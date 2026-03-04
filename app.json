@@ -1,0 +1,69 @@
+{
+  "expo": {
+    "name": "HappyOur",
+    "slug": "HappyOur",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.happyour.app"
+    },
+    "android": {
+      "package": "com.happyour.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "scheme": "happyour",
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-image",
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "L'app a besoin de la caméra pour capturer des moments."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#000000"
+        }
+      ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "052d2842-8a82-4715-a029-68b0a3264e93"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/052d2842-8a82-4715-a029-68b0a3264e93"
+    },
+    "owner": "killianhzr"
+  }
+}
