@@ -13,9 +13,10 @@ import {
   ScrollView,
   FlatList,
   Modal,
+  Pressable,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
-import { CameraView } from "expo-camera";
+import { CameraView, CameraType, FlashMode } from "expo-camera";
 import { Image } from "expo-image";
 import { BlurView } from "expo-blur";
 import * as ImagePicker from "expo-image-picker";
@@ -43,9 +44,17 @@ const GroupIcon = ({ color = "#FFF" }) => (
   </Svg>
 );
 
-const SendIcon = () => (
-  <Svg width="32" height="32" viewBox="0 0 24 24" fill="none">
-    <Path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13" stroke="#000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+const SendIcon = ({ color = "#000" }) => (
+  <Svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+    <Path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+  </Svg>
+);
+
+const FeatherIcon = () => (
+  <Svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h3.5l6.74-6.74z" />
+    <Path d="M16 8L2 22" />
+    <Path d="M17.5 15H9" />
   </Svg>
 );
 
@@ -67,6 +76,8 @@ function isVaultUnlocked(): boolean {
   return new Date() >= sunday;
 }
 
+type CameraMode = "PHOTO" | "VIDEO" | "TEXTE";
+
 export default function MainPagerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user, logout } = useAuth();
@@ -82,33 +93,40 @@ export default function MainPagerScreen() {
   const [photos, setPhotos] = useState<PhotoEntry[]>([]);
   const [username, setUsername] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [email, setEmail] = useState(user?.email ?? "");
+  const [email, setEmail] = useState("");
   const [dataLoaded, setDataLoaded] = useState(false);
   const [currentPage, setCurrentPage] = useState(1); 
   const [devMode, setDevMode] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
 
-  const [cameraMode, setCameraMode] = useState<"PHOTO" | "VIDEO" | "TEXTE">("PHOTO");
+  const [cameraMode, setCameraMode] = useState<CameraMode>("PHOTO");
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const recordingTimer = useRef<NodeJS.Timeout | null>(null);
+
   const [capturing, setCapturing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [capturedBase64, setCapturedBase64] = useState<string | null>(null);
   const [capturedUri, setCapturedUri] = useState<string | null>(null);
+  const [isEditingNote, setIsEditingNote] = useState(false);
   const [textModeContent, setTextModeContent] = useState("");
   const [note, setNote] = useState("");
 
   const unlocked = isVaultUnlocked() || devMode;
   const cameraRef = useRef<CameraView>(null);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     if (!user || !id) return;
     try {
+      const { monday } = getWeekBounds();
+      
       const [groupRes, profileRes, photosRes, membersRes] = await Promise.all([
         supabase.from("groups").select("name").eq("id", id).single(),
-        supabase.from("profiles").select("username, avatar_url").eq("id", user.id).single(),
+        supabase.from("profiles").select("username, avatar_url, email").eq("id", user.id).single(),
         supabase.from("photos")
           .select("id, image_path, created_at, note, user_id, profiles:user_id(username, avatar_url)")
           .eq("group_id", id)
-          .gte("created_at", getWeekBounds().monday.toISOString())
+          .gte("created_at", monday.toISOString())
           .order("created_at", { ascending: true }),
         supabase.from("group_members").select("profiles:user_id(username, avatar_url)").eq("group_id", id)
       ]);
@@ -117,14 +135,17 @@ export default function MainPagerScreen() {
       if (profileRes.data) {
         setUsername(profileRes.data.username);
         setAvatarUrl(profileRes.data.avatar_url);
+        setEmail(profileRes.data.email || user.email || "");
       }
       if (membersRes.data) setMembers(membersRes.data.map((m: any) => m.profiles));
       
       if (photosRes.data) {
-        setPhotoCount(photosRes.data.length);
-        setUserPhotoCount(photosRes.data.filter((p: any) => p.user_id === user.id).length);
+        const pData = photosRes.data;
+        setPhotoCount(pData.length);
+        setUserPhotoCount(pData.filter((p: any) => p.user_id === user.id).length);
+        
         if (unlocked) {
-          setPhotos(photosRes.data.map((p: any) => ({
+          const entries: PhotoEntry[] = pData.map((p: any) => ({
             id: p.id,
             url: p.image_path === "text_mode" ? "" : supabase.storage.from("moments").getPublicUrl(p.image_path).data.publicUrl,
             created_at: p.created_at,
@@ -133,16 +154,20 @@ export default function MainPagerScreen() {
             avatar_url: p.profiles?.avatar_url,
             image_path: p.image_path,
             reactions: [], 
-          })));
+          }));
+          setPhotos(entries);
         }
       }
       setDataLoaded(true);
     } catch (e) {
+      console.error("fetchData error:", e);
       setDataLoaded(true);
     }
-  };
+  }, [id, user, unlocked]);
 
-  useEffect(() => { fetchData(); }, [id, user, unlocked]);
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const updateAvatar = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -156,14 +181,20 @@ export default function MainPagerScreen() {
     if (!result.canceled && result.assets[0].base64) {
       setUploading(true);
       try {
-        const filePath = `avatars/${user?.id}.jpg`;
-        await supabase.storage.from("moments").upload(filePath, decode(result.assets[0].base64), {
-          contentType: "image/jpeg",
-          upsert: true,
+        const filePath = `avatars/${user?.id}_${Date.now()}.jpg`;
+        await supabase.storage.from("moments").upload(filePath, decode(result.assets[0].base64), { 
+          contentType: "image/jpeg", 
+          upsert: true 
         });
+        
         const { data: urlData } = supabase.storage.from("moments").getPublicUrl(filePath);
-        await supabase.from("profiles").update({ avatar_url: urlData.publicUrl }).eq("id", user?.id);
-        setAvatarUrl(urlData.publicUrl);
+        const newUrl = urlData.publicUrl;
+        
+        const { error: upErr } = await supabase.from("profiles").update({ avatar_url: newUrl }).eq("id", user?.id);
+        if (upErr) throw upErr;
+        
+        setAvatarUrl(newUrl);
+        Alert.alert("Succès", "Photo de profil mise à jour.");
       } catch (e: any) {
         Alert.alert("Erreur", e.message);
       } finally {
@@ -173,37 +204,89 @@ export default function MainPagerScreen() {
   };
 
   const jumpTo = (page: number) => {
-    scrollRef.current?.scrollTo({ x: page * SCREEN_WIDTH, animated: false });
-    setCurrentPage(page);
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo({ x: page * SCREEN_WIDTH, animated: false });
+      scrollX.setValue(page * SCREEN_WIDTH);
+      setCurrentPage(page);
+    }
   };
 
   const handleCapture = async () => {
     if (cameraMode === "TEXTE") {
       if (!textModeContent.trim()) return;
-      setUploading(true);
-      try {
-        await supabase.from("photos").insert({ group_id: id, user_id: user?.id, image_path: "text_mode", note: textModeContent.trim() });
-        setTextModeContent("");
-        await fetchData();
-        jumpTo(2);
-      } finally { setUploading(false); }
+      handleUploadText();
       return;
     }
     if (!cameraRef.current) return;
     setCapturing(true);
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.7, base64: true });
-      if (photo?.base64) { setCapturedBase64(photo.base64); setCapturedUri(photo.uri); }
-    } catch (e: any) { Alert.alert("Erreur", e.message); } finally { setCapturing(false); }
+      if (photo?.base64) {
+        setCapturedBase64(photo.base64);
+        setCapturedUri(photo.uri);
+      }
+    } catch (e: any) {
+      Alert.alert("Erreur", e.message);
+    } finally {
+      setCapturing(false);
+    }
   };
 
-  const handleUploadPhoto = async (withNote: boolean) => {
+  const startVideoRecording = async () => {
+    if (!cameraRef.current || isRecording) return;
+    setIsRecording(true);
+    setRecordingSeconds(0);
+    recordingTimer.current = setInterval(() => setRecordingSeconds(s => s + 1), 1000);
+    try {
+      const video = await cameraRef.current.recordAsync();
+      if (video) {
+        setCapturedUri(video.uri);
+        Alert.alert("Succès", "Vidéo capturée !");
+      }
+    } catch (e: any) {
+      console.error(e);
+      stopVideoRecording();
+    }
+  };
+
+  const stopVideoRecording = () => {
+    if (!isRecording) return;
+    cameraRef.current?.stopRecording();
+    setIsRecording(false);
+    if (recordingTimer.current) clearInterval(recordingTimer.current);
+  };
+
+  const handleUploadText = async () => {
+    setUploading(true);
+    try {
+      await supabase.from("photos").insert({
+        group_id: id,
+        user_id: user?.id,
+        image_path: "text_mode",
+        note: textModeContent.trim(),
+      });
+      setTextModeContent("");
+      await fetchData();
+      jumpTo(2);
+    } catch (e: any) {
+      Alert.alert("Erreur", e.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleUploadPhoto = async () => {
     if (!capturedBase64 || !user) return;
     setUploading(true);
     try {
       const fileName = `${id}/${user.id}_${Date.now()}.jpg`;
       await supabase.storage.from("moments").upload(fileName, decode(capturedBase64), { contentType: "image/jpeg" });
-      await supabase.from("photos").insert({ group_id: id, user_id: user.id, image_path: fileName, note: withNote ? note.trim() || null : null });
+      await supabase.from("photos").insert({
+        group_id: id,
+        user_id: user.id,
+        image_path: fileName,
+        note: note.trim() || null,
+      });
       setCapturedBase64(null); setNote(""); await fetchData(); jumpTo(2); 
     } catch (e: any) { Alert.alert("Erreur", e.message); } finally { setUploading(false); }
   };
@@ -232,17 +315,13 @@ export default function MainPagerScreen() {
           <View style={[styles.pageContent, { paddingTop: insets.top + 40 }]}>
             <Text style={styles.pageTitle}>Profil</Text>
             <View style={styles.profileBody}>
-              <TouchableOpacity onPress={updateAvatar} style={styles.avatarCircle}>
-                {avatarUrl ? (
-                  <Image source={{ uri: avatarUrl }} style={styles.avatarImg} />
-                ) : (
-                  <Text style={styles.avatarText}>{(username ? username[0] : "?").toUpperCase()}</Text>
-                )}
-                <View style={styles.editBadge}><Text style={styles.editBadgeText}>Modifier</Text></View>
+              <TouchableOpacity onPress={updateAvatar} style={styles.avatarCircle} activeOpacity={0.8}>
+                {avatarUrl ? ( <Image source={{ uri: avatarUrl }} style={styles.avatarImg} /> ) : ( <Text style={styles.avatarText}>{(username ? username[0] : "?").toUpperCase()}</Text> )}
+                <View style={styles.editBadge}><Text style={styles.editBadgeText}>{uploading ? "..." : "Modifier"}</Text></View>
               </TouchableOpacity>
               <View style={styles.infoBox}>
-                <Text style={styles.infoLabel}>Identité</Text><Text style={styles.infoValue}>{username || "Chargement..."}</Text>
-                <View style={styles.divider} /><Text style={styles.infoLabel}>Contact</Text><Text style={styles.infoValue}>{email}</Text>
+                <Text style={styles.infoLabel}>Identité</Text><Text style={styles.infoValue}>{username || "—"}</Text>
+                <View style={styles.divider} /><Text style={styles.infoLabel}>Contact</Text><Text style={styles.infoValue}>{email || user?.email}</Text>
               </View>
               <TouchableOpacity style={styles.logoutBtn} onPress={() => logout()}><Text style={styles.logoutText}>Se déconnecter</Text></TouchableOpacity>
             </View>
@@ -256,31 +335,51 @@ export default function MainPagerScreen() {
               <TextInput style={styles.textModeInput} placeholder="Écris..." placeholderTextColor="rgba(255,255,255,0.3)" multiline value={textModeContent} onChangeText={setTextModeContent} autoFocus />
             </View>
           ) : (
-            <StandardCamera ref={cameraRef} isActive={currentPage === 1 && !capturedBase64} />
+            <StandardCamera ref={cameraRef} isActive={currentPage === 1 && !capturedBase64} mode={cameraMode === "VIDEO" ? "video" : "picture"} />
+          )}
+
+          {isRecording && (
+            <View style={[styles.recordingTimer, { top: insets.top + 40 }]}>
+              <View style={styles.recordingDot} /><Text style={styles.recordingText}>{Math.floor(recordingSeconds / 60)}:{(recordingSeconds % 60).toString().padStart(2, '0')}</Text>
+            </View>
           )}
 
           {capturedBase64 ? (
             <View style={StyleSheet.absoluteFill}>
               <Image source={{ uri: capturedUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
-              <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.confirmOverlay}>
-                <View style={[theme.glassCard, styles.noteBox]}>
-                  <TextInput style={styles.noteInput} placeholder="Note..." placeholderTextColor="rgba(255,255,255,0.4)" value={note} onChangeText={setNote} maxLength={140} multiline />
-                  <View style={styles.confirmActions}>
-                    <TouchableOpacity style={theme.accentButton} onPress={() => handleUploadPhoto(true)}><Text style={theme.accentButtonText}>{uploading ? "..." : "Envoyer"}</Text></TouchableOpacity>
-                    <TouchableOpacity onPress={() => setCapturedBase64(null)} style={styles.cancelBtn}><Text style={styles.cancelBtnText}>Annuler</Text></TouchableOpacity>
-                  </View>
-                </View>
-              </KeyboardAvoidingView>
+              <TouchableOpacity style={[styles.backCaptureBtn, { top: insets.top + 20 }]} onPress={() => setCapturedBase64(null)}><Text style={styles.backCaptureText}>×</Text></TouchableOpacity>
+              {note ? ( <Pressable style={styles.centeredNotePreview} onPress={() => setIsEditingNote(true)}><View style={styles.noteTag}><Text style={styles.noteTagText}>{note}</Text></View></Pressable> ) : null}
+              <View style={[styles.postCaptureActions, { bottom: insets.bottom + 40 }]}>
+                <TouchableOpacity style={styles.sideActionBtn} onPress={() => setIsEditingNote(true)}><FeatherIcon /></TouchableOpacity>
+                <TouchableOpacity style={styles.sendCaptureBtn} onPress={handleUploadPhoto} disabled={uploading}><View style={styles.sendCaptureInner}>{uploading ? <Loader size={24} /> : <SendIcon color="#000" />}</View></TouchableOpacity>
+              </View>
+              <Modal visible={isEditingNote} transparent animationType="fade" onRequestClose={() => setIsEditingNote(false)}>
+                <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill}>
+                  <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.noteEditorContainer}>
+                    <TextInput style={styles.largeNoteInput} placeholder="Note..." placeholderTextColor="rgba(255,255,255,0.3)" value={note} onChangeText={setNote} maxLength={140} multiline autoFocus />
+                    <TouchableOpacity style={styles.doneNoteBtn} onPress={() => setIsEditingNote(false)}><Text style={styles.doneNoteText}>Terminé</Text></TouchableOpacity>
+                  </KeyboardAvoidingView>
+                </BlurView>
+              </Modal>
             </View>
           ) : (
             <View style={[styles.cameraFooter, { bottom: insets.bottom + 100 }]}>
               <View style={styles.modeSlider}>
                 {["PHOTO", "VIDEO", "TEXTE"].map((m: any) => (
-                  <TouchableOpacity key={m} onPress={() => setCameraMode(m)}><Text style={[styles.modeText, cameraMode === m && styles.modeTextActive]}>{m}</Text></TouchableOpacity>
+                  <TouchableOpacity key={m} onPress={() => setCameraMode(m)} disabled={isRecording}><Text style={[styles.modeText, cameraMode === m && styles.modeTextActive]}>{m}</Text></TouchableOpacity>
                 ))}
               </View>
-              <TouchableOpacity style={styles.captureBtn} onPress={handleCapture} disabled={capturing} activeOpacity={0.8}>
-                <View style={styles.captureInner}>{cameraMode === "TEXTE" && <SendIcon />}</View>
+              <TouchableOpacity 
+                style={[styles.captureBtn, cameraMode === "VIDEO" && styles.captureBtnVideo, isRecording && styles.captureBtnRecording]} 
+                onPress={handleCapture}
+                onLongPress={() => cameraMode !== "TEXTE" && startVideoRecording()}
+                onPressOut={() => isRecording && stopVideoRecording()}
+                disabled={capturing} 
+                activeOpacity={0.8}
+              >
+                <View style={[styles.captureInner, (cameraMode === "VIDEO" || isRecording) && styles.captureInnerVideo, isRecording && styles.captureInnerRecording]}>
+                  {cameraMode === "TEXTE" && <SendIcon color="#000" />}
+                </View>
               </TouchableOpacity>
             </View>
           )}
@@ -288,92 +387,51 @@ export default function MainPagerScreen() {
 
         {/* PAGE 2: VAULT */}
         <View key="page-2" style={[styles.page, { zIndex: 10 }]}>
-          <ScrollView style={[styles.pageContent, { paddingTop: insets.top + 40 }]} showsVerticalScrollIndicator={false}>
-            <View style={styles.vaultHeader}>
-              <Text style={styles.pageTitleNoPad}>{groupName || "Groupe"}</Text>
-              <TouchableOpacity onPress={() => setShowMembersModal(true)} style={styles.groupBtn}>
-                <GroupIcon />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.vaultBody}>
-              {!unlocked ? (
-                <View style={styles.vaultLockedContent}>
-                  <VaultCounter totalCount={photoCount} userCount={userPhotoCount} unlockDate={getWeekBounds().sunday} />
-                </View>
-              ) : (
-                <View style={styles.vaultUnlocked}><PhotoFeed photos={photos} /></View>
-              )}
-              
-              {!unlocked && (
+          {unlocked ? (
+            <View style={styles.vaultUnlocked}><PhotoFeed photos={photos} onReactPress={(pid) => console.log("React to", pid)} /></View>
+          ) : (
+            <ScrollView style={[styles.pageContent, { paddingTop: insets.top + 40 }]} contentContainerStyle={{ paddingBottom: 160 }} showsVerticalScrollIndicator={false}>
+              <View style={styles.vaultHeader}>
+                <Text style={styles.pageTitleNoPad}>{groupName || "Groupe"}</Text>
+                <TouchableOpacity onPress={() => setShowMembersModal(true)} style={styles.groupBtn}><GroupIcon /></TouchableOpacity>
+              </View>
+              <View style={styles.vaultBody}>
+                <View style={styles.vaultLockedContent}><VaultCounter totalCount={photoCount} userCount={userPhotoCount} unlockDate={getWeekBounds().sunday} /></View>
                 <View style={styles.debugSection}>
                   <Text style={styles.debugTitle}>Debug Tools</Text>
-                  <TouchableOpacity 
-                    style={[styles.devToggle, devMode && styles.devToggleActive]} 
-                    onPress={() => setDevMode((p) => !p)}
-                  >
-                    <Text style={[styles.devToggleText, devMode && styles.devToggleTextActive]}>
-                      Simuler Dimanche 20h
-                    </Text>
+                  <TouchableOpacity style={[styles.devToggle, devMode && styles.devToggleActive]} onPress={() => { setDevMode(!devMode); if (!devMode) fetchData(); }}>
+                    <Text style={[styles.devToggleText, devMode && styles.devToggleTextActive]}>Simuler Dimanche 20h</Text>
                   </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={styles.debugBtn} 
-                    onPress={() => scheduleImmediateLocalNotification("Test !", "Ceci est une notification de test.")}
-                  >
-                    <Text style={styles.debugBtnText}>Tester Notification Locale</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity 
-                    style={styles.debugBtn} 
-                    onPress={() => cancelAllRecapNotifications()}
-                  >
-                    <Text style={styles.debugBtnText}>Annuler toutes les notifs</Text>
-                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.debugBtn} onPress={() => scheduleImmediateLocalNotification("Test !", "Ceci est une notification de test.")}><Text style={styles.debugBtnText}>Tester Notification Locale</Text></TouchableOpacity>
+                  <TouchableOpacity style={styles.debugBtn} onPress={() => cancelAllRecapNotifications()}><Text style={styles.debugBtnText}>Annuler toutes les notifs</Text></TouchableOpacity>
                 </View>
-              )}
-            </View>
-          </ScrollView>
+              </View>
+            </ScrollView>
+          )}
         </View>
       </Animated.ScrollView>
 
-      {/* MEMBERS MODAL */}
-      <Modal visible={showMembersModal} animationType="slide" transparent>
-        <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill}>
-          <View style={[styles.modalContent, { paddingTop: insets.top + 40 }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Membres</Text>
-              <TouchableOpacity onPress={() => setShowMembersModal(false)}><Text style={styles.closeModalText}>Fermer</Text></TouchableOpacity>
-            </View>
-            <FlatList
-              data={members}
-              keyExtractor={(item, i) => i.toString()}
-              renderItem={({ item }) => (
-                <View style={styles.memberItem}>
-                  <View style={styles.memberAvatar}>
-                    {item.avatar_url ? <Image source={{ uri: item.avatar_url }} style={styles.avatarImg} /> : <Text style={styles.memberAvatarText}>{item.username[0].toUpperCase()}</Text>}
-                  </View>
-                  <Text style={styles.memberName}>{item.username}</Text>
-                </View>
-              )}
-              ListFooterComponent={() => (
-                <TouchableOpacity style={[theme.outlineButton, styles.inviteModalBtn]} onPress={() => { setShowMembersModal(false); router.push(`/(app)/groups/${id}/invite`); }}>
-                  <Text style={theme.outlineButtonText}>Ajouter un membre</Text>
-                </TouchableOpacity>
-              )}
-            />
-          </View>
-        </BlurView>
-      </Modal>
-
       {/* NAV BAR */}
       <View style={[styles.tabBarContainer, { paddingBottom: insets.bottom }]}>
-        <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+        <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
         <View style={styles.tabBarContent}>
           <TouchableOpacity style={styles.tab} onPress={() => jumpTo(0)} activeOpacity={0.7}><ProfileIcon color={currentPage === 0 ? "#FFF" : "rgba(255,255,255,0.4)"} size={24} /><Text style={[styles.tabLabel, currentPage === 0 && styles.tabLabelActive]}>Profil</Text></TouchableOpacity>
           <TouchableOpacity style={styles.tab} onPress={() => jumpTo(1)} activeOpacity={0.7}><MomentIcon color={currentPage === 1 ? "#FFF" : "rgba(255,255,255,0.4)"} size={28} /><Text style={[styles.tabLabel, currentPage === 1 && styles.tabLabelActive]}>Moment</Text></TouchableOpacity>
           <TouchableOpacity style={styles.tab} onPress={() => jumpTo(2)} activeOpacity={0.7}><VaultIcon color={currentPage === 2 ? "#FFF" : "rgba(255,255,255,0.4)"} size={24} /><Text style={[styles.tabLabel, currentPage === 2 && styles.tabLabelActive]}>Coffre</Text></TouchableOpacity>
         </View>
       </View>
+
+      {/* MEMBERS MODAL */}
+      <Modal visible={showMembersModal} animationType="slide" transparent onRequestClose={() => setShowMembersModal(false)}>
+        <View style={styles.darkModalOverlay}>
+          <View style={[styles.modalContent, { paddingTop: insets.top + 40 }]}>
+            <View style={styles.modalHeader}><Text style={styles.modalTitle}>Membres</Text><TouchableOpacity onPress={() => setShowMembersModal(false)}><Text style={styles.closeModalText}>Fermer</Text></TouchableOpacity></View>
+            <FlatList data={members} keyExtractor={(item, i) => i.toString()} renderItem={({ item }) => (
+              <View style={styles.memberItem}><View style={styles.memberAvatar}>{item.avatar_url ? <Image source={{ uri: item.avatar_url }} style={styles.avatarImg} /> : <Text style={styles.memberAvatarText}>{item.username[0]?.toUpperCase()}</Text>}</View><Text style={styles.memberName}>{item.username}</Text></View>
+            )} ListFooterComponent={() => ( <TouchableOpacity style={[theme.outlineButton, styles.inviteModalBtn]} onPress={() => { setShowMembersModal(false); router.push(`/(app)/groups/${id}/invite`); }}><Text style={theme.outlineButtonText}>Ajouter un membre</Text></TouchableOpacity> )} />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -386,43 +444,46 @@ const styles = StyleSheet.create({
   pageContent: { flex: 1 },
   pageTitle: { fontFamily: "Inter_700Bold", fontSize: 28, color: "#FFF", marginBottom: 40, letterSpacing: -1, paddingHorizontal: 24 },
   pageTitleNoPad: { fontFamily: "Inter_700Bold", fontSize: 28, color: "#FFF", letterSpacing: -1 },
-  
   profileBody: { flex: 1, paddingHorizontal: 24, alignItems: "center" },
   avatarCircle: { width: 120, height: 120, borderRadius: 60, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center", marginBottom: 32, overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
   avatarImg: { width: "100%", height: "100%" },
   avatarText: { fontFamily: "Inter_700Bold", fontSize: 48, color: "#FFF" },
-  editBadge: { position: "absolute", bottom: 0, width: "100%", backgroundColor: "rgba(0,0,0,0.6)", paddingVertical: 4, alignItems: "center" },
-  editBadgeText: { color: "#FFF", fontSize: 10, fontFamily: "Inter_600SemiBold", textTransform: "uppercase" },
-  
+  editBadge: { position: "absolute", bottom: 0, width: "100%", backgroundColor: "rgba(0,0,0,0.7)", paddingVertical: 6, alignItems: "center" },
+  editBadgeText: { color: "#FFF", fontSize: 10, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 0.5 },
   infoBox: { width: "100%", backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 20, padding: 24, gap: 8 },
   infoLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: 1 },
   infoValue: { fontSize: 18, fontFamily: "Inter_400Regular", color: "#FFF", marginBottom: 8 },
   divider: { height: 1, backgroundColor: "rgba(255,255,255,0.1)", marginVertical: 8 },
   logoutBtn: { marginTop: 40, padding: 16 },
   logoutText: { color: "#FF5555", fontFamily: "Inter_600SemiBold" },
-
   vaultHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 24, marginBottom: 40 },
   groupBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center" },
-  vaultBody: { flex: 1, paddingBottom: 140 },
+  vaultBody: { flex: 1 },
   vaultLockedContent: { paddingHorizontal: 24 },
   vaultUnlocked: { flex: 1 },
-
+  darkModalOverlay: { flex: 1, backgroundColor: "#000" },
   modalContent: { flex: 1, paddingHorizontal: 24 },
   modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 32 },
   modalTitle: { fontFamily: "Inter_700Bold", fontSize: 24, color: "#FFF" },
   closeModalText: { color: colors.secondary, fontFamily: "Inter_600SemiBold" },
-  memberItem: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16, backgroundColor: "rgba(255,255,255,0.05)", padding: 12, borderRadius: 16 },
-  memberAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center", overflow: "hidden" },
+  memberItem: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16, backgroundColor: "rgba(255,255,255,0.08)", padding: 14, borderRadius: 18 },
+  memberAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center", overflow: "hidden" },
   memberAvatarText: { color: "#FFF", fontFamily: "Inter_700Bold" },
   memberName: { color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 16 },
   inviteModalBtn: { marginTop: 24, marginBottom: 40 },
-
   cameraFooter: { position: "absolute", left: 0, right: 0, alignItems: "center", gap: 24 },
   modeSlider: { flexDirection: "row", gap: 20, backgroundColor: "rgba(0,0,0,0.3)", paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20 },
   modeText: { color: "rgba(255,255,255,0.4)", fontFamily: "Inter_700Bold", fontSize: 12 },
   modeTextActive: { color: "#FFF" },
   captureBtn: { width: 84, height: 84, borderRadius: 42, borderWidth: 5, borderColor: "#FFF", justifyContent: "center", alignItems: "center" },
+  captureBtnVideo: { borderColor: "rgba(255,59,48,0.5)" },
+  captureBtnRecording: { borderColor: "#FF3B30" },
   captureInner: { width: 66, height: 66, borderRadius: 33, backgroundColor: "#FFF", justifyContent: "center", alignItems: "center" },
+  captureInnerVideo: { backgroundColor: "#FF3B30" },
+  captureInnerRecording: { width: 30, height: 30, borderRadius: 6 },
+  recordingTimer: { position: "absolute", alignSelf: "center", flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, gap: 8 },
+  recordingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#FF3B30" },
+  recordingText: { color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 14 },
   textModeContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: 40, backgroundColor: "#0A0A0A" },
   textModeInput: { fontSize: 32, color: "#FFF", fontFamily: "Inter_700Bold", textAlign: "center", width: "100%" },
   confirmOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end", padding: 24, paddingBottom: 120 },
@@ -431,19 +492,30 @@ const styles = StyleSheet.create({
   confirmActions: { flexDirection: "row", gap: 12, alignItems: "center" },
   cancelBtn: { flex: 1, alignItems: "center" },
   cancelBtnText: { color: "rgba(255,255,255,0.6)", fontFamily: "Inter_600SemiBold" },
-
-  tabBarContainer: { position: "absolute", bottom: 0, left: 0, right: 0, height: 90, overflow: "hidden", zIndex: 100 },
+  tabBarContainer: { position: "absolute", bottom: 0, left: 0, right: 0, height: 100, overflow: "hidden", zIndex: 100, backgroundColor: "rgba(10,10,10,0.92)" },
   tabBarContent: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-evenly", paddingTop: 12 },
   tab: { alignItems: "center", justifyContent: "center", gap: 4, width: SCREEN_WIDTH / 3 },
   tabLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold", color: "rgba(255,255,255,0.4)" },
   tabLabelActive: { color: "#FFF" },
-
   debugSection: { marginTop: 40, paddingHorizontal: 24, gap: 12 },
   debugTitle: { color: "rgba(255,255,255,0.3)", fontSize: 12, fontFamily: "Inter_700Bold", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 },
-  debugBtn: { backgroundColor: "rgba(255,255,255,0.1)", padding: 16, borderRadius: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.3)" },
+  debugBtn: { backgroundColor: "rgba(255,255,255,0.15)", padding: 16, borderRadius: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.3)" },
   debugBtnText: { color: "#FFF", fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  devToggle: { borderWidth: 1, borderColor: "#FFF", borderRadius: 16, padding: 16, alignItems: "center", opacity: 0.8, backgroundColor: "rgba(255,255,255,0.1)" },
-  devToggleActive: { backgroundColor: "#FFF", borderColor: "#FFF" },
-  devToggleText: { fontFamily: "Inter_700Bold", color: "#FFF", fontSize: 12, textTransform: "uppercase" },
+  devToggle: { borderWidth: 2, borderColor: "#FFF", borderRadius: 16, padding: 18, alignItems: "center", backgroundColor: "rgba(255,255,255,0.15)" },
+  devToggleActive: { backgroundColor: "#FFF" },
+  devToggleText: { fontFamily: "Inter_700Bold", color: "#FFF", fontSize: 13, textTransform: "uppercase" },
   devToggleTextActive: { color: "#000" },
+  backCaptureBtn: { position: "absolute", left: 20, width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" },
+  backCaptureText: { color: "#FFF", fontSize: 32, fontWeight: "300" },
+  postCaptureActions: { position: "absolute", left: 0, right: 0, flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 40 },
+  sideActionBtn: { width: 56, height: 56, borderRadius: 28, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
+  sendCaptureBtn: { width: 84, height: 84, borderRadius: 42, borderWidth: 5, borderColor: "#FFF", justifyContent: "center", alignItems: "center" },
+  sendCaptureInner: { width: 66, height: 66, borderRadius: 33, backgroundColor: "#FFF", justifyContent: "center", alignItems: "center" },
+  noteEditorContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: 40 },
+  largeNoteInput: { width: "100%", color: "#FFF", fontSize: 28, fontFamily: "Inter_700Bold", textAlign: "center", marginBottom: 40 },
+  doneNoteBtn: { backgroundColor: "#FFF", paddingHorizontal: 32, paddingVertical: 14, borderRadius: 100 },
+  doneNoteText: { color: "#000", fontFamily: "Inter_700Bold", fontSize: 16 },
+  centeredNotePreview: { position: "absolute", top: "40%", left: 0, right: 0, alignItems: "center", paddingHorizontal: 40 },
+  noteTag: { backgroundColor: "rgba(0,0,0,0.6)", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
+  noteTagText: { color: "#FFF", fontSize: 18, fontFamily: "Inter_600SemiBold", textAlign: "center" },
 });
