@@ -3,7 +3,7 @@ import { Platform } from "react-native";
 import Constants from "expo-constants";
 import { supabase } from "./supabase";
 
-// Detect Expo Go — expo-notifications is not supported there since SDK 53
+// Detect Expo Go
 const isExpoGo = Constants.appOwnership === "expo";
 
 // Only require expo-notifications in dev builds / standalone
@@ -26,15 +26,8 @@ if (!isExpoGo) {
 // ── Register & Token ──
 
 export async function registerForPushNotifications(userId: string) {
-  if (!Notifications || !Device) {
-    console.log("Notifications not available (Expo Go?)");
-    return;
-  }
-
-  if (!Device.isDevice) {
-    console.log("Push notifications require a physical device");
-    return;
-  }
+  if (!Notifications || !Device) return;
+  if (!Device.isDevice) return;
 
   try {
     if (Platform.OS === "android") {
@@ -52,10 +45,7 @@ export async function registerForPushNotifications(userId: string) {
       finalStatus = status;
     }
 
-    if (finalStatus !== "granted") {
-      console.log("Push notification permission not granted");
-      return;
-    }
+    if (finalStatus !== "granted") return;
 
     const projectId = Constants.expoConfig?.extra?.eas?.projectId;
     const token = (
@@ -69,11 +59,7 @@ export async function registerForPushNotifications(userId: string) {
 
     return token;
   } catch (e: any) {
-    if (Platform.OS === "android" && e.message?.includes("FirebaseApp is not initialized")) {
-      console.warn("Push Notifications: google-services.json manquant ou projet Firebase non configuré.");
-    } else {
-      console.warn("registerForPushNotifications error:", e);
-    }
+    console.warn("registerForPushNotifications error:", e);
   }
 }
 
@@ -86,9 +72,7 @@ export async function sendPushToTokens(
   data?: Record<string, unknown>
 ) {
   if (tokens.length === 0) return;
-
   const messages = tokens.map((to) => ({ to, title, body, sound: "default" as const, data }));
-
   try {
     await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
@@ -103,8 +87,6 @@ export async function sendPushToTokens(
   }
 }
 
-// ── Get Group Member Tokens ──
-
 export async function getGroupMemberTokens(
   groupId: string,
   excludeUserId?: string
@@ -113,9 +95,7 @@ export async function getGroupMemberTokens(
     .from("group_members")
     .select("user_id, profiles:user_id(expo_push_token)")
     .eq("group_id", groupId);
-
   if (error || !data) return [];
-
   return data
     .filter((m: any) => m.user_id !== excludeUserId)
     .map((m: any) => m.profiles?.expo_push_token)
@@ -130,11 +110,9 @@ export async function scheduleRecapNotification(
   unlockDate: Date
 ) {
   if (!Notifications) return;
-
   const now = new Date();
   const secondsUntil = Math.floor((unlockDate.getTime() - now.getTime()) / 1000);
   if (secondsUntil <= 0) return;
-
   try {
     await Notifications.scheduleNotificationAsync({
       identifier: `recap_${groupId}`,
@@ -152,7 +130,6 @@ export async function scheduleRecapNotification(
 
 export async function cancelAllRecapNotifications() {
   if (!Notifications) return;
-
   try {
     const all = await Notifications.getAllScheduledNotificationsAsync();
     for (const n of all) {
@@ -167,27 +144,21 @@ export async function cancelAllRecapNotifications() {
 
 export async function scheduleAllRecaps(userId: string) {
   if (!Notifications) return;
-
   await cancelAllRecapNotifications();
-
   const { data: memberships } = await supabase
     .from("group_members")
     .select("group_id, groups:group_id(name)")
     .eq("user_id", userId);
-
   if (!memberships) return;
-
   const now = new Date();
   const day = now.getDay();
   const diffToSunday = day === 0 ? 0 : 7 - day;
   const sunday = new Date(now);
   sunday.setDate(now.getDate() + diffToSunday);
   sunday.setHours(20, 0, 0, 0);
-
   if (now >= sunday) {
     sunday.setDate(sunday.getDate() + 7);
   }
-
   for (const m of memberships as any[]) {
     const groupName = m.groups?.name;
     if (groupName) {
@@ -198,99 +169,28 @@ export async function scheduleAllRecaps(userId: string) {
 
 // ── Anti-spam Photo Notification ──
 
-interface PhotoNotifState {
-  lastNotifAt: number;
-  countSince: number;
-}
-
-const FIVE_HOURS_MS = 5 * 60 * 60 * 1000;
-const GROUPED_THRESHOLD = 3;
-
-function isSameDay(ts1: number, ts2: number): boolean {
-  const d1 = new Date(ts1);
-  const d2 = new Date(ts2);
-  return (
-    d1.getFullYear() === d2.getFullYear() &&
-    d1.getMonth() === d2.getMonth() &&
-    d1.getDate() === d2.getDate()
-  );
-}
-
 export async function notifyNewPhoto(
   groupId: string,
   groupName: string,
   senderName: string,
   senderId: string
 ) {
-  const key = `notif_photo_${groupId}`;
-  const now = Date.now();
-
-  let state: PhotoNotifState | null = null;
-  try {
-    const raw = await AsyncStorage.getItem(key);
-    if (raw) state = JSON.parse(raw);
-  } catch {}
-
   const tokens = await getGroupMemberTokens(groupId, senderId);
   if (tokens.length === 0) return;
-
-  let shouldNotify = false;
-  let isGrouped = false;
-
-  if (!state || !isSameDay(state.lastNotifAt, now)) {
-    shouldNotify = true;
-  } else if (now - state.lastNotifAt >= FIVE_HOURS_MS) {
-    shouldNotify = true;
-  } else if (state.countSince + 1 >= GROUPED_THRESHOLD) {
-    shouldNotify = true;
-    isGrouped = true;
-  }
-
-  if (shouldNotify) {
-    const title = groupName;
-    const body = isGrouped
-      ? `${state!.countSince + 1} nouveaux moments dans ${groupName}`
-      : `${senderName} a partage un moment dans ${groupName}`;
-
-    await sendPushToTokens(tokens, title, body, { type: "new_photo", groupId });
-
-    await AsyncStorage.setItem(
-      key,
-      JSON.stringify({ lastNotifAt: now, countSince: 0 } satisfies PhotoNotifState)
-    );
-  } else {
-    const newState: PhotoNotifState = {
-      lastNotifAt: state!.lastNotifAt,
-      countSince: (state?.countSince ?? 0) + 1,
-    };
-    await AsyncStorage.setItem(key, JSON.stringify(newState));
-  }
+  await sendPushToTokens(tokens, groupName, `${senderName} a partage un moment !`, { type: "new_photo", groupId });
 }
-
-// ── Group Invite Notification ──
 
 export async function notifyGroupInvite(
   invitedUserId: string,
   groupName: string
 ) {
-  const { data } = await supabase
-    .from("profiles")
-    .select("expo_push_token")
-    .eq("id", invitedUserId)
-    .single();
-
+  const { data } = await supabase.from("profiles").select("expo_push_token").eq("id", invitedUserId).single();
   const token = data?.expo_push_token;
   if (!token) return;
-
-  await sendPushToTokens(
-    [token],
-    "Nouvelle invitation !",
-    `Tu as ete invite a rejoindre "${groupName}"`,
-    { type: "invite", groupName }
-  );
+  await sendPushToTokens([token], "Nouvelle invitation !", `Tu as ete invite a rejoindre "${groupName}"`, { type: "invite", groupName });
 }
 
-// ── Setup notification handler (call from root layout) ──
+// ── Setup notification handler (FIXED WARNING) ──
 
 export function setupNotificationHandler() {
   if (!Notifications) return;
@@ -306,17 +206,11 @@ export function setupNotificationHandler() {
   });
 }
 
-// ── Schedule immediate local notification (for dev testing) ──
-
-export async function scheduleImmediateLocalNotification(title: string, body: string) {
-  if (!Notifications) {
-    console.log("Notifications not available (Expo Go?)");
-    return;
-  }
-
+export async function scheduleImmediateLocalNotification(title: string, body: string, data?: any) {
+  if (!Notifications) return;
   try {
     await Notifications.scheduleNotificationAsync({
-      content: { title, body },
+      content: { title, body, data },
       trigger: null,
     });
   } catch (e) {

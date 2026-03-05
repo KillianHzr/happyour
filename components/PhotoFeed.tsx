@@ -1,18 +1,15 @@
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   View,
   Text,
   FlatList,
   StyleSheet,
   Dimensions,
-  Pressable,
   TouchableOpacity,
 } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Path } from "react-native-svg";
-import { colors, theme } from "../lib/theme";
-import { router } from "expo-router";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -44,11 +41,18 @@ type FeedItem =
 type Props = {
   photos: PhotoEntry[];
   onReactPress?: (photoId: string) => void;
+  nextUnlockDate: Date;
 };
 
 const ReactIcon = () => (
   <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
     <Path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="#FFFFFF" />
+  </Svg>
+);
+
+const QuoteIcon = () => (
+  <Svg width="40" height="40" viewBox="0 0 24 24" fill="none" opacity={0.2}>
+    <Path d="M3 21c3 0 7-1 7-8V5c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v6c0 1.1.9 2 2 2h4c0 3.5-3.5 4.5-3.5 4.5L3 21zM14 3h4c1.1 0 2 .9 2 2v6c0 1.1-.9 2-2 2h-4c0 3.5 3.5 4.5 3.5 4.5L14 21c3 0 7-1 7-8V5c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v6c0 1.1.9 2 2 2z" fill="#FFF" />
   </Svg>
 );
 
@@ -59,7 +63,34 @@ function formatDayLabel(dateStr: string): { date: string; label: string } {
   return { date: dateStr.slice(0, 10), label: `${day}\n${full}` };
 }
 
-export default function PhotoFeed({ photos, onReactPress }: Props) {
+function EndCountdown({ targetDate }: { targetDate: Date }) {
+  const [timeLeft, setTimeLeft] = useState("");
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date().getTime();
+      const distance = targetDate.getTime() - now;
+
+      if (distance < 0) {
+        setTimeLeft("00:00:00");
+        return;
+      }
+
+      const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+      setTimeLeft(`${days > 0 ? days + 'j ' : ''}${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [targetDate]);
+
+  return <Text style={styles.countdownText}>{timeLeft}</Text>;
+}
+
+export default function PhotoFeed({ photos, onReactPress, nextUnlockDate }: Props) {
   const items = useMemo<FeedItem[]>(() => {
     if (photos.length === 0) return [];
     const result: FeedItem[] = [];
@@ -94,7 +125,8 @@ export default function PhotoFeed({ photos, onReactPress }: Props) {
         <View style={styles.fullscreenPage}>
           <View style={styles.endLogoMark} />
           <Text style={styles.endTitle}>Semaine terminée.</Text>
-          <Text style={styles.endSubtitle}>Revenez demain pour de nouveaux moments.</Text>
+          <Text style={styles.endSubtitle}>Prochain rewind dans :</Text>
+          <EndCountdown targetDate={nextUnlockDate} />
         </View>
       );
     }
@@ -106,7 +138,19 @@ export default function PhotoFeed({ photos, onReactPress }: Props) {
       <View style={styles.fullscreenPage}>
         {isTextOnly ? (
           <View style={styles.textMomentBg}>
-            <Text style={styles.textMomentContent}>{moment.note}</Text>
+            <View style={styles.quoteContainer}>
+              <Text style={styles.textMomentContent}>{moment.note}</Text>
+              <View style={styles.citationFooter}>
+                <View style={styles.citationAvatar}>
+                  {moment.avatar_url ? (
+                    <Image source={{ uri: moment.avatar_url }} style={styles.avatarImg} />
+                  ) : (
+                    <Text style={styles.avatarText}>{moment.username[0].toUpperCase()}</Text>
+                  )}
+                </View>
+                <Text style={styles.citationUsername}>{moment.username}</Text>
+              </View>
+            </View>
           </View>
         ) : (
           <>
@@ -164,14 +208,21 @@ const styles = StyleSheet.create({
   separatorDay: { fontFamily: "Inter_700Bold", fontSize: 48, color: "#FFF", textAlign: "center", letterSpacing: -2 },
   separatorDate: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginTop: 8 },
   
-  textMomentBg: { flex: 1, width: "100%", justifyContent: "center", alignItems: "center", padding: 40, backgroundColor: "#0A0A0A" },
-  textMomentContent: { fontFamily: "Inter_700Bold", fontSize: 32, color: "#FFF", textAlign: "center", lineHeight: 42 },
+  textMomentBg: { flex: 1, width: "100%", justifyContent: "center", alignItems: "center", padding: 32, backgroundColor: "#050505" },
+  quoteContainer: { width: "100%", alignItems: "center", gap: 32 },
+  quoteHeader: { width: "100%", alignItems: "flex-start", marginBottom: -10 },
+  textMomentContent: { fontFamily: "Inter_700Bold", fontSize: 32, color: "#FFF", textAlign: "center", lineHeight: 44, letterSpacing: -0.5 },
   
+  citationFooter: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 20 },
+  citationAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center", overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
+  citationAvatarImg: { width: "100%", height: "100%" },
+  avatarImg: { width: "100%", height: "100%" },
+  avatarText: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 16 },
+  citationUsername: { color: "rgba(255,255,255,0.5)", fontFamily: "Inter_600SemiBold", fontSize: 15 },
+
   momentOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 120, paddingTop: 60 },
   authorInfo: { flexDirection: "row", alignItems: "center", gap: 12 },
   avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center", overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
-  avatarImg: { width: "100%", height: "100%" },
-  avatarText: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 16 },
   username: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 16 },
   momentNote: { color: "rgba(255,255,255,0.8)", fontFamily: "Inter_400Regular", fontSize: 14, marginTop: 4, maxWidth: SCREEN_WIDTH - 100 },
   
@@ -180,4 +231,5 @@ const styles = StyleSheet.create({
   endLogoMark: { width: 32, height: 32, borderWidth: 2, borderColor: "#FFF", borderRadius: 6, marginBottom: 24, transform: [{ rotate: "45deg" }] },
   endTitle: { fontFamily: "Inter_700Bold", fontSize: 24, color: "#FFF" },
   endSubtitle: { fontFamily: "Inter_400Regular", fontSize: 14, color: "rgba(255,255,255,0.4)", marginTop: 8 },
+  countdownText: { fontFamily: "Inter_700Bold", fontSize: 32, color: "#FFF", marginTop: 12, letterSpacing: 2 },
 });
