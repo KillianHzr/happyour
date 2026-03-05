@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { colors, theme } from "../lib/theme";
@@ -5,6 +6,7 @@ import { colors, theme } from "../lib/theme";
 type Props = { 
   totalCount: number;
   userCount: number;
+  unlockDate: Date;
 };
 
 const LockIcon = () => (
@@ -26,7 +28,31 @@ const LockIcon = () => (
   </Svg>
 );
 
-export default function VaultCounter({ totalCount, userCount }: Props) {
+export default function VaultCounter({ totalCount, userCount, unlockDate }: Props) {
+  const [timeLeft, setTimeLeft] = useState("");
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date().getTime();
+      const distance = unlockDate.getTime() - now;
+
+      if (distance < 0) {
+        setTimeLeft("00:00:00");
+        return;
+      }
+
+      const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+      const dStr = days > 0 ? `${days}j ` : "";
+      setTimeLeft(`${dStr}${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [unlockDate]);
+
   return (
     <View style={[theme.glassCard, styles.container]}>
       <View style={styles.iconContainer}>
@@ -46,11 +72,13 @@ export default function VaultCounter({ totalCount, userCount }: Props) {
       </View>
 
       <Text style={styles.description}>
-        {totalCount <= 1 ? "moment capturé" : "moments capturés"} cette semaine
+        {totalCount <= 1 ? "moment capturé" : "moments capturés"}
       </Text>
 
       <View style={styles.divider} />
-      <Text style={styles.hint}>Déverrouillage dimanche à 20h</Text>
+      
+      <Text style={styles.countdownTitle}>Déverrouillage dans</Text>
+      <Text style={styles.countdownValue}>{timeLeft}</Text>
     </View>
   );
 }
@@ -71,7 +99,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: "100%",
     paddingHorizontal: 20,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   statItem: {
     alignItems: "center",
@@ -100,7 +128,7 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     fontSize: 14,
     color: colors.secondary,
-    opacity: 0.8,
+    opacity: 0.6,
   },
   divider: {
     width: 40,
@@ -108,10 +136,18 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cardBorder,
     marginVertical: 24,
   },
-  hint: { 
-    fontFamily: "Inter_400Regular", 
-    fontSize: 12, 
+  countdownTitle: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 10,
     color: colors.secondary,
-    opacity: 0.5,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  countdownValue: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 24,
+    color: "#FFF",
+    letterSpacing: 1,
   },
 });

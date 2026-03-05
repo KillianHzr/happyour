@@ -40,6 +40,12 @@
       "expo-image",
       "expo-secure-store",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "L'app a besoin d'accéder à tes photos pour changer ton profil."
+        }
+      ],
+      [
         "expo-camera",
         {
           "cameraPermission": "L'app a besoin de la caméra pour capturer des moments.",

@@ -14,7 +14,7 @@ import Svg, { Path } from "react-native-svg";
 import { colors, theme } from "../lib/theme";
 import { router } from "expo-router";
 
-const { width, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 export type Reaction = {
   id: string;
@@ -31,19 +31,19 @@ export type PhotoEntry = {
   created_at: string;
   note: string | null;
   username: string;
+  avatar_url?: string | null;
+  image_path: string;
   reactions: Reaction[];
 };
 
 type FeedItem =
-  | { type: "photo"; data: PhotoEntry }
+  | { type: "moment"; data: PhotoEntry }
   | { type: "separator"; date: string; label: string }
   | { type: "end" };
 
 type Props = {
   photos: PhotoEntry[];
-  onPhotoPress?: (photo: PhotoEntry) => void;
   onReactPress?: (photoId: string) => void;
-  onReactionPhotoPress?: (url: string) => void;
 };
 
 const ReactIcon = () => (
@@ -55,25 +55,11 @@ const ReactIcon = () => (
 function formatDayLabel(dateStr: string): { date: string; label: string } {
   const d = new Date(dateStr);
   const day = d.toLocaleDateString("fr-FR", { weekday: "long" }).toUpperCase();
-  const full = d.toLocaleDateString("fr-FR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
+  const full = d.toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
   return { date: dateStr.slice(0, 10), label: `${day}\n${full}` };
 }
 
-function formatTime(dateStr: string): string {
-  const d = new Date(dateStr);
-  return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-}
-
-export default function PhotoFeed({
-  photos,
-  onPhotoPress,
-  onReactPress,
-  onReactionPhotoPress,
-}: Props) {
+export default function PhotoFeed({ photos, onReactPress }: Props) {
   const items = useMemo<FeedItem[]>(() => {
     if (photos.length === 0) return [];
     const result: FeedItem[] = [];
@@ -86,34 +72,17 @@ export default function PhotoFeed({
         result.push({ type: "separator", date, label });
         lastDate = photoDate;
       }
-      result.push({ type: "photo", data: photo });
+      result.push({ type: "moment", data: photo });
     }
-    
-    // Ajouter l'élément final
     result.push({ type: "end" });
-    
     return result;
   }, [photos]);
-
-  if (photos.length === 0) {
-    return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>Aucun moment cette semaine.</Text>
-      </View>
-    );
-  }
-
-  const getItemLayout = (_: any, index: number) => ({
-    length: SCREEN_HEIGHT,
-    offset: SCREEN_HEIGHT * index,
-    index,
-  });
 
   const renderItem = ({ item }: { item: FeedItem }) => {
     if (item.type === "separator") {
       const lines = item.label.split("\n");
       return (
-        <View style={styles.separatorContainer}>
+        <View style={styles.fullscreenPage}>
           <Text style={styles.separatorDay}>{lines[0]}</Text>
           <Text style={styles.separatorDate}>{lines[1]}</Text>
         </View>
@@ -122,88 +91,47 @@ export default function PhotoFeed({
 
     if (item.type === "end") {
       return (
-        <View style={styles.endContainer}>
-          <LinearGradient
-            colors={["rgba(255,255,255,0.05)", "transparent"]}
-            style={styles.endGlow}
-          />
+        <View style={styles.fullscreenPage}>
           <View style={styles.endLogoMark} />
           <Text style={styles.endTitle}>Semaine terminée.</Text>
-          <Text style={styles.endSubtitle}>
-            Tous les moments de votre groupe ont été dévoilés.
-          </Text>
-          <View style={styles.endDivider} />
-          <TouchableOpacity 
-            style={[theme.accentButton, styles.newWeekBtn]}
-            onPress={() => router.back()}
-          >
-            <Text style={theme.accentButtonText}>Nouvelle semaine</Text>
-          </TouchableOpacity>
-          <Text style={styles.endFooter}>[noname]</Text>
+          <Text style={styles.endSubtitle}>Revenez demain pour de nouveaux moments.</Text>
         </View>
       );
     }
 
-    const photo = item.data;
-    const initial = photo.username?.charAt(0).toUpperCase() ?? "?";
-    const time = formatTime(photo.created_at);
-    const reactions = photo.reactions ?? [];
+    const moment = item.data;
+    const isTextOnly = moment.image_path === "text_mode";
 
     return (
-      <View style={styles.photoContainer}>
-        <Image
-          source={{ uri: photo.url }}
-          style={StyleSheet.absoluteFillObject}
-          contentFit="cover"
-          transition={300}
-        />
-        <LinearGradient
-          colors={["transparent", "rgba(0,0,0,0.85)"]}
-          style={styles.overlay}
-        >
-          {reactions.length > 0 && (
-            <View style={styles.reactionsRow}>
-              {reactions.map((r) =>
-                r.type === "emoji" ? (
-                  <View key={r.id} style={styles.reactionTextBadge}>
-                    <Text style={styles.reactionText}>{r.emoji}</Text>
-                  </View>
-                ) : r.image_url ? (
-                  <Pressable
-                    key={r.id}
-                    onPress={() => onReactionPhotoPress?.(r.image_url!)}
-                  >
-                    <Image
-                      source={{ uri: r.image_url }}
-                      style={styles.reactionSelfie}
-                    />
-                  </Pressable>
-                ) : null
-              )}
-            </View>
-          )}
-          <View style={styles.authorRow}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{initial}</Text>
-            </View>
-            <View>
-              <Text style={styles.username}>{photo.username}</Text>
-              <Text style={styles.time}>{time}</Text>
-            </View>
+      <View style={styles.fullscreenPage}>
+        {isTextOnly ? (
+          <View style={styles.textMomentBg}>
+            <Text style={styles.textMomentContent}>{moment.note}</Text>
           </View>
-          {photo.note ? (
-            <Text style={styles.note} numberOfLines={2}>
-              {photo.note}
-            </Text>
-          ) : null}
-        </LinearGradient>
+        ) : (
+          <>
+            <Image source={{ uri: moment.url }} style={StyleSheet.absoluteFill} contentFit="cover" />
+            <LinearGradient colors={["transparent", "rgba(0,0,0,0.8)"]} style={styles.momentOverlay}>
+              <View style={styles.authorInfo}>
+                <View style={styles.avatar}>
+                  {moment.avatar_url ? (
+                    <Image source={{ uri: moment.avatar_url }} style={styles.avatarImg} />
+                  ) : (
+                    <Text style={styles.avatarText}>{moment.username[0].toUpperCase()}</Text>
+                  )}
+                </View>
+                <View>
+                  <Text style={styles.username}>{moment.username}</Text>
+                  {moment.note && <Text style={styles.momentNote} numberOfLines={3}>{moment.note}</Text>}
+                </View>
+              </View>
+            </LinearGradient>
+          </>
+        )}
 
-        <Pressable
-          style={styles.reactButton}
-          onPress={() => onReactPress?.(photo.id)}
-        >
+        <TouchableOpacity style={styles.reactBtn} onPress={() => onReactPress?.(moment.id)}>
           <ReactIcon />
-        </Pressable>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -211,210 +139,45 @@ export default function PhotoFeed({
   return (
     <FlatList
       data={items}
-      keyExtractor={(item, i) => {
-        if (item.type === "separator") return `sep-${item.date}`;
-        if (item.type === "end") return "feed-end";
-        return `photo-${item.data.id}`;
-      }}
       renderItem={renderItem}
-      getItemLayout={getItemLayout}
+      keyExtractor={(item, i) => i.toString()}
       pagingEnabled
       snapToInterval={SCREEN_HEIGHT}
       snapToAlignment="start"
       decelerationRate="fast"
-      disableIntervalMomentum={true}
       showsVerticalScrollIndicator={false}
+      getItemLayout={(_, index) => ({ length: SCREEN_HEIGHT, offset: SCREEN_HEIGHT * index, index })}
       style={styles.list}
-      removeClippedSubviews={true}
-      maxToRenderPerBatch={3}
-      windowSize={5}
-      initialNumToRender={2}
     />
   );
 }
 
 const styles = StyleSheet.create({
-  list: { flex: 1, backgroundColor: colors.bg },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: colors.bg,
-  },
-  emptyText: { fontFamily: "Inter_400Regular", color: colors.secondary, fontSize: 16 },
-
-  separatorContainer: {
+  list: { flex: 1, backgroundColor: "#000" },
+  fullscreenPage: {
+    width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT,
-    backgroundColor: colors.bg,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 32,
+    backgroundColor: "#000",
   },
-  separatorDay: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 48,
-    color: colors.text,
-    textAlign: "center",
-    letterSpacing: -1,
-  },
-  separatorDate: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 16,
-    color: colors.secondary,
-    marginTop: 8,
-    textAlign: "center",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-
-  photoContainer: {
-    height: SCREEN_HEIGHT,
-    width,
-    backgroundColor: colors.bg,
-  },
-  overlay: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-    paddingTop: 80,
-  },
-  authorRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.15)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  avatarText: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 16,
-    color: colors.text,
-  },
-  username: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 15,
-    color: colors.text,
-  },
-  time: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 12,
-    color: colors.secondary,
-  },
-  note: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 15,
-    color: colors.text,
-    marginTop: 12,
-    lineHeight: 20,
-  },
-
-  reactionsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 16,
-  },
-  reactionTextBadge: {
-    backgroundColor: "rgba(255,255,255,0.1)",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.15)",
-  },
-  reactionText: {
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 11,
-    color: colors.text,
-    textTransform: "uppercase",
-  },
-  reactionSelfie: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: "#FFFFFF",
-  },
-
-  reactButton: {
-    position: "absolute",
-    bottom: 140,
-    right: 20,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.2)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  // Final screen
-  endContainer: {
-    height: SCREEN_HEIGHT,
-    backgroundColor: colors.bg,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 40,
-  },
-  endGlow: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  endLogoMark: {
-    width: 32,
-    height: 32,
-    borderWidth: 2,
-    borderColor: "#fff",
-    borderRadius: 6,
-    marginBottom: 32,
-    transform: [{ rotate: "45deg" }],
-    opacity: 0.8,
-  },
-  endTitle: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 32,
-    color: colors.text,
-    textAlign: "center",
-    letterSpacing: -1,
-  },
-  endSubtitle: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 16,
-    color: colors.secondary,
-    textAlign: "center",
-    marginTop: 12,
-    lineHeight: 22,
-  },
-  endDivider: {
-    width: 40,
-    height: 1,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    marginVertical: 40,
-  },
-  newWeekBtn: {
-    width: "100%",
-    maxWidth: 240,
-  },
-  endFooter: {
-    position: "absolute",
-    bottom: 60,
-    fontFamily: "Inter_700Bold",
-    fontSize: 14,
-    color: colors.secondary,
-    opacity: 0.3,
-    letterSpacing: 2,
-  },
+  separatorDay: { fontFamily: "Inter_700Bold", fontSize: 48, color: "#FFF", textAlign: "center", letterSpacing: -2 },
+  separatorDate: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginTop: 8 },
+  
+  textMomentBg: { flex: 1, width: "100%", justifyContent: "center", alignItems: "center", padding: 40, backgroundColor: "#0A0A0A" },
+  textMomentContent: { fontFamily: "Inter_700Bold", fontSize: 32, color: "#FFF", textAlign: "center", lineHeight: 42 },
+  
+  momentOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 120, paddingTop: 60 },
+  authorInfo: { flexDirection: "row", alignItems: "center", gap: 12 },
+  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center", overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
+  avatarImg: { width: "100%", height: "100%" },
+  avatarText: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 16 },
+  username: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 16 },
+  momentNote: { color: "rgba(255,255,255,0.8)", fontFamily: "Inter_400Regular", fontSize: 14, marginTop: 4, maxWidth: SCREEN_WIDTH - 100 },
+  
+  reactBtn: { position: "absolute", right: 20, bottom: 160, width: 56, height: 56, borderRadius: 28, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
+  
+  endLogoMark: { width: 32, height: 32, borderWidth: 2, borderColor: "#FFF", borderRadius: 6, marginBottom: 24, transform: [{ rotate: "45deg" }] },
+  endTitle: { fontFamily: "Inter_700Bold", fontSize: 24, color: "#FFF" },
+  endSubtitle: { fontFamily: "Inter_400Regular", fontSize: 14, color: "rgba(255,255,255,0.4)", marginTop: 8 },
 });
