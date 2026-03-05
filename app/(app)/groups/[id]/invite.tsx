@@ -12,6 +12,7 @@ import { useLocalSearchParams } from "expo-router";
 import { useAuth } from "../../../../lib/auth-context";
 import { supabase } from "../../../../lib/supabase";
 import { notifyGroupInvite } from "../../../../lib/notifications";
+import { colors, theme } from "../../../../lib/theme";
 
 export default function InviteScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -26,7 +27,6 @@ export default function InviteScreen() {
     setLoading(true);
 
     try {
-      // 1. Cherche si un profil existe avec cet email
       const { data: profile } = await supabase
         .from("profiles")
         .select("id")
@@ -34,7 +34,6 @@ export default function InviteScreen() {
         .single();
 
       if (profile) {
-        // L'utilisateur existe → vérifier s'il est déjà membre
         const { data: existing } = await supabase
           .from("group_members")
           .select("user_id")
@@ -47,14 +46,12 @@ export default function InviteScreen() {
           return;
         }
 
-        // L'ajouter au groupe
         const { error } = await supabase
           .from("group_members")
           .insert({ group_id: id, user_id: profile.id });
 
         if (error) throw error;
 
-        // Send push notification to invited user
         try {
           const { data: group } = await supabase
             .from("groups")
@@ -69,12 +66,10 @@ export default function InviteScreen() {
         Alert.alert("Ajouté !", `${trimmed} a été ajouté au groupe.`);
         setEmail("");
       } else {
-        // L'utilisateur n'existe pas → sauvegarder l'invitation + envoyer un mail
         await supabase
           .from("invitations")
           .upsert({ group_id: id, email: trimmed, invited_by: user.id });
 
-        // Ouvrir le client mail avec un message d'invitation
         const subject = encodeURIComponent("Rejoins-moi sur HappyOur !");
         const body = encodeURIComponent(
           `Hey ! Je t'invite à rejoindre mon groupe sur HappyOur.\n\n` +
@@ -111,41 +106,25 @@ export default function InviteScreen() {
       </Text>
 
       <TextInput
-        style={styles.input}
+        style={[theme.glassInput, styles.input]}
         placeholder="Adresse email"
-        placeholderTextColor="#999"
+        placeholderTextColor={colors.muted}
         autoCapitalize="none"
         keyboardType="email-address"
         value={email}
         onChangeText={setEmail}
       />
 
-      <TouchableOpacity style={styles.button} onPress={handleInvite} disabled={loading}>
-        <Text style={styles.buttonText}>{loading ? "Envoi..." : "Inviter"}</Text>
+      <TouchableOpacity style={theme.accentButton} onPress={handleInvite} disabled={loading}>
+        <Text style={theme.accentButtonText}>{loading ? "Envoi..." : "Inviter"}</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: 32, paddingTop: 80, backgroundColor: "#fff" },
-  title: { fontFamily: "Inter_700Bold", fontSize: 28, marginBottom: 8 },
-  subtitle: { fontFamily: "Inter_400Regular", fontSize: 14, color: "#666", marginBottom: 24, lineHeight: 20 },
-  input: {
-    fontFamily: "Inter_400Regular",
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    marginBottom: 16,
-    backgroundColor: "#fafafa",
-  },
-  button: {
-    backgroundColor: "#000",
-    borderRadius: 12,
-    padding: 16,
-    alignItems: "center",
-  },
-  buttonText: { fontFamily: "Inter_600SemiBold", color: "#fff", fontSize: 16 },
+  container: { flex: 1, paddingHorizontal: 32, paddingTop: 80, backgroundColor: colors.bg },
+  title: { fontFamily: "Inter_700Bold", fontSize: 28, marginBottom: 8, color: colors.text },
+  subtitle: { fontFamily: "Inter_400Regular", fontSize: 14, color: colors.secondary, marginBottom: 24, lineHeight: 20 },
+  input: { marginBottom: 16 },
 });

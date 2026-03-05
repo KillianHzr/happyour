@@ -11,6 +11,8 @@ import {
 } from "react-native";
 import { Link, router } from "expo-router";
 import { useAuth } from "../../lib/auth-context";
+import { colors, theme } from "../../lib/theme";
+import Loader from "../../components/Loader";
 
 export default function RegisterScreen() {
   const { register } = useAuth();
@@ -37,42 +39,49 @@ export default function RegisterScreen() {
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <Text style={styles.title}>HappyOur</Text>
-      <Text style={styles.subtitle}>Crée ton compte</Text>
+      <View style={styles.logoMark} />
+      <Text style={styles.title}>[noname]</Text>
+      <Text style={styles.subtitle}>Créer une identité</Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Nom d'utilisateur"
-        placeholderTextColor="#999"
-        autoCapitalize="none"
-        value={username}
-        onChangeText={setUsername}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        placeholderTextColor="#999"
-        autoCapitalize="none"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Mot de passe"
-        placeholderTextColor="#999"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-      />
+      <View style={styles.form}>
+        <TextInput
+          style={[theme.glassInput, styles.input]}
+          placeholder="Pseudo"
+          placeholderTextColor={colors.secondary}
+          autoCapitalize="none"
+          value={username}
+          onChangeText={setUsername}
+        />
+        <TextInput
+          style={[theme.glassInput, styles.input]}
+          placeholder="Email"
+          placeholderTextColor={colors.secondary}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          value={email}
+          onChangeText={setEmail}
+        />
+        <TextInput
+          style={[theme.glassInput, styles.input]}
+          placeholder="Mot de passe"
+          placeholderTextColor={colors.secondary}
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+        />
 
-      <TouchableOpacity style={styles.button} onPress={handleRegister} disabled={loading}>
-        <Text style={styles.buttonText}>{loading ? "Inscription..." : "S'inscrire"}</Text>
-      </TouchableOpacity>
+        <TouchableOpacity style={[theme.accentButton, styles.button]} onPress={handleRegister} disabled={loading}>
+          {loading ? (
+            <Loader size={20} />
+          ) : (
+            <Text style={theme.accentButtonText}>Rejoindre</Text>
+          )}
+        </TouchableOpacity>
+      </View>
 
       <Link href="/(auth)/login" asChild>
         <TouchableOpacity style={styles.linkBtn}>
-          <Text style={styles.link}>Déjà un compte ? Connecte-toi</Text>
+          <Text style={styles.link}>Déjà membre ? Se connecter</Text>
         </TouchableOpacity>
       </Link>
     </KeyboardAvoidingView>
@@ -80,27 +89,38 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", paddingHorizontal: 32, backgroundColor: "#fff" },
-  title: { fontFamily: "Inter_700Bold", fontSize: 36, textAlign: "center", marginBottom: 4 },
-  subtitle: { fontFamily: "Inter_400Regular", fontSize: 16, textAlign: "center", color: "#666", marginBottom: 32 },
-  input: {
+  container: { flex: 1, justifyContent: "center", paddingHorizontal: 40, backgroundColor: colors.bg },
+  logoMark: {
+    width: 32,
+    height: 32,
+    borderWidth: 2,
+    borderColor: "#fff",
+    borderRadius: 6,
+    marginBottom: 24,
+    transform: [{ rotate: "45deg" }],
+    alignSelf: "center",
+  },
+  title: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 32,
+    textAlign: "center",
+    marginBottom: 8,
+    color: colors.text,
+    letterSpacing: -1,
+    textTransform: "lowercase",
+  },
+  subtitle: {
     fontFamily: "Inter_400Regular",
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    marginBottom: 12,
-    backgroundColor: "#fafafa",
+    fontSize: 14,
+    textAlign: "center",
+    color: colors.secondary,
+    marginBottom: 48,
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
-  button: {
-    backgroundColor: "#000",
-    borderRadius: 12,
-    padding: 16,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  buttonText: { fontFamily: "Inter_600SemiBold", color: "#fff", fontSize: 16 },
-  linkBtn: { marginTop: 20, alignItems: "center" },
-  link: { fontFamily: "Inter_400Regular", color: "#666", fontSize: 14 },
+  form: { width: "100%" },
+  input: { marginBottom: 16 },
+  button: { marginTop: 12, height: 58, justifyContent: "center" },
+  linkBtn: { marginTop: 32, alignItems: "center" },
+  link: { fontFamily: "Inter_400Regular", color: colors.secondary, fontSize: 13, textDecorationLine: "underline" },
 });

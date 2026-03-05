@@ -68,8 +68,12 @@ export async function registerForPushNotifications(userId: string) {
       .eq("id", userId);
 
     return token;
-  } catch (e) {
-    console.warn("registerForPushNotifications error:", e);
+  } catch (e: any) {
+    if (Platform.OS === "android" && e.message?.includes("FirebaseApp is not initialized")) {
+      console.warn("Push Notifications: google-services.json manquant ou projet Firebase non configuré.");
+    } else {
+      console.warn("registerForPushNotifications error:", e);
+    }
   }
 }
 

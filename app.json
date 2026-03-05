@@ -1,15 +1,15 @@
 {
   "expo": {
-    "name": "HappyOur",
+    "name": "[noname]",
     "slug": "HappyOur",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#000000"
     },
     "ios": {
       "supportsTablet": true,
@@ -17,8 +17,9 @@
     },
     "android": {
       "package": "com.happyour.app",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#000000",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -41,7 +42,8 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "L'app a besoin de la caméra pour capturer des moments."
+          "cameraPermission": "L'app a besoin de la caméra pour capturer des moments.",
+          "microphonePermission": "L'app a besoin du micro pour enregistrer des vidéos."
         }
       ],
       [

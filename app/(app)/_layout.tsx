@@ -23,7 +23,7 @@ export default function AppLayout() {
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: "#fff" },
+        contentStyle: { backgroundColor: "#0A0A0F" },
       }}
     />
   );

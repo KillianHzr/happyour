@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { Slot } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useFonts, Inter_400Regular, Inter_600SemiBold, Inter_700Bold } from "@expo-google-fonts/inter";
-import { ActivityIndicator, View, StyleSheet } from "react-native";
+import { View, StyleSheet } from "react-native";
 import * as Updates from "expo-updates";
 import { AuthProvider } from "../lib/auth-context";
 import { setupNotificationHandler } from "../lib/notifications";
 import { checkAppVersion } from "../lib/version-check";
 import UpdateModal from "../components/UpdateModal";
+import SplashScreen from "../components/SplashScreen";
 
 setupNotificationHandler();
 
@@ -15,30 +16,36 @@ export default function RootLayout() {
   const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_600SemiBold, Inter_700Bold });
   const [updateRequired, setUpdateRequired] = useState(false);
   const [apkUrl, setApkUrl] = useState("");
+  const [checksReady, setChecksReady] = useState(false);
+  const [splashDone, setSplashDone] = useState(false);
 
   useEffect(() => {
-    // Check if APK version is outdated
     checkAppVersion().then(({ needsUpdate, apkUrl }) => {
       if (needsUpdate) {
         setUpdateRequired(true);
         setApkUrl(apkUrl);
-        return;
+      } else {
+        checkOTAUpdate();
       }
-
-      // If APK is up to date, check for OTA updates
-      checkOTAUpdate();
+      setChecksReady(true);
     });
   }, []);
 
+  const appReady = fontsLoaded && checksReady;
+
+  if (updateRequired && splashDone) {
+    return <UpdateModal visible apkUrl={apkUrl} />;
+  }
+
   return (
     <AuthProvider>
-      <StatusBar style="dark" />
-      <UpdateModal visible={updateRequired} apkUrl={apkUrl} />
-      {fontsLoaded ? (
-        <Slot />
-      ) : (
-        <View style={styles.loader}>
-          <ActivityIndicator size="large" color="#000" />
+      <StatusBar style="light" />
+      {!splashDone && (
+        <SplashScreen ready={appReady} onFinish={() => setSplashDone(true)} />
+      )}
+      {appReady && (
+        <View style={splashDone ? styles.visible : styles.hidden}>
+          <Slot />
         </View>
       )}
     </AuthProvider>
@@ -59,5 +66,6 @@ async function checkOTAUpdate() {
 }
 
 const styles = StyleSheet.create({
-  loader: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#fff" },
+  visible: { flex: 1 },
+  hidden: { flex: 1, opacity: 0 },
 });

@@ -6,9 +6,13 @@ import {
   StyleSheet,
   Dimensions,
   Pressable,
-  Platform,
+  TouchableOpacity,
 } from "react-native";
 import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
+import Svg, { Path } from "react-native-svg";
+import { colors, theme } from "../lib/theme";
+import { router } from "expo-router";
 
 const { width, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -32,7 +36,8 @@ export type PhotoEntry = {
 
 type FeedItem =
   | { type: "photo"; data: PhotoEntry }
-  | { type: "separator"; date: string; label: string };
+  | { type: "separator"; date: string; label: string }
+  | { type: "end" };
 
 type Props = {
   photos: PhotoEntry[];
@@ -40,6 +45,12 @@ type Props = {
   onReactPress?: (photoId: string) => void;
   onReactionPhotoPress?: (url: string) => void;
 };
+
+const ReactIcon = () => (
+  <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+    <Path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="#FFFFFF" />
+  </Svg>
+);
 
 function formatDayLabel(dateStr: string): { date: string; label: string } {
   const d = new Date(dateStr);
@@ -77,6 +88,10 @@ export default function PhotoFeed({
       }
       result.push({ type: "photo", data: photo });
     }
+    
+    // Ajouter l'élément final
+    result.push({ type: "end" });
+    
     return result;
   }, [photos]);
 
@@ -105,30 +120,54 @@ export default function PhotoFeed({
       );
     }
 
+    if (item.type === "end") {
+      return (
+        <View style={styles.endContainer}>
+          <LinearGradient
+            colors={["rgba(255,255,255,0.05)", "transparent"]}
+            style={styles.endGlow}
+          />
+          <View style={styles.endLogoMark} />
+          <Text style={styles.endTitle}>Semaine terminée.</Text>
+          <Text style={styles.endSubtitle}>
+            Tous les moments de votre groupe ont été dévoilés.
+          </Text>
+          <View style={styles.endDivider} />
+          <TouchableOpacity 
+            style={[theme.accentButton, styles.newWeekBtn]}
+            onPress={() => router.back()}
+          >
+            <Text style={theme.accentButtonText}>Nouvelle semaine</Text>
+          </TouchableOpacity>
+          <Text style={styles.endFooter}>[noname]</Text>
+        </View>
+      );
+    }
+
     const photo = item.data;
     const initial = photo.username?.charAt(0).toUpperCase() ?? "?";
     const time = formatTime(photo.created_at);
     const reactions = photo.reactions ?? [];
 
     return (
-      <Pressable
-        style={styles.photoContainer}
-        onPress={() => onPhotoPress?.(photo)}
-      >
+      <View style={styles.photoContainer}>
         <Image
           source={{ uri: photo.url }}
           style={StyleSheet.absoluteFillObject}
-          contentFit="contain"
+          contentFit="cover"
           transition={300}
         />
-        <View style={styles.overlay}>
+        <LinearGradient
+          colors={["transparent", "rgba(0,0,0,0.85)"]}
+          style={styles.overlay}
+        >
           {reactions.length > 0 && (
             <View style={styles.reactionsRow}>
               {reactions.map((r) =>
                 r.type === "emoji" ? (
-                  <Text key={r.id} style={styles.reactionEmoji}>
-                    {r.emoji}
-                  </Text>
+                  <View key={r.id} style={styles.reactionTextBadge}>
+                    <Text style={styles.reactionText}>{r.emoji}</Text>
+                  </View>
                 ) : r.image_url ? (
                   <Pressable
                     key={r.id}
@@ -157,78 +196,81 @@ export default function PhotoFeed({
               {photo.note}
             </Text>
           ) : null}
-        </View>
+        </LinearGradient>
 
-        {/* React button */}
         <Pressable
           style={styles.reactButton}
           onPress={() => onReactPress?.(photo.id)}
         >
-          <Text style={styles.reactButtonText}>😊</Text>
+          <ReactIcon />
         </Pressable>
-      </Pressable>
+      </View>
     );
   };
 
   return (
     <FlatList
       data={items}
-      keyExtractor={(item, i) =>
-        item.type === "separator" ? `sep-${item.date}` : `photo-${item.data.id}`
-      }
+      keyExtractor={(item, i) => {
+        if (item.type === "separator") return `sep-${item.date}`;
+        if (item.type === "end") return "feed-end";
+        return `photo-${item.data.id}`;
+      }}
       renderItem={renderItem}
       getItemLayout={getItemLayout}
       pagingEnabled
+      snapToInterval={SCREEN_HEIGHT}
       snapToAlignment="start"
-      decelerationRate="normal"
+      decelerationRate="fast"
+      disableIntervalMomentum={true}
       showsVerticalScrollIndicator={false}
       style={styles.list}
-      removeClippedSubviews={Platform.OS !== "web"}
+      removeClippedSubviews={true}
       maxToRenderPerBatch={3}
-      windowSize={3}
+      windowSize={5}
       initialNumToRender={2}
     />
   );
 }
 
 const styles = StyleSheet.create({
-  list: { flex: 1, backgroundColor: "#000" },
+  list: { flex: 1, backgroundColor: colors.bg },
   emptyContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#000",
+    backgroundColor: colors.bg,
   },
-  emptyText: { fontFamily: "Inter_400Regular", color: "#999", fontSize: 16 },
+  emptyText: { fontFamily: "Inter_400Regular", color: colors.secondary, fontSize: 16 },
 
-  // Separator
   separatorContainer: {
     height: SCREEN_HEIGHT,
-    backgroundColor: "#000",
+    backgroundColor: colors.bg,
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 32,
   },
   separatorDay: {
     fontFamily: "Inter_700Bold",
-    fontSize: 40,
-    color: "#fff",
+    fontSize: 48,
+    color: colors.text,
     textAlign: "center",
+    letterSpacing: -1,
   },
   separatorDate: {
     fontFamily: "Inter_400Regular",
-    fontSize: 18,
-    color: "#aaa",
+    fontSize: 16,
+    color: colors.secondary,
     marginTop: 8,
     textAlign: "center",
-    textTransform: "capitalize",
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
 
-  // Photo card
   photoContainer: {
     height: SCREEN_HEIGHT,
     width,
-    backgroundColor: "#000",
+    backgroundColor: colors.bg,
   },
   overlay: {
     position: "absolute",
@@ -237,8 +279,7 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: 20,
     paddingBottom: 40,
-    paddingTop: 16,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    paddingTop: 80,
   },
   authorRow: {
     flexDirection: "row",
@@ -246,67 +287,134 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#fff",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.15)",
     justifyContent: "center",
     alignItems: "center",
   },
   avatarText: {
     fontFamily: "Inter_700Bold",
-    fontSize: 18,
-    color: "#000",
+    fontSize: 16,
+    color: colors.text,
   },
   username: {
     fontFamily: "Inter_600SemiBold",
-    fontSize: 16,
-    color: "#fff",
+    fontSize: 15,
+    color: colors.text,
   },
   time: {
     fontFamily: "Inter_400Regular",
-    fontSize: 13,
-    color: "#ccc",
+    fontSize: 12,
+    color: colors.secondary,
   },
   note: {
     fontFamily: "Inter_400Regular",
     fontSize: 15,
-    color: "#fff",
-    marginTop: 10,
+    color: colors.text,
+    marginTop: 12,
+    lineHeight: 20,
   },
 
-  // Reactions row
   reactionsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",
-    gap: 8,
-    marginBottom: 12,
+    gap: 6,
+    marginBottom: 16,
   },
-  reactionEmoji: {
-    fontSize: 28,
+  reactionTextBadge: {
+    backgroundColor: "rgba(255,255,255,0.1)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.15)",
+  },
+  reactionText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 11,
+    color: colors.text,
+    textTransform: "uppercase",
   },
   reactionSelfie: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 2,
-    borderColor: "#fff",
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#FFFFFF",
   },
 
-  // React button
   reactButton: {
     position: "absolute",
     bottom: 140,
     right: 20,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "rgba(255,255,255,0.2)",
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.2)",
     justifyContent: "center",
     alignItems: "center",
   },
-  reactButtonText: {
-    fontSize: 22,
+
+  // Final screen
+  endContainer: {
+    height: SCREEN_HEIGHT,
+    backgroundColor: colors.bg,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 40,
+  },
+  endGlow: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  endLogoMark: {
+    width: 32,
+    height: 32,
+    borderWidth: 2,
+    borderColor: "#fff",
+    borderRadius: 6,
+    marginBottom: 32,
+    transform: [{ rotate: "45deg" }],
+    opacity: 0.8,
+  },
+  endTitle: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 32,
+    color: colors.text,
+    textAlign: "center",
+    letterSpacing: -1,
+  },
+  endSubtitle: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 16,
+    color: colors.secondary,
+    textAlign: "center",
+    marginTop: 12,
+    lineHeight: 22,
+  },
+  endDivider: {
+    width: 40,
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    marginVertical: 40,
+  },
+  newWeekBtn: {
+    width: "100%",
+    maxWidth: 240,
+  },
+  endFooter: {
+    position: "absolute",
+    bottom: 60,
+    fontFamily: "Inter_700Bold",
+    fontSize: 14,
+    color: colors.secondary,
+    opacity: 0.3,
+    letterSpacing: 2,
   },
 });

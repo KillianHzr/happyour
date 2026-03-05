@@ -10,6 +10,7 @@ import {
 import { router } from "expo-router";
 import { useAuth } from "../../../lib/auth-context";
 import { supabase } from "../../../lib/supabase";
+import { colors, theme } from "../../../lib/theme";
 
 export default function CreateGroupScreen() {
   const { user } = useAuth();
@@ -34,7 +35,7 @@ export default function CreateGroupScreen() {
         .from("group_members")
         .insert({ group_id: group.id, user_id: user.id });
 
-      router.back();
+      router.replace(`/(app)/groups/${group.id}`);
     } catch (e: any) {
       Alert.alert("Erreur", e.message);
     } finally {
@@ -47,38 +48,22 @@ export default function CreateGroupScreen() {
       <Text style={styles.title}>Nouveau groupe</Text>
 
       <TextInput
-        style={styles.input}
+        style={[theme.glassInput, styles.input]}
         placeholder="Nom du groupe"
-        placeholderTextColor="#999"
+        placeholderTextColor={colors.muted}
         value={name}
         onChangeText={setName}
       />
 
-      <TouchableOpacity style={styles.button} onPress={handleCreate} disabled={loading}>
-        <Text style={styles.buttonText}>{loading ? "Création..." : "Créer"}</Text>
+      <TouchableOpacity style={theme.accentButton} onPress={handleCreate} disabled={loading}>
+        <Text style={theme.accentButtonText}>{loading ? "Création..." : "Créer"}</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: 32, paddingTop: 80, backgroundColor: "#fff" },
-  title: { fontFamily: "Inter_700Bold", fontSize: 28, marginBottom: 24 },
-  input: {
-    fontFamily: "Inter_400Regular",
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    marginBottom: 16,
-    backgroundColor: "#fafafa",
-  },
-  button: {
-    backgroundColor: "#000",
-    borderRadius: 12,
-    padding: 16,
-    alignItems: "center",
-  },
-  buttonText: { fontFamily: "Inter_600SemiBold", color: "#fff", fontSize: 16 },
+  container: { flex: 1, paddingHorizontal: 32, paddingTop: 80, backgroundColor: colors.bg },
+  title: { fontFamily: "Inter_700Bold", fontSize: 28, marginBottom: 24, color: colors.text },
+  input: { marginBottom: 16 },
 });
