@@ -133,13 +133,16 @@ export default function PhotoFeed({ photos, onReactPress, nextUnlockDate }: Prop
 
     const moment = item.data;
     const isTextOnly = moment.image_path === "text_mode";
+    const textLen = moment.note?.length ?? 0;
+    const adaptiveFontSize = textLen <= 40 ? 32 : textLen <= 100 ? 26 : textLen <= 200 ? 21 : textLen <= 300 ? 17 : 15;
+    const adaptiveLineHeight = Math.round(adaptiveFontSize * 1.4);
 
     return (
       <View style={styles.fullscreenPage}>
         {isTextOnly ? (
           <View style={styles.textMomentBg}>
             <View style={styles.quoteContainer}>
-              <Text style={styles.textMomentContent}>{moment.note}</Text>
+              <Text style={[styles.textMomentContent, { fontSize: adaptiveFontSize, lineHeight: adaptiveLineHeight }]}>{moment.note}</Text>
               <View style={styles.citationFooter}>
                 <View style={styles.citationAvatar}>
                   {moment.avatar_url ? (

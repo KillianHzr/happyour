@@ -5,29 +5,31 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
 import { Link, router } from "expo-router";
 import { useAuth } from "../../lib/auth-context";
+import { useToast } from "../../lib/toast-context";
+import { translateError } from "../../lib/error-messages";
 import { colors, theme } from "../../lib/theme";
 import Loader from "../../components/Loader";
 
 export default function LoginScreen() {
   const { login } = useAuth();
+  const { showToast } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!email || !password) return Alert.alert("Erreur", "Remplis tous les champs.");
+    if (!email || !password) return showToast("Erreur", "Remplis tous les champs.");
     setLoading(true);
     try {
       await login(email, password);
-      router.replace("/(app)/groups");
+      router.replace("/");
     } catch (e: any) {
-      Alert.alert("Erreur", e.message);
+      showToast("Erreur", translateError(e.message));
     } finally {
       setLoading(false);
     }

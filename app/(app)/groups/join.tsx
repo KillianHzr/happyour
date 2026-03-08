@@ -5,19 +5,21 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
 import { router } from "expo-router";
 import { supabase } from "../../../lib/supabase";
 import { useAuth } from "../../../lib/auth-context";
+import { useToast } from "../../../lib/toast-context";
+import { translateError } from "../../../lib/error-messages";
 import { colors, theme } from "../../../lib/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Loader from "../../../components/Loader";
 
 export default function JoinGroupScreen() {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const insets = useSafeAreaInsets();
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -33,7 +35,7 @@ export default function JoinGroupScreen() {
         .single();
 
       if (groupErr || !group) {
-        Alert.alert("Erreur", "Code invalide ou groupe introuvable.");
+        showToast("Erreur", "Code invalide ou groupe introuvable.");
         return;
       }
 
@@ -43,17 +45,17 @@ export default function JoinGroupScreen() {
 
       if (joinErr) {
         if (joinErr.message.includes("unique")) {
-          Alert.alert("Info", "Tu fais déjà partie de ce groupe.");
+          showToast("Info", "Tu fais déjà partie de ce groupe.", "info");
           router.replace(`/(app)/groups/${group.id}`);
         } else {
           throw joinErr;
         }
       } else {
-        Alert.alert("Succès", `Tu as rejoint "${group.name}" !`);
+        showToast("Succès", `Tu as rejoint "${group.name}" !`, "success");
         router.replace(`/(app)/groups/${group.id}`);
       }
     } catch (e: any) {
-      Alert.alert("Erreur", e.message);
+      showToast("Erreur", translateError(e.message));
     } finally {
       setLoading(false);
     }

@@ -6,24 +6,25 @@ import {
   Dimensions,
   Animated,
   TouchableOpacity,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   TextInput,
   ScrollView,
   FlatList,
   Modal,
-  Pressable,
   ActivityIndicator,
 } from "react-native";
-import { useLocalSearchParams, router } from "expo-router";
+import { useLocalSearchParams, router, useFocusEffect } from "expo-router";
 import { CameraView, CameraType, FlashMode } from "expo-camera";
 import { Image } from "expo-image";
 import { BlurView } from "expo-blur";
 import * as ImagePicker from "expo-image-picker";
 import { decode } from "base64-arraybuffer";
+import { setCaptureData, clearCaptureData } from "../../../lib/capture-store";
 import { supabase } from "../../../lib/supabase";
 import { useAuth } from "../../../lib/auth-context";
+import { useToast } from "../../../lib/toast-context";
+import { translateError } from "../../../lib/error-messages";
 import { colors, theme } from "../../../lib/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path, Circle } from "react-native-svg";
@@ -51,23 +52,9 @@ const SendIcon = ({ color = "#000" }) => (
   </Svg>
 );
 
-const FeatherIcon = () => (
-  <Svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <Path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h3.5l6.74-6.74z" />
-    <Path d="M16 8L2 22" />
-    <Path d="M17.5 15H9" />
-  </Svg>
-);
-
 const FlipIcon = () => (
   <Svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <Path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-  </Svg>
-);
-
-const CloseIcon = () => (
-  <Svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <Path d="M18 6L6 18M6 6l12 12" />
   </Svg>
 );
 
@@ -105,12 +92,14 @@ type CameraMode = "PHOTO" | "VIDEO" | "TEXTE";
 export default function MainPagerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user, logout } = useAuth();
+  const { showToast } = useToast();
   const insets = useSafeAreaInsets();
   
   const scrollX = useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const scrollRef = useRef<Animated.ScrollView>(null);
 
   const [groupName, setGroupName] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
   const [members, setMembers] = useState<any[]>([]);
   const [photoCount, setPhotoCount] = useState(0);
   const [userPhotoCount, setUserPhotoCount] = useState(0);
@@ -132,15 +121,11 @@ export default function MainPagerScreen() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const recordingTimer = useRef<NodeJS.Timeout | null>(null);
-  const startTouchY = useRef<number | null>(null);
 
   const [capturing, setCapturing] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [capturedBase64, setCapturedBase64] = useState<string | null>(null);
-  const [capturedUri, setCapturedUri] = useState<string | null>(null);
-  const [isEditingNote, setIsEditingNote] = useState(false);
+  const [frozenUri, setFrozenUri] = useState<string | null>(null);
   const [textModeContent, setTextModeContent] = useState("");
-  const [note, setNote] = useState("");
 
   const unlocked = isVaultUnlocked() || devMode;
 
@@ -156,7 +141,7 @@ export default function MainPagerScreen() {
           .eq("group_id", id)
           .gte("created_at", monday.toISOString())
           .order("created_at", { ascending: true }),
-        supabase.from("group_members").select("profiles:user_id(username, avatar_url)").eq("group_id", id)
+        supabase.from("group_members").select("user_id, role, profiles:user_id(username, avatar_url)").eq("group_id", id)
       ]);
 
       if (groupRes.data) setGroupName(groupRes.data.name);
@@ -165,7 +150,11 @@ export default function MainPagerScreen() {
         setAvatarUrl(profileRes.data.avatar_url);
         setEmail(profileRes.data.email || user.email || "");
       }
-      if (membersRes.data) setMembers(membersRes.data.map((m: any) => m.profiles));
+      if (membersRes.data) {
+        const myMembership = membersRes.data.find((m: any) => m.user_id === user.id);
+        setIsAdmin(myMembership?.role === "admin");
+        setMembers(membersRes.data.map((m: any) => ({ ...m.profiles, user_id: m.user_id, role: m.role })));
+      }
       
       if (photosRes.data) {
         const pData = photosRes.data;
@@ -191,6 +180,55 @@ export default function MainPagerScreen() {
   }, [id, user, unlocked]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+  useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
+
+  // Realtime: nouveau membre rejoint le groupe
+  useEffect(() => {
+    if (!id || !user) return;
+    const channel = supabase
+      .channel(`group-members-${id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "group_members", filter: `group_id=eq.${id}` }, async (payload) => {
+        const newUserId = payload.new.user_id;
+        if (newUserId === user.id) return; // c'est moi
+        const { data: profile } = await supabase.from("profiles").select("username").eq("id", newUserId).single();
+        const name = profile?.username ?? "Quelqu'un";
+        showToast("Nouveau membre", `${name} a rejoint le groupe !`, "info");
+        fetchData();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [id, user]);
+
+  // Realtime: nouveau moment posté par un autre membre
+  useEffect(() => {
+    if (!id || !user) return;
+    const channel = supabase
+      .channel(`group-photos-${id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "photos", filter: `group_id=eq.${id}` }, async (payload) => {
+        const senderId = payload.new.user_id;
+        if (senderId === user.id) return;
+        const { data: profile } = await supabase.from("profiles").select("username").eq("id", senderId).single();
+        const name = profile?.username ?? "Quelqu'un";
+        showToast("Nouveau moment", `${name} a partagé un moment !`, "info");
+        fetchData();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [id, user]);
+
+  // Détection déverrouillage du coffre en temps réel
+  const vaultWasLocked = useRef(!isVaultUnlocked());
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const nowUnlocked = isVaultUnlocked();
+      if (vaultWasLocked.current && nowUnlocked) {
+        showToast("Coffre déverrouillé", "Les moments de la semaine sont disponibles !", "success");
+        vaultWasLocked.current = false;
+        fetchData();
+      }
+    }, 30000); // check toutes les 30s
+    return () => clearInterval(interval);
+  }, []);
 
   const updateAvatar = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -209,7 +247,19 @@ export default function MainPagerScreen() {
         const { data: urlData } = supabase.storage.from("moments").getPublicUrl(filePath);
         await supabase.from("profiles").update({ avatar_url: urlData.publicUrl }).eq("id", user?.id);
         setAvatarUrl(urlData.publicUrl);
-      } catch (e: any) { Alert.alert("Erreur", e.message); } finally { setUploading(false); }
+        showToast("Photo de profil", "Avatar mis à jour.", "success");
+      } catch (e: any) { showToast("Erreur", translateError(e.message)); } finally { setUploading(false); }
+    }
+  };
+
+  const handleRemoveMember = async (memberId: string, memberName: string) => {
+    try {
+      const { error } = await supabase.from("group_members").delete().eq("group_id", id).eq("user_id", memberId);
+      if (error) throw error;
+      setMembers((prev) => prev.filter((m) => m.user_id !== memberId));
+      showToast("Membre retiré", `${memberName} a été retiré du groupe.`, "success");
+    } catch (e: any) {
+      showToast("Erreur", translateError(e.message));
     }
   };
 
@@ -233,16 +283,27 @@ export default function MainPagerScreen() {
       handleUploadText();
       return;
     }
+    if (cameraMode === "VIDEO") {
+      if (isRecording) { stopVideoRecording(); } else { startVideoRecording(); }
+      return;
+    }
+    // Mode PHOTO — freeze instantané style Snapchat
     if (!cameraRef.current || isRecording || capturing) return;
     setCapturing(true);
+    // Flash blanc instantané pour feedback visuel + freeze le preview
+    setFrozenUri("flash");
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.7, base64: true });
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.7, base64: true, skipProcessing: true });
       if (photo?.base64) {
-        setCapturedBase64(photo.base64);
-        setCapturedUri(photo.uri);
+        setCaptureData(photo.base64, photo.uri);
+        setFrozenUri(null);
+        router.push(`/(app)/groups/${id}/preview`);
+      } else {
+        setFrozenUri(null);
       }
     } catch (e: any) {
-      Alert.alert("Erreur", "Impossible de prendre la photo.");
+      setFrozenUri(null);
+      showToast("Erreur", "Impossible de prendre la photo.");
     } finally {
       setCapturing(false);
     }
@@ -256,7 +317,7 @@ export default function MainPagerScreen() {
     try {
       const video = await cameraRef.current.recordAsync();
       if (video) {
-        setCapturedUri(video.uri);
+        showToast("Info", "L'envoi de vidéos arrive bientôt.", "info");
       }
     } catch (e: any) {
       stopVideoRecording();
@@ -270,34 +331,13 @@ export default function MainPagerScreen() {
     if (recordingTimer.current) clearInterval(recordingTimer.current);
   };
 
-  const handleTouchStart = (e: any) => {
-    startTouchY.current = e.nativeEvent.pageY;
-  };
-
-  const handleTouchMove = (e: any) => {
-    if (!isRecording || startTouchY.current === null) return;
-    const diff = startTouchY.current - e.nativeEvent.pageY;
-    const newZoom = Math.min(Math.max(diff / 300, 0), 1);
-    setZoom(newZoom);
-  };
-
   const handleUploadText = async () => {
     setUploading(true);
     try {
       await supabase.from("photos").insert({ group_id: id, user_id: user?.id, image_path: "text_mode", note: textModeContent.trim() });
       setTextModeContent(""); await fetchData(); jumpTo(2);
-    } catch (e: any) { Alert.alert("Erreur", e.message); } finally { setUploading(false); }
-  };
-
-  const handleUploadPhoto = async () => {
-    if (!capturedBase64 || !user || uploading) return;
-    setUploading(true);
-    try {
-      const fileName = `${id}/${user.id}_${Date.now()}.jpg`;
-      await supabase.storage.from("moments").upload(fileName, decode(capturedBase64), { contentType: "image/jpeg" });
-      await supabase.from("photos").insert({ group_id: id, user_id: user.id, image_path: fileName, note: note.trim() || null });
-      setCapturedBase64(null); setNote(""); await fetchData(); jumpTo(2); 
-    } catch (e: any) { Alert.alert("Erreur", e.message); } finally { setUploading(false); }
+      showToast("Moment envoyé", "Ton texte a été ajouté au coffre.", "success");
+    } catch (e: any) { showToast("Erreur", translateError(e.message)); } finally { setUploading(false); }
   };
 
   // Interpolations pour le Stacking Effect
@@ -306,7 +346,6 @@ export default function MainPagerScreen() {
   const cameraOpacity = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [0.4, 1, 0.4] });
 
   const isBlocked = capturing || uploading;
-  const isEditing = !!capturedBase64;
 
   if (!dataLoaded) return <View style={[styles.container, styles.center]}><Loader size={48} /></View>;
 
@@ -314,7 +353,7 @@ export default function MainPagerScreen() {
     <View style={styles.container}>
       <Animated.ScrollView
         ref={scrollRef} horizontal pagingEnabled showsHorizontalScrollIndicator={false}
-        scrollEnabled={!isEditing && !isBlocked}
+        scrollEnabled={!isBlocked}
         onMomentumScrollEnd={(e) => setCurrentPage(Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH))}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })}
         scrollEventThrottle={16} contentOffset={{ x: SCREEN_WIDTH, y: 0 }} style={styles.pager}
@@ -340,13 +379,20 @@ export default function MainPagerScreen() {
         {/* PAGE 1: CAMERA (Fixed underneath) */}
         <Animated.View style={[styles.page, { transform: [{ translateX: cameraTranslateX }, { scale: cameraScale }], opacity: cameraOpacity, zIndex: 1 }]}>
           {cameraMode === "TEXTE" ? (
-            <View style={styles.textModeContainer}><TextInput style={styles.textModeInput} placeholder="Écris..." placeholderTextColor="rgba(255,255,255,0.3)" multiline value={textModeContent} onChangeText={setTextModeContent} autoFocus disabled={isBlocked} /></View>
+            <View style={styles.textModeContainer}><TextInput style={styles.textModeInput} placeholder="Écris..." placeholderTextColor="rgba(255,255,255,0.3)" multiline value={textModeContent} onChangeText={setTextModeContent} maxLength={400} autoFocus disabled={isBlocked} /></View>
           ) : (
-            <StandardCamera ref={cameraRef} isActive={!capturedBase64} mode={cameraMode === "VIDEO" ? "video" : "picture"} facing={facing} flash={flash} zoom={zoom} />
+            <>
+              <StandardCamera ref={cameraRef} isActive mode={cameraMode === "VIDEO" ? "video" : "picture"} facing={facing} flash={flash} zoom={zoom} />
+              {frozenUri && (
+                frozenUri === "flash"
+                  ? <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]} />
+                  : <Image source={{ uri: frozenUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+              )}
+            </>
           )}
 
           {/* Camera UI Overlay */}
-          {!capturedBase64 && (
+          {!frozenUri && (
             <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
               {cameraMode !== "TEXTE" && (
                 <TouchableOpacity style={[styles.topControlBtn, { top: insets.top + 20, right: 20 }]} onPress={() => setFlash(prev => prev === 'off' ? 'on' : prev === 'on' ? 'auto' : 'off')} disabled={isBlocked}>
@@ -368,13 +414,9 @@ export default function MainPagerScreen() {
                 </View>
                 <View style={styles.captureRow}>
                   <View style={styles.sideControlPlaceholder} />
-                  <TouchableOpacity 
-                    style={[styles.captureBtn, (cameraMode === "VIDEO" || isRecording) && styles.captureBtnVideo, isRecording && styles.captureBtnRecording]} 
+                  <TouchableOpacity
+                    style={[styles.captureBtn, (cameraMode === "VIDEO" || isRecording) && styles.captureBtnVideo, isRecording && styles.captureBtnRecording]}
                     onPress={handleCapture}
-                    onLongPress={() => cameraMode !== "TEXTE" && startVideoRecording()}
-                    onPressOut={() => isRecording && stopVideoRecording()}
-                    onTouchStart={handleTouchStart}
-                    onTouchMove={handleTouchMove}
                     activeOpacity={0.8}
                     disabled={isBlocked}
                   >
@@ -390,27 +432,6 @@ export default function MainPagerScreen() {
             </View>
           )}
 
-          {capturedBase64 && (
-            <View style={StyleSheet.absoluteFill}>
-              <Image source={{ uri: capturedUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
-              <TouchableOpacity style={[styles.backCaptureBtn, { top: insets.top + 20 }]} onPress={() => setCapturedBase64(null)} disabled={isBlocked}>
-                <CloseIcon />
-              </TouchableOpacity>
-              {note ? ( <Pressable style={styles.centeredNotePreview} onPress={() => setIsEditingNote(true)} disabled={isBlocked}><View style={styles.noteTag}><Text style={styles.noteTagText}>{note}</Text></View></Pressable> ) : null}
-              <View style={[styles.postCaptureActions, { bottom: insets.bottom + 120 }]}>
-                <TouchableOpacity style={styles.sideActionBtn} onPress={() => setIsEditingNote(true)} disabled={isBlocked}><FeatherIcon /></TouchableOpacity>
-                <TouchableOpacity style={styles.sendCaptureBtn} onPress={handleUploadPhoto} disabled={isBlocked}><View style={styles.sendCaptureInner}>{uploading ? <ActivityIndicator color="#000" /> : <SendIcon color="#000" />}</View></TouchableOpacity>
-              </View>
-              <Modal visible={isEditingNote} transparent animationType="fade">
-                <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill}>
-                  <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.noteEditorContainer}>
-                    <TextInput style={styles.largeNoteInput} placeholder="Note..." placeholderTextColor="rgba(255,255,255,0.3)" value={note} onChangeText={setNote} maxLength={140} multiline autoFocus />
-                    <TouchableOpacity style={styles.doneNoteBtn} onPress={() => setIsEditingNote(false)}><Text style={styles.doneNoteText}>Terminé</Text></TouchableOpacity>
-                  </KeyboardAvoidingView>
-                </BlurView>
-              </Modal>
-            </View>
-          )}
         </Animated.View>
 
         {/* PAGE 2: VAULT (Slides over Camera) */}
@@ -462,22 +483,13 @@ export default function MainPagerScreen() {
         </View>
       </Animated.ScrollView>
 
-      {/* Blocking Loader Overlay */}
-      {capturing && (
-        <View style={styles.blockingOverlay}>
-          <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
-          <ActivityIndicator size="large" color="#FFF" />
-          <Text style={styles.blockingText}>Capture en cours...</Text>
-        </View>
-      )}
-
       {/* NAV BAR */}
       <View style={[styles.tabBarContainer, { paddingBottom: insets.bottom }]}>
         <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
         <View style={styles.tabBarContent}>
-          <TouchableOpacity style={styles.tab} onPress={() => jumpTo(0)} disabled={isEditing || isBlocked}><ProfileIcon color={currentPage === 0 ? "#FFF" : "rgba(255,255,255,0.4)"} size={24} /><Text style={[styles.tabLabel, currentPage === 0 && styles.tabLabelActive]}>Profil</Text></TouchableOpacity>
-          <TouchableOpacity style={styles.tab} onPress={() => jumpTo(1)} disabled={isEditing || isBlocked}><MomentIcon color={currentPage === 1 ? "#FFF" : "rgba(255,255,255,0.4)"} size={28} /><Text style={[styles.tabLabel, currentPage === 1 && styles.tabLabelActive]}>Moment</Text></TouchableOpacity>
-          <TouchableOpacity style={styles.tab} onPress={() => jumpTo(2)} disabled={isEditing || isBlocked}><VaultIcon color={currentPage === 2 ? "#FFF" : "rgba(255,255,255,0.4)"} size={24} /><Text style={[styles.tabLabel, currentPage === 2 && styles.tabLabelActive]}>Coffre</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.tab} onPress={() => jumpTo(0)} disabled={isBlocked}><ProfileIcon color={currentPage === 0 ? "#FFF" : "rgba(255,255,255,0.4)"} size={24} /><Text style={[styles.tabLabel, currentPage === 0 && styles.tabLabelActive]}>Profil</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.tab} onPress={() => jumpTo(1)} disabled={isBlocked}><MomentIcon color={currentPage === 1 ? "#FFF" : "rgba(255,255,255,0.4)"} size={28} /><Text style={[styles.tabLabel, currentPage === 1 && styles.tabLabelActive]}>Moment</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.tab} onPress={() => jumpTo(2)} disabled={isBlocked}><VaultIcon color={currentPage === 2 ? "#FFF" : "rgba(255,255,255,0.4)"} size={24} /><Text style={[styles.tabLabel, currentPage === 2 && styles.tabLabelActive]}>Coffre</Text></TouchableOpacity>
         </View>
       </View>
 
@@ -486,8 +498,19 @@ export default function MainPagerScreen() {
           <View style={[styles.modalContent, { paddingTop: insets.top + 40 }]}>
             <View style={styles.modalHeader}><Text style={styles.modalTitle}>Membres</Text><TouchableOpacity onPress={() => setShowMembersModal(false)}><Text style={styles.closeModalText}>Fermer</Text></TouchableOpacity></View>
             <FlatList data={members} keyExtractor={(item, i) => i.toString()} renderItem={({ item }) => (
-              <View style={styles.memberItem}><View style={styles.memberAvatar}>{item.avatar_url ? <Image source={{ uri: item.avatar_url }} style={styles.avatarImg} /> : <Text style={styles.memberAvatarText}>{item.username[0]?.toUpperCase()}</Text>}</View><Text style={styles.memberName}>{item.username}</Text></View>
-            )} ListFooterComponent={() => ( <TouchableOpacity style={[theme.outlineButton, styles.inviteModalBtn]} onPress={() => { setShowMembersModal(false); router.push(`/(app)/groups/${id}/invite`); }}><Text style={theme.outlineButtonText}>Ajouter un membre</Text></TouchableOpacity> )} />
+              <View style={styles.memberItem}>
+                <View style={styles.memberAvatar}>{item.avatar_url ? <Image source={{ uri: item.avatar_url }} style={styles.avatarImg} /> : <Text style={styles.memberAvatarText}>{item.username[0]?.toUpperCase()}</Text>}</View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.memberName}>{item.username}</Text>
+                  <Text style={styles.memberRole}>{item.role === "admin" ? "Admin" : "Membre"}</Text>
+                </View>
+                {isAdmin && item.role !== "admin" && (
+                  <TouchableOpacity style={styles.removeMemberBtn} onPress={() => handleRemoveMember(item.user_id, item.username)}>
+                    <Text style={styles.removeMemberText}>Retirer</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )} ListFooterComponent={isAdmin ? () => ( <TouchableOpacity style={[theme.outlineButton, styles.inviteModalBtn]} onPress={() => { setShowMembersModal(false); router.push(`/(app)/groups/${id}/invite`); }}><Text style={theme.outlineButtonText}>Ajouter un membre</Text></TouchableOpacity> ) : null} />
           </View>
         </View>
       </Modal>
@@ -529,6 +552,9 @@ const styles = StyleSheet.create({
   memberAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center", overflow: "hidden" },
   memberAvatarText: { color: "#FFF", fontFamily: "Inter_700Bold" },
   memberName: { color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 16 },
+  memberRole: { color: "rgba(255,255,255,0.4)", fontFamily: "Inter_400Regular", fontSize: 12, marginTop: 2 },
+  removeMemberBtn: { backgroundColor: "rgba(255,68,68,0.15)", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12 },
+  removeMemberText: { color: "#FF4444", fontFamily: "Inter_600SemiBold", fontSize: 13 },
   inviteModalBtn: { marginTop: 24, marginBottom: 40 },
   cameraFooter: { position: "absolute", left: 0, right: 0, alignItems: "center", gap: 24 },
   modeSlider: { flexDirection: "row", gap: 20, backgroundColor: "rgba(0,0,0,0.3)", paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, marginBottom: 12 },
@@ -566,18 +592,6 @@ const styles = StyleSheet.create({
   devToggleTextActive: { color: "#000" },
   closeVaultBtn: { position: "absolute", right: 20, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 100, zIndex: 1000 },
   closeVaultText: { color: "#FFF", fontSize: 12, fontFamily: "Inter_600SemiBold" },
-  backCaptureBtn: { position: "absolute", left: 20, width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" },
-  postCaptureActions: { position: "absolute", left: 0, right: 0, flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 40 },
-  sideActionBtn: { width: 56, height: 56, borderRadius: 28, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
-  sendCaptureBtn: { width: 84, height: 84, borderRadius: 42, borderWidth: 5, borderColor: "#FFF", justifyContent: "center", alignItems: "center" },
-  sendCaptureInner: { width: 66, height: 66, borderRadius: 33, backgroundColor: "#FFF", justifyContent: "center", alignItems: "center" },
-  noteEditorContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: 40 },
-  largeNoteInput: { width: "100%", color: "#FFF", fontSize: 28, fontFamily: "Inter_700Bold", textAlign: "center", marginBottom: 40 },
-  doneNoteBtn: { backgroundColor: "#FFF", paddingHorizontal: 32, paddingVertical: 14, borderRadius: 100 },
-  doneNoteText: { color: "#000", fontFamily: "Inter_700Bold", fontSize: 16 },
-  centeredNotePreview: { position: "absolute", top: "40%", left: 0, right: 0, alignItems: "center", paddingHorizontal: 40 },
-  noteTag: { backgroundColor: "rgba(0,0,0,0.6)", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
-  noteTagText: { color: "#FFF", fontSize: 18, fontFamily: "Inter_600SemiBold", textAlign: "center" },
   blockingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center", zIndex: 9999 },
   blockingText: { color: "#FFF", fontFamily: "Inter_600SemiBold", marginTop: 16, fontSize: 16 },
 });

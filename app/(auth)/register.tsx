@@ -5,30 +5,32 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
 import { Link, router } from "expo-router";
 import { useAuth } from "../../lib/auth-context";
+import { useToast } from "../../lib/toast-context";
+import { translateError } from "../../lib/error-messages";
 import { colors, theme } from "../../lib/theme";
 import Loader from "../../components/Loader";
 
 export default function RegisterScreen() {
   const { register } = useAuth();
+  const { showToast } = useToast();
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleRegister = async () => {
-    if (!username || !email || !password) return Alert.alert("Erreur", "Remplis tous les champs.");
+    if (!username || !email || !password) return showToast("Erreur", "Remplis tous les champs.");
     setLoading(true);
     try {
       await register(email, password, username);
-      router.replace("/(app)/groups");
+      router.replace("/");
     } catch (e: any) {
-      Alert.alert("Erreur", e.message);
+      showToast("Erreur", translateError(e.message));
     } finally {
       setLoading(false);
     }

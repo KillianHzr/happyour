@@ -10,12 +10,20 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, router } from "expo-router";
 import { supabase } from "../../../../lib/supabase";
 import { colors, theme } from "../../../../lib/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Loader from "../../../../components/Loader";
 import Svg, { Path } from "react-native-svg";
+
+const CopyIcon = () => (
+  <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+    <Path d="M20 9H11C9.89543 9 9 9.89543 9 11V20C9 21.1046 9.89543 22 11 22H20C21.1046 22 22 21.1046 22 20V11C22 9.89543 21.1046 9 20 9Z" stroke="#FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <Path d="M5 15H4C3.46957 15 2.96086 14.7893 2.58579 14.4142C2.21071 14.0391 2 13.5304 2 13V4C2 3.46957 2.21071 2.96086 2.58579 2.58579C2.96086 2.21071 3.46957 2 4 2H13C13.5304 2 14.0391 2.21071 14.4142 2.58579C14.7893 2.96086 15 3.46957 15 4V5" stroke="#FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+  </Svg>
+);
 
 const ShareIcon = () => (
   <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -31,6 +39,7 @@ export default function InviteScreen() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    if (!id) return;
     supabase.from("groups").select("invite_code").eq("id", id).single().then(({ data }) => {
       if (data) setInviteCode(data.invite_code);
     });
@@ -40,7 +49,6 @@ export default function InviteScreen() {
     if (!targetUsername.trim()) return;
     setLoading(true);
     try {
-      // 1. Trouver l'utilisateur par son pseudo
       const { data: targetProfile, error: profileErr } = await supabase
         .from("profiles")
         .select("id, username")
@@ -48,11 +56,10 @@ export default function InviteScreen() {
         .single();
 
       if (profileErr || !targetProfile) {
-        Alert.alert("Utilisateur introuvable", `Aucun compte n'existe avec le pseudo "${targetUsername}".`);
+        Alert.alert("Utilisateur introuvable", `Aucun compte avec le pseudo "${targetUsername}".`);
         return;
       }
 
-      // 2. Ajouter au groupe
       const { error: joinErr } = await supabase
         .from("group_members")
         .insert({ group_id: id, user_id: targetProfile.id });
@@ -71,6 +78,15 @@ export default function InviteScreen() {
       Alert.alert("Erreur", e.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCopyCode = async () => {
+    try {
+      await Clipboard.setStringAsync(inviteCode);
+      Alert.alert("Copié", "Code d'invitation copié.");
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -125,7 +141,12 @@ export default function InviteScreen() {
           
           <View style={[theme.glassCard, styles.codeCard]}>
             <Text style={styles.codeLabel}>TON CODE D'INVITATION</Text>
-            <Text style={styles.codeValue}>{inviteCode}</Text>
+            <View style={styles.codeRow}>
+              <Text style={styles.codeValue}>{inviteCode}</Text>
+              <TouchableOpacity style={styles.copyBtn} onPress={handleCopyCode}>
+                <CopyIcon />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <TouchableOpacity style={styles.shareBtn} onPress={handleShareCode}>
@@ -158,7 +179,9 @@ const styles = StyleSheet.create({
   
   codeCard: { padding: 32, alignItems: "center", backgroundColor: "rgba(255,255,255,0.03)", marginBottom: 24 },
   codeLabel: { fontSize: 10, fontFamily: "Inter_700Bold", color: colors.secondary, letterSpacing: 2, marginBottom: 12 },
+  codeRow: { flexDirection: "row", alignItems: "center", gap: 16 },
   codeValue: { fontSize: 32, fontFamily: "Inter_700Bold", color: "#FFF", letterSpacing: 4 },
+  copyBtn: { width: 44, height: 44, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center" },
   
   shareBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, backgroundColor: "rgba(255,255,255,0.1)", padding: 20, borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
   shareBtnText: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 16 },

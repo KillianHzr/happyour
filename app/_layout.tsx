@@ -5,6 +5,7 @@ import { useFonts, Inter_400Regular, Inter_600SemiBold, Inter_700Bold } from "@e
 import { View, StyleSheet } from "react-native";
 import * as Updates from "expo-updates";
 import { AuthProvider } from "../lib/auth-context";
+import { ToastProvider, ToastHost } from "../lib/toast-context";
 import { setupNotificationHandler } from "../lib/notifications";
 import { checkAppVersion } from "../lib/version-check";
 import UpdateModal from "../components/UpdateModal";
@@ -39,15 +40,20 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <StatusBar style="light" />
-      {!splashDone && (
-        <SplashScreen ready={appReady} onFinish={() => setSplashDone(true)} />
-      )}
-      {appReady && (
-        <View style={splashDone ? styles.visible : styles.hidden}>
-          <Slot />
+      <ToastProvider>
+        <View style={{ flex: 1 }}>
+          <StatusBar style="light" />
+          {!splashDone && (
+            <SplashScreen ready={appReady} onFinish={() => setSplashDone(true)} />
+          )}
+          {appReady && (
+            <View style={splashDone ? styles.visible : styles.hidden}>
+              <Slot />
+            </View>
+          )}
+          <ToastHost />
         </View>
-      )}
+      </ToastProvider>
     </AuthProvider>
   );
 }

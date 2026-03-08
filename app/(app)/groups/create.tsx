@@ -5,20 +5,22 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
 } from "react-native";
 import { router } from "expo-router";
 import { useAuth } from "../../../lib/auth-context";
+import { useToast } from "../../../lib/toast-context";
+import { translateError } from "../../../lib/error-messages";
 import { supabase } from "../../../lib/supabase";
 import { colors, theme } from "../../../lib/theme";
 
 export default function CreateGroupScreen() {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleCreate = async () => {
-    if (!name.trim()) return Alert.alert("Erreur", "Donne un nom au groupe.");
+    if (!name.trim()) return showToast("Erreur", "Donne un nom au groupe.");
     if (!user) return;
 
     setLoading(true);
@@ -33,11 +35,11 @@ export default function CreateGroupScreen() {
 
       await supabase
         .from("group_members")
-        .insert({ group_id: group.id, user_id: user.id });
+        .insert({ group_id: group.id, user_id: user.id, role: "admin" });
 
       router.replace(`/(app)/groups/${group.id}`);
     } catch (e: any) {
-      Alert.alert("Erreur", e.message);
+      showToast("Erreur", translateError(e.message));
     } finally {
       setLoading(false);
     }

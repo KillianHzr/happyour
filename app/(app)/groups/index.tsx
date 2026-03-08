@@ -5,12 +5,12 @@ import {
   StyleSheet,
   TouchableOpacity,
   FlatList,
-  Alert,
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { Image } from "expo-image";
 import { supabase } from "../../../lib/supabase";
 import { useAuth } from "../../../lib/auth-context";
+import { useToast } from "../../../lib/toast-context";
 import { colors, theme } from "../../../lib/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Loader from "../../../components/Loader";
@@ -30,6 +30,7 @@ const GroupIcon = () => (
 
 export default function GroupsHomeScreen() {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const insets = useSafeAreaInsets();
   const [groups, setGroups] = useState<any[]>([]);
   const [username, setUsername] = useState("");
@@ -60,6 +61,13 @@ export default function GroupsHomeScreen() {
 
   useFocusEffect(useCallback(() => { fetchUserAndGroups(); }, [user]));
 
+  // Auto-redirect vers le premier groupe si l'utilisateur en a un
+  useEffect(() => {
+    if (!loading && groups.length > 0) {
+      router.replace(`/(app)/groups/${groups[0].id}`);
+    }
+  }, [loading, groups]);
+
   if (loading) return <View style={[styles.container, styles.center]}><Loader size={48} /></View>;
 
   return (
@@ -69,7 +77,7 @@ export default function GroupsHomeScreen() {
           <Text style={styles.welcomeText}>Bonjour,</Text>
           <Text style={styles.usernameText}>{username || "Ami"}</Text>
         </View>
-        <TouchableOpacity onPress={() => groups.length > 0 ? router.push(`/(app)/groups/${groups[0].id}`) : Alert.alert("Profil", "Rejoignez un groupe pour accéder au profil complet.")}>
+        <TouchableOpacity onPress={() => groups.length > 0 ? router.push(`/(app)/groups/${groups[0].id}`) : showToast("Profil", "Rejoignez un groupe pour accéder au profil complet.", "info")}>
           <View style={styles.avatarCircle}>
             {avatarUrl ? <Image source={{ uri: avatarUrl }} style={styles.avatarImg} /> : <Text style={styles.avatarInitial}>{username[0]?.toUpperCase()}</Text>}
           </View>
