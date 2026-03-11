@@ -28,14 +28,20 @@ export default function JoinGroupScreen() {
     if (!code.trim() || !user) return;
     setLoading(true);
     try {
+      const cleanCode = code.trim().toUpperCase();
       const { data: group, error: groupErr } = await supabase
         .from("groups")
         .select("id, name")
-        .eq("invite_code", code.trim().toUpperCase())
+        .ilike("invite_code", cleanCode)
         .single();
 
       if (groupErr || !group) {
-        showToast("Erreur", "Code invalide ou groupe introuvable.");
+        if (groupErr) {
+          console.error("Join group error:", groupErr);
+          showToast("Erreur", `Erreur Supabase: ${groupErr.message}`);
+        } else {
+          showToast("Erreur", "Code invalide ou groupe introuvable.");
+        }
         return;
       }
 

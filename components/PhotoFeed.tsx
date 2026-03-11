@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,8 +6,10 @@ import {
   StyleSheet,
   Dimensions,
   TouchableOpacity,
+  ViewToken,
 } from "react-native";
 import { Image } from "expo-image";
+import { useVideoPlayer, VideoView } from "expo-video";
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Path } from "react-native-svg";
 
@@ -90,7 +92,56 @@ function EndCountdown({ targetDate }: { targetDate: Date }) {
   return <Text style={styles.countdownText}>{timeLeft}</Text>;
 }
 
+function VideoMoment({ moment, isVisible, onReactPress }: { moment: PhotoEntry; isVisible: boolean; onReactPress?: (id: string) => void }) {
+  const player = useVideoPlayer(moment.url, (p) => {
+    p.loop = true;
+    p.muted = false;
+  });
+
+  useEffect(() => {
+    if (isVisible) {
+      player.play();
+    } else {
+      player.pause();
+    }
+  }, [isVisible, player]);
+
+  return (
+    <View style={styles.fullscreenPage}>
+      <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />
+      <LinearGradient colors={["transparent", "rgba(0,0,0,0.8)"]} style={styles.momentOverlay}>
+        <View style={styles.authorInfo}>
+          <View style={styles.avatar}>
+            {moment.avatar_url ? (
+              <Image source={{ uri: moment.avatar_url }} style={styles.avatarImg} />
+            ) : (
+              <Text style={styles.avatarText}>{moment.username[0].toUpperCase()}</Text>
+            )}
+          </View>
+          <View>
+            <Text style={styles.username}>{moment.username}</Text>
+            {moment.note && <Text style={styles.momentNote} numberOfLines={3}>{moment.note}</Text>}
+          </View>
+        </View>
+      </LinearGradient>
+      <TouchableOpacity style={styles.reactBtn} onPress={() => onReactPress?.(moment.id)}>
+        <ReactIcon />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 export default function PhotoFeed({ photos, onReactPress, nextUnlockDate }: Props) {
+  const [visibleIndex, setVisibleIndex] = useState(0);
+
+  const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    if (viewableItems.length > 0 && viewableItems[0].index != null) {
+      setVisibleIndex(viewableItems[0].index);
+    }
+  }, []);
+
+  const viewabilityConfig = useMemo(() => ({ itemVisiblePercentThreshold: 50 }), []);
+
   const items = useMemo<FeedItem[]>(() => {
     if (photos.length === 0) return [];
     const result: FeedItem[] = [];
@@ -109,7 +160,7 @@ export default function PhotoFeed({ photos, onReactPress, nextUnlockDate }: Prop
     return result;
   }, [photos]);
 
-  const renderItem = ({ item }: { item: FeedItem }) => {
+  const renderItem = ({ item, index }: { item: FeedItem; index: number }) => {
     if (item.type === "separator") {
       const lines = item.label.split("\n");
       return (
@@ -133,9 +184,14 @@ export default function PhotoFeed({ photos, onReactPress, nextUnlockDate }: Prop
 
     const moment = item.data;
     const isTextOnly = moment.image_path === "text_mode";
+    const isVideo = moment.image_path.endsWith(".mp4");
     const textLen = moment.note?.length ?? 0;
     const adaptiveFontSize = textLen <= 40 ? 32 : textLen <= 100 ? 26 : textLen <= 200 ? 21 : textLen <= 300 ? 17 : 15;
     const adaptiveLineHeight = Math.round(adaptiveFontSize * 1.4);
+
+    if (isVideo) {
+      return <VideoMoment moment={moment} isVisible={index === visibleIndex} onReactPress={onReactPress} />;
+    }
 
     return (
       <View style={styles.fullscreenPage}>
@@ -194,6 +250,8 @@ export default function PhotoFeed({ photos, onReactPress, nextUnlockDate }: Prop
       decelerationRate="fast"
       showsVerticalScrollIndicator={false}
       getItemLayout={(_, index) => ({ length: SCREEN_HEIGHT, offset: SCREEN_HEIGHT * index, index })}
+      onViewableItemsChanged={onViewableItemsChanged}
+      viewabilityConfig={viewabilityConfig}
       style={styles.list}
     />
   );

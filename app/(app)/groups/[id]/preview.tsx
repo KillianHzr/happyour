@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -14,13 +14,15 @@ import {
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { Image } from "expo-image";
+import { useVideoPlayer, VideoView } from "expo-video";
 import { BlurView } from "expo-blur";
 import { decode } from "base64-arraybuffer";
+import * as FileSystem from "expo-file-system";
 import { supabase } from "../../../../lib/supabase";
 import { useAuth } from "../../../../lib/auth-context";
 import { useToast } from "../../../../lib/toast-context";
 import { translateError } from "../../../../lib/error-messages";
-import { getCaptureData, clearCaptureData } from "../../../../lib/capture-store";
+import { getCaptureData, clearCaptureData, type CaptureType } from "../../../../lib/capture-store";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 
@@ -54,18 +56,25 @@ export default function PreviewScreen() {
 
   const [base64, setBase64] = useState<string | null>(null);
   const [uri, setUri] = useState<string | null>(null);
+  const [captureType, setCaptureType] = useState<CaptureType>("photo");
   const [note, setNote] = useState("");
   const [isEditingNote, setIsEditingNote] = useState(false);
   const [uploading, setUploading] = useState(false);
 
+  const player = useVideoPlayer(captureType === "video" && uri ? uri : null, (p) => {
+    p.loop = true;
+    p.play();
+  });
+
   useEffect(() => {
     const data = getCaptureData();
-    if (!data.base64 || !data.uri) {
+    if (!data.uri) {
       router.back();
       return;
     }
     setBase64(data.base64);
     setUri(data.uri);
+    setCaptureType(data.type);
   }, []);
 
   // Android back button
@@ -76,7 +85,7 @@ export default function PreviewScreen() {
         return true;
       }
       clearCaptureData();
-      return false; // let default back happen
+      return false;
     });
     return () => sub.remove();
   }, [isEditingNote]);
@@ -87,14 +96,27 @@ export default function PreviewScreen() {
   };
 
   const handleSend = async () => {
-    if (!base64 || !user || uploading) return;
+    if (!user || uploading || !uri) return;
     setUploading(true);
     try {
-      const fileName = `${id}/${user.id}_${Date.now()}.jpg`;
-      await supabase.storage.from("moments").upload(fileName, decode(base64), { contentType: "image/jpeg" });
-      await supabase.from("photos").insert({ group_id: id, user_id: user.id, image_path: fileName, note: note.trim() || null });
-      clearCaptureData();
-      showToast("Moment envoyé", "Ta photo a été ajoutée au coffre.", "success");
+      if (captureType === "video") {
+        // Upload video from file URI
+        const fileInfo = await FileSystem.getInfoAsync(uri);
+        if (!fileInfo.exists) throw new Error("Fichier vidéo introuvable.");
+        const videoBase64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+        const fileName = `${id}/${user.id}_${Date.now()}.mp4`;
+        await supabase.storage.from("moments").upload(fileName, decode(videoBase64), { contentType: "video/mp4" });
+        await supabase.from("photos").insert({ group_id: id, user_id: user.id, image_path: fileName, note: note.trim() || null });
+        clearCaptureData();
+        showToast("Moment envoyé", "Ta vidéo a été ajoutée au coffre.", "success");
+      } else {
+        if (!base64) return;
+        const fileName = `${id}/${user.id}_${Date.now()}.jpg`;
+        await supabase.storage.from("moments").upload(fileName, decode(base64), { contentType: "image/jpeg" });
+        await supabase.from("photos").insert({ group_id: id, user_id: user.id, image_path: fileName, note: note.trim() || null });
+        clearCaptureData();
+        showToast("Moment envoyé", "Ta photo a été ajoutée au coffre.", "success");
+      }
       router.back();
     } catch (e: any) {
       showToast("Erreur", translateError(e.message));
@@ -107,7 +129,16 @@ export default function PreviewScreen() {
 
   return (
     <View style={styles.container}>
-      <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+      {captureType === "video" ? (
+        <VideoView
+          player={player}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          nativeControls={false}
+        />
+      ) : (
+        <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+      )}
 
       <TouchableOpacity style={[styles.backBtn, { top: insets.top + 20 }]} onPress={handleDiscard} disabled={uploading}>
         <CloseIcon />

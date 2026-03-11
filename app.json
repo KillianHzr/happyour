@@ -2,7 +2,7 @@
   "expo": {
     "name": "[noname]",
     "slug": "HappyOur",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -13,16 +13,19 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.happyour.app"
+      "bundleIdentifier": "com.jeanmiduntm.HappyOur",
+      "icon": "./assets/icon.png",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.happyour.app",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#000000",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "foregroundImage": "./assets/adaptive-icon.png"
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
@@ -63,15 +66,11 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "052d2842-8a82-4715-a029-68b0a3264e93"
+        "projectId": "4115b79d-ad70-4041-b024-d54279831a43"
       }
     },
     "runtimeVersion": {
       "policy": "appVersion"
-    },
-    "updates": {
-      "url": "https://u.expo.dev/052d2842-8a82-4715-a029-68b0a3264e93"
-    },
-    "owner": "killianhzr"
+    }
   }
 }
