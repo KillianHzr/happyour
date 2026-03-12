@@ -47,9 +47,10 @@ const StandardCamera = forwardRef<CameraView, Props>(({
   return (
     <View style={styles.container}>
       {isActive && (
-        <CameraView 
-          ref={ref} 
-          style={StyleSheet.absoluteFill} 
+        <CameraView
+          key={mode}
+          ref={ref}
+          style={StyleSheet.absoluteFill}
           facing={facing}
           flash={flash}
           zoom={zoom}

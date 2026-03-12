@@ -225,6 +225,11 @@ export default function MainPagerScreen() {
       handleUploadText();
       return;
     }
+    if (cameraMode === "VIDEO") {
+      if (isRecording) stopVideoRecording();
+      else startVideoRecording();
+      return;
+    }
     if (!cameraRef.current || isRecording || capturing) return;
     setCapturing(true);
     try {
@@ -363,8 +368,6 @@ export default function MainPagerScreen() {
                   <TouchableOpacity 
                     style={[styles.captureBtn, (cameraMode === "VIDEO" || isRecording) && styles.captureBtnVideo, isRecording && styles.captureBtnRecording]} 
                     onPress={handleCapture}
-                    onLongPress={() => cameraMode !== "TEXTE" && startVideoRecording()}
-                    onPressOut={() => isRecording && stopVideoRecording()}
                     onTouchStart={handleTouchStart}
                     onTouchMove={handleTouchMove}
                     activeOpacity={0.8}
