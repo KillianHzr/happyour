@@ -168,8 +168,12 @@ export default function MainPagerScreen() {
         setEmail(profileRes.data.email || user.email || "");
       }
       if (membersRes.data) {
-        setMembers(membersRes.data.map((m: any) => ({ ...m.profiles, user_id: m.user_id })));
         const me = membersRes.data.find((m: any) => m.user_id === user?.id);
+        if (!me) {
+          router.replace("/(app)/groups");
+          return;
+        }
+        setMembers(membersRes.data.map((m: any) => ({ ...m.profiles, user_id: m.user_id })));
         setIsAdmin(me?.role === "admin");
       }
       

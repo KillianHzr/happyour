@@ -21,7 +21,7 @@
       }
     },
     "android": {
-      "package": "com.happyour_lasource.app",
+      "package": "com.happyour.app",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#000000",
