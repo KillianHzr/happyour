@@ -17,12 +17,13 @@ import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { BlurView } from "expo-blur";
 import { decode } from "base64-arraybuffer";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import { supabase } from "../../../../lib/supabase";
 import { useAuth } from "../../../../lib/auth-context";
 import { useToast } from "../../../../lib/toast-context";
 import { translateError } from "../../../../lib/error-messages";
 import { getCaptureData, clearCaptureData, type CaptureType } from "../../../../lib/capture-store";
+import { notifyNewPhoto } from "../../../../lib/notifications";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 
@@ -99,6 +100,13 @@ export default function PreviewScreen() {
     if (!user || uploading || !uri) return;
     setUploading(true);
     try {
+      const [groupRes, profileRes] = await Promise.all([
+        supabase.from("groups").select("name").eq("id", id).single(),
+        supabase.from("profiles").select("username").eq("id", user.id).single(),
+      ]);
+      const groupName = groupRes.data?.name ?? "";
+      const username = profileRes.data?.username ?? "";
+
       if (captureType === "video") {
         // Upload video from file URI
         const fileInfo = await FileSystem.getInfoAsync(uri);
@@ -108,6 +116,7 @@ export default function PreviewScreen() {
         await supabase.storage.from("moments").upload(fileName, decode(videoBase64), { contentType: "video/mp4" });
         await supabase.from("photos").insert({ group_id: id, user_id: user.id, image_path: fileName, note: note.trim() || null });
         clearCaptureData();
+        notifyNewPhoto(id as string, groupName, username, user.id);
         showToast("Moment envoyé", "Ta vidéo a été ajoutée au coffre.", "success");
       } else {
         if (!base64) return;
@@ -115,6 +124,7 @@ export default function PreviewScreen() {
         await supabase.storage.from("moments").upload(fileName, decode(base64), { contentType: "image/jpeg" });
         await supabase.from("photos").insert({ group_id: id, user_id: user.id, image_path: fileName, note: note.trim() || null });
         clearCaptureData();
+        notifyNewPhoto(id as string, groupName, username, user.id);
         showToast("Moment envoyé", "Ta photo a été ajoutée au coffre.", "success");
       }
       router.back();

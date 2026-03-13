@@ -32,16 +32,15 @@ export default function JoinGroupScreen() {
       const { data: group, error: groupErr } = await supabase
         .from("groups")
         .select("id, name")
-        .ilike("invite_code", cleanCode)
-        .single();
+        .eq("invite_code", cleanCode)
+        .maybeSingle();
 
-      if (groupErr || !group) {
-        if (groupErr) {
-          console.error("Join group error:", groupErr);
-          showToast("Erreur", `Erreur Supabase: ${groupErr.message}`);
-        } else {
-          showToast("Erreur", "Code invalide ou groupe introuvable.");
-        }
+      if (groupErr) {
+        showToast("Erreur", translateError(groupErr.message));
+        return;
+      }
+      if (!group) {
+        showToast("Erreur", "Code invalide ou groupe introuvable.");
         return;
       }
 

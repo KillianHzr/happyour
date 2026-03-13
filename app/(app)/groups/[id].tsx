@@ -28,6 +28,8 @@ import { colors, theme } from "../../../lib/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path, Circle } from "react-native-svg";
 import { scheduleImmediateLocalNotification, cancelAllRecapNotifications } from "../../../lib/notifications";
+import { setCaptureData } from "../../../lib/capture-store";
+import { notifyNewPhoto } from "../../../lib/notifications";
 
 // Components
 import VaultCounter from "../../../components/VaultCounter";
@@ -121,6 +123,7 @@ export default function MainPagerScreen() {
   const [dataLoaded, setDataLoaded] = useState(false);
   const [currentPage, setCurrentPage] = useState(1); 
   const [showMembersModal, setShowMembersModal] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // -- Camera State --
   const cameraRef = useRef<CameraView>(null);
@@ -155,7 +158,7 @@ export default function MainPagerScreen() {
           .eq("group_id", id)
           .gte("created_at", monday.toISOString())
           .order("created_at", { ascending: true }),
-        supabase.from("group_members").select("profiles:user_id(username, avatar_url)").eq("group_id", id)
+        supabase.from("group_members").select("user_id, role, profiles:user_id(username, avatar_url)").eq("group_id", id)
       ]);
 
       if (groupRes.data) setGroupName(groupRes.data.name);
@@ -164,7 +167,11 @@ export default function MainPagerScreen() {
         setAvatarUrl(profileRes.data.avatar_url);
         setEmail(profileRes.data.email || user.email || "");
       }
-      if (membersRes.data) setMembers(membersRes.data.map((m: any) => m.profiles));
+      if (membersRes.data) {
+        setMembers(membersRes.data.map((m: any) => ({ ...m.profiles, user_id: m.user_id })));
+        const me = membersRes.data.find((m: any) => m.user_id === user?.id);
+        setIsAdmin(me?.role === "admin");
+      }
       
       if (photosRes.data) {
         setPhotoCount(photosRes.data.length);
@@ -252,19 +259,22 @@ export default function MainPagerScreen() {
     recordingTimer.current = setInterval(() => setRecordingSeconds(s => s + 1), 1000);
     try {
       const video = await cameraRef.current.recordAsync();
-      if (video) {
-        setCapturedUri(video.uri);
+      if (video?.uri) {
+        setCaptureData(null, video.uri, "video");
+        router.push(`/(app)/groups/${id}/preview`);
       }
     } catch (e: any) {
-      stopVideoRecording();
+      // annulé ou erreur
+    } finally {
+      setIsRecording(false);
+      if (recordingTimer.current) clearInterval(recordingTimer.current);
+      setRecordingSeconds(0);
     }
   };
 
   const stopVideoRecording = () => {
     if (!isRecording) return;
     cameraRef.current?.stopRecording();
-    setIsRecording(false);
-    if (recordingTimer.current) clearInterval(recordingTimer.current);
   };
 
   const handleTouchStart = (e: any) => {
@@ -278,10 +288,20 @@ export default function MainPagerScreen() {
     setZoom(newZoom);
   };
 
+  const handleRemoveMember = async (memberId: string) => {
+    try {
+      await supabase.from("group_members").delete().eq("group_id", id).eq("user_id", memberId);
+      setMembers(prev => prev.filter((m: any) => m.user_id !== memberId));
+    } catch (e: any) {
+      Alert.alert("Erreur", e.message);
+    }
+  };
+
   const handleUploadText = async () => {
     setUploading(true);
     try {
       await supabase.from("photos").insert({ group_id: id, user_id: user?.id, image_path: "text_mode", note: textModeContent.trim() });
+      notifyNewPhoto(id as string, groupName, username, user?.id as string);
       setTextModeContent(""); await fetchData(); jumpTo(2);
     } catch (e: any) { Alert.alert("Erreur", e.message); } finally { setUploading(false); }
   };
@@ -293,7 +313,8 @@ export default function MainPagerScreen() {
       const fileName = `${id}/${user.id}_${Date.now()}.jpg`;
       await supabase.storage.from("moments").upload(fileName, decode(capturedBase64), { contentType: "image/jpeg" });
       await supabase.from("photos").insert({ group_id: id, user_id: user.id, image_path: fileName, note: note.trim() || null });
-      setCapturedBase64(null); setNote(""); await fetchData(); jumpTo(2); 
+      notifyNewPhoto(id as string, groupName, username, user.id);
+      setCapturedBase64(null); setNote(""); await fetchData(); jumpTo(2);
     } catch (e: any) { Alert.alert("Erreur", e.message); } finally { setUploading(false); }
   };
 
@@ -447,8 +468,16 @@ export default function MainPagerScreen() {
           <View style={[styles.modalContent, { paddingTop: insets.top + 40 }]}>
             <View style={styles.modalHeader}><Text style={styles.modalTitle}>Membres</Text><TouchableOpacity onPress={() => setShowMembersModal(false)}><Text style={styles.closeModalText}>Fermer</Text></TouchableOpacity></View>
             <FlatList data={members} keyExtractor={(item, i) => i.toString()} renderItem={({ item }) => (
-              <View style={styles.memberItem}><View style={styles.memberAvatar}>{item.avatar_url ? <Image source={{ uri: item.avatar_url }} style={styles.avatarImg} /> : <Text style={styles.memberAvatarText}>{item.username[0]?.toUpperCase()}</Text>}</View><Text style={styles.memberName}>{item.username}</Text></View>
-            )} ListFooterComponent={() => ( <TouchableOpacity style={[theme.outlineButton, styles.inviteModalBtn]} onPress={() => { setShowMembersModal(false); router.push(`/(app)/groups/${id}/invite`); }}><Text style={theme.outlineButtonText}>Ajouter un membre</Text></TouchableOpacity> )} />
+              <View style={styles.memberItem}>
+                <View style={styles.memberAvatar}>{item.avatar_url ? <Image source={{ uri: item.avatar_url }} style={styles.avatarImg} /> : <Text style={styles.memberAvatarText}>{item.username[0]?.toUpperCase()}</Text>}</View>
+                <Text style={styles.memberName}>{item.username}</Text>
+                {isAdmin && item.user_id !== user?.id && (
+                  <TouchableOpacity onPress={() => Alert.alert("Supprimer", `Retirer ${item.username} du groupe ?`, [{ text: "Annuler", style: "cancel" }, { text: "Supprimer", style: "destructive", onPress: () => handleRemoveMember(item.user_id) }])} style={styles.removeMemberBtn}>
+                    <Text style={styles.removeMemberText}>Retirer</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )} ListFooterComponent={() => isAdmin ? ( <TouchableOpacity style={[theme.outlineButton, styles.inviteModalBtn]} onPress={() => { setShowMembersModal(false); router.push(`/(app)/groups/${id}/invite`); }}><Text style={theme.outlineButtonText}>Ajouter un membre</Text></TouchableOpacity> ) : null} />
           </View>
         </View>
       </Modal>
@@ -487,6 +516,8 @@ const styles = StyleSheet.create({
   modalTitle: { fontFamily: "Inter_700Bold", fontSize: 24, color: "#FFF" },
   closeModalText: { color: colors.secondary, fontFamily: "Inter_600SemiBold" },
   memberItem: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16, backgroundColor: "rgba(255,255,255,0.08)", padding: 14, borderRadius: 18 },
+  removeMemberBtn: { marginLeft: "auto", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: "rgba(255,60,60,0.15)" },
+  removeMemberText: { color: "#FF3C3C", fontFamily: "Inter_600SemiBold", fontSize: 13 },
   memberAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center", overflow: "hidden" },
   memberAvatarText: { color: "#FFF", fontFamily: "Inter_700Bold" },
   memberName: { color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 16 },

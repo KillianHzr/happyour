@@ -99,7 +99,7 @@ export default function GroupsHomeScreen() {
 
               <TouchableOpacity style={[styles.mainActionBtn, styles.secondaryActionBtn]} onPress={() => router.push("/(app)/groups/join")}>
                 <View style={[styles.actionIconContainer, styles.secondaryIconContainer]}><GroupIcon /></View>
-                <Text style={styles.actionText}>Rejoindre</Text>
+                <Text style={[styles.actionText, { color: "#FFF" }]}>Rejoindre</Text>
               </TouchableOpacity>
             </View>
           </View>
