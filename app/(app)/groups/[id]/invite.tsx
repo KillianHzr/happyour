@@ -111,29 +111,7 @@ export default function InviteScreen() {
 
         <Text style={styles.title}>Inviter</Text>
         
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Par pseudo</Text>
-          <Text style={styles.sectionDesc}>Ajoute un ami qui possède déjà un compte [noname].</Text>
-          <View style={styles.row}>
-            <TextInput
-              style={[theme.glassInput, styles.input]}
-              placeholder="Pseudo de l'ami"
-              placeholderTextColor="rgba(255,255,255,0.3)"
-              autoCapitalize="none"
-              value={targetUsername}
-              onChangeText={setTargetUsername}
-            />
-            <TouchableOpacity 
-              style={[theme.accentButton, styles.addBtn]} 
-              onPress={handleInviteByUsername}
-              disabled={loading || !targetUsername.trim()}
-            >
-              {loading ? <Loader size={20} /> : <Text style={styles.addBtnText}>Ajouter</Text>}
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.divider} />
+        {/* Section "Par pseudo" temporairement désactivée */}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Partager le code</Text>
