@@ -32,6 +32,7 @@ import Svg, { Path, Circle } from "react-native-svg";
 import { scheduleImmediateLocalNotification, cancelAllRecapNotifications } from "../../../lib/notifications";
 import { setCaptureData } from "../../../lib/capture-store";
 import { notifyNewPhoto } from "../../../lib/notifications";
+import { useUpload } from "../../../lib/upload-context";
 
 // Components
 import VaultCounter from "../../../components/VaultCounter";
@@ -106,8 +107,6 @@ function isVaultUnlocked(): boolean {
 
 type CameraMode = "PHOTO" | "VIDEO" | "TEXTE";
 
-import { useUpload } from "../../../lib/upload-context";
-
 export default function MainPagerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { startUpload } = useUpload();
@@ -137,13 +136,13 @@ export default function MainPagerScreen() {
   const [flash, setFlash] = useState<FlashMode>('off');
   const [zoom, setZoom] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
+  const [isPinching, setIsPinching] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const recordingTimer = useRef<NodeJS.Timeout | null>(null);
   const startTouchY = useRef<number | null>(null);
 
   const [capturing, setCapturing] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [capturedBase64, setCapturedBase64] = useState<string | null>(null);
   const [capturedUri, setCapturedUri] = useState<string | null>(null);
   const [isEditingNote, setIsEditingNote] = useState(false);
   const [textModeContent, setTextModeContent] = useState("");
@@ -284,10 +283,9 @@ export default function MainPagerScreen() {
       if (photo?.uri) {
         const manipResult = await manipulateAsync(
           photo.uri,
-          [{ resize: { width: 1080 } }],
-          { compress: 0.8, format: SaveFormat.JPEG, base64: true }
+          [{ resize: { width: 1440 } }],
+          { compress: 0.92, format: SaveFormat.JPEG }
         );
-        setCapturedBase64(manipResult.base64!);
         setCapturedUri(manipResult.uri);
       }
     } catch (e: any) {
@@ -372,7 +370,7 @@ export default function MainPagerScreen() {
   };
 
   const handleUploadPhoto = () => {
-    if (!capturedBase64 || !user || !capturedUri) return;
+    if (!capturedUri || !user) return;
     
     const dbData = {
       group_id: id as string,
@@ -384,9 +382,9 @@ export default function MainPagerScreen() {
     
     // LANCE L'ENVOI EN ARRIÈRE-PLAN (AVEC TOAST)
     startUpload(fileName, capturedUri, "image/jpeg", dbData);
-    
+
     // FERME L'ÉDITION IMMÉDIATEMENT
-    setCapturedBase64(null); 
+    setCapturedUri(null);
     setNote("");
     fetchData();
   };
@@ -397,7 +395,7 @@ export default function MainPagerScreen() {
   const cameraOpacity = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [0.4, 1, 0.4] });
 
   const isBlocked = false; // Plus aucun blocage visuel pour la capture ou l'upload
-  const isEditing = !!capturedBase64;
+  const isEditing = !!capturedUri;
 
   if (!dataLoaded) return <View style={[styles.container, styles.center]}><Loader size={48} /></View>;
 
@@ -405,7 +403,7 @@ export default function MainPagerScreen() {
     <View style={styles.container}>
       <Animated.ScrollView
         ref={scrollRef} horizontal pagingEnabled showsHorizontalScrollIndicator={false}
-        scrollEnabled={!isEditing && !isBlocked}
+        scrollEnabled={!isEditing && !isBlocked && !isPinching}
         onMomentumScrollEnd={(e) => setCurrentPage(Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH))}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })}
         scrollEventThrottle={16} contentOffset={{ x: SCREEN_WIDTH, y: 0 }} style={styles.pager}
@@ -433,11 +431,21 @@ export default function MainPagerScreen() {
           {cameraMode === "TEXTE" ? (
             <View style={styles.textModeContainer}><TextInput style={styles.textModeInput} placeholder="Écris..." placeholderTextColor="rgba(255,255,255,0.3)" multiline value={textModeContent} onChangeText={setTextModeContent} autoFocus disabled={isBlocked} /></View>
           ) : (
-            <StandardCamera ref={cameraRef} isActive={!capturedBase64} mode={cameraMode === "VIDEO" ? "video" : "picture"} facing={facing} flash={flash} zoom={zoom} />
+            <StandardCamera 
+              ref={cameraRef} 
+              isActive={!capturedUri}
+              mode={cameraMode === "VIDEO" ? "video" : "picture"} 
+              facing={facing} 
+              flash={flash} 
+              zoom={zoom}
+              onZoomChange={setZoom}
+              onPinchingChange={setIsPinching}
+              onDoubleTap={() => setFacing(prev => prev === 'back' ? 'front' : 'back')}
+            />
           )}
 
           {/* Camera UI Overlay */}
-          {!capturedBase64 && (
+          {!capturedUri && (
             <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
               {cameraMode !== "TEXTE" && (
                 <TouchableOpacity style={[styles.topControlBtn, { top: insets.top + 20, right: 20 }]} onPress={() => setFlash(prev => prev === 'off' ? 'on' : prev === 'on' ? 'auto' : 'off')} disabled={isBlocked}>
@@ -482,10 +490,10 @@ export default function MainPagerScreen() {
             </View>
           )}
 
-          {capturedBase64 && (
+          {capturedUri && (
             <View style={StyleSheet.absoluteFill}>
               <Image source={{ uri: capturedUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
-              <TouchableOpacity style={[styles.backCaptureBtn, { top: insets.top + 20 }]} onPress={() => setCapturedBase64(null)} disabled={isBlocked}>
+              <TouchableOpacity style={[styles.backCaptureBtn, { top: insets.top + 20 }]} onPress={() => setCapturedUri(null)} disabled={isBlocked}>
                 <CloseIcon />
               </TouchableOpacity>
               {note ? ( <Pressable style={styles.centeredNotePreview} onPress={() => setIsEditingNote(true)} disabled={isBlocked}><View style={styles.noteTag}><Text style={styles.noteTagText}>{note}</Text></View></Pressable> ) : null}
