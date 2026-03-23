@@ -22,22 +22,28 @@ const StandardCamera = forwardRef<CameraView, Props>(({
 
   useEffect(() => {
     if (isActive) {
-      if (!cameraPermission?.granted) requestCameraPermission();
-      if (mode === 'video' && !micPermission?.granted) requestMicPermission();
+      (async () => {
+        if (!cameraPermission?.granted) await requestCameraPermission();
+        if (!micPermission?.granted) await requestMicPermission();
+      })();
     }
-  }, [isActive, mode, cameraPermission, micPermission]);
+  }, [isActive]);
 
-  if (!cameraPermission) {
-    // Permission en cours de chargement
+  if (!cameraPermission || !micPermission) {
     return <View style={styles.container} />;
   }
 
-  if (!cameraPermission.granted) {
-    // Permission refusée
+  if (!cameraPermission.granted || !micPermission.granted) {
     return (
       <View style={[styles.container, styles.center]}>
-        <Text style={styles.errorText}>L'accès à l'appareil photo est requis.</Text>
-        <TouchableOpacity style={styles.button} onPress={requestCameraPermission}>
+        <Text style={styles.errorText}>L'accès à l'appareil photo et au micro est requis.</Text>
+        <TouchableOpacity 
+          style={styles.button} 
+          onPress={async () => {
+            await requestCameraPermission();
+            await requestMicPermission();
+          }}
+        >
           <Text style={styles.buttonText}>Autoriser</Text>
         </TouchableOpacity>
       </View>
@@ -48,7 +54,6 @@ const StandardCamera = forwardRef<CameraView, Props>(({
     <View style={styles.container}>
       {isActive && (
         <CameraView
-          key={mode}
           ref={ref}
           style={StyleSheet.absoluteFill}
           facing={facing}
@@ -57,6 +62,7 @@ const StandardCamera = forwardRef<CameraView, Props>(({
           mode={mode}
           enableTorch={false}
           mirror={facing === 'front'}
+          autofocus="on"
           responsiveOrientationWhenOrientationLocked
         />
       )}

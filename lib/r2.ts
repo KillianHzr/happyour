@@ -1,6 +1,24 @@
-import "react-native-get-random-values";
 import "react-native-url-polyfill/auto";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+
+/**
+ * Polyfill pour crypto.getRandomValues
+ * Indispensable pour le SDK AWS S3 sur React Native sans modules natifs additionnels.
+ * Utilise Math.random comme fallback pour éviter l'erreur "Native module not found".
+ */
+if (typeof global.crypto !== "object") {
+  // @ts-ignore
+  global.crypto = {};
+}
+if (typeof global.crypto.getRandomValues !== "function") {
+  // @ts-ignore
+  global.crypto.getRandomValues = (array: any) => {
+    for (let i = 0; i < array.length; i++) {
+      array[i] = Math.floor(Math.random() * 256);
+    }
+    return array;
+  };
+}
 
 const R2_ACCESS_KEY_ID = process.env.EXPO_PUBLIC_R2_ACCESS_KEY_ID!;
 const R2_SECRET_ACCESS_KEY = process.env.EXPO_PUBLIC_R2_SECRET_ACCESS_KEY!;
@@ -40,19 +58,14 @@ export const r2Storage = {
 
   /**
    * Génère l'URL publique pour un fichier stocké sur R2.
-   * Note : Nécessite que le bucket soit configuré en accès public 
-   * ou qu'un domaine personnalisé soit configuré dans le dashboard Cloudflare.
    */
   getPublicUrl(key: string) {
     const publicUrl = process.env.EXPO_PUBLIC_R2_PUBLIC_URL;
     
     if (publicUrl) {
-      // Supprime le slash final s'il existe et ajoute la clé
       return `${publicUrl.replace(/\/$/, "")}/${key}`;
     }
 
-    // fallback par défaut (ne fonctionnera que si le bucket est public)
-    // Format typique R2 Public : https://pub-<hash>.r2.dev/<key>
     return `${R2_ENDPOINT}/${R2_BUCKET_NAME}/${key}`;
   },
 };

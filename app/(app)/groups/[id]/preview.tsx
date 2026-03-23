@@ -99,41 +99,25 @@ export default function PreviewScreen() {
     router.back();
   };
 
-  const handleSend = async () => {
+  const handleSend = () => {
     if (!user || uploading || !uri) return;
     setUploading(true);
-    try {
-      const [groupRes, profileRes] = await Promise.all([
-        supabase.from("groups").select("name").eq("id", id).single(),
-        supabase.from("profiles").select("username").eq("id", user.id).single(),
-      ]);
-      const groupName = groupRes.data?.name ?? "";
-      const username = profileRes.data?.username ?? "";
+    
+    const dbData = {
+      group_id: id as string,
+      user_id: user.id,
+      note: note.trim() || null,
+    };
 
-      const dbData = {
-        group_id: id as string,
-        user_id: user.id,
-        note: note.trim() || null,
-        groupName,
-        username
-      };
+    const fileName = `${id}/${user.id}_${Date.now()}.${captureType === "video" ? "mp4" : "jpg"}`;
+    const contentType = captureType === "video" ? "video/mp4" : "image/jpeg";
 
-      if (captureType === "video") {
-        const videoBase64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-        const fileName = `${id}/${user.id}_${Date.now()}.mp4`;
-        startUpload(fileName, decode(videoBase64), "video/mp4", dbData);
-      } else {
-        if (!base64) return;
-        const fileName = `${id}/${user.id}_${Date.now()}.jpg`;
-        startUpload(fileName, decode(base64), "image/jpeg", dbData);
-      }
-      
-      clearCaptureData();
-      router.back();
-    } catch (e: any) {
-      showToast("Erreur", translateError(e.message));
-      setUploading(false);
-    }
+    // ON LANCE TOUT EN ARRIÈRE-PLAN SANS ATTENDRE
+    startUpload(fileName, uri, contentType, dbData);
+    
+    // ON FERME L'INTERFACE IMMÉDIATEMENT
+    clearCaptureData();
+    router.back();
   };
 
   if (!uri) return null;

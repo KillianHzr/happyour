@@ -106,8 +106,11 @@ function isVaultUnlocked(): boolean {
 
 type CameraMode = "PHOTO" | "VIDEO" | "TEXTE";
 
+import { useUpload } from "../../../lib/upload-context";
+
 export default function MainPagerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { startUpload } = useUpload();
   const { user, logout } = useAuth();
   const insets = useSafeAreaInsets();
   
@@ -203,6 +206,37 @@ export default function MainPagerScreen() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  const { activeUploads } = useUpload();
+
+  // -- Rafraîchir les données quand un upload en arrière-plan réussit --
+  useEffect(() => {
+    const hasJustFinished = activeUploads.some(u => u.status === "success");
+    if (hasJustFinished) {
+      console.log("Upload réussi en arrière-plan, rafraîchissement des données...");
+      fetchData();
+    }
+  }, [activeUploads, fetchData]);
+
+  // -- Realtime Listener pour rafraîchir les moments automatiquement --
+  useEffect(() => {
+    if (!id) return;
+    const channel = supabase
+      .channel(`group-${id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "photos", filter: `group_id=eq.${id}` },
+        () => {
+          console.log("Nouveau moment détecté, rafraîchissement...");
+          fetchData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id, fetchData]);
+
   const updateAvatar = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -265,9 +299,19 @@ export default function MainPagerScreen() {
 
   const startVideoRecording = async () => {
     if (!cameraRef.current || isRecording) return;
+    
+    // On s'assure que le mode est déjà sur VIDEO avant de record
+    if (cameraMode !== "VIDEO") {
+      setCameraMode("VIDEO");
+    }
+
     setIsRecording(true);
     setRecordingSeconds(0);
     recordingTimer.current = setInterval(() => setRecordingSeconds(s => s + 1), 1000);
+    
+    // Délai de stabilisation pour Android
+    await new Promise(resolve => setTimeout(resolve, 500));
+
     try {
       const video = await cameraRef.current.recordAsync({ quality: "720p", maxDuration: 15 });
       if (video?.uri) {
@@ -276,6 +320,7 @@ export default function MainPagerScreen() {
       }
     } catch (e: any) {
       // annulé ou erreur
+      console.error("Erreur recordAsync:", e);
     } finally {
       setIsRecording(false);
       if (recordingTimer.current) clearInterval(recordingTimer.current);
@@ -308,25 +353,42 @@ export default function MainPagerScreen() {
     }
   };
 
-  const handleUploadText = async () => {
-    setUploading(true);
-    try {
-      await supabase.from("photos").insert({ group_id: id, user_id: user?.id, image_path: "text_mode", note: textModeContent.trim() });
-      notifyNewPhoto(id as string, groupName, username, user?.id as string);
-      setTextModeContent(""); await fetchData(); jumpTo(2);
-    } catch (e: any) { Alert.alert("Erreur", e.message); } finally { setUploading(false); }
+  const handleUploadText = () => {
+    if (!textModeContent.trim() || !user) return;
+    
+    const content = textModeContent.trim();
+    const dbData = {
+      group_id: id as string,
+      user_id: user.id,
+      note: content,
+    };
+
+    // LANCE L'ENVOI EN ARRIÈRE-PLAN
+    startUpload(null, null, null, dbData);
+    
+    // LIBÈRE L'UI IMMÉDIATEMENT (SANS SWIPE)
+    setTextModeContent(""); 
+    fetchData(); 
   };
 
-  const handleUploadPhoto = async () => {
-    if (!capturedBase64 || !user || uploading) return;
-    setUploading(true);
-    try {
-      const fileName = `${id}/${user.id}_${Date.now()}.jpg`;
-      await r2Storage.upload(fileName, decode(capturedBase64), "image/jpeg");
-      await supabase.from("photos").insert({ group_id: id, user_id: user.id, image_path: fileName, note: note.trim() || null });
-      notifyNewPhoto(id as string, groupName, username, user.id);
-      setCapturedBase64(null); setNote(""); await fetchData(); jumpTo(2);
-    } catch (e: any) { Alert.alert("Erreur", e.message); } finally { setUploading(false); }
+  const handleUploadPhoto = () => {
+    if (!capturedBase64 || !user || !capturedUri) return;
+    
+    const dbData = {
+      group_id: id as string,
+      user_id: user.id,
+      note: note.trim() || null,
+    };
+
+    const fileName = `${id}/${user.id}_${Date.now()}.jpg`;
+    
+    // LANCE L'ENVOI EN ARRIÈRE-PLAN (AVEC TOAST)
+    startUpload(fileName, capturedUri, "image/jpeg", dbData);
+    
+    // FERME L'ÉDITION IMMÉDIATEMENT
+    setCapturedBase64(null); 
+    setNote("");
+    fetchData();
   };
 
   // Interpolations pour le Stacking Effect
@@ -334,7 +396,7 @@ export default function MainPagerScreen() {
   const cameraScale = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [0.9, 1, 0.9] });
   const cameraOpacity = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [0.4, 1, 0.4] });
 
-  const isBlocked = capturing || uploading;
+  const isBlocked = false; // Plus aucun blocage visuel pour la capture ou l'upload
   const isEditing = !!capturedBase64;
 
   if (!dataLoaded) return <View style={[styles.container, styles.center]}><Loader size={48} /></View>;
@@ -392,19 +454,6 @@ export default function MainPagerScreen() {
                 </View>
               )}
               
-              {isRecording && (
-                <View style={[styles.progressBarContainer, { top: insets.top + 80 }]}>
-                  <Animated.View 
-                    style={[
-                      styles.progressBarFill, 
-                      { 
-                        width: (recordingSeconds / 15 * 100) + "%" 
-                      }
-                    ]} 
-                  />
-                </View>
-              )}
-
               <View style={[styles.cameraFooter, { bottom: insets.bottom + 100 }]}>
                 <View style={styles.modeSlider}>
                   {["PHOTO", "VIDEO", "TEXTE"].map((m: any) => (
@@ -471,25 +520,15 @@ export default function MainPagerScreen() {
         </View>
       </Animated.ScrollView>
 
-      {/* Blocking Loader Overlay */}
-      {capturing && (
-        <View style={styles.blockingOverlay}>
-          <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
-          <ActivityIndicator size="large" color="#FFF" />
-          <Text style={styles.blockingText}>Capture en cours...</Text>
-        </View>
-      )}
-
       {/* NAV BAR */}
       <View style={[styles.tabBarContainer, { paddingBottom: insets.bottom }]}>
         <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
         <View style={styles.tabBarContent}>
-          <TouchableOpacity style={styles.tab} onPress={() => jumpTo(0)} disabled={isEditing || isBlocked}><ProfileIcon color={currentPage === 0 ? "#FFF" : "rgba(255,255,255,0.4)"} size={24} /><Text style={[styles.tabLabel, currentPage === 0 && styles.tabLabelActive]}>Profil</Text></TouchableOpacity>
-          <TouchableOpacity style={styles.tab} onPress={() => jumpTo(1)} disabled={isEditing || isBlocked}><MomentIcon color={currentPage === 1 ? "#FFF" : "rgba(255,255,255,0.4)"} size={28} /><Text style={[styles.tabLabel, currentPage === 1 && styles.tabLabelActive]}>Moment</Text></TouchableOpacity>
-          <TouchableOpacity style={styles.tab} onPress={() => jumpTo(2)} disabled={isEditing || isBlocked}><VaultIcon color={currentPage === 2 ? "#FFF" : "rgba(255,255,255,0.4)"} size={24} /><Text style={[styles.tabLabel, currentPage === 2 && styles.tabLabelActive]}>Coffre</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.tab} onPress={() => jumpTo(0)} disabled={isEditing}><ProfileIcon color={currentPage === 0 ? "#FFF" : "rgba(255,255,255,0.4)"} size={24} /><Text style={[styles.tabLabel, currentPage === 0 && styles.tabLabelActive]}>Profil</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.tab} onPress={() => jumpTo(1)} disabled={isEditing}><MomentIcon color={currentPage === 1 ? "#FFF" : "rgba(255,255,255,0.4)"} size={28} /><Text style={[styles.tabLabel, currentPage === 1 && styles.tabLabelActive]}>Moment</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.tab} onPress={() => jumpTo(2)} disabled={isEditing}><VaultIcon color={currentPage === 2 ? "#FFF" : "rgba(255,255,255,0.4)"} size={24} /><Text style={[styles.tabLabel, currentPage === 2 && styles.tabLabelActive]}>Coffre</Text></TouchableOpacity>
         </View>
       </View>
-
       <Modal visible={showMembersModal} animationType="slide" transparent onRequestClose={() => setShowMembersModal(false)}>
         <View style={styles.darkModalOverlay}>
           <View style={[styles.modalContent, { paddingTop: insets.top + 40 }]}>

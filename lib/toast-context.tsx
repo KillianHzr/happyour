@@ -6,7 +6,8 @@ import {
   Animated, 
   Dimensions, 
   Platform,
-  StatusBar
+  StatusBar,
+  ActivityIndicator
 } from "react-native";
 import { BlurView } from "expo-blur";
 import Svg, { Path, Circle } from "react-native-svg";
@@ -70,6 +71,29 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+function AnimatedProgressBar({ progress }: { progress: number }) {
+  const animatedWidth = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(animatedWidth, {
+      toValue: progress,
+      duration: 500,
+      useNativeDriver: false,
+    }).start();
+  }, [progress]);
+
+  const width = animatedWidth.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0%", "100%"],
+  });
+
+  return (
+    <View style={styles.progressTrack}>
+      <Animated.View style={[styles.progressThumb, { width }]} />
+    </View>
+  );
+}
+
 function ToastHost({ toasts, onDismiss }: { toasts: ToastData[], onDismiss: (id: number) => void }) {
   const { activeUploads } = useUpload();
   const topInset = Platform.OS === "ios" ? 54 : (StatusBar.currentHeight ?? 24) + 10;
@@ -78,16 +102,17 @@ function ToastHost({ toasts, onDismiss }: { toasts: ToastData[], onDismiss: (id:
     <View style={[styles.rootOverlay, { top: topInset }]} pointerEvents="box-none">
       {activeUploads.map((upload) => (
         <View key={upload.id} style={styles.uploadBanner}>
-          <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
-          <View style={styles.uploadContent}>
-            <Text style={styles.uploadTitle}>
-              {upload.status === "uploading" ? `Envoi du moment (${upload.type})...` : 
-               upload.status === "success" ? "Moment envoyé !" : "Erreur d'envoi"}
-            </Text>
+          <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
+          <View style={[styles.uploadContent, { backgroundColor: "rgba(0,0,0,0.5)" }]}>
+            <View style={styles.uploadHeader}>
+              <Text style={styles.uploadTitle}>
+                {upload.status === "uploading" ? `Envoi du moment (${upload.type})...` : 
+                 upload.status === "success" ? "Moment envoyé !" : "Erreur d'envoi"}
+              </Text>
+              {upload.status === "uploading" && <ActivityIndicator size="small" color="#FFF" style={{ scaleX: 0.6, scaleY: 0.6 }} />}
+            </View>
             {upload.status === "uploading" && (
-              <View style={styles.progressTrack}>
-                <View style={[styles.progressThumb, { width: `${upload.progress * 100}%` }]} />
-              </View>
+              <AnimatedProgressBar progress={upload.progress} />
             )}
           </View>
         </View>
@@ -121,7 +146,8 @@ function ToastItem({ toast, onDismiss }: { toast: ToastData; onDismiss: () => vo
 
   return (
     <Animated.View style={[styles.toast, { opacity, transform: [{ translateY }] }]}>
-      <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
+      <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.4)" }]} />
       <View style={styles.iconWrapper}>
         {renderIcon()}
       </View>
