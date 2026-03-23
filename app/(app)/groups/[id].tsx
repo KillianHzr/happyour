@@ -21,8 +21,10 @@ import { CameraView, CameraType, FlashMode } from "expo-camera";
 import { Image } from "expo-image";
 import { BlurView } from "expo-blur";
 import * as ImagePicker from "expo-image-picker";
+import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { decode } from "base64-arraybuffer";
 import { supabase } from "../../../lib/supabase";
+import { r2Storage } from "../../../lib/r2";
 import { useAuth } from "../../../lib/auth-context";
 import { colors, theme } from "../../../lib/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -183,7 +185,7 @@ export default function MainPagerScreen() {
         
         const entries: PhotoEntry[] = photosRes.data.map((p: any) => ({
           id: p.id,
-          url: p.image_path === "text_mode" ? "" : supabase.storage.from("moments").getPublicUrl(p.image_path).data.publicUrl,
+          url: p.image_path === "text_mode" ? "" : r2Storage.getPublicUrl(p.image_path),
           created_at: p.created_at,
           note: p.note ?? null,
           username: p.profiles?.username ?? "Anonyme",
@@ -214,10 +216,10 @@ export default function MainPagerScreen() {
       setUploading(true);
       try {
         const filePath = `avatars/${user?.id}_${Date.now()}.jpg`;
-        await supabase.storage.from("moments").upload(filePath, decode(result.assets[0].base64), { contentType: "image/jpeg", upsert: true });
-        const { data: urlData } = supabase.storage.from("moments").getPublicUrl(filePath);
-        await supabase.from("profiles").update({ avatar_url: urlData.publicUrl }).eq("id", user?.id);
-        setAvatarUrl(urlData.publicUrl);
+        await r2Storage.upload(filePath, decode(result.assets[0].base64), "image/jpeg");
+        const urlData = r2Storage.getPublicUrl(filePath);
+        await supabase.from("profiles").update({ avatar_url: urlData }).eq("id", user?.id);
+        setAvatarUrl(urlData);
       } catch (e: any) { Alert.alert("Erreur", e.message); } finally { setUploading(false); }
     }
   };
@@ -244,10 +246,15 @@ export default function MainPagerScreen() {
     if (!cameraRef.current || isRecording || capturing) return;
     setCapturing(true);
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.7, base64: true });
-      if (photo?.base64) {
-        setCapturedBase64(photo.base64);
-        setCapturedUri(photo.uri);
+      const photo = await cameraRef.current.takePictureAsync({ quality: 1.0 });
+      if (photo?.uri) {
+        const manipResult = await manipulateAsync(
+          photo.uri,
+          [{ resize: { width: 1080 } }],
+          { compress: 0.8, format: SaveFormat.JPEG, base64: true }
+        );
+        setCapturedBase64(manipResult.base64!);
+        setCapturedUri(manipResult.uri);
       }
     } catch (e: any) {
       Alert.alert("Erreur", "Impossible de prendre la photo.");
@@ -262,7 +269,7 @@ export default function MainPagerScreen() {
     setRecordingSeconds(0);
     recordingTimer.current = setInterval(() => setRecordingSeconds(s => s + 1), 1000);
     try {
-      const video = await cameraRef.current.recordAsync();
+      const video = await cameraRef.current.recordAsync({ quality: "720p", maxDuration: 15 });
       if (video?.uri) {
         setCaptureData(null, video.uri, "video");
         router.push(`/(app)/groups/${id}/preview`);
@@ -315,7 +322,7 @@ export default function MainPagerScreen() {
     setUploading(true);
     try {
       const fileName = `${id}/${user.id}_${Date.now()}.jpg`;
-      await supabase.storage.from("moments").upload(fileName, decode(capturedBase64), { contentType: "image/jpeg" });
+      await r2Storage.upload(fileName, decode(capturedBase64), "image/jpeg");
       await supabase.from("photos").insert({ group_id: id, user_id: user.id, image_path: fileName, note: note.trim() || null });
       notifyNewPhoto(id as string, groupName, username, user.id);
       setCapturedBase64(null); setNote(""); await fetchData(); jumpTo(2);
@@ -378,7 +385,23 @@ export default function MainPagerScreen() {
 
               {isRecording && (
                 <View style={[styles.recordingTimer, { top: insets.top + 40 }]}>
-                  <View style={styles.recordingDot} /><Text style={styles.recordingText}>{Math.floor(recordingSeconds / 60)}:{(recordingSeconds % 60).toString().padStart(2, '0')}</Text>
+                  <View style={styles.recordingDot} />
+                  <Text style={styles.recordingText}>
+                    {recordingSeconds}s / 15s
+                  </Text>
+                </View>
+              )}
+              
+              {isRecording && (
+                <View style={[styles.progressBarContainer, { top: insets.top + 80 }]}>
+                  <Animated.View 
+                    style={[
+                      styles.progressBarFill, 
+                      { 
+                        width: (recordingSeconds / 15 * 100) + "%" 
+                      }
+                    ]} 
+                  />
                 </View>
               )}
 
@@ -543,6 +566,19 @@ const styles = StyleSheet.create({
   recordingTimer: { position: "absolute", alignSelf: "center", flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, gap: 8 },
   recordingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#FF3B30" },
   recordingText: { color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 14 },
+  progressBarContainer: {
+    position: "absolute",
+    alignSelf: "center",
+    width: "60%",
+    height: 6,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  progressBarFill: {
+    height: "100%",
+    backgroundColor: "#FF3B30",
+  },
   textModeContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: 40, backgroundColor: "#0A0A0A" },
   textModeInput: { fontSize: 32, color: "#FFF", fontFamily: "Inter_700Bold", textAlign: "center", width: "100%" },
   tabBarContainer: { position: "absolute", bottom: 0, left: 0, right: 0, height: 100, overflow: "hidden", zIndex: 100, backgroundColor: "rgba(10,10,10,0.92)" },

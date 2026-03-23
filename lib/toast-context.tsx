@@ -1,7 +1,18 @@
-import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from "react";
-import { Animated, Text, StyleSheet, View, Platform, StatusBar } from "react-native";
+import React, { createContext, useContext, useState, useEffect, useRef } from "react";
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  Animated, 
+  Dimensions, 
+  Platform,
+  StatusBar
+} from "react-native";
+import { BlurView } from "expo-blur";
+import Svg, { Path, Circle } from "react-native-svg";
+import { useUpload } from "./upload-context";
 
-type ToastType = "error" | "success" | "info";
+type ToastType = "success" | "error" | "info";
 
 interface ToastData {
   id: number;
@@ -18,51 +29,72 @@ const ToastContext = createContext<ToastContextValue>({ showToast: () => {} });
 
 export const useToast = () => useContext(ToastContext);
 
-// Shared state so ToastHost can render toasts from anywhere
-let _setToasts: React.Dispatch<React.SetStateAction<ToastData[]>> | null = null;
-let _nextId = 0;
+// --- Icons Components ---
+const SuccessIcon = () => (
+  <Svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4ADE80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M20 6L9 17l-5-5" />
+  </Svg>
+);
 
-function _showToast(title: string, message?: string, type: ToastType = "error") {
-  if (!_setToasts) return;
-  const id = _nextId++;
-  _setToasts((prev) => [...prev, { id, title, message, type }]);
-  setTimeout(() => {
-    _setToasts?.((prev) => prev.filter((t) => t.id !== id));
-  }, 3200);
-}
+const ErrorIcon = () => (
+  <Svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F87171" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <Circle cx="12" cy="12" r="10" />
+    <Path d="M15 9l-6 6M9 9l6 6" />
+  </Svg>
+);
+
+const InfoIcon = () => (
+  <Svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#60A5FA" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <Circle cx="12" cy="12" r="10" />
+    <Path d="M12 16v-4M12 8h.01" />
+  </Svg>
+);
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
-  const showToast = useCallback((title: string, message?: string, type?: ToastType) => {
-    _showToast(title, message, type);
-  }, []);
+  const [toasts, setToasts] = useState<ToastData[]>([]);
+  const nextId = useRef(0);
+
+  const showToast = (title: string, message?: string, type: ToastType = "info") => {
+    const id = nextId.current++;
+    setToasts((prev) => [...prev, { id, title, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3500);
+  };
 
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
+      <ToastHost toasts={toasts} onDismiss={(id) => setToasts(prev => prev.filter(t => t.id !== id))} />
     </ToastContext.Provider>
   );
 }
 
-/**
- * Render this component at the VERY TOP of your component tree,
- * AFTER all other views, so it sits above everything.
- */
-export function ToastHost() {
-  const [toasts, setToasts] = useState<ToastData[]>([]);
-
-  useEffect(() => {
-    _setToasts = setToasts;
-    return () => { _setToasts = null; };
-  }, []);
-
-  if (toasts.length === 0) return null;
-
-  const topInset = Platform.OS === "ios" ? 58 : (StatusBar.currentHeight ?? 24) + 12;
+function ToastHost({ toasts, onDismiss }: { toasts: ToastData[], onDismiss: (id: number) => void }) {
+  const { activeUploads } = useUpload();
+  const topInset = Platform.OS === "ios" ? 54 : (StatusBar.currentHeight ?? 24) + 10;
 
   return (
     <View style={[styles.rootOverlay, { top: topInset }]} pointerEvents="box-none">
+      {activeUploads.map((upload) => (
+        <View key={upload.id} style={styles.uploadBanner}>
+          <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+          <View style={styles.uploadContent}>
+            <Text style={styles.uploadTitle}>
+              {upload.status === "uploading" ? `Envoi du moment (${upload.type})...` : 
+               upload.status === "success" ? "Moment envoyé !" : "Erreur d'envoi"}
+            </Text>
+            {upload.status === "uploading" && (
+              <View style={styles.progressTrack}>
+                <View style={[styles.progressThumb, { width: `${upload.progress * 100}%` }]} />
+              </View>
+            )}
+          </View>
+        </View>
+      ))}
+
       {toasts.map((toast) => (
-        <ToastItem key={toast.id} toast={toast} onDismiss={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))} />
+        <ToastItem key={toast.id} toast={toast} onDismiss={() => onDismiss(toast.id)} />
       ))}
     </View>
   );
@@ -71,36 +103,31 @@ export function ToastHost() {
 function ToastItem({ toast, onDismiss }: { toast: ToastData; onDismiss: () => void }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(-20)).current;
-  const scale = useRef(new Animated.Value(0.9)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.spring(opacity, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 0 }),
-      Animated.spring(translateY, { toValue: 0, useNativeDriver: true, speed: 14, bounciness: 4 }),
-      Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 14, bounciness: 4 }),
+      Animated.spring(opacity, { toValue: 1, useNativeDriver: true, tension: 40, friction: 7 }),
+      Animated.spring(translateY, { toValue: 0, useNativeDriver: true, tension: 40, friction: 7 }),
     ]).start();
-
-    const timer = setTimeout(() => {
-      Animated.parallel([
-        Animated.timing(opacity, { toValue: 0, duration: 250, useNativeDriver: true }),
-        Animated.timing(translateY, { toValue: -20, duration: 250, useNativeDriver: true }),
-      ]).start(() => onDismiss());
-    }, 2700);
-
-    return () => clearTimeout(timer);
   }, []);
 
-  const accentColor =
-    toast.type === "success" ? "#34D399" :
-    toast.type === "info" ? "#60A5FA" :
-    "#F87171";
+  const renderIcon = () => {
+    switch (toast.type) {
+      case "success": return <SuccessIcon />;
+      case "error": return <ErrorIcon />;
+      default: return <InfoIcon />;
+    }
+  };
 
   return (
-    <Animated.View style={[styles.toast, { opacity, transform: [{ translateY }, { scale }], borderLeftColor: accentColor }]}>
-      <View style={[styles.dot, { backgroundColor: accentColor }]} />
+    <Animated.View style={[styles.toast, { opacity, transform: [{ translateY }] }]}>
+      <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
+      <View style={styles.iconWrapper}>
+        {renderIcon()}
+      </View>
       <View style={styles.textContainer}>
-        <Text style={styles.toastTitle} numberOfLines={1}>{toast.title}</Text>
-        {toast.message ? <Text style={styles.toastMessage} numberOfLines={2}>{toast.message}</Text> : null}
+        <Text style={styles.toastTitle}>{toast.title}</Text>
+        {toast.message && <Text style={styles.toastMessage}>{toast.message}</Text>}
       </View>
     </Animated.View>
   );
@@ -109,51 +136,78 @@ function ToastItem({ toast, onDismiss }: { toast: ToastData; onDismiss: () => vo
 const styles = StyleSheet.create({
   rootOverlay: {
     position: "absolute",
-    left: 0,
-    right: 0,
-    alignItems: "flex-end",
+    left: 20,
+    right: 20,
+    zIndex: 999999,
+    gap: 10,
+  },
+  uploadBanner: {
+    height: 52,
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+  },
+  uploadContent: {
+    flex: 1,
     paddingHorizontal: 16,
-    zIndex: 2147483647,
-    elevation: 2147483647,
-    gap: 8,
+    justifyContent: "center",
+    gap: 6,
+  },
+  uploadTitle: {
+    color: "#FFF",
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+  },
+  progressTrack: {
+    height: 4,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  progressThumb: {
+    height: "100%",
+    backgroundColor: "#FFF",
   },
   toast: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(15,15,15,0.97)",
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    maxWidth: 320,
-    minWidth: 180,
-    borderLeftWidth: 3,
+    borderRadius: 20,
+    overflow: "hidden",
+    padding: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    gap: 10,
+    borderColor: "rgba(255,255,255,0.15)",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.5,
-    shadowRadius: 24,
-    elevation: 2147483647,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
   },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  iconWrapper: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
   },
   textContainer: {
     flex: 1,
   },
   toastTitle: {
     color: "#FFF",
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 14,
+    fontSize: 15,
+    fontFamily: "Inter_700Bold",
   },
   toastMessage: {
-    color: "rgba(255,255,255,0.55)",
+    color: "rgba(255,255,255,0.6)",
+    fontSize: 13,
     fontFamily: "Inter_400Regular",
-    fontSize: 12,
     marginTop: 2,
-    lineHeight: 16,
   },
 });

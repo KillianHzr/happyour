@@ -9,6 +9,7 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1014.0",
     "@expo-google-fonts/inter": "^0.4.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@supabase/supabase-js": "^2.98.0",
@@ -23,6 +24,7 @@
     "expo-file-system": "~55.0.10",
     "expo-font": "~55.0.4",
     "expo-image": "~55.0.6",
+    "expo-image-manipulator": "~55.0.11",
     "expo-image-picker": "~55.0.12",
     "expo-intent-launcher": "~55.0.8",
     "expo-linear-gradient": "~55.0.8",

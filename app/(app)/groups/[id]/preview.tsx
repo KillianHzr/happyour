@@ -19,11 +19,13 @@ import { BlurView } from "expo-blur";
 import { decode } from "base64-arraybuffer";
 import * as FileSystem from "expo-file-system/legacy";
 import { supabase } from "../../../../lib/supabase";
+import { r2Storage } from "../../../../lib/r2";
 import { useAuth } from "../../../../lib/auth-context";
 import { useToast } from "../../../../lib/toast-context";
 import { translateError } from "../../../../lib/error-messages";
 import { getCaptureData, clearCaptureData, type CaptureType } from "../../../../lib/capture-store";
 import { notifyNewPhoto } from "../../../../lib/notifications";
+import { useUpload } from "../../../../lib/upload-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 
@@ -53,6 +55,7 @@ export default function PreviewScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
   const { showToast } = useToast();
+  const { startUpload } = useUpload();
   const insets = useSafeAreaInsets();
 
   const [base64, setBase64] = useState<string | null>(null);
@@ -107,30 +110,28 @@ export default function PreviewScreen() {
       const groupName = groupRes.data?.name ?? "";
       const username = profileRes.data?.username ?? "";
 
+      const dbData = {
+        group_id: id as string,
+        user_id: user.id,
+        note: note.trim() || null,
+        groupName,
+        username
+      };
+
       if (captureType === "video") {
-        // Upload video from file URI
-        const fileInfo = await FileSystem.getInfoAsync(uri);
-        if (!fileInfo.exists) throw new Error("Fichier vidéo introuvable.");
         const videoBase64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
         const fileName = `${id}/${user.id}_${Date.now()}.mp4`;
-        await supabase.storage.from("moments").upload(fileName, decode(videoBase64), { contentType: "video/mp4" });
-        await supabase.from("photos").insert({ group_id: id, user_id: user.id, image_path: fileName, note: note.trim() || null });
-        clearCaptureData();
-        notifyNewPhoto(id as string, groupName, username, user.id);
-        showToast("Moment envoyé", "Ta vidéo a été ajoutée au coffre.", "success");
+        startUpload(fileName, decode(videoBase64), "video/mp4", dbData);
       } else {
         if (!base64) return;
         const fileName = `${id}/${user.id}_${Date.now()}.jpg`;
-        await supabase.storage.from("moments").upload(fileName, decode(base64), { contentType: "image/jpeg" });
-        await supabase.from("photos").insert({ group_id: id, user_id: user.id, image_path: fileName, note: note.trim() || null });
-        clearCaptureData();
-        notifyNewPhoto(id as string, groupName, username, user.id);
-        showToast("Moment envoyé", "Ta photo a été ajoutée au coffre.", "success");
+        startUpload(fileName, decode(base64), "image/jpeg", dbData);
       }
+      
+      clearCaptureData();
       router.back();
     } catch (e: any) {
       showToast("Erreur", translateError(e.message));
-    } finally {
       setUploading(false);
     }
   };
