@@ -39,6 +39,7 @@ import { useToast } from "../../../lib/toast-context";
 // Components
 import VaultCounter from "../../../components/VaultCounter";
 import PhotoFeed, { type PhotoEntry, type Reaction } from "../../../components/PhotoFeed";
+import { type StickerId } from "../../../components/stickers";
 import Loader from "../../../components/Loader";
 import StandardCamera from "../../../components/StandardCamera";
 import { ProfileIcon, VaultIcon, MomentIcon } from "../../../components/icons";
@@ -89,22 +90,20 @@ const FlashIcon = ({ mode }: { mode: FlashMode }) => {
   );
 };
 
-function getWeekBounds() {
+// revealDayOfWeek : jour JS (0=dimanche, 1=lundi … 6=samedi)
+function getWeekBounds(revealDayOfWeek = 0, revealHour = 20) {
   const now = new Date();
   const day = now.getDay();
   const diffToMonday = day === 0 ? -6 : 1 - day;
   const monday = new Date(now);
   monday.setDate(now.getDate() + diffToMonday);
   monday.setHours(0, 0, 0, 0);
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  sunday.setHours(20, 0, 0, 0);
-  return { monday, sunday };
-}
-
-function isVaultUnlocked(): boolean {
-  const { sunday } = getWeekBounds();
-  return new Date() >= sunday;
+  // Jours depuis lundi jusqu'au jour de reveal (dimanche = +6, lundi = +0, …)
+  const daysFromMonday = revealDayOfWeek === 0 ? 6 : revealDayOfWeek - 1;
+  const revealDate = new Date(monday);
+  revealDate.setDate(monday.getDate() + daysFromMonday);
+  revealDate.setHours(revealHour, 0, 0, 0);
+  return { monday, revealDate };
 }
 
 type CameraMode = "PHOTO" | "VIDEO" | "TEXTE";
@@ -154,12 +153,23 @@ export default function MainPagerScreen() {
   const [textModeContent, setTextModeContent] = useState("");
   const [note, setNote] = useState("");
 
-  const unlocked = isVaultUnlocked();
+  const [debugUnlocked, setDebugUnlocked] = useState(false);
+  const [revealConfig, setRevealConfig] = useState({ day: 0, hour: 20 });
+  const { revealDate } = getWeekBounds(revealConfig.day, revealConfig.hour);
+  const unlocked = __DEV__ ? debugUnlocked : new Date() >= revealDate;
 
   const fetchData = useCallback(async () => {
     if (!user || !id) return;
     try {
-      const { monday } = getWeekBounds();
+      const { data: cfgRows } = await supabase
+        .from("app_config")
+        .select("key, value")
+        .in("key", ["reveal_day", "reveal_hour"]);
+      const cfgMap = Object.fromEntries((cfgRows ?? []).map((r: any) => [r.key, Number(r.value)]));
+      const cfg = { reveal_day: cfgMap["reveal_day"] ?? 0, reveal_hour: cfgMap["reveal_hour"] ?? 20 };
+      setRevealConfig({ day: cfg.reveal_day, hour: cfg.reveal_hour });
+      const { monday } = getWeekBounds(cfg.reveal_day, cfg.reveal_hour);
+
       const [groupRes, profileRes, photosRes, membersRes] = await Promise.all([
         supabase.from("groups").select("name").eq("id", id).single(),
         supabase.from("profiles").select("username, avatar_url, email").eq("id", user.id).single(),
@@ -191,6 +201,28 @@ export default function MainPagerScreen() {
         setPhotoCount(photosRes.data.length);
         setUserPhotoCount(photosRes.data.filter((p: any) => p.user_id === user.id).length);
         
+        const photoIds = photosRes.data.map((p: any) => p.id);
+        const reactionsRes = photoIds.length > 0
+          ? await supabase
+              .from("reactions")
+              .select("id, photo_id, user_id, emoji, profiles:user_id(username, avatar_url)")
+              .in("photo_id", photoIds)
+              .eq("type", "sticker")
+          : { data: [] };
+
+        const reactionsByPhoto: Record<string, Reaction[]> = {};
+        for (const r of reactionsRes.data ?? []) {
+          if (!r.emoji) continue;
+          if (!reactionsByPhoto[r.photo_id]) reactionsByPhoto[r.photo_id] = [];
+          reactionsByPhoto[r.photo_id].push({
+            id: r.id,
+            user_id: r.user_id,
+            username: r.profiles?.username ?? "?",
+            avatar_url: r.profiles?.avatar_url ?? null,
+            sticker_id: r.emoji as StickerId,
+          });
+        }
+
         const entries: PhotoEntry[] = photosRes.data.map((p: any) => ({
           id: p.id,
           url: p.image_path === "text_mode" ? "" : r2Storage.getPublicUrl(p.image_path),
@@ -199,7 +231,7 @@ export default function MainPagerScreen() {
           username: p.profiles?.username ?? "Anonyme",
           avatar_url: p.profiles?.avatar_url,
           image_path: p.image_path,
-          reactions: [], 
+          reactions: reactionsByPhoto[p.id] ?? [],
         }));
         setPhotos(entries);
       }
@@ -260,6 +292,43 @@ export default function MainPagerScreen() {
         await supabase.from("profiles").update({ avatar_url: urlData }).eq("id", user?.id);
         setAvatarUrl(urlData);
       } catch (e: any) { Alert.alert("Erreur", e.message); } finally { setUploading(false); }
+    }
+  };
+
+  const handleReact = async (photoId: string, stickerId: StickerId) => {
+    if (!user) return;
+    const existing = photos
+      .find((p) => p.id === photoId)
+      ?.reactions.find((r) => r.user_id === user.id);
+
+    if (existing) {
+      if (existing.sticker_id === stickerId) {
+        // toggle off
+        await supabase.from("reactions").delete().eq("id", existing.id);
+        setPhotos((prev) => prev.map((p) =>
+          p.id === photoId ? { ...p, reactions: p.reactions.filter((r) => r.id !== existing.id) } : p
+        ));
+      } else {
+        // changer de sticker
+        await supabase.from("reactions").update({ emoji: stickerId }).eq("id", existing.id);
+        setPhotos((prev) => prev.map((p) =>
+          p.id === photoId ? { ...p, reactions: p.reactions.map((r) => r.id === existing.id ? { ...r, sticker_id: stickerId } : r) } : p
+        ));
+      }
+    } else {
+      const { data } = await supabase
+        .from("reactions")
+        .insert({ photo_id: photoId, user_id: user.id, type: "sticker", emoji: stickerId })
+        .select("id")
+        .single();
+      if (data) {
+        setPhotos((prev) => prev.map((p) =>
+          p.id === photoId ? {
+            ...p,
+            reactions: [...p.reactions, { id: data.id, user_id: user.id, username, avatar_url: avatarUrl, sticker_id: stickerId }],
+          } : p
+        ));
+      }
     }
   };
 
@@ -662,13 +731,18 @@ export default function MainPagerScreen() {
         {/* PAGE 2: VAULT (Slides over Camera) */}
         <View key="page-2" style={[styles.page, { zIndex: 10 }]}>
           {unlocked ? (
-            <View style={styles.vaultUnlocked}><PhotoFeed photos={photos} onReactPress={(pid) => console.log("React to", pid)} nextUnlockDate={getWeekBounds().sunday} /></View>
+            <View style={styles.vaultUnlocked}><PhotoFeed photos={photos} onReact={handleReact} currentUserId={user?.id} nextUnlockDate={revealDate} /></View>
           ) : (
             <ScrollView style={[styles.pageContent, { paddingTop: insets.top + 40 }]} contentContainerStyle={{ paddingBottom: 160 }} showsVerticalScrollIndicator={false}>
               <View style={styles.vaultHeader}><Text style={styles.pageTitleNoPad}>{groupName || "Groupe"}</Text><TouchableOpacity onPress={() => setShowMembersModal(true)} style={styles.groupBtn}><GroupIcon /></TouchableOpacity></View>
               <View style={styles.vaultBody}>
-                <View style={styles.vaultLockedContent}><VaultCounter totalCount={photoCount} userCount={userPhotoCount} unlockDate={getWeekBounds().sunday} /></View>
+                <View style={styles.vaultLockedContent}><VaultCounter totalCount={photoCount} userCount={userPhotoCount} unlockDate={revealDate} /></View>
               </View>
+              {__DEV__ && (
+                <TouchableOpacity style={styles.debugBtn} onPress={() => setDebugUnlocked(true)}>
+                  <Text style={styles.debugBtnText}>🔓 Simuler reveal (DEV)</Text>
+                </TouchableOpacity>
+              )}
             </ScrollView>
           )}
         </View>
@@ -756,6 +830,8 @@ const styles = StyleSheet.create({
   memberAvatarText: { color: "#FFF", fontFamily: "Inter_700Bold" },
   memberName: { color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 16 },
   inviteModalBtn: { marginTop: 24, marginBottom: 40 },
+  debugBtn: { marginHorizontal: 24, marginTop: 24, marginBottom: 16, paddingVertical: 12, borderRadius: 12, backgroundColor: "rgba(255,200,0,0.15)", borderWidth: 1, borderColor: "rgba(255,200,0,0.4)", alignItems: "center" },
+  debugBtnText: { color: "#FFD700", fontFamily: "Inter_600SemiBold", fontSize: 14 },
   cameraFooter: { position: "absolute", left: 0, right: 0, alignItems: "center", gap: 24 },
   modeSlider: { flexDirection: "row", gap: 20, backgroundColor: "rgba(0,0,0,0.3)", paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, marginBottom: 12 },
   modeText: { color: "rgba(255,255,255,0.4)", fontFamily: "Inter_700Bold", fontSize: 12 },

@@ -6,12 +6,15 @@ import {
   StyleSheet,
   Dimensions,
   TouchableOpacity,
+  Modal,
+  Pressable,
   ViewToken,
 } from "react-native";
 import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Path } from "react-native-svg";
+import { STICKERS, type StickerId } from "./stickers";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -19,9 +22,8 @@ export type Reaction = {
   id: string;
   user_id: string;
   username: string;
-  type: "emoji" | "photo";
-  emoji?: string;
-  image_url?: string;
+  avatar_url?: string | null;
+  sticker_id: StickerId;
 };
 
 export type PhotoEntry = {
@@ -42,117 +44,205 @@ type FeedItem =
 
 type Props = {
   photos: PhotoEntry[];
-  onReactPress?: (photoId: string) => void;
+  onReact?: (photoId: string, stickerId: StickerId) => void;
+  currentUserId?: string;
   nextUnlockDate: Date;
 };
 
+// --- Icône "réagir" (bulle + éclair, pas un cœur) ---
 const ReactIcon = () => (
-  <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-    <Path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="#FFFFFF" />
+  <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+      fill="rgba(255,255,255,0.9)"
+    />
   </Svg>
 );
 
-const QuoteIcon = () => (
-  <Svg width="40" height="40" viewBox="0 0 24 24" fill="none" opacity={0.2}>
-    <Path d="M3 21c3 0 7-1 7-8V5c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v6c0 1.1.9 2 2 2h4c0 3.5-3.5 4.5-3.5 4.5L3 21zM14 3h4c1.1 0 2 .9 2 2v6c0 1.1-.9 2-2 2h-4c0 3.5 3.5 4.5 3.5 4.5L14 21c3 0 7-1 7-8V5c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v6c0 1.1.9 2 2 2z" fill="#FFF" />
-  </Svg>
-);
+// --- Avatar générique : photo ou initiale ---
+function UserAvatar({ avatar_url, username, size = 28 }: { avatar_url?: string | null; username: string; size?: number }) {
+  const borderRadius = size / 2;
+  if (avatar_url) {
+    return <Image source={{ uri: avatar_url }} style={{ width: size, height: size, borderRadius }} />;
+  }
+  return (
+    <View style={{ width: size, height: size, borderRadius, backgroundColor: "#FFF", justifyContent: "center", alignItems: "center" }}>
+      <Text style={{ color: "#000", fontFamily: "Inter_700Bold", fontSize: Math.round(size * 0.42) }}>
+        {username[0]?.toUpperCase() ?? "?"}
+      </Text>
+    </View>
+  );
+}
 
-function formatDayLabel(dateStr: string): { date: string; label: string } {
+// --- Bulles de réactions groupées par sticker ---
+function ReactionsRow({ reactions, currentUserId, onReact, photoId }: {
+  reactions: Reaction[];
+  currentUserId?: string;
+  onReact?: (photoId: string, stickerId: StickerId) => void;
+  photoId: string;
+}) {
+  if (reactions.length === 0) return null;
+
+  // Grouper par sticker
+  const groups = STICKERS
+    .map(({ id, Component }) => ({
+      id,
+      Component,
+      users: reactions.filter((r) => r.sticker_id === id),
+    }))
+    .filter((g) => g.users.length > 0);
+
+  return (
+    <View style={styles.reactionsRow}>
+      {groups.map(({ id, Component, users }) => {
+        const iMine = users.some((r) => r.user_id === currentUserId);
+        return (
+          <TouchableOpacity
+            key={id}
+            style={[styles.reactionBubble, iMine && styles.reactionBubbleMine]}
+            onPress={() => onReact?.(photoId, id as StickerId)}
+            activeOpacity={0.75}
+          >
+            {/* Avatars empilés (max 2) */}
+            <View style={styles.reactionAvatarStack}>
+              {users.slice(0, 2).map((r, i) => (
+                <View key={r.id} style={[styles.reactionAvatarWrap, { zIndex: 2 - i, marginLeft: i === 0 ? 0 : -8 }]}>
+                  <UserAvatar avatar_url={r.avatar_url} username={r.username} size={20} />
+                </View>
+              ))}
+            </View>
+            {/* Sticker SVG */}
+            <View style={styles.reactionStickerWrap}>
+              <Component width={32} height={12} />
+            </View>
+            {/* Compte si > 2 */}
+            {users.length > 2 && (
+              <Text style={styles.reactionCount}>+{users.length - 2}</Text>
+            )}
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+// --- Picker de stickers ---
+function StickerPicker({ visible, onClose, onSelect, myReaction }: {
+  visible: boolean;
+  onClose: () => void;
+  onSelect: (id: StickerId) => void;
+  myReaction?: StickerId | null;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.pickerBackdrop} onPress={onClose}>
+        <Pressable style={styles.pickerSheet} onPress={(e) => e.stopPropagation()}>
+          <View style={styles.pickerHandle} />
+          <Text style={styles.pickerTitle}>Réagir</Text>
+          <View style={styles.pickerGrid}>
+            {STICKERS.map(({ id, Component, label }) => {
+              const isActive = myReaction === id;
+              return (
+                <TouchableOpacity
+                  key={id}
+                  style={[styles.pickerItem, isActive && styles.pickerItemActive]}
+                  onPress={() => { onSelect(id as StickerId); onClose(); }}
+                  activeOpacity={0.7}
+                >
+                  <Component width={52} height={20} />
+                  <Text style={styles.pickerLabel}>{label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// --- Countdown ---
+function EndCountdown({ targetDate }: { targetDate: Date }) {
+  const [timeLeft, setTimeLeft] = useState("");
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const distance = targetDate.getTime() - Date.now();
+      if (distance < 0) { setTimeLeft("00:00:00"); return; }
+      const d = Math.floor(distance / 86400000);
+      const h = Math.floor((distance % 86400000) / 3600000);
+      const m = Math.floor((distance % 3600000) / 60000);
+      const s = Math.floor((distance % 60000) / 1000);
+      setTimeLeft(`${d > 0 ? d + "j " : ""}${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [targetDate]);
+  return <Text style={styles.countdownText}>{timeLeft}</Text>;
+}
+
+function formatDayLabel(dateStr: string) {
   const d = new Date(dateStr);
   const day = d.toLocaleDateString("fr-FR", { weekday: "long" }).toUpperCase();
   const full = d.toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
   return { date: dateStr.slice(0, 10), label: `${day}\n${full}` };
 }
 
-function EndCountdown({ targetDate }: { targetDate: Date }) {
-  const [timeLeft, setTimeLeft] = useState("");
+// --- Moment vidéo ---
+function VideoMoment({ moment, isVisible, onReact, currentUserId }: {
+  moment: PhotoEntry;
+  isVisible: boolean;
+  onReact?: (photoId: string, stickerId: StickerId) => void;
+  currentUserId?: string;
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const player = useVideoPlayer(moment.url, (p) => { p.loop = true; p.muted = false; });
+  const myReaction = moment.reactions.find((r) => r.user_id === currentUserId)?.sticker_id ?? null;
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      const now = new Date().getTime();
-      const distance = targetDate.getTime() - now;
-
-      if (distance < 0) {
-        setTimeLeft("00:00:00");
-        return;
-      }
-
-      const days = Math.floor(distance / (1000 * 60 * 60 * 24));
-      const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((distance % (1000 * 60)) / 1000);
-
-      setTimeLeft(`${days > 0 ? days + 'j ' : ''}${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [targetDate]);
-
-  return <Text style={styles.countdownText}>{timeLeft}</Text>;
-}
-
-function VideoMoment({ moment, isVisible, onReactPress }: { moment: PhotoEntry; isVisible: boolean; onReactPress?: (id: string) => void }) {
-  const player = useVideoPlayer(moment.url, (p) => {
-    p.loop = true;
-    p.muted = false;
-  });
-
-  useEffect(() => {
-    if (isVisible) {
-      player.play();
-    } else {
-      player.pause();
-    }
+    if (isVisible) player.play(); else player.pause();
   }, [isVisible, player]);
 
   return (
     <View style={styles.fullscreenPage}>
       <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />
-      <LinearGradient colors={["transparent", "rgba(0,0,0,0.8)"]} style={styles.momentOverlay}>
+      <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.momentOverlay}>
         <View style={styles.authorInfo}>
-          <View style={styles.avatar}>
-            {moment.avatar_url ? (
-              <Image source={{ uri: moment.avatar_url }} style={styles.avatarImg} />
-            ) : (
-              <Text style={styles.avatarText}>{moment.username[0].toUpperCase()}</Text>
-            )}
-          </View>
+          <UserAvatar avatar_url={moment.avatar_url} username={moment.username} size={40} />
           <View>
             <Text style={styles.username}>{moment.username}</Text>
             {moment.note && <Text style={styles.momentNote} numberOfLines={3}>{moment.note}</Text>}
           </View>
         </View>
+        <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={onReact} photoId={moment.id} />
       </LinearGradient>
-      <TouchableOpacity style={styles.reactBtn} onPress={() => onReactPress?.(moment.id)}>
+      <TouchableOpacity style={styles.reactBtn} onPress={() => setPickerOpen(true)}>
         <ReactIcon />
       </TouchableOpacity>
+      <StickerPicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={(sid) => onReact?.(moment.id, sid)} myReaction={myReaction} />
     </View>
   );
 }
 
-export default function PhotoFeed({ photos, onReactPress, nextUnlockDate }: Props) {
+// --- Feed principal ---
+export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDate }: Props) {
   const [visibleIndex, setVisibleIndex] = useState(0);
+  const [openPickerId, setOpenPickerId] = useState<string | null>(null);
 
   const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     if (viewableItems.length > 0 && viewableItems[0].index != null) {
       setVisibleIndex(viewableItems[0].index);
     }
   }, []);
-
   const viewabilityConfig = useMemo(() => ({ itemVisiblePercentThreshold: 50 }), []);
 
   const items = useMemo<FeedItem[]>(() => {
     if (photos.length === 0) return [];
     const result: FeedItem[] = [];
     let lastDate = "";
-
     for (const photo of photos) {
-      const photoDate = photo.created_at.slice(0, 10);
-      if (photoDate !== lastDate) {
-        const { date, label } = formatDayLabel(photo.created_at);
-        result.push({ type: "separator", date, label });
-        lastDate = photoDate;
+      const d = photo.created_at.slice(0, 10);
+      if (d !== lastDate) {
+        result.push({ type: "separator", ...formatDayLabel(photo.created_at) });
+        lastDate = d;
       }
       result.push({ type: "moment", data: photo });
     }
@@ -162,11 +252,11 @@ export default function PhotoFeed({ photos, onReactPress, nextUnlockDate }: Prop
 
   const renderItem = ({ item, index }: { item: FeedItem; index: number }) => {
     if (item.type === "separator") {
-      const lines = item.label.split("\n");
+      const [day, date] = item.label.split("\n");
       return (
         <View style={styles.fullscreenPage}>
-          <Text style={styles.separatorDay}>{lines[0]}</Text>
-          <Text style={styles.separatorDate}>{lines[1]}</Text>
+          <Text style={styles.separatorDay}>{day}</Text>
+          <Text style={styles.separatorDate}>{date}</Text>
         </View>
       );
     }
@@ -186,11 +276,11 @@ export default function PhotoFeed({ photos, onReactPress, nextUnlockDate }: Prop
     const isTextOnly = moment.image_path === "text_mode";
     const isVideo = moment.image_path.endsWith(".mp4");
     const textLen = moment.note?.length ?? 0;
-    const adaptiveFontSize = textLen <= 40 ? 32 : textLen <= 100 ? 26 : textLen <= 200 ? 21 : textLen <= 300 ? 17 : 15;
-    const adaptiveLineHeight = Math.round(adaptiveFontSize * 1.4);
+    const fontSize = textLen <= 40 ? 32 : textLen <= 100 ? 26 : textLen <= 200 ? 21 : textLen <= 300 ? 17 : 15;
+    const myReaction = moment.reactions.find((r) => r.user_id === currentUserId)?.sticker_id ?? null;
 
     if (isVideo) {
-      return <VideoMoment moment={moment} isVisible={index === visibleIndex} onReactPress={onReactPress} />;
+      return <VideoMoment moment={moment} isVisible={index === visibleIndex} onReact={onReact} currentUserId={currentUserId} />;
     }
 
     return (
@@ -198,43 +288,40 @@ export default function PhotoFeed({ photos, onReactPress, nextUnlockDate }: Prop
         {isTextOnly ? (
           <View style={styles.textMomentBg}>
             <View style={styles.quoteContainer}>
-              <Text style={[styles.textMomentContent, { fontSize: adaptiveFontSize, lineHeight: adaptiveLineHeight }]}>{moment.note}</Text>
+              <Text style={[styles.textMomentContent, { fontSize, lineHeight: Math.round(fontSize * 1.4) }]}>{moment.note}</Text>
               <View style={styles.citationFooter}>
                 <View style={styles.citationAvatar}>
-                  {moment.avatar_url ? (
-                    <Image source={{ uri: moment.avatar_url }} style={styles.avatarImg} />
-                  ) : (
-                    <Text style={styles.avatarText}>{moment.username[0].toUpperCase()}</Text>
-                  )}
+                  <UserAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} />
                 </View>
                 <Text style={styles.citationUsername}>{moment.username}</Text>
               </View>
             </View>
           </View>
         ) : (
-          <>
-            <Image source={{ uri: moment.url }} style={StyleSheet.absoluteFill} contentFit="cover" />
-            <LinearGradient colors={["transparent", "rgba(0,0,0,0.8)"]} style={styles.momentOverlay}>
-              <View style={styles.authorInfo}>
-                <View style={styles.avatar}>
-                  {moment.avatar_url ? (
-                    <Image source={{ uri: moment.avatar_url }} style={styles.avatarImg} />
-                  ) : (
-                    <Text style={styles.avatarText}>{moment.username[0].toUpperCase()}</Text>
-                  )}
-                </View>
-                <View>
-                  <Text style={styles.username}>{moment.username}</Text>
-                  {moment.note && <Text style={styles.momentNote} numberOfLines={3}>{moment.note}</Text>}
-                </View>
-              </View>
-            </LinearGradient>
-          </>
+          <Image source={{ uri: moment.url }} style={StyleSheet.absoluteFill} contentFit="cover" />
         )}
 
-        <TouchableOpacity style={styles.reactBtn} onPress={() => onReactPress?.(moment.id)}>
+        <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.momentOverlay}>
+          <View style={styles.authorInfo}>
+            <UserAvatar avatar_url={moment.avatar_url} username={moment.username} size={40} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.username}>{moment.username}</Text>
+              {moment.note && !isTextOnly && <Text style={styles.momentNote} numberOfLines={2}>{moment.note}</Text>}
+            </View>
+          </View>
+          <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={onReact} photoId={moment.id} />
+        </LinearGradient>
+
+        <TouchableOpacity style={styles.reactBtn} onPress={() => setOpenPickerId(moment.id)}>
           <ReactIcon />
         </TouchableOpacity>
+
+        <StickerPicker
+          visible={openPickerId === moment.id}
+          onClose={() => setOpenPickerId(null)}
+          onSelect={(sid) => { onReact?.(moment.id, sid); setOpenPickerId(null); }}
+          myReaction={myReaction}
+        />
       </View>
     );
   };
@@ -243,13 +330,13 @@ export default function PhotoFeed({ photos, onReactPress, nextUnlockDate }: Prop
     <FlatList
       data={items}
       renderItem={renderItem}
-      keyExtractor={(item, i) => i.toString()}
+      keyExtractor={(_, i) => i.toString()}
       pagingEnabled
       snapToInterval={SCREEN_HEIGHT}
       snapToAlignment="start"
       decelerationRate="fast"
       showsVerticalScrollIndicator={false}
-      getItemLayout={(_, index) => ({ length: SCREEN_HEIGHT, offset: SCREEN_HEIGHT * index, index })}
+      getItemLayout={(_, i) => ({ length: SCREEN_HEIGHT, offset: SCREEN_HEIGHT * i, index: i })}
       onViewableItemsChanged={onViewableItemsChanged}
       viewabilityConfig={viewabilityConfig}
       style={styles.list}
@@ -259,36 +346,39 @@ export default function PhotoFeed({ photos, onReactPress, nextUnlockDate }: Prop
 
 const styles = StyleSheet.create({
   list: { flex: 1, backgroundColor: "#000" },
-  fullscreenPage: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#000",
-  },
+  fullscreenPage: { width: SCREEN_WIDTH, height: SCREEN_HEIGHT, justifyContent: "center", alignItems: "center", backgroundColor: "#000" },
   separatorDay: { fontFamily: "Inter_700Bold", fontSize: 48, color: "#FFF", textAlign: "center", letterSpacing: -2 },
   separatorDate: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginTop: 8 },
-  
   textMomentBg: { flex: 1, width: "100%", justifyContent: "center", alignItems: "center", padding: 32, backgroundColor: "#050505" },
   quoteContainer: { width: "100%", alignItems: "center", gap: 32 },
-  quoteHeader: { width: "100%", alignItems: "flex-start", marginBottom: -10 },
-  textMomentContent: { fontFamily: "Inter_700Bold", fontSize: 32, color: "#FFF", textAlign: "center", lineHeight: 44, letterSpacing: -0.5 },
-  
+  textMomentContent: { fontFamily: "Inter_700Bold", color: "#FFF", textAlign: "center", letterSpacing: -0.5 },
   citationFooter: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 20 },
-  citationAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center", overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
-  citationAvatarImg: { width: "100%", height: "100%" },
-  avatarImg: { width: "100%", height: "100%" },
-  avatarText: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 16 },
+  citationAvatar: { borderRadius: 16, overflow: "hidden" },
   citationUsername: { color: "rgba(255,255,255,0.5)", fontFamily: "Inter_600SemiBold", fontSize: 15 },
-
-  momentOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 120, paddingTop: 60 },
+  momentOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 110, paddingTop: 80, gap: 14 },
   authorInfo: { flexDirection: "row", alignItems: "center", gap: 12 },
-  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center", overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
   username: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 16 },
-  momentNote: { color: "rgba(255,255,255,0.8)", fontFamily: "Inter_400Regular", fontSize: 14, marginTop: 4, maxWidth: SCREEN_WIDTH - 100 },
-  
-  reactBtn: { position: "absolute", right: 20, bottom: 160, width: 56, height: 56, borderRadius: 28, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
-  
+  momentNote: { color: "rgba(255,255,255,0.75)", fontFamily: "Inter_400Regular", fontSize: 14, marginTop: 3 },
+  // Reactions
+  reactionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  reactionBubble: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 20, paddingHorizontal: 8, paddingVertical: 5, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
+  reactionBubbleMine: { backgroundColor: "rgba(255,255,255,0.28)", borderColor: "rgba(255,255,255,0.4)" },
+  reactionAvatarStack: { flexDirection: "row" },
+  reactionAvatarWrap: { borderRadius: 10, overflow: "hidden", borderWidth: 1.5, borderColor: "rgba(0,0,0,0.3)" },
+  reactionStickerWrap: { marginLeft: 2 },
+  reactionCount: { color: "rgba(255,255,255,0.7)", fontFamily: "Inter_700Bold", fontSize: 11, marginLeft: 2 },
+  // React button
+  reactBtn: { position: "absolute", right: 20, bottom: 160, width: 52, height: 52, borderRadius: 26, backgroundColor: "rgba(255,255,255,0.18)", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.25)" },
+  // Sticker picker
+  pickerBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
+  pickerSheet: { backgroundColor: "#1A1A1A", borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingBottom: 40, paddingTop: 12, paddingHorizontal: 20 },
+  pickerHandle: { width: 36, height: 4, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 2, alignSelf: "center", marginBottom: 20 },
+  pickerTitle: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 18, marginBottom: 20 },
+  pickerGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  pickerItem: { flex: 1, minWidth: "28%", alignItems: "center", gap: 8, paddingVertical: 16, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.06)", borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" },
+  pickerItemActive: { backgroundColor: "rgba(255,255,255,0.18)", borderColor: "rgba(255,255,255,0.35)" },
+  pickerLabel: { color: "rgba(255,255,255,0.5)", fontFamily: "Inter_600SemiBold", fontSize: 11 },
+  // End screen
   endLogoMark: { width: 32, height: 32, borderWidth: 2, borderColor: "#FFF", borderRadius: 6, marginBottom: 24, transform: [{ rotate: "45deg" }] },
   endTitle: { fontFamily: "Inter_700Bold", fontSize: 24, color: "#FFF" },
   endSubtitle: { fontFamily: "Inter_400Regular", fontSize: 14, color: "rgba(255,255,255,0.4)", marginTop: 8 },
