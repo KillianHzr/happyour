@@ -20,6 +20,7 @@ import { useLocalSearchParams, router } from "expo-router";
 import { CameraView, CameraType, FlashMode } from "expo-camera";
 import { Image } from "expo-image";
 import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { decode } from "base64-arraybuffer";
@@ -33,6 +34,7 @@ import { scheduleImmediateLocalNotification, cancelAllRecapNotifications } from 
 import { setCaptureData } from "../../../lib/capture-store";
 import { notifyNewPhoto } from "../../../lib/notifications";
 import { useUpload } from "../../../lib/upload-context";
+import { useToast } from "../../../lib/toast-context";
 
 // Components
 import VaultCounter from "../../../components/VaultCounter";
@@ -110,6 +112,7 @@ type CameraMode = "PHOTO" | "VIDEO" | "TEXTE";
 export default function MainPagerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { startUpload } = useUpload();
+  const { showToast } = useToast();
   const { user, logout } = useAuth();
   const insets = useSafeAreaInsets();
   
@@ -124,6 +127,9 @@ export default function MainPagerScreen() {
   const [username, setUsername] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [email, setEmail] = useState("");
+  const [isEditingUsername, setIsEditingUsername] = useState(false);
+  const [newUsername, setNewUsername] = useState("");
+  const [savingUsername, setSavingUsername] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
   const [currentPage, setCurrentPage] = useState(1); 
   const [showMembersModal, setShowMembersModal] = useState(false);
@@ -255,6 +261,21 @@ export default function MainPagerScreen() {
         setAvatarUrl(urlData);
       } catch (e: any) { Alert.alert("Erreur", e.message); } finally { setUploading(false); }
     }
+  };
+
+  const saveUsername = async () => {
+    const trimmed = newUsername.trim();
+    if (!trimmed || trimmed === username) { setIsEditingUsername(false); return; }
+    setSavingUsername(true);
+    const { error } = await supabase.from("profiles").update({ username: trimmed }).eq("id", user!.id);
+    if (!error) {
+      setUsername(trimmed);
+      showToast("Pseudo mis à jour", undefined, "success");
+    } else {
+      showToast("Erreur", "Impossible de modifier le pseudo", "error");
+    }
+    setSavingUsername(false);
+    setIsEditingUsername(false);
   };
 
   const jumpTo = (page: number) => {
@@ -409,22 +430,146 @@ export default function MainPagerScreen() {
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })}
         scrollEventThrottle={16} contentOffset={{ x: SCREEN_WIDTH, y: 0 }} style={styles.pager}
       >
-        {/* PAGE 0: PROFILE (Slides over Camera) */}
+        {/* PAGE 0: PROFILE */}
         <View key="page-0" style={[styles.page, { zIndex: 10 }]}>
-          <View style={[styles.pageContent, { paddingTop: insets.top + 40 }]}>
-            <Text style={styles.pageTitle}>Profil</Text>
-            <View style={styles.profileBody}>
-              <TouchableOpacity onPress={updateAvatar} style={styles.avatarCircle} disabled={isBlocked}>
-                {avatarUrl ? ( <Image source={{ uri: avatarUrl }} style={styles.avatarImg} /> ) : ( <Text style={styles.avatarText}>{(username ? username[0] : "?").toUpperCase()}</Text> )}
-                <View style={styles.editBadge}><Text style={styles.editBadgeText}>{uploading ? "..." : "Modifier"}</Text></View>
+          <ScrollView
+            style={styles.pageContent}
+            contentContainerStyle={{ paddingBottom: 140 }}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Hero header */}
+            <LinearGradient
+              colors={["rgba(255,255,255,0.07)", "transparent"]}
+              style={[styles.profileHeader, { paddingTop: insets.top + 36 }]}
+            >
+              {/* Avatar */}
+              <LinearGradient
+                colors={["rgba(255,255,255,0.35)", "rgba(255,255,255,0.06)"]}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={styles.avatarRing}
+              >
+                <TouchableOpacity onPress={updateAvatar} style={styles.avatarWrap} disabled={uploading}>
+                  {avatarUrl
+                    ? <Image source={{ uri: avatarUrl }} style={styles.avatarImg} />
+                    : <Text style={styles.avatarInitial}>{(username?.[0] ?? "?").toUpperCase()}</Text>
+                  }
+                  <View style={styles.avatarOverlay}>
+                    {uploading
+                      ? <ActivityIndicator size="small" color="#FFF" />
+                      : <Svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                          <Circle cx="12" cy="13" r="4"/>
+                        </Svg>
+                    }
+                  </View>
+                </TouchableOpacity>
+              </LinearGradient>
+
+              {/* Nom */}
+              <Text style={styles.profileName}>{username || "—"}</Text>
+
+              {/* Bouton modifier */}
+              <TouchableOpacity
+                style={styles.editUsernameChip}
+                onPress={() => { setNewUsername(username); setIsEditingUsername(true); }}
+              >
+                <Svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <Path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                  <Path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </Svg>
+                <Text style={styles.editUsernameChipText}>Modifier le pseudo</Text>
               </TouchableOpacity>
-              <View style={styles.infoBox}>
-                <Text style={styles.infoLabel}>Identité</Text><Text style={styles.infoValue}>{username || "—"}</Text>
-                <View style={styles.divider} /><Text style={styles.infoLabel}>Contact</Text><Text style={styles.infoValue}>{email || user?.email}</Text>
+            </LinearGradient>
+
+            {/* Settings cards */}
+            <View style={styles.settingsSection}>
+              {/* Compte */}
+              <Text style={styles.settingsSectionLabel}>Compte</Text>
+              <View style={styles.settingsCard}>
+                <TouchableOpacity
+                  style={styles.settingsRow}
+                  onPress={() => { setNewUsername(username); setIsEditingUsername(true); }}
+                >
+                  <View style={[styles.settingsIconWrap, { backgroundColor: "rgba(129,140,248,0.15)" }]}>
+                    <Svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#818CF8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <Path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                      <Circle cx="12" cy="7" r="4"/>
+                    </Svg>
+                  </View>
+                  <View style={styles.settingsTextCol}>
+                    <Text style={styles.settingsLabel}>Pseudo</Text>
+                    <Text style={styles.settingsSubValue}>{username}</Text>
+                  </View>
+                  <Svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <Path d="M9 18l6-6-6-6"/>
+                  </Svg>
+                </TouchableOpacity>
+
+                <View style={styles.settingsDivider} />
+
+                <View style={styles.settingsRow}>
+                  <View style={[styles.settingsIconWrap, { backgroundColor: "rgba(251,191,36,0.12)" }]}>
+                    <Svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FBB824" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <Path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                      <Path d="M22 6l-10 7L2 6"/>
+                    </Svg>
+                  </View>
+                  <View style={styles.settingsTextCol}>
+                    <Text style={styles.settingsLabel}>Email</Text>
+                    <Text style={styles.settingsSubValue}>{email || user?.email}</Text>
+                  </View>
+                </View>
               </View>
-              <TouchableOpacity style={styles.logoutBtn} onPress={() => logout()} disabled={isBlocked}><Text style={styles.logoutText}>Se déconnecter</Text></TouchableOpacity>
+
+              {/* Danger zone */}
+              <Text style={[styles.settingsSectionLabel, { marginTop: 28 }]}>Session</Text>
+              <View style={styles.settingsCard}>
+                <TouchableOpacity style={styles.settingsRow} onPress={() => logout()}>
+                  <View style={[styles.settingsIconWrap, { backgroundColor: "rgba(255,59,48,0.12)" }]}>
+                    <Svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FF3B30" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <Path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                      <Path d="M16 17l5-5-5-5"/>
+                      <Path d="M21 12H9"/>
+                    </Svg>
+                  </View>
+                  <Text style={[styles.settingsLabel, { color: "#FF3B30" }]}>Se déconnecter</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
+          </ScrollView>
+
+          {/* Modal édition pseudo — bottom sheet */}
+          <Modal visible={isEditingUsername} transparent animationType="slide" onRequestClose={() => setIsEditingUsername(false)}>
+            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+              <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setIsEditingUsername(false)} />
+              <View style={styles.editSheet}>
+                <View style={styles.editSheetHandle} />
+                <Text style={styles.editSheetTitle}>Modifier le pseudo</Text>
+                <TextInput
+                  style={styles.editSheetInput}
+                  value={newUsername}
+                  onChangeText={setNewUsername}
+                  autoFocus
+                  maxLength={30}
+                  autoCapitalize="none"
+                  returnKeyType="done"
+                  onSubmitEditing={saveUsername}
+                  placeholder="Ton pseudo..."
+                  placeholderTextColor="rgba(255,255,255,0.3)"
+                  editable={!savingUsername}
+                />
+                <TouchableOpacity style={styles.editSheetBtn} onPress={saveUsername} disabled={savingUsername}>
+                  {savingUsername
+                    ? <ActivityIndicator color="#000" />
+                    : <Text style={styles.editSheetBtnText}>Valider</Text>
+                  }
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.editSheetCancel} onPress={() => setIsEditingUsername(false)}>
+                  <Text style={styles.editSheetCancelText}>Annuler</Text>
+                </TouchableOpacity>
+              </View>
+            </KeyboardAvoidingView>
+          </Modal>
         </View>
 
         {/* PAGE 1: CAMERA (Fixed underneath) */}
@@ -568,18 +713,32 @@ const styles = StyleSheet.create({
   pageContent: { flex: 1 },
   pageTitle: { fontFamily: "Inter_700Bold", fontSize: 28, color: "#FFF", marginBottom: 40, letterSpacing: -1, paddingHorizontal: 24 },
   pageTitleNoPad: { fontFamily: "Inter_700Bold", fontSize: 28, color: "#FFF", letterSpacing: -1 },
-  profileBody: { flex: 1, paddingHorizontal: 24, alignItems: "center" },
-  avatarCircle: { width: 120, height: 120, borderRadius: 60, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center", marginBottom: 32, overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
   avatarImg: { width: "100%", height: "100%" },
-  avatarText: { fontFamily: "Inter_700Bold", fontSize: 48, color: "#FFF" },
-  editBadge: { position: "absolute", bottom: 0, width: "100%", backgroundColor: "rgba(0,0,0,0.7)", paddingVertical: 6, alignItems: "center" },
-  editBadgeText: { color: "#FFF", fontSize: 10, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 0.5 },
-  infoBox: { width: "100%", backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 20, padding: 24, gap: 8 },
-  infoLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: 1 },
-  infoValue: { fontSize: 18, fontFamily: "Inter_400Regular", color: "#FFF", marginBottom: 8 },
-  divider: { height: 1, backgroundColor: "rgba(255,255,255,0.1)", marginVertical: 8 },
-  logoutBtn: { marginTop: 40, padding: 16 },
-  logoutText: { color: "#FF5555", fontFamily: "Inter_600SemiBold" },
+  profileHeader: { alignItems: "center", paddingHorizontal: 24, paddingBottom: 40 },
+  avatarRing: { width: 114, height: 114, borderRadius: 57, padding: 2, marginBottom: 20 },
+  avatarWrap: { flex: 1, borderRadius: 55, overflow: "hidden", backgroundColor: "rgba(255,255,255,0.1)" },
+  avatarInitial: { fontFamily: "Inter_700Bold", fontSize: 44, color: "#FFF", textAlign: "center", lineHeight: 110 },
+  avatarOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, height: 32, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
+  profileName: { fontFamily: "Inter_700Bold", fontSize: 30, color: "#FFF", letterSpacing: -0.8, marginBottom: 10 },
+  editUsernameChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: "rgba(255,255,255,0.15)", backgroundColor: "rgba(255,255,255,0.06)" },
+  editUsernameChipText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "rgba(255,255,255,0.6)" },
+  settingsSection: { paddingHorizontal: 20 },
+  settingsSectionLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, paddingLeft: 4 },
+  settingsCard: { backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 20, overflow: "hidden" },
+  settingsRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 13, gap: 12 },
+  settingsIconWrap: { width: 36, height: 36, borderRadius: 10, justifyContent: "center", alignItems: "center" },
+  settingsTextCol: { flex: 1, gap: 2 },
+  settingsLabel: { fontSize: 16, color: "#FFF", fontFamily: "Inter_600SemiBold" },
+  settingsSubValue: { fontSize: 13, color: "rgba(255,255,255,0.38)", fontFamily: "Inter_400Regular" },
+  settingsDivider: { height: 1, backgroundColor: "rgba(255,255,255,0.06)", marginLeft: 64 },
+  editSheet: { backgroundColor: "#161616", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 44 },
+  editSheetHandle: { width: 36, height: 4, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 2, alignSelf: "center", marginBottom: 24 },
+  editSheetTitle: { fontSize: 20, fontFamily: "Inter_700Bold", color: "#FFF", marginBottom: 20 },
+  editSheetInput: { backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 16, paddingHorizontal: 16, paddingVertical: 15, fontSize: 17, color: "#FFF", fontFamily: "Inter_400Regular", marginBottom: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
+  editSheetBtn: { backgroundColor: "#FFF", borderRadius: 16, paddingVertical: 15, alignItems: "center", marginBottom: 10 },
+  editSheetBtnText: { color: "#000", fontSize: 16, fontFamily: "Inter_700Bold" },
+  editSheetCancel: { paddingVertical: 12, alignItems: "center" },
+  editSheetCancelText: { color: "rgba(255,255,255,0.35)", fontSize: 15, fontFamily: "Inter_600SemiBold" },
   vaultHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 24, marginBottom: 40 },
   groupBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center" },
   vaultBody: { flex: 1 },
