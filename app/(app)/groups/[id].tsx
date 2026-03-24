@@ -649,21 +649,23 @@ export default function MainPagerScreen() {
 
         {/* PAGE 1: CAMERA (Fixed underneath) */}
         <Animated.View style={[styles.page, { transform: [{ translateX: cameraTranslateX }, { scale: cameraScale }], opacity: cameraOpacity, zIndex: 1 }]}>
-          {cameraMode === "TEXTE" ? (
-            <View style={styles.textModeContainer}><TextInput style={styles.textModeInput} placeholder="Écris..." placeholderTextColor="rgba(255,255,255,0.3)" multiline value={textModeContent} onChangeText={setTextModeContent} autoFocus disabled={isBlocked} /></View>
-          ) : (
-            <StandardCamera 
-              ref={cameraRef} 
-              isActive={!capturedUri}
-              mode={cameraMode === "VIDEO" ? "video" : "picture"} 
-              facing={facing} 
-              flash={flash} 
-              zoom={zoom}
-              onZoomChange={setZoom}
-              onPinchingChange={setIsPinching}
-              onDoubleTap={() => setFacing(prev => prev === 'back' ? 'front' : 'back')}
-            />
-          )}
+          {!capturedUri ? (
+            cameraMode === "TEXTE" ? (
+              <View style={styles.textModeContainer}><TextInput style={styles.textModeInput} placeholder="Écris..." placeholderTextColor="rgba(255,255,255,0.3)" multiline value={textModeContent} onChangeText={setTextModeContent} autoFocus disabled={isBlocked} /></View>
+            ) : (
+              <StandardCamera 
+                ref={cameraRef} 
+                isActive={!capturedUri}
+                mode={cameraMode === "VIDEO" ? "video" : "picture"} 
+                facing={facing} 
+                flash={flash} 
+                zoom={zoom}
+                onZoomChange={setZoom}
+                onPinchingChange={setIsPinching}
+                onDoubleTap={() => setFacing(prev => prev === 'back' ? 'front' : 'back')}
+              />
+            )
+          ) : null}
 
           {/* Camera UI Overlay */}
           {!capturedUri && (
@@ -714,16 +716,54 @@ export default function MainPagerScreen() {
           )}
 
           {capturedUri && (
-            <View style={StyleSheet.absoluteFill}>
-              <Image source={{ uri: capturedUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
-              <TouchableOpacity style={[styles.backCaptureBtn, { top: insets.top + 20 }]} onPress={() => setCapturedUri(null)} disabled={isBlocked}>
-                <CloseIcon />
-              </TouchableOpacity>
-              {note ? ( <Pressable style={styles.centeredNotePreview} onPress={() => setIsEditingNote(true)} disabled={isBlocked}><View style={styles.noteTag}><Text style={styles.noteTagText}>{note}</Text></View></Pressable> ) : null}
-              <View style={[styles.postCaptureActions, { bottom: insets.bottom + 120 }]}>
-                <TouchableOpacity style={styles.sideActionBtn} onPress={() => setIsEditingNote(true)} disabled={isBlocked}><FeatherIcon /></TouchableOpacity>
-                <TouchableOpacity style={styles.sendCaptureBtn} onPress={handleUploadPhoto} disabled={isBlocked}><View style={styles.sendCaptureInner}>{uploading ? <ActivityIndicator color="#000" /> : <SendIcon color="#000" />}</View></TouchableOpacity>
+            <View style={[styles.previewContainer, { paddingTop: insets.top + 20 }]}>
+              <View style={styles.previewImageWrapper}>
+                <Image source={{ uri: capturedUri }} style={styles.previewImage} contentFit="cover" />
+                <TouchableOpacity 
+                  style={styles.backCaptureBtnInside} 
+                  onPress={() => {
+                    setCapturedUri(null);
+                    setNote("");
+                  }} 
+                  disabled={isBlocked}
+                >
+                  <CloseIcon />
+                </TouchableOpacity>
               </View>
+
+              <View style={styles.previewContent}>
+                {note ? (
+                  <Pressable 
+                    style={styles.previewNoteBox} 
+                    onPress={() => setIsEditingNote(true)} 
+                    disabled={isBlocked}
+                  >
+                    <Text style={styles.previewNoteText}>{note}</Text>
+                  </Pressable>
+                ) : (
+                  <TouchableOpacity 
+                    style={styles.addNoteBtn} 
+                    onPress={() => setIsEditingNote(true)} 
+                    disabled={isBlocked}
+                  >
+                    <FeatherIcon />
+                    <Text style={styles.addNoteBtnText}>Ajouter une légende...</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <View style={[styles.postCaptureActions, { marginBottom: insets.bottom + 100 }]}>
+                <TouchableOpacity 
+                  style={styles.sendCaptureBtn} 
+                  onPress={handleUploadPhoto} 
+                  disabled={isBlocked}
+                >
+                  <View style={styles.sendCaptureInner}>
+                    {uploading ? <ActivityIndicator color="#000" /> : <SendIcon color="#000" />}
+                  </View>
+                </TouchableOpacity>
+              </View>
+
               <Modal visible={isEditingNote} transparent animationType="fade">
                 <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill}>
                   <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.noteEditorContainer}>
@@ -882,18 +922,22 @@ const styles = StyleSheet.create({
   tab: { alignItems: "center", justifyContent: "center", gap: 4, width: SCREEN_WIDTH / 3 },
   tabLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold", color: "rgba(255,255,255,0.4)" },
   tabLabelActive: { color: "#FFF" },
-  backCaptureBtn: { position: "absolute", left: 20, width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" },
-  postCaptureActions: { position: "absolute", left: 0, right: 0, flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 40 },
-  sideActionBtn: { width: 56, height: 56, borderRadius: 28, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
+  previewContainer: { flex: 1, backgroundColor: "#000", alignItems: "center" },
+  previewImageWrapper: { width: SCREEN_WIDTH - 40, height: (SCREEN_WIDTH - 40) * 1.33, borderRadius: 32, overflow: "hidden", backgroundColor: "#1A1A1A" },
+  previewImage: { width: "100%", height: "100%" },
+  previewContent: { width: SCREEN_WIDTH - 40, marginTop: 20 },
+  previewNoteBox: { backgroundColor: "rgba(255,255,255,0.1)", padding: 16, borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.05)" },
+  previewNoteText: { color: "#FFF", fontSize: 16, fontFamily: "Inter_600SemiBold", textAlign: "center" },
+  addNoteBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, padding: 16, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.05)", borderStyle: "dashed", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
+  addNoteBtnText: { color: "rgba(255,255,255,0.6)", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  backCaptureBtnInside: { position: "absolute", top: 16, left: 16, width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" },
+  postCaptureActions: { flex: 1, width: SCREEN_WIDTH, justifyContent: "center", alignItems: "center" },
   sendCaptureBtn: { width: 84, height: 84, borderRadius: 42, borderWidth: 5, borderColor: "#FFF", justifyContent: "center", alignItems: "center" },
   sendCaptureInner: { width: 66, height: 66, borderRadius: 33, backgroundColor: "#FFF", justifyContent: "center", alignItems: "center" },
   noteEditorContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: 40 },
   largeNoteInput: { width: "100%", color: "#FFF", fontSize: 28, fontFamily: "Inter_700Bold", textAlign: "center", marginBottom: 40 },
   doneNoteBtn: { backgroundColor: "#FFF", paddingHorizontal: 32, paddingVertical: 14, borderRadius: 100 },
   doneNoteText: { color: "#000", fontFamily: "Inter_700Bold", fontSize: 16 },
-  centeredNotePreview: { position: "absolute", top: "40%", left: 0, right: 0, alignItems: "center", paddingHorizontal: 40 },
-  noteTag: { backgroundColor: "rgba(0,0,0,0.6)", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
-  noteTagText: { color: "#FFF", fontSize: 18, fontFamily: "Inter_600SemiBold", textAlign: "center" },
   blockingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center", zIndex: 9999 },
   blockingText: { color: "#FFF", fontFamily: "Inter_600SemiBold", marginTop: 16, fontSize: 16 },
 });

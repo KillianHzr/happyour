@@ -11,6 +11,7 @@ import {
   Modal,
   BackHandler,
   Dimensions,
+  Pressable,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { Image } from "expo-image";
@@ -124,36 +125,59 @@ export default function PreviewScreen() {
 
   return (
     <View style={styles.container}>
-      {captureType === "video" ? (
-        <VideoView
-          player={player}
-          style={StyleSheet.absoluteFill}
-          contentFit="cover"
-          nativeControls={false}
-        />
-      ) : (
-        <Image source={{ uri }} style={StyleSheet.absoluteFill} contentFit="cover" />
-      )}
+      <View style={[styles.previewContainer, { paddingTop: insets.top + 20 }]}>
+        <View style={styles.previewImageWrapper}>
+          {captureType === "video" ? (
+            <VideoView
+              player={player}
+              style={styles.previewImage}
+              contentFit="cover"
+              nativeControls={false}
+            />
+          ) : (
+            <Image source={{ uri }} style={styles.previewImage} contentFit="cover" />
+          )}
+          <TouchableOpacity 
+            style={styles.backCaptureBtnInside} 
+            onPress={handleDiscard} 
+            disabled={uploading}
+          >
+            <CloseIcon />
+          </TouchableOpacity>
+        </View>
 
-      <TouchableOpacity style={[styles.backBtn, { top: insets.top + 20 }]} onPress={handleDiscard} disabled={uploading}>
-        <CloseIcon />
-      </TouchableOpacity>
+        <View style={styles.previewContent}>
+          {note ? (
+            <Pressable 
+              style={styles.previewNoteBox} 
+              onPress={() => setIsEditingNote(true)} 
+              disabled={uploading}
+            >
+              <Text style={styles.previewNoteText}>{note}</Text>
+            </Pressable>
+          ) : (
+            <TouchableOpacity 
+              style={styles.addNoteBtn} 
+              onPress={() => setIsEditingNote(true)} 
+              disabled={uploading}
+            >
+              <FeatherIcon />
+              <Text style={styles.addNoteBtnText}>Ajouter une légende...</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
-      {note ? (
-        <TouchableOpacity style={styles.centeredNotePreview} onPress={() => setIsEditingNote(true)} disabled={uploading} activeOpacity={0.8}>
-          <View style={styles.noteTag}><Text style={styles.noteTagText}>{note}</Text></View>
-        </TouchableOpacity>
-      ) : null}
-
-      <View style={[styles.actions, { bottom: insets.bottom + 120 }]}>
-        <TouchableOpacity style={styles.sideActionBtn} onPress={() => setIsEditingNote(true)} disabled={uploading}>
-          <FeatherIcon />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.sendBtn} onPress={handleSend} disabled={uploading}>
-          <View style={styles.sendInner}>
-            {uploading ? <ActivityIndicator color="#000" /> : <SendIcon color="#000" />}
-          </View>
-        </TouchableOpacity>
+        <View style={[styles.postCaptureActions, { marginBottom: insets.bottom + 100 }]}>
+          <TouchableOpacity 
+            style={styles.sendCaptureBtn} 
+            onPress={handleSend} 
+            disabled={uploading}
+          >
+            <View style={styles.sendCaptureInner}>
+              {uploading ? <ActivityIndicator color="#000" /> : <SendIcon color="#000" />}
+            </View>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <Modal visible={isEditingNote} transparent animationType="fade">
@@ -170,14 +194,18 @@ export default function PreviewScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
-  backBtn: { position: "absolute", left: 20, width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center", zIndex: 10 },
-  centeredNotePreview: { position: "absolute", top: "40%", left: 0, right: 0, alignItems: "center", paddingHorizontal: 40 },
-  noteTag: { backgroundColor: "rgba(0,0,0,0.6)", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
-  noteTagText: { color: "#FFF", fontSize: 18, fontFamily: "Inter_600SemiBold", textAlign: "center" },
-  actions: { position: "absolute", left: 0, right: 0, flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 40 },
-  sideActionBtn: { width: 56, height: 56, borderRadius: 28, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
-  sendBtn: { width: 84, height: 84, borderRadius: 42, borderWidth: 5, borderColor: "#FFF", justifyContent: "center", alignItems: "center" },
-  sendInner: { width: 66, height: 66, borderRadius: 33, backgroundColor: "#FFF", justifyContent: "center", alignItems: "center" },
+  previewContainer: { flex: 1, backgroundColor: "#000", alignItems: "center" },
+  previewImageWrapper: { width: SCREEN_WIDTH - 40, height: (SCREEN_WIDTH - 40) * 1.33, borderRadius: 32, overflow: "hidden", backgroundColor: "#1A1A1A" },
+  previewImage: { width: "100%", height: "100%" },
+  previewContent: { width: SCREEN_WIDTH - 40, marginTop: 20 },
+  previewNoteBox: { backgroundColor: "rgba(255,255,255,0.1)", padding: 16, borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.05)" },
+  previewNoteText: { color: "#FFF", fontSize: 16, fontFamily: "Inter_600SemiBold", textAlign: "center" },
+  addNoteBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, padding: 16, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.05)", borderStyle: "dashed", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
+  addNoteBtnText: { color: "rgba(255,255,255,0.6)", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  backCaptureBtnInside: { position: "absolute", top: 16, left: 16, width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" },
+  postCaptureActions: { flex: 1, width: SCREEN_WIDTH, justifyContent: "center", alignItems: "center" },
+  sendCaptureBtn: { width: 84, height: 84, borderRadius: 42, borderWidth: 5, borderColor: "#FFF", justifyContent: "center", alignItems: "center" },
+  sendCaptureInner: { width: 66, height: 66, borderRadius: 33, backgroundColor: "#FFF", justifyContent: "center", alignItems: "center" },
   noteEditorContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: 40 },
   largeNoteInput: { width: "100%", color: "#FFF", fontSize: 28, fontFamily: "Inter_700Bold", textAlign: "center", marginBottom: 40 },
   doneNoteBtn: { backgroundColor: "#FFF", paddingHorizontal: 32, paddingVertical: 14, borderRadius: 100 },
