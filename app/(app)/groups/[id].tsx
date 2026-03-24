@@ -369,12 +369,12 @@ export default function MainPagerScreen() {
     if (!cameraRef.current || isRecording || capturing) return;
     setCapturing(true);
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 1.0 });
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.85, skipMetadata: true });
       if (photo?.uri) {
         const manipResult = await manipulateAsync(
           photo.uri,
           [{ resize: { width: 1440 } }],
-          { compress: 0.92, format: SaveFormat.JPEG }
+          { compress: 0.92, format: SaveFormat.JPEG, base64: false }
         );
         setCapturedUri(manipResult.uri);
       }
