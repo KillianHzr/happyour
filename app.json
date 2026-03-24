@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "[noname]",
+    "name": "HappyOur",
     "slug": "HappyOur",
     "version": "1.0.2",
     "orientation": "portrait",
@@ -63,14 +63,15 @@
         }
       ]
     ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "4115b79d-ad70-4041-b024-d54279831a43"
+        "projectId": "65222b8e-774d-4367-b67b-4f7c9799cac1"
       }
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    }
+    "owner": "axel_genin"
   }
 }
