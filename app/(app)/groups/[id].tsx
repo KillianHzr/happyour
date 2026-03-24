@@ -403,6 +403,7 @@ export default function MainPagerScreen() {
     <View style={styles.container}>
       <Animated.ScrollView
         ref={scrollRef} horizontal pagingEnabled showsHorizontalScrollIndicator={false}
+        bounces={false} overScrollMode="never"
         scrollEnabled={!isEditing && !isBlocked && !isPinching}
         onMomentumScrollEnd={(e) => setCurrentPage(Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH))}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })}
