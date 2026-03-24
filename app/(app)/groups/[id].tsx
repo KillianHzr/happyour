@@ -20,9 +20,12 @@ import { useLocalSearchParams, router } from "expo-router";
 import { CameraView, CameraType, FlashMode } from "expo-camera";
 import { Image } from "expo-image";
 import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
+import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { decode } from "base64-arraybuffer";
 import { supabase } from "../../../lib/supabase";
+import { r2Storage } from "../../../lib/r2";
 import { useAuth } from "../../../lib/auth-context";
 import { colors, theme } from "../../../lib/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -30,10 +33,13 @@ import Svg, { Path, Circle } from "react-native-svg";
 import { scheduleImmediateLocalNotification, cancelAllRecapNotifications } from "../../../lib/notifications";
 import { setCaptureData } from "../../../lib/capture-store";
 import { notifyNewPhoto } from "../../../lib/notifications";
+import { useUpload } from "../../../lib/upload-context";
+import { useToast } from "../../../lib/toast-context";
 
 // Components
 import VaultCounter from "../../../components/VaultCounter";
 import PhotoFeed, { type PhotoEntry, type Reaction } from "../../../components/PhotoFeed";
+import { type StickerId } from "../../../components/stickers";
 import Loader from "../../../components/Loader";
 import StandardCamera from "../../../components/StandardCamera";
 import { ProfileIcon, VaultIcon, MomentIcon } from "../../../components/icons";
@@ -90,28 +96,28 @@ const FlashIcon = ({ mode }: { mode: FlashMode }) => {
   );
 };
 
-function getWeekBounds() {
+// revealDayOfWeek : jour JS (0=dimanche, 1=lundi … 6=samedi)
+function getWeekBounds(revealDayOfWeek = 0, revealHour = 20) {
   const now = new Date();
   const day = now.getDay();
   const diffToMonday = day === 0 ? -6 : 1 - day;
   const monday = new Date(now);
   monday.setDate(now.getDate() + diffToMonday);
   monday.setHours(0, 0, 0, 0);
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  sunday.setHours(20, 0, 0, 0);
-  return { monday, sunday };
-}
-
-function isVaultUnlocked(): boolean {
-  const { sunday } = getWeekBounds();
-  return new Date() >= sunday;
+  // Jours depuis lundi jusqu'au jour de reveal (dimanche = +6, lundi = +0, …)
+  const daysFromMonday = revealDayOfWeek === 0 ? 6 : revealDayOfWeek - 1;
+  const revealDate = new Date(monday);
+  revealDate.setDate(monday.getDate() + daysFromMonday);
+  revealDate.setHours(revealHour, 0, 0, 0);
+  return { monday, revealDate };
 }
 
 type CameraMode = "PHOTO" | "VIDEO" | "TEXTE";
 
 export default function MainPagerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { startUpload } = useUpload();
+  const { showToast } = useToast();
   const { user, logout } = useAuth();
   const insets = useSafeAreaInsets();
   
@@ -126,6 +132,9 @@ export default function MainPagerScreen() {
   const [username, setUsername] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [email, setEmail] = useState("");
+  const [isEditingUsername, setIsEditingUsername] = useState(false);
+  const [newUsername, setNewUsername] = useState("");
+  const [savingUsername, setSavingUsername] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
   const [currentPage, setCurrentPage] = useState(1); 
   const [showMembersModal, setShowMembersModal] = useState(false);
@@ -138,24 +147,35 @@ export default function MainPagerScreen() {
   const [flash, setFlash] = useState<FlashMode>('off');
   const [zoom, setZoom] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
+  const [isPinching, setIsPinching] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const recordingTimer = useRef<NodeJS.Timeout | null>(null);
   const startTouchY = useRef<number | null>(null);
 
   const [capturing, setCapturing] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [capturedBase64, setCapturedBase64] = useState<string | null>(null);
   const [capturedUri, setCapturedUri] = useState<string | null>(null);
   const [isEditingNote, setIsEditingNote] = useState(false);
   const [textModeContent, setTextModeContent] = useState("");
   const [note, setNote] = useState("");
 
-  const unlocked = isVaultUnlocked();
+  const [debugUnlocked, setDebugUnlocked] = useState(false);
+  const [revealConfig, setRevealConfig] = useState({ day: 0, hour: 20 });
+  const { revealDate } = getWeekBounds(revealConfig.day, revealConfig.hour);
+  const unlocked = __DEV__ ? debugUnlocked : new Date() >= revealDate;
 
   const fetchData = useCallback(async () => {
     if (!user || !id) return;
     try {
-      const { monday } = getWeekBounds();
+      const { data: cfgRows } = await supabase
+        .from("app_config")
+        .select("key, value")
+        .in("key", ["reveal_day", "reveal_hour"]);
+      const cfgMap = Object.fromEntries((cfgRows ?? []).map((r: any) => [r.key, Number(r.value)]));
+      const cfg = { reveal_day: cfgMap["reveal_day"] ?? 0, reveal_hour: cfgMap["reveal_hour"] ?? 20 };
+      setRevealConfig({ day: cfg.reveal_day, hour: cfg.reveal_hour });
+      const { monday } = getWeekBounds(cfg.reveal_day, cfg.reveal_hour);
+
       const [groupRes, profileRes, photosRes, membersRes] = await Promise.all([
         supabase.from("groups").select("name").eq("id", id).single(),
         supabase.from("profiles").select("username, avatar_url, email").eq("id", user.id).single(),
@@ -187,15 +207,37 @@ export default function MainPagerScreen() {
         setPhotoCount(photosRes.data.length);
         setUserPhotoCount(photosRes.data.filter((p: any) => p.user_id === user.id).length);
         
+        const photoIds = photosRes.data.map((p: any) => p.id);
+        const reactionsRes = photoIds.length > 0
+          ? await supabase
+              .from("reactions")
+              .select("id, photo_id, user_id, emoji, profiles:user_id(username, avatar_url)")
+              .in("photo_id", photoIds)
+              .eq("type", "sticker")
+          : { data: [] };
+
+        const reactionsByPhoto: Record<string, Reaction[]> = {};
+        for (const r of reactionsRes.data ?? []) {
+          if (!r.emoji) continue;
+          if (!reactionsByPhoto[r.photo_id]) reactionsByPhoto[r.photo_id] = [];
+          reactionsByPhoto[r.photo_id].push({
+            id: r.id,
+            user_id: r.user_id,
+            username: r.profiles?.username ?? "?",
+            avatar_url: r.profiles?.avatar_url ?? null,
+            sticker_id: r.emoji as StickerId,
+          });
+        }
+
         const entries: PhotoEntry[] = photosRes.data.map((p: any) => ({
           id: p.id,
-          url: p.image_path === "text_mode" ? "" : supabase.storage.from("moments").getPublicUrl(p.image_path).data.publicUrl,
+          url: p.image_path === "text_mode" ? "" : r2Storage.getPublicUrl(p.image_path),
           created_at: p.created_at,
           note: p.note ?? null,
           username: p.profiles?.username ?? "Anonyme",
           avatar_url: p.profiles?.avatar_url,
           image_path: p.image_path,
-          reactions: [], 
+          reactions: reactionsByPhoto[p.id] ?? [],
         }));
         setPhotos(entries);
       }
@@ -206,6 +248,37 @@ export default function MainPagerScreen() {
   }, [id, user, unlocked]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  const { activeUploads } = useUpload();
+
+  // -- Rafraîchir les données quand un upload en arrière-plan réussit --
+  useEffect(() => {
+    const hasJustFinished = activeUploads.some(u => u.status === "success");
+    if (hasJustFinished) {
+      console.log("Upload réussi en arrière-plan, rafraîchissement des données...");
+      fetchData();
+    }
+  }, [activeUploads, fetchData]);
+
+  // -- Realtime Listener pour rafraîchir les moments automatiquement --
+  useEffect(() => {
+    if (!id) return;
+    const channel = supabase
+      .channel(`group-${id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "photos", filter: `group_id=eq.${id}` },
+        () => {
+          console.log("Nouveau moment détecté, rafraîchissement...");
+          fetchData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id, fetchData]);
 
   const updateAvatar = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -220,12 +293,64 @@ export default function MainPagerScreen() {
       setUploading(true);
       try {
         const filePath = `avatars/${user?.id}_${Date.now()}.jpg`;
-        await supabase.storage.from("moments").upload(filePath, decode(result.assets[0].base64), { contentType: "image/jpeg", upsert: true });
-        const { data: urlData } = supabase.storage.from("moments").getPublicUrl(filePath);
-        await supabase.from("profiles").update({ avatar_url: urlData.publicUrl }).eq("id", user?.id);
-        setAvatarUrl(urlData.publicUrl);
+        await r2Storage.upload(filePath, decode(result.assets[0].base64), "image/jpeg");
+        const urlData = r2Storage.getPublicUrl(filePath);
+        await supabase.from("profiles").update({ avatar_url: urlData }).eq("id", user?.id);
+        setAvatarUrl(urlData);
       } catch (e: any) { Alert.alert("Erreur", e.message); } finally { setUploading(false); }
     }
+  };
+
+  const handleReact = async (photoId: string, stickerId: StickerId) => {
+    if (!user) return;
+    const existing = photos
+      .find((p) => p.id === photoId)
+      ?.reactions.find((r) => r.user_id === user.id);
+
+    if (existing) {
+      if (existing.sticker_id === stickerId) {
+        // toggle off
+        await supabase.from("reactions").delete().eq("id", existing.id);
+        setPhotos((prev) => prev.map((p) =>
+          p.id === photoId ? { ...p, reactions: p.reactions.filter((r) => r.id !== existing.id) } : p
+        ));
+      } else {
+        // changer de sticker
+        await supabase.from("reactions").update({ emoji: stickerId }).eq("id", existing.id);
+        setPhotos((prev) => prev.map((p) =>
+          p.id === photoId ? { ...p, reactions: p.reactions.map((r) => r.id === existing.id ? { ...r, sticker_id: stickerId } : r) } : p
+        ));
+      }
+    } else {
+      const { data } = await supabase
+        .from("reactions")
+        .insert({ photo_id: photoId, user_id: user.id, type: "sticker", emoji: stickerId })
+        .select("id")
+        .single();
+      if (data) {
+        setPhotos((prev) => prev.map((p) =>
+          p.id === photoId ? {
+            ...p,
+            reactions: [...p.reactions, { id: data.id, user_id: user.id, username, avatar_url: avatarUrl, sticker_id: stickerId }],
+          } : p
+        ));
+      }
+    }
+  };
+
+  const saveUsername = async () => {
+    const trimmed = newUsername.trim();
+    if (!trimmed || trimmed === username) { setIsEditingUsername(false); return; }
+    setSavingUsername(true);
+    const { error } = await supabase.from("profiles").update({ username: trimmed }).eq("id", user!.id);
+    if (!error) {
+      setUsername(trimmed);
+      showToast("Pseudo mis à jour", undefined, "success");
+    } else {
+      showToast("Erreur", "Impossible de modifier le pseudo", "error");
+    }
+    setSavingUsername(false);
+    setIsEditingUsername(false);
   };
 
   const jumpTo = (page: number) => {
@@ -250,10 +375,14 @@ export default function MainPagerScreen() {
     if (!cameraRef.current || isRecording || capturing) return;
     setCapturing(true);
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.7, base64: true });
-      if (photo?.base64) {
-        setCapturedBase64(photo.base64);
-        setCapturedUri(photo.uri);
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.85, skipMetadata: true });
+      if (photo?.uri) {
+        const manipResult = await manipulateAsync(
+          photo.uri,
+          [{ resize: { width: 1440 } }],
+          { compress: 0.92, format: SaveFormat.JPEG, base64: false }
+        );
+        setCapturedUri(manipResult.uri);
       }
     } catch (e: any) {
       Alert.alert("Erreur", "Impossible de prendre la photo.");
@@ -264,17 +393,28 @@ export default function MainPagerScreen() {
 
   const startVideoRecording = async () => {
     if (!cameraRef.current || isRecording) return;
+    
+    // On s'assure que le mode est déjà sur VIDEO avant de record
+    if (cameraMode !== "VIDEO") {
+      setCameraMode("VIDEO");
+    }
+
     setIsRecording(true);
     setRecordingSeconds(0);
     recordingTimer.current = setInterval(() => setRecordingSeconds(s => s + 1), 1000);
+    
+    // Délai de stabilisation pour Android
+    await new Promise(resolve => setTimeout(resolve, 500));
+
     try {
-      const video = await cameraRef.current.recordAsync();
+      const video = await cameraRef.current.recordAsync({ quality: "720p", maxDuration: 15 });
       if (video?.uri) {
         setCaptureData(null, video.uri, "video");
         router.push(`/(app)/groups/${id}/preview`);
       }
     } catch (e: any) {
       // annulé ou erreur
+      console.error("Erreur recordAsync:", e);
     } finally {
       setIsRecording(false);
       if (recordingTimer.current) clearInterval(recordingTimer.current);
@@ -307,25 +447,42 @@ export default function MainPagerScreen() {
     }
   };
 
-  const handleUploadText = async () => {
-    setUploading(true);
-    try {
-      await supabase.from("photos").insert({ group_id: id, user_id: user?.id, image_path: "text_mode", note: textModeContent.trim() });
-      notifyNewPhoto(id as string, groupName, username, user?.id as string);
-      setTextModeContent(""); await fetchData(); jumpTo(2);
-    } catch (e: any) { Alert.alert("Erreur", e.message); } finally { setUploading(false); }
+  const handleUploadText = () => {
+    if (!textModeContent.trim() || !user) return;
+    
+    const content = textModeContent.trim();
+    const dbData = {
+      group_id: id as string,
+      user_id: user.id,
+      note: content,
+    };
+
+    // LANCE L'ENVOI EN ARRIÈRE-PLAN
+    startUpload(null, null, null, dbData);
+    
+    // LIBÈRE L'UI IMMÉDIATEMENT (SANS SWIPE)
+    setTextModeContent(""); 
+    fetchData(); 
   };
 
-  const handleUploadPhoto = async () => {
-    if (!capturedBase64 || !user || uploading) return;
-    setUploading(true);
-    try {
-      const fileName = `${id}/${user.id}_${Date.now()}.jpg`;
-      await supabase.storage.from("moments").upload(fileName, decode(capturedBase64), { contentType: "image/jpeg" });
-      await supabase.from("photos").insert({ group_id: id, user_id: user.id, image_path: fileName, note: note.trim() || null });
-      notifyNewPhoto(id as string, groupName, username, user.id);
-      setCapturedBase64(null); setNote(""); await fetchData(); jumpTo(2);
-    } catch (e: any) { Alert.alert("Erreur", e.message); } finally { setUploading(false); }
+  const handleUploadPhoto = () => {
+    if (!capturedUri || !user) return;
+    
+    const dbData = {
+      group_id: id as string,
+      user_id: user.id,
+      note: note.trim() || null,
+    };
+
+    const fileName = `${id}/${user.id}_${Date.now()}.jpg`;
+    
+    // LANCE L'ENVOI EN ARRIÈRE-PLAN (AVEC TOAST)
+    startUpload(fileName, capturedUri, "image/jpeg", dbData);
+
+    // FERME L'ÉDITION IMMÉDIATEMENT
+    setCapturedUri(null);
+    setNote("");
+    fetchData();
   };
 
   // Interpolations pour le Stacking Effect
@@ -333,8 +490,8 @@ export default function MainPagerScreen() {
   const cameraScale = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [0.9, 1, 0.9] });
   const cameraOpacity = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [0.4, 1, 0.4] });
 
-  const isBlocked = capturing || uploading;
-  const isEditing = !!capturedBase64;
+  const isBlocked = false; // Plus aucun blocage visuel pour la capture ou l'upload
+  const isEditing = !!capturedUri;
 
   if (!dataLoaded) return <View style={[styles.container, styles.center]}><Loader size={48} /></View>;
 
@@ -342,27 +499,152 @@ export default function MainPagerScreen() {
     <View style={styles.container}>
       <Animated.ScrollView
         ref={scrollRef} horizontal pagingEnabled showsHorizontalScrollIndicator={false}
-        scrollEnabled={!isEditing && !isBlocked}
+        bounces={false} overScrollMode="never"
+        scrollEnabled={!isEditing && !isBlocked && !isPinching}
         onMomentumScrollEnd={(e) => setCurrentPage(Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH))}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })}
         scrollEventThrottle={16} contentOffset={{ x: SCREEN_WIDTH, y: 0 }} style={styles.pager}
       >
-        {/* PAGE 0: PROFILE (Slides over Camera) */}
+        {/* PAGE 0: PROFILE */}
         <View key="page-0" style={[styles.page, { zIndex: 10 }]}>
-          <View style={[styles.pageContent, { paddingTop: insets.top + 40 }]}>
-            <Text style={styles.pageTitle}>Profil</Text>
-            <View style={styles.profileBody}>
-              <TouchableOpacity onPress={updateAvatar} style={styles.avatarCircle} disabled={isBlocked}>
-                {avatarUrl ? ( <Image source={{ uri: avatarUrl }} style={styles.avatarImg} /> ) : ( <Text style={styles.avatarText}>{(username ? username[0] : "?").toUpperCase()}</Text> )}
-                <View style={styles.editBadge}><Text style={styles.editBadgeText}>{uploading ? "..." : "Modifier"}</Text></View>
+          <ScrollView
+            style={styles.pageContent}
+            contentContainerStyle={{ paddingBottom: 140 }}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Hero header */}
+            <LinearGradient
+              colors={["rgba(255,255,255,0.07)", "transparent"]}
+              style={[styles.profileHeader, { paddingTop: insets.top + 36 }]}
+            >
+              {/* Avatar */}
+              <LinearGradient
+                colors={["rgba(255,255,255,0.35)", "rgba(255,255,255,0.06)"]}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={styles.avatarRing}
+              >
+                <TouchableOpacity onPress={updateAvatar} style={styles.avatarWrap} disabled={uploading}>
+                  {avatarUrl
+                    ? <Image source={{ uri: avatarUrl }} style={styles.avatarImg} />
+                    : <Text style={styles.avatarInitial}>{(username?.[0] ?? "?").toUpperCase()}</Text>
+                  }
+                  <View style={styles.avatarOverlay}>
+                    {uploading
+                      ? <ActivityIndicator size="small" color="#FFF" />
+                      : <Svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                          <Circle cx="12" cy="13" r="4"/>
+                        </Svg>
+                    }
+                  </View>
+                </TouchableOpacity>
+              </LinearGradient>
+
+              {/* Nom */}
+              <Text style={styles.profileName}>{username || "—"}</Text>
+
+              {/* Bouton modifier */}
+              <TouchableOpacity
+                style={styles.editUsernameChip}
+                onPress={() => { setNewUsername(username); setIsEditingUsername(true); }}
+              >
+                <Svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <Path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                  <Path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </Svg>
+                <Text style={styles.editUsernameChipText}>Modifier le pseudo</Text>
               </TouchableOpacity>
-              <View style={styles.infoBox}>
-                <Text style={styles.infoLabel}>Identité</Text><Text style={styles.infoValue}>{username || "—"}</Text>
-                <View style={styles.divider} /><Text style={styles.infoLabel}>Contact</Text><Text style={styles.infoValue}>{email || user?.email}</Text>
+            </LinearGradient>
+
+            {/* Settings cards */}
+            <View style={styles.settingsSection}>
+              {/* Compte */}
+              <Text style={styles.settingsSectionLabel}>Compte</Text>
+              <View style={styles.settingsCard}>
+                <TouchableOpacity
+                  style={styles.settingsRow}
+                  onPress={() => { setNewUsername(username); setIsEditingUsername(true); }}
+                >
+                  <View style={[styles.settingsIconWrap, { backgroundColor: "rgba(129,140,248,0.15)" }]}>
+                    <Svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#818CF8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <Path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                      <Circle cx="12" cy="7" r="4"/>
+                    </Svg>
+                  </View>
+                  <View style={styles.settingsTextCol}>
+                    <Text style={styles.settingsLabel}>Pseudo</Text>
+                    <Text style={styles.settingsSubValue}>{username}</Text>
+                  </View>
+                  <Svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <Path d="M9 18l6-6-6-6"/>
+                  </Svg>
+                </TouchableOpacity>
+
+                <View style={styles.settingsDivider} />
+
+                <View style={styles.settingsRow}>
+                  <View style={[styles.settingsIconWrap, { backgroundColor: "rgba(251,191,36,0.12)" }]}>
+                    <Svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FBB824" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <Path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                      <Path d="M22 6l-10 7L2 6"/>
+                    </Svg>
+                  </View>
+                  <View style={styles.settingsTextCol}>
+                    <Text style={styles.settingsLabel}>Email</Text>
+                    <Text style={styles.settingsSubValue}>{email || user?.email}</Text>
+                  </View>
+                </View>
               </View>
-              <TouchableOpacity style={styles.logoutBtn} onPress={() => logout()} disabled={isBlocked}><Text style={styles.logoutText}>Se déconnecter</Text></TouchableOpacity>
+
+              {/* Danger zone */}
+              <Text style={[styles.settingsSectionLabel, { marginTop: 28 }]}>Session</Text>
+              <View style={styles.settingsCard}>
+                <TouchableOpacity style={styles.settingsRow} onPress={() => logout()}>
+                  <View style={[styles.settingsIconWrap, { backgroundColor: "rgba(255,59,48,0.12)" }]}>
+                    <Svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FF3B30" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <Path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                      <Path d="M16 17l5-5-5-5"/>
+                      <Path d="M21 12H9"/>
+                    </Svg>
+                  </View>
+                  <Text style={[styles.settingsLabel, { color: "#FF3B30" }]}>Se déconnecter</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
+          </ScrollView>
+
+          {/* Modal édition pseudo — bottom sheet */}
+          <Modal visible={isEditingUsername} transparent animationType="slide" onRequestClose={() => setIsEditingUsername(false)}>
+            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+              <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setIsEditingUsername(false)} />
+              <View style={styles.editSheet}>
+                <View style={styles.editSheetHandle} />
+                <Text style={styles.editSheetTitle}>Modifier le pseudo</Text>
+                <TextInput
+                  style={styles.editSheetInput}
+                  value={newUsername}
+                  onChangeText={setNewUsername}
+                  autoFocus
+                  maxLength={30}
+                  autoCapitalize="none"
+                  returnKeyType="done"
+                  onSubmitEditing={saveUsername}
+                  placeholder="Ton pseudo..."
+                  placeholderTextColor="rgba(255,255,255,0.3)"
+                  editable={!savingUsername}
+                />
+                <TouchableOpacity style={styles.editSheetBtn} onPress={saveUsername} disabled={savingUsername}>
+                  {savingUsername
+                    ? <ActivityIndicator color="#000" />
+                    : <Text style={styles.editSheetBtnText}>Valider</Text>
+                  }
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.editSheetCancel} onPress={() => setIsEditingUsername(false)}>
+                  <Text style={styles.editSheetCancelText}>Annuler</Text>
+                </TouchableOpacity>
+              </View>
+            </KeyboardAvoidingView>
+          </Modal>
         </View>
 
         {/* PAGE 1: CAMERA (Fixed underneath) */}
@@ -370,11 +652,21 @@ export default function MainPagerScreen() {
           {cameraMode === "TEXTE" ? (
             <View style={styles.textModeContainer}><TextInput style={styles.textModeInput} placeholder="Écris..." placeholderTextColor="rgba(255,255,255,0.3)" multiline value={textModeContent} onChangeText={setTextModeContent} autoFocus disabled={isBlocked} /></View>
           ) : (
-            <StandardCamera ref={cameraRef} isActive={!capturedBase64} mode={cameraMode === "VIDEO" ? "video" : "picture"} facing={facing} flash={flash} zoom={zoom} />
+            <StandardCamera 
+              ref={cameraRef} 
+              isActive={!capturedUri}
+              mode={cameraMode === "VIDEO" ? "video" : "picture"} 
+              facing={facing} 
+              flash={flash} 
+              zoom={zoom}
+              onZoomChange={setZoom}
+              onPinchingChange={setIsPinching}
+              onDoubleTap={() => setFacing(prev => prev === 'back' ? 'front' : 'back')}
+            />
           )}
 
           {/* Camera UI Overlay */}
-          {!capturedBase64 && (
+          {!capturedUri && (
             <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
               {cameraMode !== "TEXTE" && (
                 <TouchableOpacity style={[styles.topControlBtn, { top: insets.top + 20, right: 20 }]} onPress={() => setFlash(prev => prev === 'off' ? 'on' : prev === 'on' ? 'auto' : 'off')} disabled={isBlocked}>
@@ -384,10 +676,13 @@ export default function MainPagerScreen() {
 
               {isRecording && (
                 <View style={[styles.recordingTimer, { top: insets.top + 40 }]}>
-                  <View style={styles.recordingDot} /><Text style={styles.recordingText}>{Math.floor(recordingSeconds / 60)}:{(recordingSeconds % 60).toString().padStart(2, '0')}</Text>
+                  <View style={styles.recordingDot} />
+                  <Text style={styles.recordingText}>
+                    {recordingSeconds}s / 15s
+                  </Text>
                 </View>
               )}
-
+              
               <View style={[styles.cameraFooter, { bottom: insets.bottom + 100 }]}>
                 <View style={styles.modeSlider}>
                   {["PHOTO", "VIDEO", "TEXTE"].map((m: any) => (
@@ -418,10 +713,10 @@ export default function MainPagerScreen() {
             </View>
           )}
 
-          {capturedBase64 && (
+          {capturedUri && (
             <View style={StyleSheet.absoluteFill}>
               <Image source={{ uri: capturedUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
-              <TouchableOpacity style={[styles.backCaptureBtn, { top: insets.top + 20 }]} onPress={() => setCapturedBase64(null)} disabled={isBlocked}>
+              <TouchableOpacity style={[styles.backCaptureBtn, { top: insets.top + 20 }]} onPress={() => setCapturedUri(null)} disabled={isBlocked}>
                 <CloseIcon />
               </TouchableOpacity>
               {note ? ( <Pressable style={styles.centeredNotePreview} onPress={() => setIsEditingNote(true)} disabled={isBlocked}><View style={styles.noteTag}><Text style={styles.noteTagText}>{note}</Text></View></Pressable> ) : null}
@@ -444,7 +739,7 @@ export default function MainPagerScreen() {
         {/* PAGE 2: VAULT (Slides over Camera) */}
         <View key="page-2" style={[styles.page, { zIndex: 10 }]}>
           {unlocked ? (
-            <View style={styles.vaultUnlocked}><PhotoFeed photos={photos} onReactPress={(pid) => console.log("React to", pid)} nextUnlockDate={getWeekBounds().sunday} /></View>
+            <View style={styles.vaultUnlocked}><PhotoFeed photos={photos} onReact={handleReact} currentUserId={user?.id} nextUnlockDate={revealDate} /></View>
           ) : (
             <ScrollView style={[styles.pageContent, { paddingTop: insets.top + 40 }]} contentContainerStyle={{ paddingBottom: 160 }} showsVerticalScrollIndicator={false}>
               <View style={styles.vaultHeader}>
@@ -454,32 +749,27 @@ export default function MainPagerScreen() {
                 </TouchableOpacity>
               </View>
               <View style={styles.vaultBody}>
-                <View style={styles.vaultLockedContent}><VaultCounter totalCount={photoCount} userCount={userPhotoCount} unlockDate={getWeekBounds().sunday} /></View>
+                <View style={styles.vaultLockedContent}><VaultCounter totalCount={photoCount} userCount={userPhotoCount} unlockDate={revealDate} /></View>
               </View>
+              {__DEV__ && (
+                <TouchableOpacity style={styles.debugBtn} onPress={() => setDebugUnlocked(true)}>
+                  <Text style={styles.debugBtnText}>🔓 Simuler reveal (DEV)</Text>
+                </TouchableOpacity>
+              )}
             </ScrollView>
           )}
         </View>
       </Animated.ScrollView>
 
-      {/* Blocking Loader Overlay */}
-      {capturing && (
-        <View style={styles.blockingOverlay}>
-          <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
-          <ActivityIndicator size="large" color="#FFF" />
-          <Text style={styles.blockingText}>Capture en cours...</Text>
-        </View>
-      )}
-
       {/* NAV BAR */}
       <View style={[styles.tabBarContainer, { paddingBottom: insets.bottom }]}>
         <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
         <View style={styles.tabBarContent}>
-          <TouchableOpacity style={styles.tab} onPress={() => jumpTo(0)} disabled={isEditing || isBlocked}><ProfileIcon color={currentPage === 0 ? "#FFF" : "rgba(255,255,255,0.4)"} size={24} /><Text style={[styles.tabLabel, currentPage === 0 && styles.tabLabelActive]}>Profil</Text></TouchableOpacity>
-          <TouchableOpacity style={styles.tab} onPress={() => jumpTo(1)} disabled={isEditing || isBlocked}><MomentIcon color={currentPage === 1 ? "#FFF" : "rgba(255,255,255,0.4)"} size={28} /><Text style={[styles.tabLabel, currentPage === 1 && styles.tabLabelActive]}>Moment</Text></TouchableOpacity>
-          <TouchableOpacity style={styles.tab} onPress={() => jumpTo(2)} disabled={isEditing || isBlocked}><VaultIcon color={currentPage === 2 ? "#FFF" : "rgba(255,255,255,0.4)"} size={24} /><Text style={[styles.tabLabel, currentPage === 2 && styles.tabLabelActive]}>Coffre</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.tab} onPress={() => jumpTo(0)} disabled={isEditing}><ProfileIcon color={currentPage === 0 ? "#FFF" : "rgba(255,255,255,0.4)"} size={24} /><Text style={[styles.tabLabel, currentPage === 0 && styles.tabLabelActive]}>Profil</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.tab} onPress={() => jumpTo(1)} disabled={isEditing}><MomentIcon color={currentPage === 1 ? "#FFF" : "rgba(255,255,255,0.4)"} size={28} /><Text style={[styles.tabLabel, currentPage === 1 && styles.tabLabelActive]}>Moment</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.tab} onPress={() => jumpTo(2)} disabled={isEditing}><VaultIcon color={currentPage === 2 ? "#FFF" : "rgba(255,255,255,0.4)"} size={24} /><Text style={[styles.tabLabel, currentPage === 2 && styles.tabLabelActive]}>Coffre</Text></TouchableOpacity>
         </View>
       </View>
-
       <Modal visible={showMembersModal} animationType="slide" transparent onRequestClose={() => setShowMembersModal(false)}>
         <View style={styles.darkModalOverlay}>
           <View style={[styles.modalContent, { paddingTop: insets.top + 40 }]}>
@@ -510,18 +800,32 @@ const styles = StyleSheet.create({
   pageContent: { flex: 1 },
   pageTitle: { fontFamily: "Inter_700Bold", fontSize: 28, color: "#FFF", marginBottom: 40, letterSpacing: -1, paddingHorizontal: 24 },
   pageTitleNoPad: { fontFamily: "Inter_700Bold", fontSize: 28, color: "#FFF", letterSpacing: -1 },
-  profileBody: { flex: 1, paddingHorizontal: 24, alignItems: "center" },
-  avatarCircle: { width: 120, height: 120, borderRadius: 60, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center", marginBottom: 32, overflow: "hidden", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
   avatarImg: { width: "100%", height: "100%" },
-  avatarText: { fontFamily: "Inter_700Bold", fontSize: 48, color: "#FFF" },
-  editBadge: { position: "absolute", bottom: 0, width: "100%", backgroundColor: "rgba(0,0,0,0.7)", paddingVertical: 6, alignItems: "center" },
-  editBadgeText: { color: "#FFF", fontSize: 10, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 0.5 },
-  infoBox: { width: "100%", backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 20, padding: 24, gap: 8 },
-  infoLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: 1 },
-  infoValue: { fontSize: 18, fontFamily: "Inter_400Regular", color: "#FFF", marginBottom: 8 },
-  divider: { height: 1, backgroundColor: "rgba(255,255,255,0.1)", marginVertical: 8 },
-  logoutBtn: { marginTop: 40, padding: 16 },
-  logoutText: { color: "#FF5555", fontFamily: "Inter_600SemiBold" },
+  profileHeader: { alignItems: "center", paddingHorizontal: 24, paddingBottom: 40 },
+  avatarRing: { width: 114, height: 114, borderRadius: 57, padding: 2, marginBottom: 20 },
+  avatarWrap: { flex: 1, borderRadius: 55, overflow: "hidden", backgroundColor: "rgba(255,255,255,0.1)" },
+  avatarInitial: { fontFamily: "Inter_700Bold", fontSize: 44, color: "#FFF", textAlign: "center", lineHeight: 110 },
+  avatarOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, height: 32, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
+  profileName: { fontFamily: "Inter_700Bold", fontSize: 30, color: "#FFF", letterSpacing: -0.8, marginBottom: 10 },
+  editUsernameChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: "rgba(255,255,255,0.15)", backgroundColor: "rgba(255,255,255,0.06)" },
+  editUsernameChipText: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "rgba(255,255,255,0.6)" },
+  settingsSection: { paddingHorizontal: 20 },
+  settingsSectionLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, paddingLeft: 4 },
+  settingsCard: { backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 20, overflow: "hidden" },
+  settingsRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 13, gap: 12 },
+  settingsIconWrap: { width: 36, height: 36, borderRadius: 10, justifyContent: "center", alignItems: "center" },
+  settingsTextCol: { flex: 1, gap: 2 },
+  settingsLabel: { fontSize: 16, color: "#FFF", fontFamily: "Inter_600SemiBold" },
+  settingsSubValue: { fontSize: 13, color: "rgba(255,255,255,0.38)", fontFamily: "Inter_400Regular" },
+  settingsDivider: { height: 1, backgroundColor: "rgba(255,255,255,0.06)", marginLeft: 64 },
+  editSheet: { backgroundColor: "#161616", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 44 },
+  editSheetHandle: { width: 36, height: 4, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 2, alignSelf: "center", marginBottom: 24 },
+  editSheetTitle: { fontSize: 20, fontFamily: "Inter_700Bold", color: "#FFF", marginBottom: 20 },
+  editSheetInput: { backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 16, paddingHorizontal: 16, paddingVertical: 15, fontSize: 17, color: "#FFF", fontFamily: "Inter_400Regular", marginBottom: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
+  editSheetBtn: { backgroundColor: "#FFF", borderRadius: 16, paddingVertical: 15, alignItems: "center", marginBottom: 10 },
+  editSheetBtnText: { color: "#000", fontSize: 16, fontFamily: "Inter_700Bold" },
+  editSheetCancel: { paddingVertical: 12, alignItems: "center" },
+  editSheetCancelText: { color: "rgba(255,255,255,0.35)", fontSize: 15, fontFamily: "Inter_600SemiBold" },
   vaultHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 24, marginBottom: 40 },
   groupBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center" },
   vaultBody: { flex: 1 },
@@ -539,6 +843,8 @@ const styles = StyleSheet.create({
   memberAvatarText: { color: "#FFF", fontFamily: "Inter_700Bold" },
   memberName: { color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 16 },
   inviteModalBtn: { marginTop: 24, marginBottom: 40 },
+  debugBtn: { marginHorizontal: 24, marginTop: 24, marginBottom: 16, paddingVertical: 12, borderRadius: 12, backgroundColor: "rgba(255,200,0,0.15)", borderWidth: 1, borderColor: "rgba(255,200,0,0.4)", alignItems: "center" },
+  debugBtnText: { color: "#FFD700", fontFamily: "Inter_600SemiBold", fontSize: 14 },
   cameraFooter: { position: "absolute", left: 0, right: 0, alignItems: "center", gap: 24 },
   modeSlider: { flexDirection: "row", gap: 20, backgroundColor: "rgba(0,0,0,0.3)", paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, marginBottom: 12 },
   modeText: { color: "rgba(255,255,255,0.4)", fontFamily: "Inter_700Bold", fontSize: 12 },
@@ -556,6 +862,19 @@ const styles = StyleSheet.create({
   recordingTimer: { position: "absolute", alignSelf: "center", flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, gap: 8 },
   recordingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#FF3B30" },
   recordingText: { color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 14 },
+  progressBarContainer: {
+    position: "absolute",
+    alignSelf: "center",
+    width: "60%",
+    height: 6,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  progressBarFill: {
+    height: "100%",
+    backgroundColor: "#FF3B30",
+  },
   textModeContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: 40, backgroundColor: "#0A0A0A" },
   textModeInput: { fontSize: 32, color: "#FFF", fontFamily: "Inter_700Bold", textAlign: "center", width: "100%" },
   tabBarContainer: { position: "absolute", bottom: 0, left: 0, right: 0, height: 100, overflow: "hidden", zIndex: 100, backgroundColor: "rgba(10,10,10,0.92)" },
