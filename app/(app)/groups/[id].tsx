@@ -213,7 +213,7 @@ export default function MainPagerScreen() {
               .from("reactions")
               .select("id, photo_id, user_id, emoji, profiles:user_id(username, avatar_url)")
               .in("photo_id", photoIds)
-              .eq("type", "sticker")
+              .eq("type", "emoji")
           : { data: [] };
 
         const reactionsByPhoto: Record<string, Reaction[]> = {};
@@ -237,6 +237,7 @@ export default function MainPagerScreen() {
           username: p.profiles?.username ?? "Anonyme",
           avatar_url: p.profiles?.avatar_url,
           image_path: p.image_path,
+          user_id: p.user_id,
           reactions: reactionsByPhoto[p.id] ?? [],
         }));
         setPhotos(entries);
@@ -307,34 +308,44 @@ export default function MainPagerScreen() {
       .find((p) => p.id === photoId)
       ?.reactions.find((r) => r.user_id === user.id);
 
-    if (existing) {
-      if (existing.sticker_id === stickerId) {
-        // toggle off
-        await supabase.from("reactions").delete().eq("id", existing.id);
-        setPhotos((prev) => prev.map((p) =>
-          p.id === photoId ? { ...p, reactions: p.reactions.filter((r) => r.id !== existing.id) } : p
-        ));
+    try {
+      if (existing) {
+        if (existing.sticker_id === stickerId) {
+          const { error } = await supabase.from("reactions").delete().eq("id", existing.id);
+          if (error) throw error;
+          
+          setPhotos((prev) => prev.map((p) =>
+            p.id === photoId ? { ...p, reactions: p.reactions.filter((r) => r.id !== existing.id) } : p
+          ));
+        } else {
+          const { error } = await supabase.from("reactions").update({ emoji: stickerId }).eq("id", existing.id);
+          if (error) throw error;
+
+          setPhotos((prev) => prev.map((p) =>
+            p.id === photoId ? { ...p, reactions: p.reactions.map((r) => r.id === existing.id ? { ...r, sticker_id: stickerId } : r) } : p
+          ));
+        }
       } else {
-        // changer de sticker
-        await supabase.from("reactions").update({ emoji: stickerId }).eq("id", existing.id);
-        setPhotos((prev) => prev.map((p) =>
-          p.id === photoId ? { ...p, reactions: p.reactions.map((r) => r.id === existing.id ? { ...r, sticker_id: stickerId } : r) } : p
-        ));
+        const { data, error } = await supabase
+          .from("reactions")
+          .insert({ photo_id: photoId, user_id: user.id, type: "emoji", emoji: stickerId })
+          .select("id")
+          .single();
+        
+        if (error) throw error;
+        
+        if (data) {
+          setPhotos((prev) => prev.map((p) =>
+            p.id === photoId ? {
+              ...p,
+              reactions: [...p.reactions, { id: data.id, user_id: user.id, username, avatar_url: avatarUrl, sticker_id: stickerId }],
+            } : p
+          ));
+        }
       }
-    } else {
-      const { data } = await supabase
-        .from("reactions")
-        .insert({ photo_id: photoId, user_id: user.id, type: "sticker", emoji: stickerId })
-        .select("id")
-        .single();
-      if (data) {
-        setPhotos((prev) => prev.map((p) =>
-          p.id === photoId ? {
-            ...p,
-            reactions: [...p.reactions, { id: data.id, user_id: user.id, username, avatar_url: avatarUrl, sticker_id: stickerId }],
-          } : p
-        ));
-      }
+    } catch (err) {
+      console.error("[handleReact] Error:", err);
+      Alert.alert("Erreur", "Impossible d'enregistrer la réaction.");
     }
   };
 

@@ -9,10 +9,12 @@ import {
   Modal,
   Pressable,
   ViewToken,
+  Platform,
 } from "react-native";
 import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 import { STICKERS, type StickerId } from "./stickers";
 
@@ -34,6 +36,7 @@ export type PhotoEntry = {
   username: string;
   avatar_url?: string | null;
   image_path: string;
+  user_id: string;
   reactions: Reaction[];
 };
 
@@ -150,7 +153,6 @@ function StickerPicker({ visible, onClose, onSelect, myReaction }: {
                   activeOpacity={0.7}
                 >
                   <Component width={52} height={20} />
-                  <Text style={styles.pickerLabel}>{label}</Text>
                 </TouchableOpacity>
               );
             })}
@@ -187,23 +189,61 @@ function formatDayLabel(dateStr: string) {
 }
 
 // --- Moment vidéo ---
-function VideoMoment({ moment, isVisible, onReact, currentUserId }: {
+function VideoMoment({ moment, isVisible, isNearVisible, onReact, currentUserId }: {
   moment: PhotoEntry;
   isVisible: boolean;
+  isNearVisible: boolean;
   onReact?: (photoId: string, stickerId: StickerId) => void;
   currentUserId?: string;
 }) {
+  const insets = useSafeAreaInsets();
   const [pickerOpen, setPickerOpen] = useState(false);
-  const player = useVideoPlayer(moment.url, (p) => { p.loop = true; p.muted = false; });
+  const [isPaused, setIsPaused] = useState(false);
+  
+  // PRE-LOADING : On charge le player si la vidéo est visible OU proche (précédente/suivante).
+  const player = useVideoPlayer(isNearVisible ? moment.url : null, (p) => {
+    p.loop = true;
+    p.muted = false;
+    if (isVisible && !isPaused) p.play();
+  });
+
   const myReaction = moment.reactions.find((r) => r.user_id === currentUserId)?.sticker_id ?? null;
 
   useEffect(() => {
-    if (isVisible) player.play(); else player.pause();
-  }, [isVisible, player]);
+    if (!player) return;
+    if (isVisible && !isPaused) {
+      player.play();
+    } else {
+      player.pause();
+    }
+  }, [isVisible, isPaused, player]);
+
+  useEffect(() => {
+    if (!isVisible) setIsPaused(false);
+  }, [isVisible]);
 
   return (
     <View style={styles.fullscreenPage}>
-      <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />
+      {isNearVisible ? (
+        <>
+          <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />
+          
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setIsPaused((v) => !v)}>
+            {isVisible && isPaused && (
+              <View style={[styles.pauseOverlay, { paddingTop: insets.top + 20 }]} pointerEvents="none">
+                <View style={styles.pauseCircle}>
+                  <Svg width="24" height="24" viewBox="0 0 24 24" fill="#FFF">
+                    <Path d="M8 5v14l11-7z" />
+                  </Svg>
+                </View>
+              </View>
+            )}
+          </Pressable>
+        </>
+      ) : (
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]} />
+      )}
+
       <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.momentOverlay}>
         <View style={styles.authorInfo}>
           <UserAvatar avatar_url={moment.avatar_url} username={moment.username} size={40} />
@@ -213,11 +253,14 @@ function VideoMoment({ moment, isVisible, onReact, currentUserId }: {
           </View>
         </View>
         <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={onReact} photoId={moment.id} />
-      </LinearGradient>
-      <TouchableOpacity style={styles.reactBtn} onPress={() => setPickerOpen(true)}>
-        <ReactIcon />
-      </TouchableOpacity>
-      <StickerPicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={(sid) => onReact?.(moment.id, sid)} myReaction={myReaction} />
+        </LinearGradient>
+        {moment.user_id !== currentUserId && (
+        <TouchableOpacity style={styles.reactBtn} onPress={() => setPickerOpen(true)}>
+          <ReactIcon />
+        </TouchableOpacity>
+        )}
+        <StickerPicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={(sid) => onReact?.(moment.id, sid)} myReaction={myReaction} />
+
     </View>
   );
 }
@@ -280,7 +323,8 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
     const myReaction = moment.reactions.find((r) => r.user_id === currentUserId)?.sticker_id ?? null;
 
     if (isVideo) {
-      return <VideoMoment moment={moment} isVisible={index === visibleIndex} onReact={onReact} currentUserId={currentUserId} />;
+      const isNearVisible = Math.abs(index - visibleIndex) <= 1;
+      return <VideoMoment moment={moment} isVisible={index === visibleIndex} isNearVisible={isNearVisible} onReact={onReact} currentUserId={currentUserId} />;
     }
 
     return (
@@ -302,19 +346,23 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
         )}
 
         <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.momentOverlay}>
-          <View style={styles.authorInfo}>
-            <UserAvatar avatar_url={moment.avatar_url} username={moment.username} size={40} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.username}>{moment.username}</Text>
-              {moment.note && !isTextOnly && <Text style={styles.momentNote} numberOfLines={2}>{moment.note}</Text>}
+          {!isTextOnly && (
+            <View style={styles.authorInfo}>
+              <UserAvatar avatar_url={moment.avatar_url} username={moment.username} size={40} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.username}>{moment.username}</Text>
+                {moment.note && <Text style={styles.momentNote} numberOfLines={2}>{moment.note}</Text>}
+              </View>
             </View>
-          </View>
+          )}
           <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={onReact} photoId={moment.id} />
         </LinearGradient>
 
-        <TouchableOpacity style={styles.reactBtn} onPress={() => setOpenPickerId(moment.id)}>
-          <ReactIcon />
-        </TouchableOpacity>
+        {moment.user_id !== currentUserId && (
+          <TouchableOpacity style={styles.reactBtn} onPress={() => setOpenPickerId(moment.id)}>
+            <ReactIcon />
+          </TouchableOpacity>
+        )}
 
         <StickerPicker
           visible={openPickerId === moment.id}
@@ -325,6 +373,18 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
       </View>
     );
   };
+
+  if (photos.length === 0) {
+    return (
+      <View style={[styles.list, { justifyContent: "center", alignItems: "center" }]}>
+        <View style={styles.endLogoMark} />
+        <Text style={[styles.endTitle, { marginTop: 24 }]}>Aucun moment cette semaine.</Text>
+        <Text style={[styles.endSubtitle, { textAlign: "center", paddingHorizontal: 40, marginTop: 8 }]}>
+          Les moments partagés apparaîtront ici après le reveal.
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <FlatList
@@ -339,6 +399,8 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
       getItemLayout={(_, i) => ({ length: SCREEN_HEIGHT, offset: SCREEN_HEIGHT * i, index: i })}
       onViewableItemsChanged={onViewableItemsChanged}
       viewabilityConfig={viewabilityConfig}
+      windowSize={3}
+      removeClippedSubviews={Platform.OS === 'android'}
       style={styles.list}
     />
   );
@@ -355,7 +417,7 @@ const styles = StyleSheet.create({
   citationFooter: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 20 },
   citationAvatar: { borderRadius: 16, overflow: "hidden" },
   citationUsername: { color: "rgba(255,255,255,0.5)", fontFamily: "Inter_600SemiBold", fontSize: 15 },
-  momentOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 110, paddingTop: 80, gap: 14 },
+  momentOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 140, paddingTop: 80, gap: 14 },
   authorInfo: { flexDirection: "row", alignItems: "center", gap: 12 },
   username: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 16 },
   momentNote: { color: "rgba(255,255,255,0.75)", fontFamily: "Inter_400Regular", fontSize: 14, marginTop: 3 },
@@ -368,7 +430,7 @@ const styles = StyleSheet.create({
   reactionStickerWrap: { marginLeft: 2 },
   reactionCount: { color: "rgba(255,255,255,0.7)", fontFamily: "Inter_700Bold", fontSize: 11, marginLeft: 2 },
   // React button
-  reactBtn: { position: "absolute", right: 20, bottom: 160, width: 52, height: 52, borderRadius: 26, backgroundColor: "rgba(255,255,255,0.18)", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.25)" },
+  reactBtn: { position: "absolute", right: 20, bottom: 180, width: 52, height: 52, borderRadius: 26, backgroundColor: "rgba(255,255,255,0.18)", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.25)" },
   // Sticker picker
   pickerBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
   pickerSheet: { backgroundColor: "#1A1A1A", borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingBottom: 40, paddingTop: 12, paddingHorizontal: 20 },
@@ -383,4 +445,7 @@ const styles = StyleSheet.create({
   endTitle: { fontFamily: "Inter_700Bold", fontSize: 24, color: "#FFF" },
   endSubtitle: { fontFamily: "Inter_400Regular", fontSize: 14, color: "rgba(255,255,255,0.4)", marginTop: 8 },
   countdownText: { fontFamily: "Inter_700Bold", fontSize: 32, color: "#FFF", marginTop: 12, letterSpacing: 2 },
+  // Video Play/Pause
+  pauseOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "flex-end", paddingRight: 20 },
+  pauseCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "center", alignItems: "center" },
 });
