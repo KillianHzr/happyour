@@ -109,7 +109,11 @@ function getWeekBounds(revealDayOfWeek = 0, revealHour = 20) {
   const revealDate = new Date(monday);
   revealDate.setDate(monday.getDate() + daysFromMonday);
   revealDate.setHours(revealHour, 0, 0, 0);
-  return { monday, revealDate };
+  // Les moments capturés pendant le reveal appartiennent à la semaine suivante :
+  // la semaine courante va du reveal précédent au reveal actuel.
+  const prevRevealDate = new Date(revealDate);
+  prevRevealDate.setDate(revealDate.getDate() - 7);
+  return { monday, revealDate, prevRevealDate };
 }
 
 type CameraMode = "PHOTO" | "VIDEO" | "TEXTE";
@@ -174,7 +178,7 @@ export default function MainPagerScreen() {
       const cfgMap = Object.fromEntries((cfgRows ?? []).map((r: any) => [r.key, Number(r.value)]));
       const cfg = { reveal_day: cfgMap["reveal_day"] ?? 0, reveal_hour: cfgMap["reveal_hour"] ?? 20 };
       setRevealConfig({ day: cfg.reveal_day, hour: cfg.reveal_hour });
-      const { monday } = getWeekBounds(cfg.reveal_day, cfg.reveal_hour);
+      const { revealDate: currentRevealDate, prevRevealDate } = getWeekBounds(cfg.reveal_day, cfg.reveal_hour);
 
       const [groupRes, profileRes, photosRes, membersRes] = await Promise.all([
         supabase.from("groups").select("name").eq("id", id).single(),
@@ -182,7 +186,8 @@ export default function MainPagerScreen() {
         supabase.from("photos")
           .select("id, image_path, created_at, note, user_id, profiles:user_id(username, avatar_url)")
           .eq("group_id", id)
-          .gte("created_at", monday.toISOString())
+          .gte("created_at", prevRevealDate.toISOString())
+          .lt("created_at", currentRevealDate.toISOString())
           .order("created_at", { ascending: true }),
         supabase.from("group_members").select("user_id, role, profiles:user_id(username, avatar_url)").eq("group_id", id)
       ]);
