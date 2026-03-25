@@ -290,12 +290,22 @@ export default function MainPagerScreen() {
       base64: true,
     });
 
-    if (!result.canceled && result.assets[0].base64) {
+    if (!result.canceled) {
       setUploading(true);
       try {
+        // Optimisation : Redimensionnement en 200x200 car l'avatar est petit
+        const manipResult = await manipulateAsync(
+          result.assets[0].uri,
+          [{ resize: { width: 200, height: 200 } }],
+          { compress: 0.7, format: SaveFormat.JPEG, base64: true }
+        );
+
+        if (!manipResult.base64) throw new Error("Erreur de manipulation image");
+
         const filePath = `avatars/${user?.id}_${Date.now()}.jpg`;
-        await r2Storage.upload(filePath, decode(result.assets[0].base64), "image/jpeg");
+        await r2Storage.upload(filePath, decode(manipResult.base64), "image/jpeg");
         const urlData = r2Storage.getPublicUrl(filePath);
+        
         await supabase.from("profiles").update({ avatar_url: urlData }).eq("id", user?.id);
         setAvatarUrl(urlData);
       } catch (e: any) { Alert.alert("Erreur", e.message); } finally { setUploading(false); }
