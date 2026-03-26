@@ -682,7 +682,46 @@ export default function MainPagerScreen() {
             <ScrollView style={[styles.pageContent, { paddingTop: insets.top + 40 }]} contentContainerStyle={{ paddingBottom: 160 }} showsVerticalScrollIndicator={false}>
               <View style={styles.vaultHeader}><Text style={styles.pageTitleNoPad}>{groupName || "Groupe"}</Text><TouchableOpacity onPress={() => setShowMembersModal(true)} style={styles.groupBtn}>{isAdmin ? <GroupAddIcon /> : <GroupIcon />}</TouchableOpacity></View>
               <View style={styles.vaultBody}><View style={styles.vaultLockedContent}><VaultCounter totalCount={photoCount} userCount={userPhotoCount} unlockDate={revealDate} /></View></View>
-              {__DEV__ && <TouchableOpacity style={styles.debugBtn} onPress={() => setDebugUnlocked(true)}><Text style={styles.debugBtnText}>🔓 Simuler reveal (DEV)</Text></TouchableOpacity>}
+              {__DEV__ && (
+                <View style={{ gap: 8, marginTop: 24, marginHorizontal: 24 }}>
+                  <TouchableOpacity style={[styles.debugBtn, { marginHorizontal: 0, marginTop: 0, marginBottom: 0 }]} onPress={() => setDebugUnlocked(true)}>
+                    <Text style={styles.debugBtnText}>🔓 Simuler reveal (DEV)</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity 
+                    style={[styles.debugBtn, { marginHorizontal: 0, marginTop: 0, marginBottom: 0 }]} 
+                    onPress={() => scheduleImmediateLocalNotification(
+                      "Le coffre est ouvert !", 
+                      `Les moments de "${groupName || "Groupe"}" sont disponibles`, 
+                      { type: "recap", groupId: id }
+                    )}
+                  >
+                    <Text style={styles.debugBtnText}>🔔 Debug Reveal (DEV)</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={[styles.debugBtn, { marginHorizontal: 0, marginTop: 0, marginBottom: 0 }]} 
+                    onPress={() => scheduleImmediateLocalNotification(
+                      groupName || "Groupe", 
+                      `Un ami a partagé un moment !`, 
+                      { type: "new_photo", groupId: id }
+                    )}
+                  >
+                    <Text style={styles.debugBtnText}>🔔 Debug Photo (DEV)</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={[styles.debugBtn, { marginHorizontal: 0, marginTop: 0, marginBottom: 0 }]} 
+                    onPress={() => scheduleImmediateLocalNotification(
+                      "Nouvelle invitation !", 
+                      `Tu as été invité à rejoindre "${groupName || "Groupe"}"`, 
+                      { type: "invite", groupName: groupName || "Groupe" }
+                    )}
+                  >
+                    <Text style={styles.debugBtnText}>🔔 Debug Invite (DEV)</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </ScrollView>
           )}
         </View>
