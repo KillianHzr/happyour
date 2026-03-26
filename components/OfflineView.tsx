@@ -10,7 +10,7 @@ export default function OfflineView() {
       <Text style={styles.subtitle}>
         Une connexion internet est nécessaire pour se connecter ou s'inscrire. 
         Vérifie tes réglages réseau.
-      </p>
+      </Text>
     </View>
   );
 }
