@@ -30,7 +30,8 @@ import { useUpload } from "../../../../lib/upload-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const NAVBAR_HEIGHT = 100;
 
 const SendIcon = ({ color = "#000" }) => (
   <Svg width="28" height="28" viewBox="0 0 24 24" fill="none">
@@ -125,7 +126,7 @@ export default function PreviewScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.previewContainer, { paddingTop: insets.top + 20 }]}>
+      <View style={[styles.previewContainer, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12, paddingHorizontal: 12 }]}>
         <View style={styles.previewImageWrapper}>
           {captureType === "video" ? (
             <VideoView
@@ -137,46 +138,49 @@ export default function PreviewScreen() {
           ) : (
             <Image source={{ uri }} style={styles.previewImage} contentFit="cover" />
           )}
-          <TouchableOpacity 
-            style={styles.backCaptureBtnInside} 
-            onPress={handleDiscard} 
-            disabled={uploading}
-          >
-            <CloseIcon />
-          </TouchableOpacity>
-        </View>
 
-        <View style={styles.previewContent}>
-          {note ? (
-            <Pressable 
-              style={styles.previewNoteBox} 
-              onPress={() => setIsEditingNote(true)} 
-              disabled={uploading}
-            >
-              <Text style={styles.previewNoteText}>{note}</Text>
-            </Pressable>
-          ) : (
+          <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
             <TouchableOpacity 
-              style={styles.addNoteBtn} 
-              onPress={() => setIsEditingNote(true)} 
+              style={[styles.backCaptureBtnInside, { top: 16 }]} 
+              onPress={handleDiscard} 
               disabled={uploading}
             >
-              <FeatherIcon />
-              <Text style={styles.addNoteBtnText}>Ajouter une légende...</Text>
+              <CloseIcon />
             </TouchableOpacity>
-          )}
-        </View>
 
-        <View style={[styles.postCaptureActions, { marginBottom: insets.bottom + 100 }]}>
-          <TouchableOpacity 
-            style={styles.sendCaptureBtn} 
-            onPress={handleSend} 
-            disabled={uploading}
-          >
-            <View style={styles.sendCaptureInner}>
-              {uploading ? <ActivityIndicator color="#000" /> : <SendIcon color="#000" />}
+            <View style={[styles.previewContent, { bottom: 120 }]}>
+              {note ? (
+                <Pressable 
+                  style={styles.previewNoteBox} 
+                  onPress={() => setIsEditingNote(true)} 
+                  disabled={uploading}
+                >
+                  <Text style={styles.previewNoteText}>{note}</Text>
+                </Pressable>
+              ) : (
+                <TouchableOpacity 
+                  style={styles.addNoteBtn} 
+                  onPress={() => setIsEditingNote(true)} 
+                  disabled={uploading}
+                >
+                  <FeatherIcon />
+                  <Text style={styles.addNoteBtnText}>Ajouter une légende...</Text>
+                </TouchableOpacity>
+              )}
             </View>
-          </TouchableOpacity>
+
+            <View style={[styles.postCaptureActions, { bottom: 20 }]}>
+              <TouchableOpacity 
+                style={styles.sendCaptureBtn} 
+                onPress={handleSend} 
+                disabled={uploading}
+              >
+                <View style={styles.sendCaptureInner}>
+                  {uploading ? <ActivityIndicator color="#000" /> : <SendIcon color="#000" />}
+                </View>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </View>
 
@@ -195,15 +199,15 @@ export default function PreviewScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
   previewContainer: { flex: 1, backgroundColor: "#000", alignItems: "center" },
-  previewImageWrapper: { width: SCREEN_WIDTH - 40, height: (SCREEN_WIDTH - 40) * 1.33, borderRadius: 32, overflow: "hidden", backgroundColor: "#1A1A1A" },
+  previewImageWrapper: { flex: 1, width: '100%', borderRadius: 32, overflow: "hidden", backgroundColor: "#1A1A1A" },
   previewImage: { width: "100%", height: "100%" },
-  previewContent: { width: SCREEN_WIDTH - 40, marginTop: 20 },
-  previewNoteBox: { backgroundColor: "rgba(255,255,255,0.1)", padding: 16, borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.05)" },
+  previewContent: { position: "absolute", left: 24, right: 24 },
+  previewNoteBox: { backgroundColor: "rgba(0,0,0,0.5)", padding: 16, borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
   previewNoteText: { color: "#FFF", fontSize: 16, fontFamily: "Inter_600SemiBold", textAlign: "center" },
-  addNoteBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, padding: 16, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.05)", borderStyle: "dashed", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
+  addNoteBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, padding: 16, borderRadius: 16, backgroundColor: "rgba(0,0,0,0.4)", borderStyle: "dashed", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
   addNoteBtnText: { color: "rgba(255,255,255,0.6)", fontSize: 15, fontFamily: "Inter_600SemiBold" },
-  backCaptureBtnInside: { position: "absolute", top: 16, left: 16, width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" },
-  postCaptureActions: { flex: 1, width: SCREEN_WIDTH, justifyContent: "center", alignItems: "center" },
+  backCaptureBtnInside: { position: "absolute", left: 16, width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" },
+  postCaptureActions: { position: "absolute", left: 0, right: 0, alignItems: "center" },
   sendCaptureBtn: { width: 84, height: 84, borderRadius: 42, borderWidth: 5, borderColor: "#FFF", justifyContent: "center", alignItems: "center" },
   sendCaptureInner: { width: 66, height: 66, borderRadius: 33, backgroundColor: "#FFF", justifyContent: "center", alignItems: "center" },
   noteEditorContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: 40 },

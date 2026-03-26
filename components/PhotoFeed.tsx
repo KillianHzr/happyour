@@ -19,6 +19,7 @@ import Svg, { Path } from "react-native-svg";
 import { STICKERS, type StickerId } from "./stickers";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const NAVBAR_HEIGHT = 100;
 
 export type Reaction = {
   id: string;
@@ -52,7 +53,6 @@ type Props = {
   nextUnlockDate: Date;
 };
 
-// --- Icône "réagir" (bulle + éclair, pas un cœur) ---
 const ReactIcon = () => (
   <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
     <Path
@@ -62,7 +62,6 @@ const ReactIcon = () => (
   </Svg>
 );
 
-// --- Avatar générique : photo ou initiale ---
 function UserAvatar({ avatar_url, username, size = 28 }: { avatar_url?: string | null; username: string; size?: number }) {
   const borderRadius = size / 2;
   if (avatar_url) {
@@ -77,7 +76,6 @@ function UserAvatar({ avatar_url, username, size = 28 }: { avatar_url?: string |
   );
 }
 
-// --- Bulles de réactions groupées par sticker ---
 function ReactionsRow({ reactions, currentUserId, onReact, photoId }: {
   reactions: Reaction[];
   currentUserId?: string;
@@ -86,7 +84,6 @@ function ReactionsRow({ reactions, currentUserId, onReact, photoId }: {
 }) {
   if (reactions.length === 0) return null;
 
-  // Grouper par sticker
   const groups = STICKERS
     .map(({ id, Component }) => ({
       id,
@@ -106,7 +103,6 @@ function ReactionsRow({ reactions, currentUserId, onReact, photoId }: {
             onPress={() => onReact?.(photoId, id as StickerId)}
             activeOpacity={0.75}
           >
-            {/* Avatars empilés (max 2) */}
             <View style={styles.reactionAvatarStack}>
               {users.slice(0, 2).map((r, i) => (
                 <View key={r.id} style={[styles.reactionAvatarWrap, { zIndex: 2 - i, marginLeft: i === 0 ? 0 : -8 }]}>
@@ -114,11 +110,9 @@ function ReactionsRow({ reactions, currentUserId, onReact, photoId }: {
                 </View>
               ))}
             </View>
-            {/* Sticker SVG */}
             <View style={styles.reactionStickerWrap}>
               <Component width={32} height={12} />
             </View>
-            {/* Compte si > 2 */}
             {users.length > 2 && (
               <Text style={styles.reactionCount}>+{users.length - 2}</Text>
             )}
@@ -129,7 +123,6 @@ function ReactionsRow({ reactions, currentUserId, onReact, photoId }: {
   );
 }
 
-// --- Picker de stickers ---
 function StickerPicker({ visible, onClose, onSelect, myReaction }: {
   visible: boolean;
   onClose: () => void;
@@ -163,7 +156,6 @@ function StickerPicker({ visible, onClose, onSelect, myReaction }: {
   );
 }
 
-// --- Countdown ---
 function EndCountdown({ targetDate }: { targetDate: Date }) {
   const [timeLeft, setTimeLeft] = useState("");
   useEffect(() => {
@@ -188,7 +180,6 @@ function formatDayLabel(dateStr: string) {
   return { date: dateStr.slice(0, 10), label: `${day}\n${full}` };
 }
 
-// --- Moment vidéo ---
 function VideoMoment({ moment, isVisible, isNearVisible, onReact, currentUserId }: {
   moment: PhotoEntry;
   isVisible: boolean;
@@ -200,7 +191,6 @@ function VideoMoment({ moment, isVisible, isNearVisible, onReact, currentUserId 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   
-  // PRE-LOADING : On charge le player si la vidéo est visible OU proche (précédente/suivante).
   const player = useVideoPlayer(isNearVisible ? moment.url : null, (p) => {
     p.loop = true;
     p.muted = false;
@@ -223,50 +213,53 @@ function VideoMoment({ moment, isVisible, isNearVisible, onReact, currentUserId 
   }, [isVisible]);
 
   return (
-    <View style={styles.fullscreenPage}>
-      {isNearVisible ? (
-        <>
-          <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />
-          
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setIsPaused((v) => !v)}>
-            {isVisible && isPaused && (
-              <View style={[styles.pauseOverlay, { paddingTop: insets.top + 20 }]} pointerEvents="none">
-                <View style={styles.pauseCircle}>
-                  <Svg width="24" height="24" viewBox="0 0 24 24" fill="#FFF">
-                    <Path d="M8 5v14l11-7z" />
-                  </Svg>
+    <View style={[styles.fullscreenPage, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12 }]}>
+      <View style={styles.momentWrapper}>
+        {isNearVisible ? (
+          <>
+            <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setIsPaused((v) => !v)}>
+              {isVisible && isPaused && (
+                <View style={styles.pauseOverlay} pointerEvents="none">
+                  <View style={styles.pauseCircle}>
+                    <Svg width="24" height="24" viewBox="0 0 24 24" fill="#FFF">
+                      <Path d="M8 5v14l11-7z" />
+                    </Svg>
+                  </View>
                 </View>
-              </View>
-            )}
-          </Pressable>
-        </>
-      ) : (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]} />
-      )}
-
-      <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.momentOverlay}>
-        <View style={styles.authorInfo}>
-          <UserAvatar avatar_url={moment.avatar_url} username={moment.username} size={40} />
-          <View>
-            <Text style={styles.username}>{moment.username}</Text>
-            {moment.note && <Text style={styles.momentNote} numberOfLines={3}>{moment.note}</Text>}
-          </View>
-        </View>
-        <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={onReact} photoId={moment.id} />
-        </LinearGradient>
-        {moment.user_id !== currentUserId && (
-        <TouchableOpacity style={styles.reactBtn} onPress={() => setPickerOpen(true)}>
-          <ReactIcon />
-        </TouchableOpacity>
+              )}
+            </Pressable>
+          </>
+        ) : (
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]} />
         )}
-        <StickerPicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={(sid) => onReact?.(moment.id, sid)} myReaction={myReaction} />
 
+        <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+          <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.momentOverlay}>
+            <View style={styles.authorInfo}>
+              <UserAvatar avatar_url={moment.avatar_url} username={moment.username} size={40} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.username}>{moment.username}</Text>
+                {moment.note && <Text style={styles.momentNote} numberOfLines={3}>{moment.note}</Text>}
+              </View>
+            </View>
+            <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={onReact} photoId={moment.id} />
+          </LinearGradient>
+
+          {moment.user_id !== currentUserId && (
+            <TouchableOpacity style={styles.reactBtnInside} onPress={() => setPickerOpen(true)}>
+              <ReactIcon />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+      <StickerPicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={(sid) => onReact?.(moment.id, sid)} myReaction={myReaction} />
     </View>
   );
 }
 
-// --- Feed principal ---
 export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDate }: Props) {
+  const insets = useSafeAreaInsets();
   const [visibleIndex, setVisibleIndex] = useState(0);
   const [openPickerId, setOpenPickerId] = useState<string | null>(null);
 
@@ -328,41 +321,45 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
     }
 
     return (
-      <View style={styles.fullscreenPage}>
-        {isTextOnly ? (
-          <View style={styles.textMomentBg}>
-            <View style={styles.quoteContainer}>
-              <Text style={[styles.textMomentContent, { fontSize, lineHeight: Math.round(fontSize * 1.4) }]}>{moment.note}</Text>
-              <View style={styles.citationFooter}>
-                <View style={styles.citationAvatar}>
-                  <UserAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} />
+      <View style={[styles.fullscreenPage, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12 }]}>
+        <View style={styles.momentWrapper}>
+          {isTextOnly ? (
+            <View style={styles.textMomentBg}>
+              <View style={styles.quoteContainer}>
+                <Text style={[styles.textMomentContent, { fontSize, lineHeight: Math.round(fontSize * 1.4) }]}>{moment.note}</Text>
+                <View style={styles.citationFooter}>
+                  <View style={styles.citationAvatar}>
+                    <UserAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} />
+                  </View>
+                  <Text style={styles.citationUsername}>{moment.username}</Text>
                 </View>
-                <Text style={styles.citationUsername}>{moment.username}</Text>
               </View>
             </View>
-          </View>
-        ) : (
-          <Image source={{ uri: moment.url }} style={StyleSheet.absoluteFill} contentFit="cover" />
-        )}
-
-        <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.momentOverlay}>
-          {!isTextOnly && (
-            <View style={styles.authorInfo}>
-              <UserAvatar avatar_url={moment.avatar_url} username={moment.username} size={40} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.username}>{moment.username}</Text>
-                {moment.note && <Text style={styles.momentNote} numberOfLines={2}>{moment.note}</Text>}
-              </View>
-            </View>
+          ) : (
+            <Image source={{ uri: moment.url }} style={StyleSheet.absoluteFill} contentFit="cover" />
           )}
-          <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={onReact} photoId={moment.id} />
-        </LinearGradient>
 
-        {moment.user_id !== currentUserId && (
-          <TouchableOpacity style={styles.reactBtn} onPress={() => setOpenPickerId(moment.id)}>
-            <ReactIcon />
-          </TouchableOpacity>
-        )}
+          <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+            <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.momentOverlay}>
+              {!isTextOnly && (
+                <View style={styles.authorInfo}>
+                  <UserAvatar avatar_url={moment.avatar_url} username={moment.username} size={40} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.username}>{moment.username}</Text>
+                    {moment.note && <Text style={styles.momentNote} numberOfLines={2}>{moment.note}</Text>}
+                  </View>
+                </View>
+              )}
+              <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={onReact} photoId={moment.id} />
+            </LinearGradient>
+
+            {moment.user_id !== currentUserId && (
+              <TouchableOpacity style={styles.reactBtnInside} onPress={() => setOpenPickerId(moment.id)}>
+                <ReactIcon />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
 
         <StickerPicker
           visible={openPickerId === moment.id}
@@ -408,7 +405,8 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
 
 const styles = StyleSheet.create({
   list: { flex: 1, backgroundColor: "#000" },
-  fullscreenPage: { width: SCREEN_WIDTH, height: SCREEN_HEIGHT, justifyContent: "center", alignItems: "center", backgroundColor: "#000" },
+  fullscreenPage: { width: SCREEN_WIDTH, height: SCREEN_HEIGHT, justifyContent: "center", alignItems: "center", backgroundColor: "#000", paddingHorizontal: 12 },
+  momentWrapper: { flex: 1, width: '100%', borderRadius: 32, overflow: "hidden", backgroundColor: "#1A1A1A" },
   separatorDay: { fontFamily: "Inter_700Bold", fontSize: 48, color: "#FFF", textAlign: "center", letterSpacing: -2 },
   separatorDate: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginTop: 8 },
   textMomentBg: { flex: 1, width: "100%", justifyContent: "center", alignItems: "center", padding: 32, backgroundColor: "#050505" },
@@ -417,11 +415,10 @@ const styles = StyleSheet.create({
   citationFooter: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 20 },
   citationAvatar: { borderRadius: 16, overflow: "hidden" },
   citationUsername: { color: "rgba(255,255,255,0.5)", fontFamily: "Inter_600SemiBold", fontSize: 15 },
-  momentOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 140, paddingTop: 80, gap: 14 },
+  momentOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 20, paddingBottom: 32, gap: 14 },
   authorInfo: { flexDirection: "row", alignItems: "center", gap: 12 },
   username: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 16 },
   momentNote: { color: "rgba(255,255,255,0.75)", fontFamily: "Inter_400Regular", fontSize: 14, marginTop: 3 },
-  // Reactions
   reactionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   reactionBubble: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 20, paddingHorizontal: 8, paddingVertical: 5, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
   reactionBubbleMine: { backgroundColor: "rgba(255,255,255,0.28)", borderColor: "rgba(255,255,255,0.4)" },
@@ -429,9 +426,7 @@ const styles = StyleSheet.create({
   reactionAvatarWrap: { borderRadius: 10, overflow: "hidden", borderWidth: 1.5, borderColor: "rgba(0,0,0,0.3)" },
   reactionStickerWrap: { marginLeft: 2 },
   reactionCount: { color: "rgba(255,255,255,0.7)", fontFamily: "Inter_700Bold", fontSize: 11, marginLeft: 2 },
-  // React button
-  reactBtn: { position: "absolute", right: 20, bottom: 180, width: 52, height: 52, borderRadius: 26, backgroundColor: "rgba(255,255,255,0.18)", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.25)" },
-  // Sticker picker
+  reactBtnInside: { position: "absolute", right: 16, bottom: 100, width: 52, height: 52, borderRadius: 26, backgroundColor: "rgba(255,255,255,0.18)", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.25)" },
   pickerBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
   pickerSheet: { backgroundColor: "#1A1A1A", borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingBottom: 40, paddingTop: 12, paddingHorizontal: 20 },
   pickerHandle: { width: 36, height: 4, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 2, alignSelf: "center", marginBottom: 20 },
@@ -440,12 +435,10 @@ const styles = StyleSheet.create({
   pickerItem: { flex: 1, minWidth: "28%", alignItems: "center", gap: 8, paddingVertical: 16, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.06)", borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" },
   pickerItemActive: { backgroundColor: "rgba(255,255,255,0.18)", borderColor: "rgba(255,255,255,0.35)" },
   pickerLabel: { color: "rgba(255,255,255,0.5)", fontFamily: "Inter_600SemiBold", fontSize: 11 },
-  // End screen
   endLogoMark: { width: 32, height: 32, borderWidth: 2, borderColor: "#FFF", borderRadius: 6, marginBottom: 24, transform: [{ rotate: "45deg" }] },
   endTitle: { fontFamily: "Inter_700Bold", fontSize: 24, color: "#FFF" },
   endSubtitle: { fontFamily: "Inter_400Regular", fontSize: 14, color: "rgba(255,255,255,0.4)", marginTop: 8 },
   countdownText: { fontFamily: "Inter_700Bold", fontSize: 32, color: "#FFF", marginTop: 12, letterSpacing: 2 },
-  // Video Play/Pause
-  pauseOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "flex-end", paddingRight: 20 },
-  pauseCircle: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "center", alignItems: "center" },
+  pauseOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: "center", alignItems: "center" },
+  pauseCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" },
 });
