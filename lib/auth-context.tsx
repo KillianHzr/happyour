@@ -9,6 +9,7 @@ type AuthState = {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, username: string) => Promise<void>;
   logout: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -49,9 +50,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   };
 
+  const resetPassword = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: "https://app-gobelins-m2-landing.vercel.app/reset-password",
+    });
+    if (error) throw error;
+  };
+
   return (
     <AuthContext.Provider
-      value={{ session, user: session?.user ?? null, loading, login, register, logout }}
+      value={{ session, user: session?.user ?? null, loading, login, register, logout, resetPassword }}
     >
       {children}
     </AuthContext.Provider>
