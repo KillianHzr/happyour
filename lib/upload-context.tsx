@@ -48,6 +48,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
 
     (async () => {
       try {
+        console.log(`[Upload ${taskId}] 1. Récupération des infos groupe/profil...`);
         // 1. Récupérer les noms pour la notif (en parallèle de la lecture si besoin)
         const [groupRes, profileRes] = await Promise.all([
           supabase.from("groups").select("name").eq("id", dbData.group_id).single(),
@@ -61,16 +62,19 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
         // 2. Gestion du fichier (si c'est une photo/vidéo)
         let finalPath = "text_mode";
         if (fileName && fileUri && contentType) {
+          console.log(`[Upload ${taskId}] 2. Lecture du fichier...`);
           const base64 = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
           const arrayBuffer = decode(base64);
           setActiveUploads((prev) => prev.map(t => t.id === taskId ? { ...t, progress: 0.5 } : t));
           
+          console.log(`[Upload ${taskId}] 2. Upload vers R2...`);
           await r2Storage.upload(fileName, arrayBuffer, contentType);
           finalPath = fileName;
         }
 
         setActiveUploads((prev) => prev.map(t => t.id === taskId ? { ...t, progress: 0.8 } : t));
 
+        console.log(`[Upload ${taskId}] 3. Enregistrement en BDD...`);
         // 3. Enregistrement en BDD
         const { error: dbError } = await supabase.from("photos").insert({
           group_id: dbData.group_id,
@@ -81,9 +85,11 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
 
         if (dbError) throw dbError;
 
+        console.log(`[Upload ${taskId}] 4. Envoi notification...`);
         // 4. Notification
         notifyNewPhoto(dbData.group_id, groupName, username, dbData.user_id);
 
+        console.log(`[Upload ${taskId}] 5. Succès !`);
         // Succès
         setActiveUploads((prev) => prev.map(t => t.id === taskId ? { ...t, progress: 1, status: "success" } : t));
         

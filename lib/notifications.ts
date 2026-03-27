@@ -1,32 +1,13 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
+import * as Notifications from "expo-notifications";
+import * as Device from "expo-device";
 import { supabase } from "./supabase";
-
-// Detect Expo Go
-const isExpoGo = Constants.appOwnership === "expo";
-
-// Only require expo-notifications in dev builds / standalone
-let Notifications: typeof import("expo-notifications") | null = null;
-if (!isExpoGo) {
-  try {
-    Notifications = require("expo-notifications");
-  } catch {
-    // module not available
-  }
-}
-
-let Device: typeof import("expo-device") | null = null;
-if (!isExpoGo) {
-  try {
-    Device = require("expo-device");
-  } catch {}
-}
 
 // ── Register & Token ──
 
 export async function registerForPushNotifications(userId: string) {
-  if (!Notifications || !Device) return;
   if (!Device.isDevice) return;
 
   try {
@@ -36,6 +17,8 @@ export async function registerForPushNotifications(userId: string) {
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
         lightColor: "#FF231F7C",
+        enableVibrate: true,
+        showBadge: true,
       });
     }
 
@@ -74,6 +57,7 @@ export async function sendPushToTokens(
   data?: Record<string, unknown>
 ) {
   if (tokens.length === 0) return;
+
   const messages = tokens.map((to) => ({
     to,
     title,
@@ -81,18 +65,60 @@ export async function sendPushToTokens(
     sound: "default" as const,
     data,
     channelId: "default",
+    priority: "high",
+    vibrate: true,
   }));
-  try {
-    await fetch("https://exp.host/--/api/v2/push/send", {
+
+  const sendBatch = async (batch: typeof messages) => {
+    console.log(`[Push] Envoi de ${batch.length} notification(s) à Expo...`);
+    const response = await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
       },
-      body: JSON.stringify(messages),
+      body: JSON.stringify(batch),
     });
+    const res = await response.json();
+    console.log("[Push] Réponse Expo:", JSON.stringify(res));
+    return res;
+  };
+
+  try {
+    const result = await sendBatch(messages);
+    
+    if (result.errors) {
+      const isMixedExperience = result.errors.some(
+        (e: any) => e.code === "PUSH_TOO_MANY_EXPERIENCE_IDS"
+      );
+
+      if (isMixedExperience) {
+        console.log("[Push] Experience IDs mixtes détectés, passage en envoi individuel...");
+        await Promise.all(
+          messages.map(async (msg) => {
+            try {
+              const res = await sendBatch([msg]);
+              if (res.errors) console.error("[Push] Erreur individuelle:", res.errors);
+            } catch (e) {
+              console.error("[Push] Échec envoi individuel:", e);
+            }
+          })
+        );
+      } else {
+        console.error("[Push] Erreurs API Expo:", result.errors);
+      }
+    } else if (result.data) {
+      // Log du statut de chaque ticket
+      result.data.forEach((ticket: any, index: number) => {
+        if (ticket.status === "error") {
+          console.error(`[Push] Erreur pour le token ${tokens[index]}:`, ticket.message);
+        } else {
+          console.log(`[Push] Ticket de succès créé: ${ticket.id}`);
+        }
+      });
+    }
   } catch (e) {
-    console.error("sendPushToTokens error:", e);
+    console.error("[Push] Erreur fatale fetch:", e);
   }
 }
 
