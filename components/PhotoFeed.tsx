@@ -248,15 +248,13 @@ function VideoMoment({ moment, isVisible, isNearVisible, onReact, currentUserId 
                 <Text style={styles.username}>{moment.username}</Text>
                 {moment.note && <Text style={styles.momentNote} numberOfLines={3}>{moment.note}</Text>}
               </View>
+              <Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text>
+              <TouchableOpacity style={styles.reactBtnInline} onPress={() => setPickerOpen(true)}>
+                <ReactIcon />
+              </TouchableOpacity>
             </View>
             <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={onReact} photoId={moment.id} />
           </LinearGradient>
-
-          {moment.user_id !== currentUserId && (
-            <TouchableOpacity style={styles.reactBtnInside} onPress={() => setPickerOpen(true)}>
-              <ReactIcon />
-            </TouchableOpacity>
-          )}
         </View>
       </View>
       <StickerPicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={(sid) => onReact?.(moment.id, sid)} myReaction={myReaction} />
@@ -337,7 +335,13 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
                   <View style={styles.citationAvatar}>
                     <UserAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} />
                   </View>
-                  <Text style={styles.citationUsername}>{moment.username}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.citationUsername}>{moment.username}</Text>
+                    <Text style={styles.citationTime}>{formatTime(moment.created_at)}</Text>
+                  </View>
+                  <TouchableOpacity style={styles.reactBtnInline} onPress={() => setOpenPickerId(moment.id)}>
+                    <ReactIcon />
+                  </TouchableOpacity>
                 </View>
               </View>
             </View>
@@ -354,16 +358,14 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
                     <Text style={styles.username}>{moment.username}</Text>
                     {moment.note && <Text style={styles.momentNote} numberOfLines={2}>{moment.note}</Text>}
                   </View>
+                  <Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text>
+                  <TouchableOpacity style={styles.reactBtnInline} onPress={() => setOpenPickerId(moment.id)}>
+                    <ReactIcon />
+                  </TouchableOpacity>
                 </View>
               )}
               <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={onReact} photoId={moment.id} />
             </LinearGradient>
-
-            {moment.user_id !== currentUserId && (
-              <TouchableOpacity style={styles.reactBtnInside} onPress={() => setOpenPickerId(moment.id)}>
-                <ReactIcon />
-              </TouchableOpacity>
-            )}
           </View>
         </View>
 
@@ -423,7 +425,7 @@ const styles = StyleSheet.create({
   citationUsername: { color: "rgba(255,255,255,0.5)", fontFamily: "Inter_600SemiBold", fontSize: 15 },
   citationTime: { color: "rgba(255,255,255,0.6)", fontFamily: "Inter_600SemiBold", fontSize: 13, marginTop: 3 },
   momentTime: { color: "rgba(255,255,255,0.75)", fontFamily: "Inter_600SemiBold", fontSize: 14 },
-  momentOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 140, paddingTop: 80, gap: 14 },
+  momentOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 32, paddingTop: 80, gap: 14 },
   authorInfo: { flexDirection: "row", alignItems: "center", gap: 12 },
   username: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 16 },
   momentNote: { color: "rgba(255,255,255,0.75)", fontFamily: "Inter_400Regular", fontSize: 14, marginTop: 3 },
@@ -434,7 +436,17 @@ const styles = StyleSheet.create({
   reactionAvatarWrap: { borderRadius: 10, overflow: "hidden", borderWidth: 1.5, borderColor: "rgba(0,0,0,0.3)" },
   reactionStickerWrap: { marginLeft: 2 },
   reactionCount: { color: "rgba(255,255,255,0.7)", fontFamily: "Inter_700Bold", fontSize: 11, marginLeft: 2 },
-  reactBtnInside: { position: "absolute", right: 16, bottom: 100, width: 52, height: 52, borderRadius: 26, backgroundColor: "rgba(255,255,255,0.18)", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.25)" },
+  reactBtnInline: {
+    marginLeft: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+  },
   pickerBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
   pickerSheet: { backgroundColor: "#1A1A1A", borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingBottom: 40, paddingTop: 12, paddingHorizontal: 20 },
   pickerHandle: { width: 36, height: 4, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 2, alignSelf: "center", marginBottom: 20 },
