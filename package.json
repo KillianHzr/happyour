@@ -16,6 +16,7 @@
     "base64-arraybuffer": "^1.0.2",
     "expo": "~55.0.5",
     "expo-blur": "~55.0.9",
+    "expo-camera": "~55.0.9",
     "expo-clipboard": "~55.0.8",
     "expo-constants": "~55.0.7",
     "expo-dev-client": "~55.0.16",
@@ -45,7 +46,6 @@
     "react-native-screens": "~4.23.0",
     "react-native-svg": "15.15.3",
     "react-native-url-polyfill": "^3.0.0",
-    "react-native-vision-camera": "^4.7.3",
     "react-native-web": "^0.21.2"
   },
   "devDependencies": {

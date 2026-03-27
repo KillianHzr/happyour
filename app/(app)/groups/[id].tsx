@@ -17,7 +17,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
-import { Camera } from "react-native-vision-camera";
+import { CameraView, CameraType, FlashMode } from "expo-camera";
 import { Image } from "expo-image";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
@@ -85,7 +85,7 @@ const CloseIcon = () => (
   </Svg>
 );
 
-const FlashIcon = ({ mode }: { mode: "off" | "on" | "auto" }) => {
+const FlashIcon = ({ mode }: { mode: FlashMode }) => {
   const color = mode === 'off' ? 'rgba(255,255,255,0.4)' : '#FFF';
   return (
     <Svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -145,10 +145,10 @@ export default function MainPagerScreen() {
   const [isAdmin, setIsAdmin] = useState(false);
 
   // -- Camera State --
-  const cameraRef = useRef<Camera>(null);
+  const cameraRef = useRef<CameraView>(null);
   const [cameraMode, setCameraMode] = useState<CameraMode>("PHOTO");
-  const [facing, setFacing] = useState<"back" | "front">("back");
-  const [flash, setFlash] = useState<"off" | "on" | "auto">("off");
+  const [facing, setFacing] = useState<CameraType>('back');
+  const [flash, setFlash] = useState<FlashMode>('off');
   const [zoom, setZoom] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [isPinching, setIsPinching] = useState(false);
@@ -401,11 +401,10 @@ export default function MainPagerScreen() {
     if (!cameraRef.current || isRecording || capturing) return;
     setCapturing(true);
     try {
-      const photo = await cameraRef.current.takePhoto({ flash });
-      if (photo?.path) {
-        const uri = `file://${photo.path}`;
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.85, skipMetadata: true });
+      if (photo?.uri) {
         const manipResult = await manipulateAsync(
-          uri,
+          photo.uri,
           [{ resize: { width: 1440 } }],
           { compress: 0.92, format: SaveFormat.JPEG, base64: false }
         );
@@ -420,29 +419,33 @@ export default function MainPagerScreen() {
 
   const startVideoRecording = async () => {
     if (!cameraRef.current || isRecording) return;
+    
+    // On s'assure que le mode est déjà sur VIDEO avant de record
+    if (cameraMode !== "VIDEO") {
+      setCameraMode("VIDEO");
+    }
 
     setIsRecording(true);
     setRecordingSeconds(0);
     recordingTimer.current = setInterval(() => setRecordingSeconds(s => s + 1), 1000);
-
+    
     // Délai de stabilisation pour Android
-    await new Promise(resolve => setTimeout(resolve, 300));
+    await new Promise(resolve => setTimeout(resolve, 500));
 
-    cameraRef.current.startRecording({
-      onRecordingFinished: (video) => {
-        setIsRecording(false);
-        if (recordingTimer.current) clearInterval(recordingTimer.current);
-        setRecordingSeconds(0);
-        setCaptureData(null, `file://${video.path}`, "video");
+    try {
+      const video = await cameraRef.current.recordAsync({ quality: "720p", maxDuration: 15 });
+      if (video?.uri) {
+        setCaptureData(null, video.uri, "video");
         router.push(`/(app)/groups/${id}/preview`);
-      },
-      onRecordingError: (error) => {
-        console.error("Erreur recording:", error);
-        setIsRecording(false);
-        if (recordingTimer.current) clearInterval(recordingTimer.current);
-        setRecordingSeconds(0);
-      },
-    });
+      }
+    } catch (e: any) {
+      // annulé ou erreur
+      console.error("Erreur recordAsync:", e);
+    } finally {
+      setIsRecording(false);
+      if (recordingTimer.current) clearInterval(recordingTimer.current);
+      setRecordingSeconds(0);
+    }
   };
 
   const stopVideoRecording = () => {
@@ -676,14 +679,16 @@ export default function MainPagerScreen() {
             cameraMode === "TEXTE" ? (
               <View style={styles.textModeContainer}><TextInput style={styles.textModeInput} placeholder="Écris..." placeholderTextColor="rgba(255,255,255,0.3)" multiline value={textModeContent} onChangeText={setTextModeContent} autoFocus disabled={isBlocked} /></View>
             ) : (
-              <StandardCamera
-                ref={cameraRef}
+              <StandardCamera 
+                ref={cameraRef} 
                 isActive={!capturedUri}
-                facing={facing}
+                mode={cameraMode === "VIDEO" ? "video" : "picture"} 
+                facing={facing} 
+                flash={flash} 
                 zoom={zoom}
                 onZoomChange={setZoom}
                 onPinchingChange={setIsPinching}
-                onDoubleTap={() => setFacing(prev => prev === "back" ? "front" : "back")}
+                onDoubleTap={() => setFacing(prev => prev === 'back' ? 'front' : 'back')}
               />
             )
           ) : null}

@@ -17,9 +17,7 @@
       "icon": "./assets/icon.png",
       "buildNumber": "4",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "L'app a besoin de la caméra pour capturer des moments.",
-        "NSMicrophoneUsageDescription": "L'app a besoin du micro pour enregistrer des vidéos."
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -51,11 +49,10 @@
         }
       ],
       [
-        "react-native-vision-camera",
+        "expo-camera",
         {
-          "cameraPermissionText": "L'app a besoin de la caméra pour capturer des moments.",
-          "enableMicrophonePermission": true,
-          "microphonePermissionText": "L'app a besoin du micro pour enregistrer des vidéos."
+          "cameraPermission": "L'app a besoin de la caméra pour capturer des moments.",
+          "microphonePermission": "L'app a besoin du micro pour enregistrer des vidéos."
         }
       ],
       [
@@ -72,9 +69,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "ea274b8a-f2eb-4a8b-a3c7-c4bdd0d6c4c6"
+        "projectId": "65222b8e-774d-4367-b67b-4f7c9799cac1"
       }
     },
-    "owner": "killian3829"
+    "owner": "axel_genin"
   }
 }
