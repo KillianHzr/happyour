@@ -3,7 +3,7 @@ import { Slot } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useFonts, Inter_400Regular, Inter_600SemiBold, Inter_700Bold } from "@expo-google-fonts/inter";
 import { View, StyleSheet } from "react-native";
-// import { GestureHandlerRootView } from "react-native-gesture-handler"; // activer après rebuild natif
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import * as Updates from "expo-updates";
 import { AuthProvider } from "../lib/auth-context";
 import { UploadProvider } from "../lib/upload-context";
@@ -41,6 +41,7 @@ export default function RootLayout() {
   }
 
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <AuthProvider>
       <UploadProvider>
         <ToastProvider>
@@ -58,6 +59,7 @@ export default function RootLayout() {
         </ToastProvider>
       </UploadProvider>
     </AuthProvider>
+    </GestureHandlerRootView>
   );
 }
 

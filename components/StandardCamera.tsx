@@ -1,129 +1,106 @@
-import React, { forwardRef, useEffect, useRef, useState } from "react";
-import { View, StyleSheet, Text, TouchableOpacity } from "react-native";
-import { CameraView, useCameraPermissions, useMicrophonePermissions, FlashMode, CameraType } from "expo-camera";
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Camera, useCameraDevice, useCameraPermission, useMicrophonePermission } from "react-native-vision-camera";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Reanimated, { useAnimatedProps, useSharedValue, runOnJS } from "react-native-reanimated";
+
+const ReanimatedCamera = Reanimated.createAnimatedComponent(Camera);
 
 interface Props {
   isActive?: boolean;
-  facing?: CameraType;
-  flash?: FlashMode;
-  zoom?: number;
-  mode?: "picture" | "video";
+  facing?: "back" | "front";
+  zoom?: number; // normalisé 0–1
   onZoomChange?: (zoom: number) => void;
   onPinchingChange?: (isPinching: boolean) => void;
   onDoubleTap?: () => void;
 }
 
-const StandardCamera = forwardRef<CameraView, Props>(({
+const StandardCamera = forwardRef<Camera, Props>(({
   isActive = true,
-  facing = 'back',
-  flash = 'off',
-  zoom: initialZoom = 0,
-  mode = 'picture',
+  facing = "back",
+  zoom: externalZoom = 0,
   onZoomChange,
   onPinchingChange,
-  onDoubleTap
+  onDoubleTap,
 }, ref) => {
-  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
-  const [micPermission, requestMicPermission] = useMicrophonePermissions();
-  const [localZoom, setLocalZoom] = useState(initialZoom);
+  const { hasPermission: hasCameraPermission, requestPermission: requestCamera } = useCameraPermission();
+  const { hasPermission: hasMicPermission, requestPermission: requestMic } = useMicrophonePermission();
+  const device = useCameraDevice(facing);
 
-  // Zoom persisté entre les gestes sans stale closures
-  const savedZoom = useRef(initialZoom);
-  const gestureStartZoom = useRef(initialZoom);
-  const prevPinchDistance = useRef<number | null>(null);
-  const isPinching = useRef(false);
-  // RAF throttle : évite de re-render React plus vite que l'écran
-  const rafId = useRef<number | null>(null);
-  // Double-tap detection
-  const lastTapTime = useRef(0);
+  const internalRef = useRef<Camera>(null);
+  useImperativeHandle(ref, () => internalRef.current!, []);
+
+  const zoom = useSharedValue(device?.minZoom ?? 1);
+  const startZoom = useSharedValue(device?.minZoom ?? 1);
+
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    if (isPinching.current) return; // ne pas écraser le zoom pendant un geste
-    setLocalZoom(initialZoom);
-    savedZoom.current = initialZoom;
-  }, [initialZoom]);
-
-  useEffect(() => {
-    if (isActive) {
-      (async () => {
-        if (!cameraPermission?.granted) await requestCameraPermission();
-        if (!micPermission?.granted) await requestMicPermission();
-      })();
-    }
+    if (!isActive) return;
+    (async () => {
+      if (!hasCameraPermission) await requestCamera();
+      if (!hasMicPermission) await requestMic();
+      setInitialized(true);
+    })();
   }, [isActive]);
 
-  const scheduleZoomUpdate = () => {
-    if (rafId.current !== null) return; // déjà schedulé pour ce frame
-    rafId.current = requestAnimationFrame(() => {
-      setLocalZoom(savedZoom.current);
-      rafId.current = null;
+  // Reset zoom quand on change de caméra
+  useEffect(() => {
+    if (device) {
+      zoom.value = device.minZoom;
+      startZoom.value = device.minZoom;
+    }
+  }, [device?.id]);
+
+  // Sync zoom externe (0–1) → unités device
+  useEffect(() => {
+    if (!device) return;
+    zoom.value = device.minZoom + externalZoom * (device.maxZoom - device.minZoom);
+  }, [externalZoom]);
+
+  const pinchGesture = Gesture.Pinch()
+    .onStart(() => {
+      startZoom.value = zoom.value;
+      if (onPinchingChange) runOnJS(onPinchingChange)(true);
+    })
+    .onUpdate((e) => {
+      if (!device) return;
+      zoom.value = Math.min(Math.max(startZoom.value * e.scale, device.minZoom), device.maxZoom);
+    })
+    .onEnd(() => {
+      if (onPinchingChange) runOnJS(onPinchingChange)(false);
+      if (onZoomChange && device) {
+        const normalized = (zoom.value - device.minZoom) / (device.maxZoom - device.minZoom);
+        runOnJS(onZoomChange)(Math.min(Math.max(normalized, 0), 1));
+      }
     });
-  };
 
-  const handleTouchStart = (event: any) => {
-    const touches = event.nativeEvent.touches;
-    if (touches.length === 2) {
-      isPinching.current = true;
-      prevPinchDistance.current = null;
-      gestureStartZoom.current = savedZoom.current;
-      onPinchingChange?.(true);
-    } else if (touches.length === 1 && onDoubleTap) {
-      const now = Date.now();
-      if (now - lastTapTime.current < 300) {
-        onDoubleTap();
-        lastTapTime.current = 0; // reset pour éviter triple-tap
-      } else {
-        lastTapTime.current = now;
-      }
-    }
-  };
+  const doubleTapGesture = Gesture.Tap()
+    .numberOfTaps(2)
+    .maxDuration(300)
+    .onEnd(() => {
+      if (onDoubleTap) runOnJS(onDoubleTap)();
+    });
 
-  const handleTouchMove = (event: any) => {
-    const touches = event.nativeEvent.touches;
-    if (touches.length !== 2) return;
+  const composedGesture = Gesture.Race(pinchGesture, doubleTapGesture);
 
-    const dx = touches[1].pageX - touches[0].pageX;
-    const dy = touches[1].pageY - touches[0].pageY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
+  const animatedProps = useAnimatedProps<any>(() => ({
+    zoom: zoom.value,
+  }));
 
-    if (prevPinchDistance.current !== null) {
-      const delta = distance - prevPinchDistance.current;
-      const newZoom = Math.min(Math.max(savedZoom.current + delta * 0.003, 0), 1);
-      savedZoom.current = newZoom;
-      scheduleZoomUpdate(); // throttlé par RAF, pas de re-render en rafale
-    }
-    prevPinchDistance.current = distance;
-  };
-
-  const handleTouchEnd = (event: any) => {
-    if (event.nativeEvent.touches.length < 2) {
-      prevPinchDistance.current = null;
-      if (rafId.current !== null) {
-        cancelAnimationFrame(rafId.current);
-        rafId.current = null;
-      }
-      if (isPinching.current) {
-        isPinching.current = false;
-        setLocalZoom(savedZoom.current);
-        onZoomChange?.(savedZoom.current); // une seule fois, à la fin du geste
-        onPinchingChange?.(false);
-      }
-    }
-  };
-
-  if (!cameraPermission || !micPermission) {
+  if (!initialized) {
     return <View style={styles.container} />;
   }
 
-  if (!cameraPermission.granted || !micPermission.granted) {
+  if (!hasCameraPermission || !hasMicPermission) {
     return (
       <View style={[styles.container, styles.center]}>
         <Text style={styles.errorText}>L'accès à l'appareil photo et au micro est requis.</Text>
         <TouchableOpacity
           style={styles.button}
           onPress={async () => {
-            await requestCameraPermission();
-            await requestMicPermission();
+            await requestCamera();
+            await requestMic();
           }}
         >
           <Text style={styles.buttonText}>Autoriser</Text>
@@ -132,34 +109,27 @@ const StandardCamera = forwardRef<CameraView, Props>(({
     );
   }
 
+  if (!device) {
+    return <View style={styles.container} />;
+  }
+
   return (
-    <View
-      style={styles.container}
-      // Phase capture : on intercepte AVANT que le scroll parent puisse claim
-      onStartShouldSetResponderCapture={(e) => e.nativeEvent.touches.length >= 2}
-      onMoveShouldSetResponderCapture={(e) => e.nativeEvent.touches.length >= 2}
-      onResponderGrant={handleTouchStart}
-      onResponderMove={handleTouchMove}
-      onResponderRelease={handleTouchEnd}
-      onResponderTerminate={handleTouchEnd}
-      // Refuse de rendre le responder à un parent quand on pinche
-      onResponderTerminationRequest={() => !isPinching.current}
-    >
-      {isActive && (
-        <CameraView
-          ref={ref}
-          style={StyleSheet.absoluteFill}
-          facing={facing}
-          flash={flash}
-          zoom={localZoom}
-          mode={mode}
-          enableTorch={false}
-          mirror={facing === 'front'}
-          autofocus="on"
-          responsiveOrientationWhenOrientationLocked
-        />
-      )}
-    </View>
+    <GestureDetector gesture={composedGesture}>
+      <View style={styles.container}>
+        {isActive && (
+          <ReanimatedCamera
+            ref={internalRef}
+            style={StyleSheet.absoluteFill}
+            device={device}
+            isActive={isActive}
+            photo
+            video
+            audio
+            animatedProps={animatedProps}
+          />
+        )}
+      </View>
+    </GestureDetector>
   );
 });
 
