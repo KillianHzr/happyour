@@ -188,6 +188,11 @@ function formatDayLabel(dateStr: string) {
   return { date: dateStr.slice(0, 10), label: `${day}\n${full}` };
 }
 
+function formatTime(dateStr: string) {
+  const d = new Date(dateStr);
+  return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+}
+
 // --- Moment vidéo ---
 function VideoMoment({ moment, isVisible, isNearVisible, onReact, currentUserId }: {
   moment: PhotoEntry;
@@ -247,10 +252,11 @@ function VideoMoment({ moment, isVisible, isNearVisible, onReact, currentUserId 
       <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.momentOverlay}>
         <View style={styles.authorInfo}>
           <UserAvatar avatar_url={moment.avatar_url} username={moment.username} size={40} />
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={styles.username}>{moment.username}</Text>
             {moment.note && <Text style={styles.momentNote} numberOfLines={3}>{moment.note}</Text>}
           </View>
+          <Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text>
         </View>
         <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={onReact} photoId={moment.id} />
         </LinearGradient>
@@ -337,7 +343,10 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
                 <View style={styles.citationAvatar}>
                   <UserAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} />
                 </View>
-                <Text style={styles.citationUsername}>{moment.username}</Text>
+                <View>
+                  <Text style={styles.citationUsername}>{moment.username}</Text>
+                  <Text style={styles.citationTime}>{formatTime(moment.created_at)}</Text>
+                </View>
               </View>
             </View>
           </View>
@@ -353,6 +362,7 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
                 <Text style={styles.username}>{moment.username}</Text>
                 {moment.note && <Text style={styles.momentNote} numberOfLines={2}>{moment.note}</Text>}
               </View>
+              <Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text>
             </View>
           )}
           <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={onReact} photoId={moment.id} />
@@ -417,6 +427,8 @@ const styles = StyleSheet.create({
   citationFooter: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 20 },
   citationAvatar: { borderRadius: 16, overflow: "hidden" },
   citationUsername: { color: "rgba(255,255,255,0.5)", fontFamily: "Inter_600SemiBold", fontSize: 15 },
+  citationTime: { color: "rgba(255,255,255,0.6)", fontFamily: "Inter_600SemiBold", fontSize: 13, marginTop: 3 },
+  momentTime: { color: "rgba(255,255,255,0.75)", fontFamily: "Inter_600SemiBold", fontSize: 14 },
   momentOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 140, paddingTop: 80, gap: 14 },
   authorInfo: { flexDirection: "row", alignItems: "center", gap: 12 },
   username: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 16 },
