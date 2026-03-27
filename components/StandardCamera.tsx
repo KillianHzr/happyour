@@ -1,5 +1,5 @@
 import React, { forwardRef, useEffect, useRef, useState } from "react";
-import { View, StyleSheet, Text, TouchableOpacity } from "react-native";
+import { View, StyleSheet, Text, TouchableOpacity, Dimensions } from "react-native";
 import { CameraView, useCameraPermissions, useMicrophonePermissions, FlashMode, CameraType } from "expo-camera";
 
 interface Props {
@@ -27,18 +27,14 @@ const StandardCamera = forwardRef<CameraView, Props>(({
   const [micPermission, requestMicPermission] = useMicrophonePermissions();
   const [localZoom, setLocalZoom] = useState(initialZoom);
 
-  // Zoom persisté entre les gestes sans stale closures
   const savedZoom = useRef(initialZoom);
-  const gestureStartZoom = useRef(initialZoom);
   const prevPinchDistance = useRef<number | null>(null);
   const isPinching = useRef(false);
-  // RAF throttle : évite de re-render React plus vite que l'écran
   const rafId = useRef<number | null>(null);
-  // Double-tap detection
   const lastTapTime = useRef(0);
 
   useEffect(() => {
-    if (isPinching.current) return; // ne pas écraser le zoom pendant un geste
+    if (isPinching.current) return;
     setLocalZoom(initialZoom);
     savedZoom.current = initialZoom;
   }, [initialZoom]);
@@ -53,7 +49,7 @@ const StandardCamera = forwardRef<CameraView, Props>(({
   }, [isActive]);
 
   const scheduleZoomUpdate = () => {
-    if (rafId.current !== null) return; // déjà schedulé pour ce frame
+    if (rafId.current !== null) return;
     rafId.current = requestAnimationFrame(() => {
       setLocalZoom(savedZoom.current);
       rafId.current = null;
@@ -65,13 +61,12 @@ const StandardCamera = forwardRef<CameraView, Props>(({
     if (touches.length === 2) {
       isPinching.current = true;
       prevPinchDistance.current = null;
-      gestureStartZoom.current = savedZoom.current;
       onPinchingChange?.(true);
     } else if (touches.length === 1 && onDoubleTap) {
       const now = Date.now();
       if (now - lastTapTime.current < 300) {
         onDoubleTap();
-        lastTapTime.current = 0; // reset pour éviter triple-tap
+        lastTapTime.current = 0;
       } else {
         lastTapTime.current = now;
       }
@@ -90,7 +85,7 @@ const StandardCamera = forwardRef<CameraView, Props>(({
       const delta = distance - prevPinchDistance.current;
       const newZoom = Math.min(Math.max(savedZoom.current + delta * 0.003, 0), 1);
       savedZoom.current = newZoom;
-      scheduleZoomUpdate(); // throttlé par RAF, pas de re-render en rafale
+      scheduleZoomUpdate();
     }
     prevPinchDistance.current = distance;
   };
@@ -105,7 +100,7 @@ const StandardCamera = forwardRef<CameraView, Props>(({
       if (isPinching.current) {
         isPinching.current = false;
         setLocalZoom(savedZoom.current);
-        onZoomChange?.(savedZoom.current); // une seule fois, à la fin du geste
+        onZoomChange?.(savedZoom.current);
         onPinchingChange?.(false);
       }
     }
@@ -134,15 +129,13 @@ const StandardCamera = forwardRef<CameraView, Props>(({
 
   return (
     <View
-      style={styles.container}
-      // Phase capture : on intercepte AVANT que le scroll parent puisse claim
+      style={styles.cameraWrapper}
       onStartShouldSetResponderCapture={(e) => e.nativeEvent.touches.length >= 2}
       onMoveShouldSetResponderCapture={(e) => e.nativeEvent.touches.length >= 2}
       onResponderGrant={handleTouchStart}
       onResponderMove={handleTouchMove}
       onResponderRelease={handleTouchEnd}
       onResponderTerminate={handleTouchEnd}
-      // Refuse de rendre le responder à un parent quand on pinche
       onResponderTerminationRequest={() => !isPinching.current}
     >
       {isActive && (
@@ -168,6 +161,13 @@ export default StandardCamera;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
+  cameraWrapper: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: "#000",
+    borderRadius: 32,
+    overflow: "hidden",
+  },
   center: { justifyContent: "center", alignItems: "center", padding: 40 },
   errorText: { color: "#FFF", textAlign: "center", marginBottom: 20, fontFamily: "Inter_400Regular" },
   button: { backgroundColor: "#FFF", paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },

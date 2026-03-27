@@ -34,6 +34,8 @@ export async function registerForPushNotifications(userId: string) {
       await Notifications.setNotificationChannelAsync("default", {
         name: "default",
         importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: "#FF231F7C",
       });
     }
 
@@ -72,7 +74,14 @@ export async function sendPushToTokens(
   data?: Record<string, unknown>
 ) {
   if (tokens.length === 0) return;
-  const messages = tokens.map((to) => ({ to, title, body, sound: "default" as const, data }));
+  const messages = tokens.map((to) => ({
+    to,
+    title,
+    body,
+    sound: "default" as const,
+    data,
+    channelId: "default",
+  }));
   try {
     await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
@@ -120,6 +129,7 @@ export async function scheduleRecapNotification(
         title: "Le coffre est ouvert !",
         body: `Les moments de "${groupName}" sont disponibles`,
         data: { type: "recap", groupId },
+        channelId: "default",
       },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: secondsUntil },
     });
@@ -210,7 +220,7 @@ export async function scheduleImmediateLocalNotification(title: string, body: st
   if (!Notifications) return;
   try {
     await Notifications.scheduleNotificationAsync({
-      content: { title, body, data },
+      content: { title, body, data, channelId: "default" },
       trigger: null,
     });
   } catch (e) {
