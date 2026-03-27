@@ -1,32 +1,12 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Notifications from "expo-notifications";
+import * as Device from "expo-device";
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 import { supabase } from "./supabase";
 
-// Detect Expo Go
-const isExpoGo = Constants.appOwnership === "expo";
-
-// Only require expo-notifications in dev builds / standalone
-let Notifications: typeof import("expo-notifications") | null = null;
-if (!isExpoGo) {
-  try {
-    Notifications = require("expo-notifications");
-  } catch {
-    // module not available
-  }
-}
-
-let Device: typeof import("expo-device") | null = null;
-if (!isExpoGo) {
-  try {
-    Device = require("expo-device");
-  } catch {}
-}
-
 // ── Register & Token ──
 
 export async function registerForPushNotifications(userId: string) {
-  if (!Notifications || !Device) return;
   if (!Device.isDevice) return;
 
   try {
@@ -83,7 +63,7 @@ export async function sendPushToTokens(
     channelId: "default",
   }));
   try {
-    await fetch("https://exp.host/--/api/v2/push/send", {
+    const res = await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -91,6 +71,8 @@ export async function sendPushToTokens(
       },
       body: JSON.stringify(messages),
     });
+    const result = await res.json();
+    console.log("[Push Notification] Result:", JSON.stringify(result));
   } catch (e) {
     console.error("sendPushToTokens error:", e);
   }
@@ -118,7 +100,6 @@ export async function scheduleRecapNotification(
   groupName: string,
   unlockDate: Date
 ) {
-  if (!Notifications) return;
   const now = new Date();
   const secondsUntil = Math.floor((unlockDate.getTime() - now.getTime()) / 1000);
   if (secondsUntil <= 0) return;
@@ -139,7 +120,6 @@ export async function scheduleRecapNotification(
 }
 
 export async function cancelAllRecapNotifications() {
-  if (!Notifications) return;
   try {
     const all = await Notifications.getAllScheduledNotificationsAsync();
     for (const n of all) {
@@ -153,7 +133,6 @@ export async function cancelAllRecapNotifications() {
 }
 
 export async function scheduleAllRecaps(userId: string) {
-  if (!Notifications) return;
   await cancelAllRecapNotifications();
   const { data: memberships } = await supabase
     .from("group_members")
@@ -217,7 +196,6 @@ export function setupNotificationHandler() {
 }
 
 export async function scheduleImmediateLocalNotification(title: string, body: string, data?: any) {
-  if (!Notifications) return;
   try {
     await Notifications.scheduleNotificationAsync({
       content: { title, body, data, channelId: "default" },
