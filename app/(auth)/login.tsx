@@ -16,7 +16,7 @@ import { colors, theme } from "../../lib/theme";
 import Loader from "../../components/Loader";
 
 export default function LoginScreen() {
-  const { login } = useAuth();
+  const { login, resetPassword } = useAuth();
   const { showToast } = useToast();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -28,6 +28,19 @@ export default function LoginScreen() {
     try {
       await login(email, password);
       router.replace("/");
+    } catch (e: any) {
+      showToast("Erreur", translateError(e.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!email) return showToast("Attention", "Entre ton email pour réinitialiser ton mot de passe.");
+    setLoading(true);
+    try {
+      await resetPassword(email);
+      showToast("Succès", "Un email de réinitialisation a été envoyé.");
     } catch (e: any) {
       showToast("Erreur", translateError(e.message));
     } finally {
@@ -62,6 +75,10 @@ export default function LoginScreen() {
           value={password}
           onChangeText={setPassword}
         />
+
+        <TouchableOpacity style={styles.forgotBtn} onPress={handleResetPassword}>
+          <Text style={styles.forgotText}>Mot de passe oublié ?</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity style={[theme.accentButton, styles.button]} onPress={handleLogin} disabled={loading}>
           {loading ? (
@@ -116,4 +133,6 @@ const styles = StyleSheet.create({
   button: { marginTop: 12, height: 58, justifyContent: "center" },
   linkBtn: { marginTop: 32, alignItems: "center" },
   link: { fontFamily: "Inter_400Regular", color: colors.secondary, fontSize: 13, textDecorationLine: "underline" },
+  forgotBtn: { alignSelf: "flex-end", marginBottom: 24, marginTop: -8 },
+  forgotText: { fontFamily: "Inter_400Regular", color: colors.secondary, fontSize: 13, opacity: 0.8 },
 });

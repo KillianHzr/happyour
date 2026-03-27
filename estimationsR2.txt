@@ -1,0 +1,22 @@
+ESTIMATION BÊTA R2 - 26/03/2026
+
+- Utilisateurs : 20 grp × 10 pers = 200 pers
+- Total fichiers : 200 pers × 20 moments = 4 000 fichiers
+- Poids moyen (IMG/VID) : 2,5 Mo
+
+---
+
+- Stockage : 4 000 × 2,5 Mo = 10 Go
+  (Limite Free Tier : 10 Go) -> 0,00 $
+
+- Opérations A (Uploads) : 4 000
+  (Limite Free Tier : 1 000 000) -> 0,00 $
+
+- Opérations B (Vues) : 4 000 fichiers × 10 vues/pers = 40 000
+  (Limite Free Tier : 10 000 000) -> 0,00 $
+
+- Egress (Transfert) : Gratuit illimité -> 0,00 $
+
+---
+
+TOTAL ESTIMÉ : 0,00 $ / MOIS

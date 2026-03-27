@@ -6,9 +6,11 @@ type AuthState = {
   session: Session | null;
   user: User | null;
   loading: boolean;
+  isOffline: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, username: string) => Promise<void>;
   logout: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -16,18 +18,27 @@ const AuthContext = createContext<AuthState | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isOffline, setIsOffline] = useState(false); // Désactivé (nécessite rebuild natif)
 
   useEffect(() => {
+    // Get initial session from storage
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
+      if (session) setSession(session);
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // Important: Only clear session if it's a real sign out
+      if (event === "SIGNED_OUT") {
+        setSession(null);
+      } else if (session) {
+        setSession(session);
+      }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const login = async (email: string, password: string) => {
@@ -49,9 +60,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   };
 
+  const resetPassword = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: "https://app-gobelins-m2-landing.vercel.app/reset-password",
+    });
+    if (error) throw error;
+  };
+
   return (
     <AuthContext.Provider
-      value={{ session, user: session?.user ?? null, loading, login, register, logout }}
+      value={{ session, user: session?.user ?? null, loading, isOffline, login, register, logout, resetPassword }}
     >
       {children}
     </AuthContext.Provider>

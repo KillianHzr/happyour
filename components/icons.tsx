@@ -86,8 +86,9 @@ export function VaultIcon({ size = 22, color = "#fff" }: IconProps) {
 
 export function MomentIcon({ size = 22, color = "#fff" }: IconProps) {
   const outerSize = size;
-  const innerSize = size * 0.5;
   const bw = size * 0.08;
+  const plusSize = size * 0.5;
+  const plusThickness = size * 0.08;
 
   return (
     <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
@@ -102,12 +103,24 @@ export function MomentIcon({ size = 22, color = "#fff" }: IconProps) {
           justifyContent: "center",
         }}
       >
+        {/* Horizontal bar */}
         <View
           style={{
-            width: innerSize,
-            height: innerSize,
-            borderRadius: innerSize / 2,
+            position: "absolute",
+            width: plusSize,
+            height: plusThickness,
             backgroundColor: color,
+            borderRadius: plusThickness / 2,
+          }}
+        />
+        {/* Vertical bar */}
+        <View
+          style={{
+            position: "absolute",
+            width: plusThickness,
+            height: plusSize,
+            backgroundColor: color,
+            borderRadius: plusThickness / 2,
           }}
         />
       </View>
