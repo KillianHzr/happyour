@@ -54,7 +54,7 @@ export default function LoginScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <View style={styles.logoMark} />
-      <Text style={styles.title}>[noname]</Text>
+      <Text style={styles.title}>HappyOur</Text>
       <Text style={styles.subtitle}>Espace membre privé</Text>
 
       <View style={styles.form}>
