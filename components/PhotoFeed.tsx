@@ -63,6 +63,28 @@ const ReactIcon = () => (
   </Svg>
 );
 
+function ExpandableNote({ text, maxLines }: { text: string; maxLines: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const [isTruncated, setIsTruncated] = useState(false);
+
+  return (
+    <TouchableOpacity onPress={() => expanded ? setExpanded(false) : isTruncated && setExpanded(true)} activeOpacity={0.8}>
+      <Text
+        style={styles.momentNote}
+        numberOfLines={expanded ? undefined : maxLines}
+        onTextLayout={(e) => {
+          if (!expanded) setIsTruncated(e.nativeEvent.lines.length >= maxLines);
+        }}
+      >
+        {text}
+      </Text>
+      {!expanded && isTruncated && (
+        <Text style={styles.noteExpand}>voir plus</Text>
+      )}
+    </TouchableOpacity>
+  );
+}
+
 function PhotoImage({ url, fallback_url }: { url: string; fallback_url?: string }) {
   const [src, setSrc] = useState(url);
   return (
@@ -209,8 +231,14 @@ function VideoMoment({ moment, isVisible, isNearVisible, onReact, currentUserId 
   const insets = useSafeAreaInsets();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [videoUrl, setVideoUrl] = useState(moment.url);
 
-  const player = useVideoPlayer(isNearVisible ? moment.url : null, (p) => {
+  const player = useVideoPlayer(isNearVisible ? videoUrl : null, (p) => {
+    p.addListener("statusChange", (status) => {
+      if (status.error && moment.fallback_url && videoUrl !== moment.fallback_url) {
+        setVideoUrl(moment.fallback_url);
+      }
+    });
     p.loop = true;
     p.muted = false;
     if (isVisible && !isPaused) p.play();
@@ -259,7 +287,7 @@ function VideoMoment({ moment, isVisible, isNearVisible, onReact, currentUserId 
               <UserAvatar avatar_url={moment.avatar_url} username={moment.username} size={40} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.username}>{moment.username}</Text>
-                {moment.note && <Text style={styles.momentNote} numberOfLines={3}>{moment.note}</Text>}
+                {moment.note && <ExpandableNote text={moment.note} maxLines={3} />}
               </View>
               <Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text>
               <TouchableOpacity style={styles.reactBtnInline} onPress={() => setPickerOpen(true)}>
@@ -369,7 +397,7 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
                   <UserAvatar avatar_url={moment.avatar_url} username={moment.username} size={40} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.username}>{moment.username}</Text>
-                    {moment.note && <Text style={styles.momentNote} numberOfLines={2}>{moment.note}</Text>}
+                    {moment.note && <ExpandableNote text={moment.note} maxLines={2} />}
                   </View>
                   <Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text>
                   <TouchableOpacity style={styles.reactBtnInline} onPress={() => setOpenPickerId(moment.id)}>
@@ -442,6 +470,7 @@ const styles = StyleSheet.create({
   authorInfo: { flexDirection: "row", alignItems: "center", gap: 12 },
   username: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 16 },
   momentNote: { color: "rgba(255,255,255,0.75)", fontFamily: "Inter_400Regular", fontSize: 14, marginTop: 3 },
+  noteExpand: { color: "rgba(255,255,255,0.45)", fontFamily: "Inter_600SemiBold", fontSize: 12, marginTop: 2 },
   reactionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   reactionBubble: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 20, paddingHorizontal: 8, paddingVertical: 5, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
   reactionBubbleMine: { backgroundColor: "rgba(255,255,255,0.28)", borderColor: "rgba(255,255,255,0.4)" },
