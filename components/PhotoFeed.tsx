@@ -32,6 +32,7 @@ export type Reaction = {
 export type PhotoEntry = {
   id: string;
   url: string;
+  fallback_url?: string;
   created_at: string;
   note: string | null;
   username: string;
@@ -61,6 +62,18 @@ const ReactIcon = () => (
     />
   </Svg>
 );
+
+function PhotoImage({ url, fallback_url }: { url: string; fallback_url?: string }) {
+  const [src, setSrc] = useState(url);
+  return (
+    <Image
+      source={{ uri: src }}
+      style={StyleSheet.absoluteFill}
+      contentFit="cover"
+      onError={() => { if (fallback_url && src !== fallback_url) setSrc(fallback_url); }}
+    />
+  );
+}
 
 function UserAvatar({ avatar_url, username, size = 28 }: { avatar_url?: string | null; username: string; size?: number }) {
   const borderRadius = size / 2;
@@ -346,7 +359,7 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
               </View>
             </View>
           ) : (
-            <Image source={{ uri: moment.url }} style={StyleSheet.absoluteFill} contentFit="cover" />
+            <PhotoImage url={moment.url} fallback_url={moment.fallback_url} />
           )}
 
           <View style={StyleSheet.absoluteFill} pointerEvents="box-none">

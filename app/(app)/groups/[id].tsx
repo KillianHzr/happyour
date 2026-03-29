@@ -235,6 +235,7 @@ export default function MainPagerScreen() {
         const entries: PhotoEntry[] = photosRes.data.map((p: any) => ({
           id: p.id,
           url: p.image_path === "text_mode" ? "" : r2Storage.getPublicUrl(p.image_path),
+          fallback_url: p.image_path === "text_mode" ? undefined : supabase.storage.from("moments").getPublicUrl(p.image_path).data.publicUrl,
           created_at: p.created_at,
           note: p.note ?? null,
           username: p.profiles?.username ?? "Anonyme",
