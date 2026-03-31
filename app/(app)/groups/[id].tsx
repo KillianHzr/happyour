@@ -167,6 +167,8 @@ export default function MainPagerScreen() {
   const [debugUnlocked, setDebugUnlocked] = useState(false);
   const [revealConfig, setRevealConfig] = useState({ day: 0, hour: 20 });
   const { revealDate } = getWeekBounds(revealConfig.day, revealConfig.hour);
+  const nextRevealDate = new Date(revealDate);
+  nextRevealDate.setDate(revealDate.getDate() + 7);
   const unlocked = __DEV__ ? debugUnlocked : new Date() >= revealDate;
 
   const fetchData = useCallback(async () => {
@@ -714,7 +716,7 @@ export default function MainPagerScreen() {
         {/* PAGE 2: VAULT (Slides over Camera) */}
         <View key="page-2" style={[styles.page, { zIndex: 10 }]}>
           {unlocked ? (
-            <View style={styles.vaultUnlocked}><PhotoFeed photos={photos} onReact={handleReact} currentUserId={user?.id} nextUnlockDate={revealDate} /></View>
+            <View style={styles.vaultUnlocked}><PhotoFeed photos={photos} onReact={handleReact} currentUserId={user?.id} nextUnlockDate={nextRevealDate} /></View>
           ) : (
             <ScrollView style={[styles.pageContent, { paddingTop: insets.top + 40 }]} contentContainerStyle={{ paddingBottom: 160 }} showsVerticalScrollIndicator={false}>
               <View style={styles.vaultHeader}><Text style={styles.pageTitleNoPad}>{groupName || "Groupe"}</Text><TouchableOpacity onPress={() => setShowMembersModal(true)} style={styles.groupBtn}>{isAdmin ? <GroupAddIcon /> : <GroupIcon />}</TouchableOpacity></View>

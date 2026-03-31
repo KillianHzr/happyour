@@ -68,14 +68,17 @@ function ExpandableNote({ text, maxLines }: { text: string; maxLines: number }) 
   const [isTruncated, setIsTruncated] = useState(false);
 
   return (
-    <TouchableOpacity onPress={() => expanded ? setExpanded(false) : isTruncated && setExpanded(true)} activeOpacity={0.8}>
-      <Text
-        style={styles.momentNote}
-        numberOfLines={expanded ? undefined : maxLines}
-        onTextLayout={(e) => {
-          if (!expanded) setIsTruncated(e.nativeEvent.lines.length >= maxLines);
-        }}
-      >
+    <TouchableOpacity onPress={() => isTruncated && setExpanded(v => !v)} activeOpacity={0.8}>
+      {/* Texte caché sans limite pour mesurer le vrai nombre de lignes */}
+      <View style={{ height: 0, overflow: 'hidden' }}>
+        <Text
+          style={styles.momentNote}
+          onTextLayout={(e) => setIsTruncated(e.nativeEvent.lines.length > maxLines)}
+        >
+          {text}
+        </Text>
+      </View>
+      <Text style={styles.momentNote} numberOfLines={expanded ? undefined : maxLines}>
         {text}
       </Text>
       {!expanded && isTruncated && (
@@ -92,6 +95,7 @@ function PhotoImage({ url, fallback_url }: { url: string; fallback_url?: string 
       source={{ uri: src }}
       style={StyleSheet.absoluteFill}
       contentFit="cover"
+      contentPosition={{ top: 0, left: "50%" }}
       onError={() => { if (fallback_url && src !== fallback_url) setSrc(fallback_url); }}
     />
   );
@@ -244,6 +248,7 @@ function VideoMoment({ moment, isVisible, isNearVisible, onReact, currentUserId 
     if (isVisible && !isPaused) p.play();
   });
 
+  const isOwn = moment.user_id === currentUserId;
   const myReaction = moment.reactions.find((r) => r.user_id === currentUserId)?.sticker_id ?? null;
 
   useEffect(() => {
@@ -284,21 +289,25 @@ function VideoMoment({ moment, isVisible, isNearVisible, onReact, currentUserId 
         <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
           <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.momentOverlay}>
             <View style={styles.authorInfo}>
-              <UserAvatar avatar_url={moment.avatar_url} username={moment.username} size={40} />
+              <UserAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.username}>{moment.username}</Text>
+                <View style={styles.usernameLine}>
+                  <Text style={styles.username}>{moment.username}</Text>
+                  <Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text>
+                </View>
                 {moment.note && <ExpandableNote text={moment.note} maxLines={3} />}
               </View>
-              <Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text>
-              <TouchableOpacity style={styles.reactBtnInline} onPress={() => setPickerOpen(true)}>
-                <ReactIcon />
-              </TouchableOpacity>
+              {!isOwn && (
+                <TouchableOpacity style={styles.reactBtnInline} onPress={() => setPickerOpen(true)}>
+                  <ReactIcon />
+                </TouchableOpacity>
+              )}
             </View>
-            <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={onReact} photoId={moment.id} />
+            <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={isOwn ? undefined : onReact} photoId={moment.id} />
           </LinearGradient>
         </View>
       </View>
-      <StickerPicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={(sid) => onReact?.(moment.id, sid)} myReaction={myReaction} />
+      {!isOwn && <StickerPicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={(sid) => onReact?.(moment.id, sid)} myReaction={myReaction} />}
     </View>
   );
 }
@@ -346,7 +355,7 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
       return (
         <View style={styles.fullscreenPage}>
           <View style={styles.endLogoMark} />
-          <Text style={styles.endTitle}>Semaine terminée.</Text>
+          <Text style={styles.endTitle}>Reveal terminé.</Text>
           <Text style={styles.endSubtitle}>Prochain rewind dans :</Text>
           <EndCountdown targetDate={nextUnlockDate} />
         </View>
@@ -356,6 +365,7 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
     const moment = item.data;
     const isTextOnly = moment.image_path === "text_mode";
     const isVideo = moment.image_path.endsWith(".mp4");
+    const isOwn = moment.user_id === currentUserId;
     const textLen = moment.note?.length ?? 0;
     const fontSize = textLen <= 40 ? 32 : textLen <= 100 ? 26 : textLen <= 200 ? 21 : textLen <= 300 ? 17 : 15;
     const myReaction = moment.reactions.find((r) => r.user_id === currentUserId)?.sticker_id ?? null;
@@ -380,9 +390,11 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
                     <Text style={styles.citationUsername}>{moment.username}</Text>
                     <Text style={styles.citationTime}>{formatTime(moment.created_at)}</Text>
                   </View>
-                  <TouchableOpacity style={styles.reactBtnInline} onPress={() => setOpenPickerId(moment.id)}>
-                    <ReactIcon />
-                  </TouchableOpacity>
+                  {!isOwn && (
+                    <TouchableOpacity style={styles.reactBtnInline} onPress={() => setOpenPickerId(moment.id)}>
+                      <ReactIcon />
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
             </View>
@@ -394,28 +406,34 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
             <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.momentOverlay}>
               {!isTextOnly && (
                 <View style={styles.authorInfo}>
-                  <UserAvatar avatar_url={moment.avatar_url} username={moment.username} size={40} />
+                  <UserAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} />
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.username}>{moment.username}</Text>
+                    <View style={styles.usernameLine}>
+                      <Text style={styles.username}>{moment.username}</Text>
+                      <Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text>
+                    </View>
                     {moment.note && <ExpandableNote text={moment.note} maxLines={2} />}
                   </View>
-                  <Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text>
-                  <TouchableOpacity style={styles.reactBtnInline} onPress={() => setOpenPickerId(moment.id)}>
-                    <ReactIcon />
-                  </TouchableOpacity>
+                  {!isOwn && (
+                    <TouchableOpacity style={styles.reactBtnInline} onPress={() => setOpenPickerId(moment.id)}>
+                      <ReactIcon />
+                    </TouchableOpacity>
+                  )}
                 </View>
               )}
-              <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={onReact} photoId={moment.id} />
+              <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={isOwn ? undefined : onReact} photoId={moment.id} />
             </LinearGradient>
           </View>
         </View>
 
-        <StickerPicker
-          visible={openPickerId === moment.id}
-          onClose={() => setOpenPickerId(null)}
-          onSelect={(sid) => { onReact?.(moment.id, sid); setOpenPickerId(null); }}
-          myReaction={myReaction}
-        />
+        {!isOwn && (
+          <StickerPicker
+            visible={openPickerId === moment.id}
+            onClose={() => setOpenPickerId(null)}
+            onSelect={(sid) => { onReact?.(moment.id, sid); setOpenPickerId(null); }}
+            myReaction={myReaction}
+          />
+        )}
       </View>
     );
   };
@@ -465,11 +483,12 @@ const styles = StyleSheet.create({
   citationAvatar: { borderRadius: 16, overflow: "hidden" },
   citationUsername: { color: "rgba(255,255,255,0.5)", fontFamily: "Inter_600SemiBold", fontSize: 15 },
   citationTime: { color: "rgba(255,255,255,0.6)", fontFamily: "Inter_600SemiBold", fontSize: 13, marginTop: 3 },
-  momentTime: { color: "rgba(255,255,255,0.75)", fontFamily: "Inter_600SemiBold", fontSize: 14 },
+  momentTime: { color: "rgba(255,255,255,0.55)", fontFamily: "Inter_600SemiBold", fontSize: 12 },
   momentOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 32, paddingTop: 80, gap: 14 },
-  authorInfo: { flexDirection: "row", alignItems: "center", gap: 12 },
-  username: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 16 },
-  momentNote: { color: "rgba(255,255,255,0.75)", fontFamily: "Inter_400Regular", fontSize: 14, marginTop: 3 },
+  authorInfo: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  usernameLine: { flexDirection: "row", alignItems: "center", gap: 8 },
+  username: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 14 },
+  momentNote: { color: "rgba(255,255,255,0.75)", fontFamily: "Inter_400Regular", fontSize: 12, marginTop: 3 },
   noteExpand: { color: "rgba(255,255,255,0.45)", fontFamily: "Inter_600SemiBold", fontSize: 12, marginTop: 2 },
   reactionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   reactionBubble: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 20, paddingHorizontal: 8, paddingVertical: 5, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
