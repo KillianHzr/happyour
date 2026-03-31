@@ -580,8 +580,6 @@ export default function MainPagerScreen() {
             <View style={styles.settingsSection}>
               <Text style={styles.settingsSectionLabel}>Compte</Text>
               <View style={styles.settingsCard}>
-                <TouchableOpacity style={styles.settingsRow} onPress={() => { setNewUsername(username); setIsEditingUsername(true); }}><View style={[styles.settingsIconWrap, { backgroundColor: "rgba(129,140,248,0.15)" }]}><Svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#818CF8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><Path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><Circle cx="12" cy="7" r="4"/></Svg></View><View style={styles.settingsTextCol}><Text style={styles.settingsLabel}>Pseudo</Text><Text style={styles.settingsSubValue}>{username}</Text></View><Svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><Path d="M9 18l6-6-6-6"/></Svg></TouchableOpacity>
-                <View style={styles.settingsDivider} />
                 <View style={styles.settingsRow}><View style={[styles.settingsIconWrap, { backgroundColor: "rgba(251,191,36,0.12)" }]}><Svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FBB824" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><Path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><Path d="M22 6l-10 7L2 6"/></Svg></View><View style={styles.settingsTextCol}><Text style={styles.settingsLabel}>Email</Text><Text style={styles.settingsSubValue}>{email || user?.email}</Text></View></View>
               </View>
               <Text style={[styles.settingsSectionLabel, { marginTop: 28 }]}>Session</Text>
