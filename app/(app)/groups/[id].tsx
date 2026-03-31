@@ -141,6 +141,9 @@ export default function MainPagerScreen() {
   const [currentPage, setCurrentPage] = useState(1); 
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [leaveNextAdmin, setLeaveNextAdmin] = useState<string | null>(null);
+  const [isLeaving, setIsLeaving] = useState(false);
 
   // -- Camera State --
   const cameraRef = useRef<CameraView>(null);
@@ -480,6 +483,38 @@ export default function MainPagerScreen() {
     setZoom(newZoom);
   };
 
+  const openLeaveModal = () => {
+    const others = members.filter((m: any) => m.user_id !== user?.id);
+    setLeaveNextAdmin(isAdmin && others.length > 0 ? others[0].username : null);
+    setShowLeaveModal(true);
+  };
+
+  const handleLeaveGroup = async () => {
+    if (!user || !id) return;
+    setIsLeaving(true);
+    try {
+      const others = members.filter((m: any) => m.user_id !== user.id);
+      if (isAdmin && others.length > 0) {
+        await supabase
+          .from("group_members")
+          .update({ role: "admin" })
+          .eq("group_id", id)
+          .eq("user_id", others[0].user_id);
+      }
+      await supabase
+        .from("group_members")
+        .delete()
+        .eq("group_id", id)
+        .eq("user_id", user.id);
+      router.replace("/(app)/groups");
+    } catch (e: any) {
+      Alert.alert("Erreur", e.message);
+    } finally {
+      setIsLeaving(false);
+      setShowLeaveModal(false);
+    }
+  };
+
   const handleRemoveMember = async (memberId: string) => {
     try {
       await supabase.from("group_members").delete().eq("group_id", id).eq("user_id", memberId);
@@ -561,17 +596,28 @@ export default function MainPagerScreen() {
               <View style={styles.textModeContainer}><TextInput style={styles.textModeInput} placeholder="Écris..." placeholderTextColor="rgba(255,255,255,0.3)" multiline value={textModeContent} onChangeText={setTextModeContent} autoFocus disabled={isBlocked} /></View>
             ) : (
               <View style={[styles.cameraPageContainer, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12, paddingHorizontal: 12 }]}>
-                <StandardCamera 
-                  ref={cameraRef} 
-                  isActive={!capturedUri}
-                  mode={cameraMode === "VIDEO" ? "video" : "picture"} 
-                  facing={facing} 
-                  flash={flash} 
-                  zoom={zoom}
-                  onZoomChange={setZoom}
-                  onPinchingChange={setIsPinching}
-                  onDoubleTap={() => setFacing(prev => prev === 'back' ? 'front' : 'back')}
-                />
+                <View style={styles.cameraInner}>
+                  <StandardCamera
+                    ref={cameraRef}
+                    isActive={!capturedUri}
+                    mode={cameraMode === "VIDEO" ? "video" : "picture"}
+                    facing={facing}
+                    flash={flash}
+                    zoom={zoom}
+                    onZoomChange={setZoom}
+                    onPinchingChange={setIsPinching}
+                    onDoubleTap={() => setFacing(prev => prev === 'back' ? 'front' : 'back')}
+                  />
+                  {cameraMode !== "TEXTE" && (
+                    <TouchableOpacity
+                      style={styles.flashBtn}
+                      onPress={() => setFlash(prev => prev === 'off' ? 'on' : prev === 'on' ? 'auto' : 'off')}
+                      disabled={isBlocked}
+                    >
+                      <FlashIcon mode={flash} />
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
             )
           ) : null}
@@ -579,16 +625,6 @@ export default function MainPagerScreen() {
           {/* Camera UI Overlay */}
           {!capturedUri && (
             <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-              {cameraMode !== "TEXTE" && (
-                <TouchableOpacity 
-                  style={[styles.topControlBtn, { top: Math.max(insets.top, 28), right: 28 }]} 
-                  onPress={() => setFlash(prev => prev === 'off' ? 'on' : prev === 'on' ? 'auto' : 'off')} 
-                  disabled={isBlocked}
-                >
-                  <FlashIcon mode={flash} />
-                </TouchableOpacity>
-              )}
-
               {isRecording && (
                 <View style={[styles.recordingTimer, { top: Math.max(insets.top, 40) }]}>
                   <View style={styles.recordingDot} />
@@ -737,6 +773,32 @@ export default function MainPagerScreen() {
           <TouchableOpacity style={styles.tab} onPress={() => jumpTo(2)} disabled={isEditing}><VaultIcon color={currentPage === 2 ? "#FFF" : "rgba(255,255,255,0.4)"} size={24} /><Text style={[styles.tabLabel, currentPage === 2 && styles.tabLabelActive]}>Coffre</Text></TouchableOpacity>
         </View>
       </View>
+      <Modal visible={showLeaveModal} transparent animationType="fade" onRequestClose={() => setShowLeaveModal(false)}>
+        <Pressable style={styles.leaveModalOverlay} onPress={() => setShowLeaveModal(false)}>
+          <Pressable style={styles.leaveModalSheet} onPress={() => {}}>
+            <View style={styles.editSheetHandle} />
+            <Text style={styles.leaveModalTitle}>Quitter le groupe</Text>
+            <Text style={styles.leaveModalBody}>
+              {isAdmin && leaveNextAdmin
+                ? `Tu es admin. Le rôle d'administrateur sera automatiquement transféré à ${leaveNextAdmin}.`
+                : "Tu ne pourras plus accéder aux moments de ce groupe."}
+            </Text>
+            <TouchableOpacity
+              style={styles.leaveModalConfirmBtn}
+              onPress={handleLeaveGroup}
+              disabled={isLeaving}
+            >
+              {isLeaving
+                ? <ActivityIndicator color="#FFF" />
+                : <Text style={styles.leaveModalConfirmText}>Quitter le groupe</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.editSheetCancel} onPress={() => setShowLeaveModal(false)}>
+              <Text style={styles.editSheetCancelText}>Annuler</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <Modal visible={showMembersModal} animationType="slide" transparent onRequestClose={() => setShowMembersModal(false)}>
         <View style={styles.darkModalOverlay}>
           <View style={[styles.modalContent, { paddingTop: insets.top + 40 }]}>
@@ -751,7 +813,18 @@ export default function MainPagerScreen() {
                   </TouchableOpacity>
                 )}
               </View>
-            )} ListFooterComponent={() => isAdmin ? ( <TouchableOpacity style={[theme.outlineButton, styles.inviteModalBtn]} onPress={() => { setShowMembersModal(false); router.push(`/(app)/groups/${id}/invite`); }}><Text style={theme.outlineButtonText}>Ajouter un membre</Text></TouchableOpacity> ) : null} />
+            )} ListFooterComponent={() => (
+              <View style={styles.membersFooter}>
+                {isAdmin && (
+                  <TouchableOpacity style={[theme.outlineButton, styles.inviteModalBtn]} onPress={() => { setShowMembersModal(false); router.push(`/(app)/groups/${id}/invite`); }}>
+                    <Text style={theme.outlineButtonText}>Ajouter un membre</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity style={styles.leaveGroupBtn} onPress={openLeaveModal}>
+                  <Text style={styles.leaveGroupBtnText}>Quitter le groupe</Text>
+                </TouchableOpacity>
+              </View>
+            )} />
           </View>
         </View>
       </Modal>
@@ -807,7 +880,6 @@ const styles = StyleSheet.create({
   memberAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center", overflow: "hidden" },
   memberAvatarText: { color: "#FFF", fontFamily: "Inter_700Bold" },
   memberName: { color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 16 },
-  inviteModalBtn: { marginTop: 24, marginBottom: 40 },
   debugBtn: { marginHorizontal: 24, marginTop: 24, marginBottom: 16, paddingVertical: 12, borderRadius: 12, backgroundColor: "rgba(255,200,0,0.15)", borderWidth: 1, borderColor: "rgba(255,200,0,0.4)", alignItems: "center" },
   debugBtnText: { color: "#FFD700", fontFamily: "Inter_600SemiBold", fontSize: 14 },
   cameraFooter: { position: "absolute", left: 0, right: 0, alignItems: "center", gap: 24 },
@@ -823,7 +895,7 @@ const styles = StyleSheet.create({
   captureInner: { width: 66, height: 66, borderRadius: 33, backgroundColor: "#FFF", justifyContent: "center", alignItems: "center" },
   captureInnerVideo: { backgroundColor: "#FF3B30" },
   captureInnerRecording: { width: 30, height: 30, borderRadius: 6 },
-  topControlBtn: { position: "absolute", width: 48, height: 48, borderRadius: 24, backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "center", alignItems: "center" },
+  flashBtn: { position: "absolute", top: 16, right: 16, width: 48, height: 48, borderRadius: 24, backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "center", alignItems: "center" },
   recordingTimer: { position: "absolute", alignSelf: "center", flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, gap: 8 },
   recordingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#FF3B30" },
   recordingText: { color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 14 },
@@ -835,6 +907,7 @@ const styles = StyleSheet.create({
   tabLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold", color: "rgba(255,255,255,0.4)" },
   tabLabelActive: { color: "#FFF" },
   cameraPageContainer: { flex: 1, backgroundColor: "#000", alignItems: "center" },
+  cameraInner: { flex: 1, width: "100%" },
   previewContainer: { flex: 1, backgroundColor: "#000", alignItems: "center" },
   previewImageWrapper: { flex: 1, width: '100%', borderRadius: 32, overflow: "hidden", backgroundColor: "#1A1A1A" },
   previewImage: { width: "100%", height: "100%" },
@@ -867,7 +940,16 @@ const styles = StyleSheet.create({
   memberAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center", overflow: "hidden" },
   memberAvatarText: { color: "#FFF", fontFamily: "Inter_700Bold" },
   memberName: { color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 16 },
-  inviteModalBtn: { marginTop: 24, marginBottom: 40 },
+  inviteModalBtn: { marginBottom: 12 },
+  membersFooter: { marginTop: 24, marginBottom: 40 },
+  leaveGroupBtn: { paddingVertical: 15, alignItems: "center", borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,59,48,0.35)", backgroundColor: "rgba(255,59,48,0.08)" },
+  leaveGroupBtnText: { color: "#FF3B30", fontFamily: "Inter_600SemiBold", fontSize: 16 },
+  leaveModalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "flex-end" },
+  leaveModalSheet: { backgroundColor: "#161616", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 44 },
+  leaveModalTitle: { fontSize: 20, fontFamily: "Inter_700Bold", color: "#FFF", marginBottom: 12 },
+  leaveModalBody: { fontSize: 15, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.55)", marginBottom: 28, lineHeight: 22 },
+  leaveModalConfirmBtn: { backgroundColor: "#FF3B30", borderRadius: 16, paddingVertical: 15, alignItems: "center", marginBottom: 10 },
+  leaveModalConfirmText: { color: "#FFF", fontSize: 16, fontFamily: "Inter_700Bold" },
   debugBtn: { marginHorizontal: 24, marginTop: 24, marginBottom: 16, paddingVertical: 12, borderRadius: 12, backgroundColor: "rgba(255,200,0,0.15)", borderWidth: 1, borderColor: "rgba(255,200,0,0.4)", alignItems: "center" },
   debugBtnText: { color: "#FFD700", fontFamily: "Inter_600SemiBold", fontSize: 14 },
 });
