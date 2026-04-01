@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState } from "react";
 import * as FileSystem from "expo-file-system/legacy";
 import { decode } from "base64-arraybuffer";
 import { r2Storage } from "./r2";
-import * as FileSystemNew from "expo-file-system";
 import { supabase } from "./supabase";
 import { notifyNewPhoto } from "./notifications";
 
@@ -70,7 +69,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
             console.log(`[Upload ${taskId}] 2. Génération presigned URL...`);
             const presignedUrl = await r2Storage.getPresignedUploadUrl(fileName, contentType);
             console.log(`[Upload ${taskId}] 2. Upload vidéo en streaming...`);
-            const uploadResult = await FileSystemNew.uploadAsync(presignedUrl, fileUri, {
+            const uploadResult = await FileSystem.uploadAsync(presignedUrl, fileUri, {
               httpMethod: "PUT",
               headers: { "Content-Type": contentType },
             });
