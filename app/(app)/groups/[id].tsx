@@ -23,7 +23,7 @@ import { Image } from "expo-image";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import * as ImagePicker from "expo-image-picker";
-import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
+import { manipulateAsync, SaveFormat, FlipType } from "expo-image-manipulator";
 import { decode } from "base64-arraybuffer";
 import { supabase } from "../../../lib/supabase";
 import { r2Storage } from "../../../lib/r2";
@@ -161,6 +161,7 @@ export default function MainPagerScreen() {
   const [capturing, setCapturing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [capturedUri, setCapturedUri] = useState<string | null>(null);
+  const [capturedFacing, setCapturedFacing] = useState<CameraType>('back');
   const [isEditingNote, setIsEditingNote] = useState(false);
   const [textModeContent, setTextModeContent] = useState("");
   const [note, setNote] = useState("");
@@ -403,7 +404,7 @@ export default function MainPagerScreen() {
     if (!cameraRef.current || isRecording || capturing) return;
     setCapturing(true);
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.9, skipMetadata: true });
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.9 });
       if (photo?.uri) {
         // --- CROPPING TO MATCH PREVIEW ---
         const paddingTop = Math.max(insets.top, 12) + 12;
@@ -428,6 +429,7 @@ export default function MainPagerScreen() {
           actions.push({ crop: { originX: 0, originY, width: sensorWidth, height: cropHeight } });
         }
 
+        if (facing === 'front') actions.push({ flip: FlipType.Horizontal });
         actions.push({ resize: { width: 1080 } });
 
         const manipResult = await manipulateAsync(
@@ -436,6 +438,7 @@ export default function MainPagerScreen() {
           { compress: 0.92, format: SaveFormat.JPEG, base64: false }
         );
         setCapturedUri(manipResult.uri);
+        setCapturedFacing(facing);
       }
     } catch (e: any) {
       console.error("Capture error:", e);

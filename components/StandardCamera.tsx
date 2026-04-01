@@ -147,7 +147,6 @@ const StandardCamera = forwardRef<CameraView, Props>(({
           zoom={localZoom}
           mode={mode}
           enableTorch={false}
-          mirror={facing === 'front'}
           autofocus="on"
           responsiveOrientationWhenOrientationLocked
         />

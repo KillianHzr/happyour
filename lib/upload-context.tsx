@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState } from "react";
 import * as FileSystem from "expo-file-system/legacy";
 import { decode } from "base64-arraybuffer";
 import { r2Storage } from "./r2";
+import * as FileSystemNew from "expo-file-system";
 import { supabase } from "./supabase";
 import { notifyNewPhoto } from "./notifications";
 
@@ -62,13 +63,30 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
         // 2. Gestion du fichier (si c'est une photo/vidéo)
         let finalPath = "text_mode";
         if (fileName && fileUri && contentType) {
-          console.log(`[Upload ${taskId}] 2. Lecture du fichier...`);
-          const base64 = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
-          const arrayBuffer = decode(base64);
+          const isVideo = contentType.includes("video") || fileName.endsWith(".mp4");
+
+          if (isVideo) {
+            // Vidéo : presigned URL + streaming natif (pas de lecture en mémoire JS)
+            console.log(`[Upload ${taskId}] 2. Génération presigned URL...`);
+            const presignedUrl = await r2Storage.getPresignedUploadUrl(fileName, contentType);
+            console.log(`[Upload ${taskId}] 2. Upload vidéo en streaming...`);
+            const uploadResult = await FileSystemNew.uploadAsync(presignedUrl, fileUri, {
+              httpMethod: "PUT",
+              headers: { "Content-Type": contentType },
+            });
+            if (uploadResult.status < 200 || uploadResult.status >= 300) {
+              throw new Error(`Upload échoué: HTTP ${uploadResult.status}`);
+            }
+          } else {
+            // Photo : lecture base64 (fichier petit, pas de freeze)
+            console.log(`[Upload ${taskId}] 2. Lecture du fichier...`);
+            const base64 = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
+            const arrayBuffer = decode(base64);
+            console.log(`[Upload ${taskId}] 2. Upload vers R2...`);
+            await r2Storage.upload(fileName, arrayBuffer, contentType);
+          }
+
           setActiveUploads((prev) => prev.map(t => t.id === taskId ? { ...t, progress: 0.5 } : t));
-          
-          console.log(`[Upload ${taskId}] 2. Upload vers R2...`);
-          await r2Storage.upload(fileName, arrayBuffer, contentType);
           finalPath = fileName;
         }
 

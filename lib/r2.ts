@@ -1,5 +1,6 @@
 import "react-native-url-polyfill/auto";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 /**
  * Polyfill pour crypto.getRandomValues
@@ -54,6 +55,18 @@ export const r2Storage = {
       console.error("R2 Upload Error:", error);
       throw error;
     }
+  },
+
+  /**
+   * Génère une presigned URL pour uploader un fichier directement vers R2 sans passer par la mémoire JS.
+   */
+  async getPresignedUploadUrl(fileName: string, contentType: string, expiresIn = 3600) {
+    const command = new PutObjectCommand({
+      Bucket: R2_BUCKET_NAME,
+      Key: fileName,
+      ContentType: contentType,
+    });
+    return getSignedUrl(s3Client, command, { expiresIn });
   },
 
   /**
