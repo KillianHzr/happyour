@@ -24,11 +24,7 @@
     "expo-file-system": "~55.0.10",
     "expo-font": "~55.0.4",
     "expo-image": "~55.0.6",
-<<<<<<< Updated upstream
     "expo-image-manipulator": "~55.0.11",
-=======
-    "expo-image-manipulator": "^55.0.11",
->>>>>>> Stashed changes
     "expo-image-picker": "~55.0.12",
     "expo-intent-launcher": "~55.0.8",
     "expo-linear-gradient": "~55.0.8",

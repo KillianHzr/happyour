@@ -148,12 +148,8 @@ const StandardCamera = forwardRef<CameraView, Props>(({
           mode={mode}
           enableTorch={false}
           mirror={facing === 'front'}
-<<<<<<< Updated upstream
           autofocus="on"
           responsiveOrientationWhenOrientationLocked
-=======
-          responsiveOrientationWhenOrientationLocked={true}
->>>>>>> Stashed changes
         />
       )}
     </View>

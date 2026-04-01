@@ -19,7 +19,6 @@ import {
 import { useLocalSearchParams, router } from "expo-router";
 import { CameraView, CameraType, FlashMode } from "expo-camera";
 import { Image } from "expo-image";
-import * as ImageManipulator from "expo-image-manipulator";
 
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
@@ -404,13 +403,12 @@ export default function MainPagerScreen() {
     if (!cameraRef.current || isRecording || capturing) return;
     setCapturing(true);
     try {
-<<<<<<< Updated upstream
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.9, skipMetadata: true });
       if (photo?.uri) {
         // --- CROPPING TO MATCH PREVIEW ---
         const paddingTop = Math.max(insets.top, 12) + 12;
         const paddingBottom = NAVBAR_HEIGHT + 12;
-        
+
         const uiWidth = SCREEN_WIDTH - 24;
         const uiHeight = SCREEN_HEIGHT - paddingTop - paddingBottom;
         const targetRatio = uiWidth / uiHeight;
@@ -441,50 +439,6 @@ export default function MainPagerScreen() {
       }
     } catch (e: any) {
       console.error("Capture error:", e);
-=======
-      // We capture with EXIF to know if the phone was held in portrait or landscape
-      const photo = await cameraRef.current.takePictureAsync({ 
-        quality: 1,
-        exif: true
-      });
-      
-      if (photo) {
-        console.log("[Camera] Captured photo dimensions:", photo.width, "x", photo.height, "EXIF Orientation:", photo.exif?.Orientation);
-        
-        let actions: ImageManipulator.Action[] = [];
-        const orientation = photo.exif?.Orientation;
-
-        // 1. Mirror Selfie
-        if (facing === "front") {
-          actions.push({ flip: ImageManipulator.FlipType.Horizontal });
-        }
-
-        // 2. Decide if we need to rotate to "sideways" portrait
-        // EXIF 5,6,7,8 are all variations of Portrait (held vertically)
-        // EXIF 1,2,3,4 are all variations of Landscape (held horizontally)
-        const isActuallyPortrait = orientation >= 5 && orientation <= 8;
-        
-        if (photo.width > photo.height && !isActuallyPortrait) {
-          console.log("[Camera] True Landscape detected, rotating 90deg to prevent cropping...");
-          actions.push({ rotate: 90 });
-        } else if (actions.length === 0) {
-          // Process anyway to ensure EXIF is flattened
-          actions.push({ rotate: 0 });
-        }
-
-        const result = await ImageManipulator.manipulateAsync(
-          photo.uri,
-          actions,
-          { base64: true, compress: 0.7 }
-        );
-
-        console.log("[Camera] Final photo dimensions:", result.width, "x", result.height);
-        setCapturedBase64(result.base64 || null);
-        setCapturedUri(result.uri);
-      }
-    } catch (e: any) {
-      console.error("[Camera] Capture Error:", e);
->>>>>>> Stashed changes
       Alert.alert("Erreur", "Impossible de prendre la photo.");
     } finally {
       setCapturing(false);
