@@ -5,7 +5,6 @@ import { colors, theme } from "../lib/theme";
 
 type Props = { 
   totalCount: number;
-  userCount: number;
   unlockDate: Date;
 };
 
@@ -28,7 +27,7 @@ const LockIcon = () => (
   </Svg>
 );
 
-export default function VaultCounter({ totalCount, userCount, unlockDate }: Props) {
+export default function VaultCounter({ totalCount, unlockDate }: Props) {
   const [timeLeft, setTimeLeft] = useState("");
 
   useEffect(() => {
@@ -63,11 +62,6 @@ export default function VaultCounter({ totalCount, userCount, unlockDate }: Prop
         <View style={styles.statItem}>
           <Text style={styles.count}>{totalCount}</Text>
           <Text style={styles.label}>Total</Text>
-        </View>
-        <View style={styles.verticalDivider} />
-        <View style={styles.statItem}>
-          <Text style={styles.count}>{userCount}</Text>
-          <Text style={styles.label}>Toi</Text>
         </View>
       </View>
 

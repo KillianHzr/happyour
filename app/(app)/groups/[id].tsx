@@ -130,7 +130,6 @@ export default function MainPagerScreen() {
   const [groupName, setGroupName] = useState("");
   const [members, setMembers] = useState<any[]>([]);
   const [photoCount, setPhotoCount] = useState(0);
-  const [userPhotoCount, setUserPhotoCount] = useState(0);
   const [photos, setPhotos] = useState<PhotoEntry[]>([]);
   const [username, setUsername] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -215,10 +214,8 @@ export default function MainPagerScreen() {
       
       if (photosRes.data) {
         setPhotoCount(photosRes.data.length);
-        setUserPhotoCount(photosRes.data.filter((p: any) => p.user_id === user.id).length);
-        
-        const photoIds = photosRes.data.map((p: any) => p.id);
-        const reactionsRes = photoIds.length > 0
+
+        const photoIds = photosRes.data.map((p: any) => p.id);        const reactionsRes = photoIds.length > 0
           ? await supabase
               .from("reactions")
               .select("id, photo_id, user_id, emoji, profiles:user_id(username, avatar_url)")
@@ -722,7 +719,7 @@ export default function MainPagerScreen() {
           ) : (
             <ScrollView style={[styles.pageContent, { paddingTop: insets.top + 40 }]} contentContainerStyle={{ paddingBottom: 160 }} showsVerticalScrollIndicator={false}>
               <View style={styles.vaultHeader}><Text style={[styles.pageTitleNoPad, { flexShrink: 1, marginRight: 12 }]}>{groupName || "Groupe"}</Text><TouchableOpacity onPress={() => setShowMembersModal(true)} style={styles.groupBtn}>{isAdmin ? <GroupAddIcon /> : <GroupIcon />}</TouchableOpacity></View>
-              <View style={styles.vaultBody}><View style={styles.vaultLockedContent}><VaultCounter totalCount={photoCount} userCount={userPhotoCount} unlockDate={revealDate} /></View></View>
+              <View style={styles.vaultBody}><View style={styles.vaultLockedContent}><VaultCounter totalCount={photoCount} unlockDate={revealDate} /></View></View>
               {__DEV__ && (
                 <View style={{ gap: 8, marginTop: 24, marginHorizontal: 24 }}>
                   <TouchableOpacity style={[styles.debugBtn, { marginHorizontal: 0, marginTop: 0, marginBottom: 0 }]} onPress={() => setDebugUnlocked(true)}>
