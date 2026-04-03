@@ -9,7 +9,7 @@ type UploadTask = {
   id: string;
   progress: number;
   status: "uploading" | "success" | "error";
-  type: "photo" | "video" | "texte";
+  type: "photo" | "video" | "texte" | "audio";
 };
 
 type UploadContextType = {
@@ -36,9 +36,11 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
     const taskId = Math.random().toString(36).substring(7);
     
     // Identification plus robuste du type
-    let type: "photo" | "video" | "texte" = "photo";
+    let type: "photo" | "video" | "texte" | "audio" = "photo";
     if (fileName === null) {
       type = "texte";
+    } else if (contentType?.includes("audio") || fileName.endsWith(".m4a")) {
+      type = "audio";
     } else if (contentType?.includes("video") || fileName.endsWith(".mp4")) {
       type = "video";
     }
@@ -63,8 +65,9 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
         let finalPath = "text_mode";
         if (fileName && fileUri && contentType) {
           const isVideo = contentType.includes("video") || fileName.endsWith(".mp4");
+          const isAudio = contentType.includes("audio") || fileName.endsWith(".m4a");
 
-          if (isVideo) {
+          if (isVideo || isAudio) {
             // Vidéo : presigned URL + streaming natif (pas de lecture en mémoire JS)
             console.log(`[Upload ${taskId}] 2. Génération presigned URL...`);
             const presignedUrl = await r2Storage.getPresignedUploadUrl(fileName, contentType);

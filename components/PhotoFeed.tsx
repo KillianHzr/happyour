@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -10,9 +10,11 @@ import {
   Pressable,
   ViewToken,
   Platform,
+  PanResponder,
 } from "react-native";
 import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
+import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
@@ -224,6 +226,155 @@ function formatTime(dateStr: string) {
   return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 }
 
+const WAVE_HEIGHTS = [18, 32, 48, 36, 60, 80, 52, 68, 42, 62, 88, 72, 50, 38, 68, 82, 58, 44, 28, 52, 72, 56, 78, 46, 36, 62, 50, 66, 42, 28];
+
+function fmtAudio(s: number) {
+  if (!isFinite(s) || isNaN(s)) return "0:00";
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, "0")}`;
+}
+
+// --- Moment audio ---
+function AudioMoment({ moment, isVisible, onReact, currentUserId }: {
+  moment: PhotoEntry;
+  isVisible: boolean;
+  onReact?: (photoId: string, stickerId: StickerId) => void;
+  currentUserId?: string;
+}) {
+  const insets = useSafeAreaInsets();
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const player = useAudioPlayer(isVisible ? moment.url : "");
+  const status = useAudioPlayerStatus(player);
+
+  const isOwn = moment.user_id === currentUserId;
+  const myReaction = moment.reactions.find((r) => r.user_id === currentUserId)?.sticker_id ?? null;
+
+  // Refs pour PanResponder (évite les closures périmées)
+  const seekBarRef = useRef<View>(null);
+  const seekLayoutRef = useRef({ pageX: 0, width: 1 });
+  const playerRef = useRef(player);
+  const durationRef = useRef(0);
+  useEffect(() => { playerRef.current = player; }, [player]);
+  useEffect(() => { durationRef.current = status.duration ?? 0; }, [status.duration]);
+
+  useEffect(() => {
+    if (!isVisible) player.pause();
+  }, [isVisible]);
+
+  const togglePlay = () => {
+    if (status.playing) {
+      player.pause();
+    } else {
+      if (durationRef.current > 0 && (status.currentTime ?? 0) >= durationRef.current - 0.1) {
+        player.seekTo(0);
+      }
+      player.play();
+    }
+  };
+
+  // PanResponder : capture le touch avant le ScrollView parent, fonctionne même hors zone
+  const seekPan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
+      onMoveShouldSetPanResponderCapture: () => true,
+      onPanResponderGrant: (evt) => {
+        const relX = evt.nativeEvent.pageX - seekLayoutRef.current.pageX;
+        const ratio = Math.max(0, Math.min(1, relX / seekLayoutRef.current.width));
+        playerRef.current.seekTo(ratio * durationRef.current);
+      },
+      onPanResponderMove: (evt) => {
+        const relX = evt.nativeEvent.pageX - seekLayoutRef.current.pageX;
+        const ratio = Math.max(0, Math.min(1, relX / seekLayoutRef.current.width));
+        playerRef.current.seekTo(ratio * durationRef.current);
+      },
+    })
+  ).current;
+
+  const progress = status.duration > 0 ? (status.currentTime ?? 0) / status.duration : 0;
+
+  return (
+    <View style={[styles.fullscreenPage, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12 }]}>
+      <View style={styles.momentWrapper}>
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: "#0A0A0A" }]} />
+
+        {/* Waveform décoratif */}
+        <View style={styles.audioWaveContainer} pointerEvents="none">
+          {WAVE_HEIGHTS.map((h, i) => (
+            <View
+              key={i}
+              style={[styles.audioWaveBar, { height: h, opacity: progress > i / WAVE_HEIGHTS.length ? 0.9 : 0.25 }]}
+            />
+          ))}
+        </View>
+
+        <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+          <LinearGradient colors={["transparent", "rgba(0,0,0,0.92)"]} style={styles.momentOverlay}>
+            {/* Lecteur audio */}
+            <View style={styles.audioPlayerRow}>
+              <TouchableOpacity onPress={togglePlay} style={styles.audioPlayBtn}>
+                <Svg width="26" height="26" viewBox="0 0 24 24" fill="#FFF">
+                  {status.playing ? (
+                    <Path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                  ) : (
+                    <Path d="M8 5v14l11-7z" />
+                  )}
+                </Svg>
+              </TouchableOpacity>
+              <View style={styles.audioProgressWrapper}>
+                {/* Zone de touch large, PanResponder capture avant le parent */}
+                <View
+                  ref={seekBarRef}
+                  style={styles.audioSeekHitArea}
+                  onLayout={() => {
+                    seekBarRef.current?.measure((_x, _y, width, _h, pageX) => {
+                      seekLayoutRef.current = { pageX, width };
+                    });
+                  }}
+                  {...seekPan.panHandlers}
+                >
+                  <View style={styles.audioSeekTrack}>
+                    <View style={[styles.audioSeekFill, { width: `${progress * 100}%` as any }]} />
+                  </View>
+                  {progress > 0 && (
+                    <View style={[styles.audioSeekThumb, { left: `${Math.min(progress * 100, 100)}%` as any }]} pointerEvents="none" />
+                  )}
+                </View>
+                <View style={styles.audioTimesRow}>
+                  <Text style={styles.audioTimeText}>{fmtAudio(status.currentTime)}</Text>
+                  <Text style={styles.audioTimeText}>{fmtAudio(status.duration)}</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Auteur */}
+            <View style={styles.authorInfo}>
+              <UserAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} />
+              <View style={{ flex: 1 }}>
+                <View style={styles.usernameLine}>
+                  <Text style={styles.username}>{moment.username}</Text>
+                  <Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text>
+                </View>
+                {moment.note && <ExpandableNote text={moment.note} maxLines={3} />}
+              </View>
+              {!isOwn && (
+                <TouchableOpacity style={styles.reactBtnInline} onPress={() => setPickerOpen(true)}>
+                  <ReactIcon />
+                </TouchableOpacity>
+              )}
+            </View>
+            <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={isOwn ? undefined : onReact} photoId={moment.id} />
+          </LinearGradient>
+        </View>
+      </View>
+      {!isOwn && <StickerPicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={(sid) => onReact?.(moment.id, sid)} myReaction={myReaction} />}
+    </View>
+  );
+}
+
 // --- Moment vidéo ---
 function VideoMoment({ moment, isVisible, isNearVisible, onReact, currentUserId }: {
   moment: PhotoEntry;
@@ -364,11 +515,16 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
 
     const moment = item.data;
     const isTextOnly = moment.image_path === "text_mode";
+    const isAudio = moment.image_path.endsWith(".m4a");
     const isVideo = moment.image_path.endsWith(".mp4");
     const isOwn = moment.user_id === currentUserId;
     const textLen = moment.note?.length ?? 0;
     const fontSize = textLen <= 40 ? 32 : textLen <= 100 ? 26 : textLen <= 200 ? 21 : textLen <= 300 ? 17 : 15;
     const myReaction = moment.reactions.find((r) => r.user_id === currentUserId)?.sticker_id ?? null;
+
+    if (isAudio) {
+      return <AudioMoment moment={moment} isVisible={index === visibleIndex} onReact={onReact} currentUserId={currentUserId} />;
+    }
 
     if (isVideo) {
       const isNearVisible = Math.abs(index - visibleIndex) <= 1;
@@ -522,4 +678,15 @@ const styles = StyleSheet.create({
   countdownText: { fontFamily: "Inter_700Bold", fontSize: 32, color: "#FFF", marginTop: 12, letterSpacing: 2 },
   pauseOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: "center", alignItems: "center" },
   pauseCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" },
+  audioWaveContainer: { position: "absolute", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 3, bottom: "38%", left: 24, right: 24 },
+  audioWaveBar: { width: 3, borderRadius: 2, backgroundColor: "#FFF" },
+  audioPlayerRow: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 16 },
+  audioPlayBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
+  audioProgressWrapper: { flex: 1, gap: 4 },
+  audioSeekHitArea: { paddingVertical: 14, justifyContent: "center" },
+  audioSeekTrack: { height: 3, backgroundColor: "rgba(255,255,255,0.22)", borderRadius: 2 },
+  audioSeekFill: { height: 3, backgroundColor: "#FFF", borderRadius: 2 },
+  audioSeekThumb: { position: "absolute", width: 13, height: 13, borderRadius: 7, backgroundColor: "#FFF", marginLeft: -6, top: 14 - 5 },
+  audioTimesRow: { flexDirection: "row", justifyContent: "space-between" },
+  audioTimeText: { fontSize: 11, color: "rgba(255,255,255,0.5)", fontFamily: "Inter_400Regular" },
 });

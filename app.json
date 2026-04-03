@@ -2,7 +2,7 @@
   "expo": {
     "name": "HappyOur",
     "slug": "HappyOur",
-    "version": "1.0.4",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -61,6 +61,12 @@
         {
           "icon": "./assets/icon.png",
           "color": "#000000"
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "L'app a besoin du micro pour enregistrer des messages audio."
         }
       ]
     ],

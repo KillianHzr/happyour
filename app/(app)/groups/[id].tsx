@@ -15,6 +15,7 @@ import {
   Modal,
   Pressable,
   ActivityIndicator,
+  PanResponder,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { CameraView, CameraType, FlashMode } from "expo-camera";
@@ -36,6 +37,7 @@ import { setCaptureData } from "../../../lib/capture-store";
 import { notifyNewPhoto } from "../../../lib/notifications";
 import { useUpload } from "../../../lib/upload-context";
 import { useToast } from "../../../lib/toast-context";
+import { useAudioRecorder, AudioModule, RecordingPresets, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 
 // Components
 import VaultCounter from "../../../components/VaultCounter";
@@ -115,7 +117,7 @@ function getWeekBounds(revealDayOfWeek = 0, revealHour = 20) {
   return { monday, revealDate, prevRevealDate };
 }
 
-type CameraMode = "PHOTO" | "VIDEO" | "TEXTE";
+type CameraMode = "PHOTO" | "VIDEO" | "TEXTE" | "AUDIO";
 
 export default function MainPagerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -126,6 +128,7 @@ export default function MainPagerScreen() {
   
   const scrollX = useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const scrollRef = useRef<Animated.ScrollView>(null);
+  const pagerTouchRef = useRef<{ x: number; y: number; decided: boolean } | null>(null);
 
   const [groupName, setGroupName] = useState("");
   const [members, setMembers] = useState<any[]>([]);
@@ -164,6 +167,44 @@ export default function MainPagerScreen() {
   const [isEditingNote, setIsEditingNote] = useState(false);
   const [textModeContent, setTextModeContent] = useState("");
   const [note, setNote] = useState("");
+
+  // -- Audio State --
+  const [isAudioRecording, setIsAudioRecording] = useState(false);
+  const [audioSeconds, setAudioSeconds] = useState(0);
+  const [capturedAudioUri, setCapturedAudioUri] = useState<string | null>(null);
+  const audioTimer = useRef<NodeJS.Timeout | null>(null);
+  const audioWaveAnims = useRef(
+    [350, 500, 280, 420, 320, 480, 360].map((duration, i) =>
+      ({ anim: new Animated.Value(0.15), duration, delay: i * 60 })
+    )
+  ).current;
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const audioPreviewPlayer = useAudioPlayer(capturedAudioUri ?? "");
+  const audioPreviewStatus = useAudioPlayerStatus(audioPreviewPlayer);
+  const audioPreviewSeekRef = useRef<View>(null);
+  const audioPreviewSeekLayoutRef = useRef({ pageX: 0, width: 1 });
+  const audioPreviewDurationRef = useRef(0);
+  useEffect(() => { audioPreviewDurationRef.current = audioPreviewStatus.duration ?? 0; }, [audioPreviewStatus.duration]);
+  const audioPreviewPlayerRef = useRef(audioPreviewPlayer);
+  useEffect(() => { audioPreviewPlayerRef.current = audioPreviewPlayer; }, [audioPreviewPlayer]);
+  const audioPreviewPan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
+      onMoveShouldSetPanResponderCapture: () => true,
+      onPanResponderGrant: (evt) => {
+        const relX = evt.nativeEvent.pageX - audioPreviewSeekLayoutRef.current.pageX;
+        const ratio = Math.max(0, Math.min(1, relX / audioPreviewSeekLayoutRef.current.width));
+        audioPreviewPlayerRef.current.seekTo(ratio * audioPreviewDurationRef.current);
+      },
+      onPanResponderMove: (evt) => {
+        const relX = evt.nativeEvent.pageX - audioPreviewSeekLayoutRef.current.pageX;
+        const ratio = Math.max(0, Math.min(1, relX / audioPreviewSeekLayoutRef.current.width));
+        audioPreviewPlayerRef.current.seekTo(ratio * audioPreviewDurationRef.current);
+      },
+    })
+  ).current;
 
   const [debugUnlocked, setDebugUnlocked] = useState(false);
   const [revealConfig, setRevealConfig] = useState({ day: 0, hour: 20 });
@@ -393,6 +434,11 @@ export default function MainPagerScreen() {
       handleUploadText();
       return;
     }
+    if (cameraMode === "AUDIO") {
+      if (isAudioRecording) await stopAudioRecording();
+      else await startAudioRecording();
+      return;
+    }
     if (cameraMode === "VIDEO") {
       if (isRecording) stopVideoRecording();
       else startVideoRecording();
@@ -527,6 +573,47 @@ export default function MainPagerScreen() {
     }
   };
 
+  const startAudioRecording = async () => {
+    const perm = await AudioModule.requestRecordingPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Permission refusée", "L'accès au micro est requis.");
+      return;
+    }
+    await audioRecorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
+    audioRecorder.record();
+    setIsAudioRecording(true);
+    setAudioSeconds(0);
+    audioTimer.current = setInterval(() => setAudioSeconds((s) => s + 1), 1000);
+    audioWaveAnims.forEach(({ anim, duration, delay }) => {
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(anim, { toValue: 1, duration, useNativeDriver: true }),
+          Animated.timing(anim, { toValue: 0.15, duration, useNativeDriver: true }),
+        ])
+      ).start();
+    });
+  };
+
+  const stopAudioRecording = async () => {
+    if (!isAudioRecording) return;
+    await audioRecorder.stop();
+    if (audioTimer.current) clearInterval(audioTimer.current);
+    audioWaveAnims.forEach(({ anim }) => { anim.stopAnimation(); anim.setValue(0.15); });
+    setIsAudioRecording(false);
+    if (audioRecorder.uri) setCapturedAudioUri(audioRecorder.uri);
+  };
+
+  const handleUploadAudio = () => {
+    if (!capturedAudioUri || !user) return;
+    const dbData = { group_id: id as string, user_id: user.id, note: note.trim() || null };
+    const fileName = `${id}/${user.id}_${Date.now()}.m4a`;
+    startUpload(fileName, capturedAudioUri, "audio/m4a", dbData);
+    setCapturedAudioUri(null);
+    setNote("");
+    fetchData();
+  };
+
   const handleUploadText = () => {
     if (!textModeContent.trim() || !user) return;
     const content = textModeContent.trim();
@@ -555,12 +642,43 @@ export default function MainPagerScreen() {
 
   if (!dataLoaded) return <View style={[styles.container, styles.center]}><Loader size={48} /></View>;
 
+  const baseScrollEnabled = !isEditing && !isBlocked && !isPinching;
+
+  const handlePagerTouchStart = (e: any) => {
+    pagerTouchRef.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY, decided: false };
+    scrollRef.current?.setNativeProps({ scrollEnabled: baseScrollEnabled });
+  };
+
+  const handlePagerTouchMove = (e: any) => {
+    const t = pagerTouchRef.current;
+    if (!t || t.decided) return;
+    const dx = Math.abs(e.nativeEvent.pageX - t.x);
+    const dy = Math.abs(e.nativeEvent.pageY - t.y);
+    if (dx + dy > 5) {
+      t.decided = true;
+      if (dy > dx) {
+        scrollRef.current?.setNativeProps({ scrollEnabled: false });
+      }
+    }
+  };
+
+  const handlePagerTouchEnd = () => {
+    pagerTouchRef.current = null;
+    scrollRef.current?.setNativeProps({ scrollEnabled: baseScrollEnabled });
+  };
+
   return (
-    <View style={styles.container}>
+    <View
+      style={styles.container}
+      onTouchStart={handlePagerTouchStart}
+      onTouchMove={handlePagerTouchMove}
+      onTouchEnd={handlePagerTouchEnd}
+      onTouchCancel={handlePagerTouchEnd}
+    >
       <Animated.ScrollView
         ref={scrollRef} horizontal pagingEnabled showsHorizontalScrollIndicator={false}
         bounces={false} overScrollMode="never"
-        scrollEnabled={!isEditing && !isBlocked && !isPinching}
+        scrollEnabled={baseScrollEnabled}
         onMomentumScrollEnd={(e) => setCurrentPage(Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH))}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })}
         scrollEventThrottle={16} contentOffset={{ x: SCREEN_WIDTH, y: 0 }} style={styles.pager}
@@ -592,9 +710,37 @@ export default function MainPagerScreen() {
 
         {/* PAGE 1: CAMERA (Fixed underneath) */}
         <Animated.View style={[styles.page, { transform: [{ translateX: cameraTranslateX }, { scale: cameraScale }], opacity: cameraOpacity, zIndex: 1 }]}>
-          {!capturedUri ? (
+          {!capturedUri && !capturedAudioUri ? (
             cameraMode === "TEXTE" ? (
               <View style={styles.textModeContainer}><TextInput style={styles.textModeInput} placeholder="Écris..." placeholderTextColor="rgba(255,255,255,0.3)" multiline value={textModeContent} onChangeText={setTextModeContent} autoFocus disabled={isBlocked} /></View>
+            ) : cameraMode === "AUDIO" ? (
+              <View style={styles.audioModeContainer}>
+                {isAudioRecording ? (
+                  <>
+                    <View style={styles.audioRecordingIndicator}>
+                      <View style={styles.audioRedDot} />
+                      <Text style={styles.audioTimerText}>
+                        {Math.floor(audioSeconds / 60).toString().padStart(2, "0")}:{(audioSeconds % 60).toString().padStart(2, "0")}
+                      </Text>
+                    </View>
+                    <View style={styles.audioWaveformRow} pointerEvents="none">
+                      {audioWaveAnims.map(({ anim }, i) => (
+                        <Animated.View key={i} style={[styles.audioWaveformBar, { transform: [{ scaleY: anim }] }]} />
+                      ))}
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <Svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+                      <Path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                      <Path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                      <Path d="M12 19v4" />
+                      <Path d="M8 23h8" />
+                    </Svg>
+                    <Text style={styles.audioHintText}>Appuie pour enregistrer</Text>
+                  </>
+                )}
+              </View>
             ) : (
               <View style={[styles.cameraPageContainer, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12, paddingHorizontal: 12 }]}>
                 <View style={styles.cameraInner}>
@@ -624,7 +770,7 @@ export default function MainPagerScreen() {
           ) : null}
 
           {/* Camera UI Overlay */}
-          {!capturedUri && (
+          {!capturedUri && !capturedAudioUri && (
             <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
               {isRecording && (
                 <View style={[styles.recordingTimer, { top: Math.max(insets.top, 40) }]}>
@@ -632,32 +778,49 @@ export default function MainPagerScreen() {
                   <Text style={styles.recordingText}>{recordingSeconds}s / 15s</Text>
                 </View>
               )}
+              {isAudioRecording && (
+                <View style={[styles.recordingTimer, { top: Math.max(insets.top, 40) }]}>
+                  <View style={[styles.recordingDot, { backgroundColor: "#A78BFA" }]} />
+                  <Text style={styles.recordingText}>{Math.floor(audioSeconds / 60)}:{(audioSeconds % 60).toString().padStart(2, "0")}</Text>
+                </View>
+              )}
               
               <View style={[styles.cameraFooter, { bottom: NAVBAR_HEIGHT + 24 }]}>
                 <View style={styles.modeSlider}>
-                  {["PHOTO", "VIDEO", "TEXTE"].map((m: any) => (
-                    <TouchableOpacity key={m} onPress={() => setCameraMode(m)} disabled={isRecording || isBlocked}><Text style={[styles.modeText, cameraMode === m && styles.modeTextActive]}>{m}</Text></TouchableOpacity>
+                  {["PHOTO", "VIDEO", "AUDIO", "TEXTE"].map((m: any) => (
+                    <TouchableOpacity key={m} onPress={() => setCameraMode(m)} disabled={isRecording || isAudioRecording || isBlocked}><Text style={[styles.modeText, cameraMode === m && styles.modeTextActive]}>{m}</Text></TouchableOpacity>
                   ))}
                 </View>
                 <View style={styles.captureRow}>
                   {cameraMode !== "TEXTE" && <View style={styles.sideControlPlaceholder} />}
-                  <TouchableOpacity 
-                    style={[styles.captureBtn, (cameraMode === "VIDEO" || isRecording) && styles.captureBtnVideo, isRecording && styles.captureBtnRecording]} 
+                  <TouchableOpacity
+                    style={[styles.captureBtn, (cameraMode === "VIDEO" || isRecording) && styles.captureBtnVideo, isRecording && styles.captureBtnRecording, cameraMode === "AUDIO" && styles.captureBtnAudio, isAudioRecording && styles.captureBtnAudioRecording]}
                     onPress={handleCapture}
                     onTouchStart={handleTouchStart}
                     onTouchMove={handleTouchMove}
                     activeOpacity={0.8}
                     disabled={isBlocked}
                   >
-                    <View style={[styles.captureInner, (cameraMode === "VIDEO" || isRecording) && styles.captureInnerVideo, isRecording && styles.captureInnerRecording]}>
+                    <View style={[styles.captureInner, (cameraMode === "VIDEO" || isRecording) && styles.captureInnerVideo, isRecording && styles.captureInnerRecording, cameraMode === "AUDIO" && styles.captureInnerAudio, isAudioRecording && styles.captureInnerAudioRecording]}>
                       {cameraMode === "TEXTE" && <SendIcon color="#000" />}
+                      {cameraMode === "AUDIO" && !isAudioRecording && (
+                        <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <Path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                          <Path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                          <Path d="M12 19v4" /><Path d="M8 23h8" />
+                        </Svg>
+                      )}
+                      {isAudioRecording && (
+                        <View style={{ width: 22, height: 22, borderRadius: 5, backgroundColor: "#000" }} />
+                      )}
                     </View>
                   </TouchableOpacity>
-                  {cameraMode !== "TEXTE" && (
+                  {cameraMode !== "TEXTE" && cameraMode !== "AUDIO" && (
                     <TouchableOpacity style={styles.flipBtn} onPress={() => setFacing(prev => prev === 'back' ? 'front' : 'back')} disabled={isRecording || isBlocked}>
                       <FlipIcon />
                     </TouchableOpacity>
                   )}
+                  {cameraMode === "AUDIO" && <View style={styles.sideControlPlaceholder} />}
                 </View>
               </View>
             </View>
@@ -697,6 +860,106 @@ export default function MainPagerScreen() {
                       </View>
                     </TouchableOpacity>
                   </View>
+                </View>
+              </View>
+
+              <Modal visible={isEditingNote} transparent animationType="fade">
+                <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill}>
+                  <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.noteEditorContainer}>
+                    <TextInput style={styles.largeNoteInput} placeholder="Note..." placeholderTextColor="rgba(255,255,255,0.3)" value={note} onChangeText={setNote} maxLength={140} multiline autoFocus />
+                    <TouchableOpacity style={styles.doneNoteBtn} onPress={() => setIsEditingNote(false)}><Text style={styles.doneNoteText}>Terminé</Text></TouchableOpacity>
+                  </KeyboardAvoidingView>
+                </BlurView>
+              </Modal>
+            </View>
+          )}
+
+          {/* Audio preview */}
+          {capturedAudioUri && (
+            <View style={[styles.previewContainer, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12, paddingHorizontal: 12 }]}>
+              <View style={[styles.previewImageWrapper, { justifyContent: "center", alignItems: "center" }]}>
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: "#0A0A0A" }]} />
+
+                <TouchableOpacity
+                  style={[styles.backCaptureBtnInside, { top: 16 }]}
+                  onPress={() => { setCapturedAudioUri(null); setNote(""); }}
+                  disabled={isBlocked}
+                >
+                  <CloseIcon />
+                </TouchableOpacity>
+
+                {/* Waveform décoratif */}
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }} pointerEvents="none">
+                  {[18, 32, 48, 36, 60, 80, 52, 68, 42, 62, 88, 72, 50, 38, 68, 82, 58, 44, 28, 52].map((h, i) => (
+                    <View key={i} style={{ width: 3, height: h, borderRadius: 2, backgroundColor: "#FFF", opacity: audioPreviewStatus.currentTime > 0 && audioPreviewStatus.duration > 0 && (audioPreviewStatus.currentTime / audioPreviewStatus.duration) > i / 20 ? 0.9 : 0.25 }} />
+                  ))}
+                </View>
+
+                {/* Lecteur */}
+                <View style={styles.audioPreviewPlayer}>
+                  <TouchableOpacity
+                    style={styles.audioPreviewPlayBtn}
+                    onPress={() => {
+                      if (audioPreviewStatus.playing) {
+                        audioPreviewPlayer.pause();
+                      } else {
+                        if (audioPreviewDurationRef.current > 0 && (audioPreviewStatus.currentTime ?? 0) >= audioPreviewDurationRef.current - 0.1) {
+                          audioPreviewPlayer.seekTo(0);
+                        }
+                        audioPreviewPlayer.play();
+                      }
+                    }}
+                  >
+                    <Svg width="28" height="28" viewBox="0 0 24 24" fill="#FFF">
+                      {audioPreviewStatus.playing ? <Path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /> : <Path d="M8 5v14l11-7z" />}
+                    </Svg>
+                  </TouchableOpacity>
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <View
+                      ref={audioPreviewSeekRef}
+                      style={styles.audioPreviewSeekHitArea}
+                      onLayout={() => {
+                        audioPreviewSeekRef.current?.measure((_x, _y, width, _h, pageX) => {
+                          audioPreviewSeekLayoutRef.current = { pageX, width };
+                        });
+                      }}
+                      {...audioPreviewPan.panHandlers}
+                    >
+                      <View style={styles.audioPreviewTrack}>
+                        <View style={[styles.audioPreviewFill, { width: `${audioPreviewStatus.duration > 0 ? (audioPreviewStatus.currentTime / audioPreviewStatus.duration) * 100 : 0}%` as any }]} />
+                      </View>
+                      {audioPreviewStatus.currentTime > 0 && (
+                        <View style={[styles.audioPreviewThumb, { left: `${Math.min(audioPreviewStatus.duration > 0 ? (audioPreviewStatus.currentTime / audioPreviewStatus.duration) * 100 : 0, 100)}%` as any }]} pointerEvents="none" />
+                      )}
+                    </View>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                      <Text style={styles.audioPreviewTime}>{Math.floor((audioPreviewStatus.currentTime ?? 0) / 60)}:{((Math.floor(audioPreviewStatus.currentTime ?? 0)) % 60).toString().padStart(2, "0")}</Text>
+                      <Text style={styles.audioPreviewTime}>{Math.floor((audioPreviewStatus.duration ?? 0) / 60)}:{((Math.floor(audioPreviewStatus.duration ?? 0)) % 60).toString().padStart(2, "0")}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Note */}
+                <View style={[styles.previewContent, { bottom: 120 }]}>
+                  {note ? (
+                    <Pressable style={styles.previewNoteBox} onPress={() => setIsEditingNote(true)} disabled={isBlocked}>
+                      <Text style={styles.previewNoteText}>{note}</Text>
+                    </Pressable>
+                  ) : (
+                    <TouchableOpacity style={styles.addNoteBtn} onPress={() => setIsEditingNote(true)} disabled={isBlocked}>
+                      <FeatherIcon />
+                      <Text style={styles.addNoteBtnText}>Ajouter une légende...</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Envoyer */}
+                <View style={[styles.postCaptureActions, { bottom: 20 }]}>
+                  <TouchableOpacity style={styles.sendCaptureBtn} onPress={handleUploadAudio} disabled={isBlocked}>
+                    <View style={styles.sendCaptureInner}>
+                      <SendIcon color="#000" />
+                    </View>
+                  </TouchableOpacity>
                 </View>
               </View>
 
@@ -953,4 +1216,23 @@ const styles = StyleSheet.create({
   leaveModalConfirmText: { color: "#FFF", fontSize: 16, fontFamily: "Inter_700Bold" },
   debugBtn: { marginHorizontal: 24, marginTop: 24, marginBottom: 16, paddingVertical: 12, borderRadius: 12, backgroundColor: "rgba(255,200,0,0.15)", borderWidth: 1, borderColor: "rgba(255,200,0,0.4)", alignItems: "center" },
   debugBtnText: { color: "#FFD700", fontFamily: "Inter_600SemiBold", fontSize: 14 },
+  // Audio mode
+  captureBtnAudio: { borderColor: "rgba(255,255,255,0.4)" },
+  captureBtnAudioRecording: { borderColor: "#FFF" },
+  captureInnerAudio: { backgroundColor: "#FFF" },
+  captureInnerAudioRecording: { backgroundColor: "#FFF", width: 28, height: 28, borderRadius: 6 },
+  audioModeContainer: { flex: 1, justifyContent: "center", alignItems: "center", gap: 20, backgroundColor: "#0A0A0A" },
+  audioRecordingIndicator: { flexDirection: "row", alignItems: "center", gap: 12 },
+  audioRedDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#FF3B30" },
+  audioTimerText: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 38, letterSpacing: 2 },
+  audioHintText: { color: "rgba(255,255,255,0.3)", fontFamily: "Inter_400Regular", fontSize: 13, letterSpacing: 0.5, marginTop: 4 },
+  audioWaveformRow: { flexDirection: "row", alignItems: "center", gap: 4, height: 52 },
+  audioWaveformBar: { width: 3.5, height: 44, borderRadius: 2, backgroundColor: "#FFF" },
+  audioPreviewPlayer: { flexDirection: "row", alignItems: "center", gap: 14, marginTop: 32, paddingHorizontal: 24, width: "100%" },
+  audioPreviewPlayBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
+  audioPreviewSeekHitArea: { paddingVertical: 14, justifyContent: "center" },
+  audioPreviewTrack: { height: 3, backgroundColor: "rgba(255,255,255,0.22)", borderRadius: 2 },
+  audioPreviewFill: { height: 3, backgroundColor: "#FFF", borderRadius: 2 },
+  audioPreviewThumb: { position: "absolute", width: 13, height: 13, borderRadius: 7, backgroundColor: "#FFF", marginLeft: -6, top: 14 - 5 },
+  audioPreviewTime: { fontSize: 11, color: "rgba(255,255,255,0.5)", fontFamily: "Inter_400Regular" },
 });
