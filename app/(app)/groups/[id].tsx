@@ -1071,7 +1071,9 @@ export default function MainPagerScreen() {
         {/* PAGE 2: VAULT (Slides over Camera) */}
         <View key="page-2" style={[styles.page, { zIndex: 10 }]}>
           {unlocked ? (
-            <View style={styles.vaultUnlocked}><PhotoFeed photos={photos} onReact={handleReact} currentUserId={user?.id} nextUnlockDate={nextRevealDate} crownWinnerId={crownWinnerId} crownDurationMs={crownDurationMs} /></View>
+            <View style={styles.vaultUnlocked}>
+              <PhotoFeed photos={photos} onReact={handleReact} currentUserId={user?.id} nextUnlockDate={nextRevealDate} crownWinnerId={crownWinnerId} crownDurationMs={crownDurationMs} groupName={groupName} />
+            </View>
           ) : (
             <ScrollView style={[styles.pageContent, { paddingTop: insets.top + 40 }]} contentContainerStyle={{ paddingBottom: 160 }} showsVerticalScrollIndicator={false}>
               <View style={styles.vaultHeader}><Text style={[styles.pageTitleNoPad, { flexShrink: 1, marginRight: 12 }]}>{groupName || "Groupe"}</Text><TouchableOpacity onPress={() => setShowMembersModal(true)} style={styles.groupBtn}>{isAdmin ? <GroupAddIcon /> : <GroupIcon />}</TouchableOpacity></View>

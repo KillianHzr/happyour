@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useCallback, useRef } from "react";
+import { useMemo, useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   ViewToken,
   Platform,
   PanResponder,
+  Animated,
 } from "react-native";
 import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
@@ -45,6 +46,7 @@ export type PhotoEntry = {
 };
 
 type FeedItem =
+  | { type: "intro" }
   | { type: "crown" }
   | { type: "moment"; data: PhotoEntry }
   | { type: "separator"; date: string; label: string }
@@ -57,6 +59,7 @@ type Props = {
   nextUnlockDate: Date;
   crownWinnerId?: string | null;
   crownDurationMs?: number;
+  groupName?: string;
 };
 
 const ReactIcon = () => (
@@ -488,6 +491,52 @@ function VideoMoment({ moment, isVisible, isNearVisible, onReact, currentUserId,
   );
 }
 
+function RevealIntroPage({ groupName, isVisible }: { groupName?: string; isVisible: boolean }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(0.9)).current;
+  const hintOpacity = useRef(new Animated.Value(0)).current;
+  const hintY = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!isVisible) return;
+    opacity.setValue(0);
+    scale.setValue(0.9);
+    hintOpacity.setValue(0);
+    hintY.setValue(0);
+    Animated.sequence([
+      Animated.parallel([
+        Animated.timing(opacity, { toValue: 1, duration: 500, useNativeDriver: true }),
+        Animated.spring(scale, { toValue: 1, tension: 55, friction: 9, useNativeDriver: true }),
+      ]),
+      Animated.delay(300),
+      Animated.timing(hintOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+    ]).start(() => {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(hintY, { toValue: 8, duration: 600, useNativeDriver: true }),
+          Animated.timing(hintY, { toValue: 0, duration: 600, useNativeDriver: true }),
+        ])
+      ).start();
+    });
+  }, [isVisible]);
+
+  return (
+    <View style={styles.fullscreenPage}>
+      <Animated.View style={{ alignItems: "center", opacity, transform: [{ scale }] }}>
+        <Text style={styles.revealIntroEyebrow}>cette semaine</Text>
+        <Text style={styles.revealIntroTitle}>Le Reveal</Text>
+        {groupName ? <Text style={styles.revealIntroGroup}>{groupName}</Text> : null}
+      </Animated.View>
+      <Animated.View style={[styles.revealIntroHint, { opacity: hintOpacity, transform: [{ translateY: hintY }] }]}>
+        <Svg width={24} height={24} viewBox="0 0 24 24">
+          <Path d="M12 5v14M5 12l7 7 7-7" stroke="rgba(255,255,255,0.35)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+        <Text style={styles.revealIntroHintText}>Scroll</Text>
+      </Animated.View>
+    </View>
+  );
+}
+
 function formatCrownDuration(ms: number): string {
   const totalMinutes = Math.floor(ms / 60000);
   const days = Math.floor(totalMinutes / 1440);
@@ -522,7 +571,7 @@ function CrownRevealPage({ winner, durationMs }: { winner: PhotoEntry; durationM
   );
 }
 
-export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDate, crownWinnerId, crownDurationMs = 0 }: Props) {
+export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDate, crownWinnerId, crownDurationMs = 0, groupName }: Props) {
   const insets = useSafeAreaInsets();
   const [visibleIndex, setVisibleIndex] = useState(0);
   const [openPickerId, setOpenPickerId] = useState<string | null>(null);
@@ -537,6 +586,7 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
   const items = useMemo<FeedItem[]>(() => {
     if (photos.length === 0) return [];
     const result: FeedItem[] = [];
+    result.push({ type: "intro" });
     if (crownWinnerId) result.push({ type: "crown" });
     let lastDate = "";
     for (const photo of photos) {
@@ -552,6 +602,10 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
   }, [photos, crownWinnerId]);
 
   const renderItem = ({ item, index }: { item: FeedItem; index: number }) => {
+    if (item.type === "intro") {
+      return <RevealIntroPage groupName={groupName} isVisible={index === visibleIndex} />;
+    }
+
     if (item.type === "crown") {
       const winner = photos.find((p) => p.user_id === crownWinnerId);
       if (!winner) return null;
@@ -741,6 +795,11 @@ const styles = StyleSheet.create({
   pickerItem: { flex: 1, minWidth: "28%", alignItems: "center", gap: 8, paddingVertical: 16, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.06)", borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" },
   pickerItemActive: { backgroundColor: "rgba(255,255,255,0.18)", borderColor: "rgba(255,255,255,0.35)" },
   pickerLabel: { color: "rgba(255,255,255,0.5)", fontFamily: "Inter_600SemiBold", fontSize: 11 },
+  revealIntroEyebrow: { fontFamily: "Inter_400Regular", fontSize: 13, color: "rgba(255,255,255,0.4)", letterSpacing: 4, textTransform: "uppercase", marginBottom: 10 },
+  revealIntroTitle: { fontFamily: "Inter_700Bold", fontSize: 58, color: "#FFF", letterSpacing: -1.5, lineHeight: 62 },
+  revealIntroGroup: { fontFamily: "Inter_400Regular", fontSize: 18, color: "rgba(255,255,255,0.4)", marginTop: 10, textAlign: "center" },
+  revealIntroHint: { position: "absolute", bottom: NAVBAR_HEIGHT + 24, alignItems: "center", gap: 6 },
+  revealIntroHintText: { fontFamily: "Inter_400Regular", fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: 2, textTransform: "uppercase" },
   crownRevealInner: { alignItems: "center", paddingHorizontal: 32 },
   crownRevealTitle: { fontFamily: "Inter_700Bold", fontSize: 13, color: "#FFD700", letterSpacing: 2, textTransform: "uppercase", marginBottom: 28, marginTop: 8 },
   crownRevealAvatarWrap: { marginBottom: 20 },
