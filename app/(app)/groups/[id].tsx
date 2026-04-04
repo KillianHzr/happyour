@@ -45,6 +45,7 @@ import PhotoFeed, { type PhotoEntry, type Reaction } from "../../../components/P
 import { type StickerId } from "../../../components/stickers";
 import Loader from "../../../components/Loader";
 import StandardCamera from "../../../components/StandardCamera";
+import DrawingCanvas, { type DrawingCanvasRef } from "../../../components/DrawingCanvas";
 import { ProfileIcon, VaultIcon, MomentIcon } from "../../../components/icons";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -117,7 +118,7 @@ function getWeekBounds(revealDayOfWeek = 0, revealHour = 20) {
   return { monday, revealDate, prevRevealDate };
 }
 
-type CameraMode = "PHOTO" | "VIDEO" | "TEXTE" | "AUDIO";
+type CameraMode = "PHOTO" | "VIDEO" | "AUDIO" | "DESSIN" | "TEXTE";
 
 export default function MainPagerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -150,6 +151,7 @@ export default function MainPagerScreen() {
 
   // -- Camera State --
   const cameraRef = useRef<CameraView>(null);
+  const drawingRef = useRef<DrawingCanvasRef>(null);
   const [cameraMode, setCameraMode] = useState<CameraMode>("PHOTO");
   const [facing, setFacing] = useState<CameraType>('back');
   const [flash, setFlash] = useState<FlashMode>('off');
@@ -439,6 +441,17 @@ export default function MainPagerScreen() {
       else await startAudioRecording();
       return;
     }
+    if (cameraMode === "DESSIN") {
+      if (!drawingRef.current) return;
+      setCapturing(true);
+      try {
+        const uri = await drawingRef.current.capture();
+        if (uri) setCapturedUri(uri);
+      } finally {
+        setCapturing(false);
+      }
+      return;
+    }
     if (cameraMode === "VIDEO") {
       if (isRecording) stopVideoRecording();
       else startVideoRecording();
@@ -626,7 +639,7 @@ export default function MainPagerScreen() {
   const handleUploadPhoto = () => {
     if (!capturedUri || !user) return;
     const dbData = { group_id: id as string, user_id: user.id, note: note.trim() || null };
-    const fileName = `${id}/${user.id}_${Date.now()}.jpg`;
+    const fileName = `${id}/${user.id}_${Date.now()}${cameraMode === "DESSIN" ? "_draw" : ""}.jpg`;
     startUpload(fileName, capturedUri, "image/jpeg", dbData);
     setCapturedUri(null);
     setNote("");
@@ -713,6 +726,10 @@ export default function MainPagerScreen() {
           {!capturedUri && !capturedAudioUri ? (
             cameraMode === "TEXTE" ? (
               <View style={styles.textModeContainer}><TextInput style={styles.textModeInput} placeholder="Écris..." placeholderTextColor="rgba(255,255,255,0.3)" multiline value={textModeContent} onChangeText={setTextModeContent} autoFocus disabled={isBlocked} /></View>
+            ) : cameraMode === "DESSIN" ? (
+              <View style={StyleSheet.absoluteFill}>
+                <DrawingCanvas ref={drawingRef} />
+              </View>
             ) : cameraMode === "AUDIO" ? (
               <View style={styles.audioModeContainer}>
                 {isAudioRecording ? (
@@ -787,12 +804,12 @@ export default function MainPagerScreen() {
               
               <View style={[styles.cameraFooter, { bottom: NAVBAR_HEIGHT + 24 }]}>
                 <View style={styles.modeSlider}>
-                  {["PHOTO", "VIDEO", "AUDIO", "TEXTE"].map((m: any) => (
+                  {["PHOTO", "VIDEO", "AUDIO", "DESSIN", "TEXTE"].map((m: any) => (
                     <TouchableOpacity key={m} onPress={() => setCameraMode(m)} disabled={isRecording || isAudioRecording || isBlocked}><Text style={[styles.modeText, cameraMode === m && styles.modeTextActive]}>{m}</Text></TouchableOpacity>
                   ))}
                 </View>
                 <View style={styles.captureRow}>
-                  {cameraMode !== "TEXTE" && <View style={styles.sideControlPlaceholder} />}
+                  {(cameraMode !== "TEXTE" && cameraMode !== "DESSIN") && <View style={styles.sideControlPlaceholder} />}
                   <TouchableOpacity
                     style={[styles.captureBtn, (cameraMode === "VIDEO" || isRecording) && styles.captureBtnVideo, isRecording && styles.captureBtnRecording, cameraMode === "AUDIO" && styles.captureBtnAudio, isAudioRecording && styles.captureBtnAudioRecording]}
                     onPress={handleCapture}
@@ -803,6 +820,11 @@ export default function MainPagerScreen() {
                   >
                     <View style={[styles.captureInner, (cameraMode === "VIDEO" || isRecording) && styles.captureInnerVideo, isRecording && styles.captureInnerRecording, cameraMode === "AUDIO" && styles.captureInnerAudio, isAudioRecording && styles.captureInnerAudioRecording]}>
                       {cameraMode === "TEXTE" && <SendIcon color="#000" />}
+                      {cameraMode === "DESSIN" && (
+                        <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <Path d="M20 6L9 17l-5-5" />
+                        </Svg>
+                      )}
                       {cameraMode === "AUDIO" && !isAudioRecording && (
                         <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                           <Path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
@@ -815,7 +837,7 @@ export default function MainPagerScreen() {
                       )}
                     </View>
                   </TouchableOpacity>
-                  {cameraMode !== "TEXTE" && cameraMode !== "AUDIO" && (
+                  {cameraMode !== "TEXTE" && cameraMode !== "AUDIO" && cameraMode !== "DESSIN" && (
                     <TouchableOpacity style={styles.flipBtn} onPress={() => setFacing(prev => prev === 'back' ? 'front' : 'back')} disabled={isRecording || isBlocked}>
                       <FlipIcon />
                     </TouchableOpacity>
