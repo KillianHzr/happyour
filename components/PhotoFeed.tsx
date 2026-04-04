@@ -45,6 +45,7 @@ export type PhotoEntry = {
 };
 
 type FeedItem =
+  | { type: "crown" }
   | { type: "moment"; data: PhotoEntry }
   | { type: "separator"; date: string; label: string }
   | { type: "end" };
@@ -54,6 +55,8 @@ type Props = {
   onReact?: (photoId: string, stickerId: StickerId) => void;
   currentUserId?: string;
   nextUnlockDate: Date;
+  crownWinnerId?: string | null;
+  crownDurationMs?: number;
 };
 
 const ReactIcon = () => (
@@ -117,11 +120,30 @@ function UserAvatar({ avatar_url, username, size = 28 }: { avatar_url?: string |
   );
 }
 
-function ReactionsRow({ reactions, currentUserId, onReact, photoId }: {
+function CrownedAvatar({ avatar_url, username, size = 36, isCrown }: { avatar_url?: string | null; username: string; size?: number; isCrown: boolean }) {
+  const crownSize = Math.round(size * 0.6);
+  return (
+    <View style={{ width: size, height: size + (isCrown ? crownSize * 0.6 : 0), alignItems: "center", justifyContent: "flex-end" }}>
+      {isCrown && (
+        <View style={{ position: "absolute", top: 0, zIndex: 10 }}>
+          <Svg width={crownSize} height={crownSize} viewBox="0 0 24 24">
+            <Path d="M2 19l2-9 4.5 4L12 5l3.5 9L20 10l2 9H2z" fill="#FFD700" stroke="#B8860B" strokeWidth="1" strokeLinejoin="round" />
+          </Svg>
+        </View>
+      )}
+      <View style={isCrown ? { borderWidth: 2, borderColor: "#FFD700", borderRadius: size / 2 } : undefined}>
+        <UserAvatar avatar_url={avatar_url} username={username} size={size} />
+      </View>
+    </View>
+  );
+}
+
+function ReactionsRow({ reactions, currentUserId, onReact, photoId, crownWinnerId }: {
   reactions: Reaction[];
   currentUserId?: string;
   onReact?: (photoId: string, stickerId: StickerId) => void;
   photoId: string;
+  crownWinnerId?: string | null;
 }) {
   if (reactions.length === 0) return null;
 
@@ -137,10 +159,11 @@ function ReactionsRow({ reactions, currentUserId, onReact, photoId }: {
     <View style={styles.reactionsRow}>
       {groups.map(({ id, Component, users }) => {
         const iMine = users.some((r) => r.user_id === currentUserId);
+        const isCrownReaction = crownWinnerId != null && users.some((r) => r.user_id === crownWinnerId);
         return (
           <TouchableOpacity
             key={id}
-            style={[styles.reactionBubble, iMine && styles.reactionBubbleMine]}
+            style={[styles.reactionBubble, iMine && styles.reactionBubbleMine, isCrownReaction && styles.reactionBubbleCrown]}
             onPress={() => onReact?.(photoId, id as StickerId)}
             activeOpacity={0.75}
           >
@@ -236,11 +259,12 @@ function fmtAudio(s: number) {
 }
 
 // --- Moment audio ---
-function AudioMoment({ moment, isVisible, onReact, currentUserId }: {
+function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId }: {
   moment: PhotoEntry;
   isVisible: boolean;
   onReact?: (photoId: string, stickerId: StickerId) => void;
   currentUserId?: string;
+  crownWinnerId?: string | null;
 }) {
   const insets = useSafeAreaInsets();
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -352,7 +376,7 @@ function AudioMoment({ moment, isVisible, onReact, currentUserId }: {
 
             {/* Auteur */}
             <View style={styles.authorInfo}>
-              <UserAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} />
+              <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={crownWinnerId === moment.user_id} />
               <View style={{ flex: 1 }}>
                 <View style={styles.usernameLine}>
                   <Text style={styles.username}>{moment.username}</Text>
@@ -366,7 +390,7 @@ function AudioMoment({ moment, isVisible, onReact, currentUserId }: {
                 </TouchableOpacity>
               )}
             </View>
-            <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={isOwn ? undefined : onReact} photoId={moment.id} />
+            <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={isOwn ? undefined : onReact} photoId={moment.id} crownWinnerId={crownWinnerId} />
           </LinearGradient>
         </View>
       </View>
@@ -376,12 +400,13 @@ function AudioMoment({ moment, isVisible, onReact, currentUserId }: {
 }
 
 // --- Moment vidéo ---
-function VideoMoment({ moment, isVisible, isNearVisible, onReact, currentUserId }: {
+function VideoMoment({ moment, isVisible, isNearVisible, onReact, currentUserId, crownWinnerId }: {
   moment: PhotoEntry;
   isVisible: boolean;
   isNearVisible: boolean;
   onReact?: (photoId: string, stickerId: StickerId) => void;
   currentUserId?: string;
+  crownWinnerId?: string | null;
 }) {
   const insets = useSafeAreaInsets();
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -440,7 +465,7 @@ function VideoMoment({ moment, isVisible, isNearVisible, onReact, currentUserId 
         <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
           <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.momentOverlay}>
             <View style={styles.authorInfo}>
-              <UserAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} />
+              <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={crownWinnerId === moment.user_id} />
               <View style={{ flex: 1 }}>
                 <View style={styles.usernameLine}>
                   <Text style={styles.username}>{moment.username}</Text>
@@ -454,7 +479,7 @@ function VideoMoment({ moment, isVisible, isNearVisible, onReact, currentUserId 
                 </TouchableOpacity>
               )}
             </View>
-            <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={isOwn ? undefined : onReact} photoId={moment.id} />
+            <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={isOwn ? undefined : onReact} photoId={moment.id} crownWinnerId={crownWinnerId} />
           </LinearGradient>
         </View>
       </View>
@@ -463,7 +488,41 @@ function VideoMoment({ moment, isVisible, isNearVisible, onReact, currentUserId 
   );
 }
 
-export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDate }: Props) {
+function formatCrownDuration(ms: number): string {
+  const totalMinutes = Math.floor(ms / 60000);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days}j`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0 || parts.length === 0) parts.push(`${minutes}min`);
+  return parts.join(" ");
+}
+
+function CrownRevealPage({ winner, durationMs }: { winner: PhotoEntry; durationMs: number }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[styles.fullscreenPage, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 24, backgroundColor: "#0A0A0A", alignItems: "center", justifyContent: "center" }]}>
+      <View style={styles.crownRevealInner}>
+        <Svg width={64} height={64} viewBox="0 0 24 24" style={{ marginBottom: 4 }}>
+          <Path d="M2 19l2-9 4.5 4L12 5l3.5 9L20 10l2 9H2z" fill="#FFD700" stroke="#B8860B" strokeWidth="0.8" strokeLinejoin="round" />
+        </Svg>
+        <Text style={styles.crownRevealTitle}>Couronne de la semaine</Text>
+        <View style={styles.crownRevealAvatarWrap}>
+          <View style={{ borderWidth: 3, borderColor: "#FFD700", borderRadius: 44 }}>
+            <UserAvatar avatar_url={winner.avatar_url} username={winner.username} size={80} />
+          </View>
+        </View>
+        <Text style={styles.crownRevealUsername}>{winner.username}</Text>
+        <Text style={styles.crownRevealDurationLabel}>a tenu la couronne pendant</Text>
+        <Text style={styles.crownRevealDuration}>{formatCrownDuration(durationMs)}</Text>
+      </View>
+    </View>
+  );
+}
+
+export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDate, crownWinnerId, crownDurationMs = 0 }: Props) {
   const insets = useSafeAreaInsets();
   const [visibleIndex, setVisibleIndex] = useState(0);
   const [openPickerId, setOpenPickerId] = useState<string | null>(null);
@@ -478,6 +537,7 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
   const items = useMemo<FeedItem[]>(() => {
     if (photos.length === 0) return [];
     const result: FeedItem[] = [];
+    if (crownWinnerId) result.push({ type: "crown" });
     let lastDate = "";
     for (const photo of photos) {
       const d = photo.created_at.slice(0, 10);
@@ -489,9 +549,15 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
     }
     result.push({ type: "end" });
     return result;
-  }, [photos]);
+  }, [photos, crownWinnerId]);
 
   const renderItem = ({ item, index }: { item: FeedItem; index: number }) => {
+    if (item.type === "crown") {
+      const winner = photos.find((p) => p.user_id === crownWinnerId);
+      if (!winner) return null;
+      return <CrownRevealPage winner={winner} durationMs={crownDurationMs} />;
+    }
+
     if (item.type === "separator") {
       const [day, date] = item.label.split("\n");
       return (
@@ -523,13 +589,15 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
     const myReaction = moment.reactions.find((r) => r.user_id === currentUserId)?.sticker_id ?? null;
 
     if (isAudio) {
-      return <AudioMoment moment={moment} isVisible={index === visibleIndex} onReact={onReact} currentUserId={currentUserId} />;
+      return <AudioMoment moment={moment} isVisible={index === visibleIndex} onReact={onReact} currentUserId={currentUserId} crownWinnerId={crownWinnerId} />;
     }
 
     if (isVideo) {
       const isNearVisible = Math.abs(index - visibleIndex) <= 1;
-      return <VideoMoment moment={moment} isVisible={index === visibleIndex} isNearVisible={isNearVisible} onReact={onReact} currentUserId={currentUserId} />;
+      return <VideoMoment moment={moment} isVisible={index === visibleIndex} isNearVisible={isNearVisible} onReact={onReact} currentUserId={currentUserId} crownWinnerId={crownWinnerId} />;
     }
+
+    const isCrown = crownWinnerId === moment.user_id;
 
     return (
       <View style={[styles.fullscreenPage, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12 }]}>
@@ -540,7 +608,7 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
                 <Text style={[styles.textMomentContent, { fontSize, lineHeight: Math.round(fontSize * 1.4) }]}>{moment.note}</Text>
                 <View style={styles.citationFooter}>
                   <View style={styles.citationAvatar}>
-                    <UserAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} />
+                    <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} isCrown={isCrown} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.citationUsername}>{moment.username}</Text>
@@ -562,7 +630,7 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
             <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.momentOverlay}>
               {!isTextOnly && (
                 <View style={styles.authorInfo}>
-                  <UserAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} />
+                  <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={isCrown} />
                   <View style={{ flex: 1 }}>
                     <View style={styles.usernameLine}>
                       <Text style={styles.username}>{moment.username}</Text>
@@ -577,7 +645,7 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
                   )}
                 </View>
               )}
-              <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={isOwn ? undefined : onReact} photoId={moment.id} />
+              <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={isOwn ? undefined : onReact} photoId={moment.id} crownWinnerId={crownWinnerId} />
             </LinearGradient>
           </View>
         </View>
@@ -636,7 +704,7 @@ const styles = StyleSheet.create({
   quoteContainer: { width: "100%", alignItems: "center", gap: 32 },
   textMomentContent: { fontFamily: "Inter_700Bold", color: "#FFF", textAlign: "center", letterSpacing: -0.5 },
   citationFooter: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 20 },
-  citationAvatar: { borderRadius: 16, overflow: "hidden" },
+  citationAvatar: { borderRadius: 16 },
   citationUsername: { color: "rgba(255,255,255,0.5)", fontFamily: "Inter_600SemiBold", fontSize: 15 },
   citationTime: { color: "rgba(255,255,255,0.6)", fontFamily: "Inter_600SemiBold", fontSize: 13, marginTop: 3 },
   momentTime: { color: "rgba(255,255,255,0.55)", fontFamily: "Inter_600SemiBold", fontSize: 12 },
@@ -649,6 +717,7 @@ const styles = StyleSheet.create({
   reactionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   reactionBubble: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 20, paddingHorizontal: 8, paddingVertical: 5, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
   reactionBubbleMine: { backgroundColor: "rgba(255,255,255,0.28)", borderColor: "rgba(255,255,255,0.4)" },
+  reactionBubbleCrown: { borderColor: "#FFD700", borderWidth: 1.5 },
   reactionAvatarStack: { flexDirection: "row" },
   reactionAvatarWrap: { borderRadius: 10, overflow: "hidden", borderWidth: 1.5, borderColor: "rgba(0,0,0,0.3)" },
   reactionStickerWrap: { marginLeft: 2 },
@@ -672,6 +741,12 @@ const styles = StyleSheet.create({
   pickerItem: { flex: 1, minWidth: "28%", alignItems: "center", gap: 8, paddingVertical: 16, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.06)", borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" },
   pickerItemActive: { backgroundColor: "rgba(255,255,255,0.18)", borderColor: "rgba(255,255,255,0.35)" },
   pickerLabel: { color: "rgba(255,255,255,0.5)", fontFamily: "Inter_600SemiBold", fontSize: 11 },
+  crownRevealInner: { alignItems: "center", paddingHorizontal: 32 },
+  crownRevealTitle: { fontFamily: "Inter_700Bold", fontSize: 13, color: "#FFD700", letterSpacing: 2, textTransform: "uppercase", marginBottom: 28, marginTop: 8 },
+  crownRevealAvatarWrap: { marginBottom: 20 },
+  crownRevealUsername: { fontFamily: "Inter_700Bold", fontSize: 28, color: "#FFF", marginBottom: 12, textAlign: "center" },
+  crownRevealDurationLabel: { fontFamily: "Inter_400Regular", fontSize: 14, color: "rgba(255,255,255,0.5)", marginBottom: 6 },
+  crownRevealDuration: { fontFamily: "Inter_700Bold", fontSize: 38, color: "#FFD700", letterSpacing: 1 },
   endLogoMark: { width: 32, height: 32, borderWidth: 2, borderColor: "#FFF", borderRadius: 6, marginBottom: 24, transform: [{ rotate: "45deg" }] },
   endTitle: { fontFamily: "Inter_700Bold", fontSize: 24, color: "#FFF" },
   endSubtitle: { fontFamily: "Inter_400Regular", fontSize: 14, color: "rgba(255,255,255,0.4)", marginTop: 8 },

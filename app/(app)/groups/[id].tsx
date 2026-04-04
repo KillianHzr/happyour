@@ -47,6 +47,7 @@ import Loader from "../../../components/Loader";
 import StandardCamera from "../../../components/StandardCamera";
 import DrawingCanvas, { type DrawingCanvasRef } from "../../../components/DrawingCanvas";
 import { ProfileIcon, VaultIcon, MomentIcon } from "../../../components/icons";
+import { computeCrownWinner } from "../../../lib/crown";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const NAVBAR_HEIGHT = 100;
@@ -135,6 +136,8 @@ export default function MainPagerScreen() {
   const [members, setMembers] = useState<any[]>([]);
   const [photoCount, setPhotoCount] = useState(0);
   const [photos, setPhotos] = useState<PhotoEntry[]>([]);
+  const [crownWinnerId, setCrownWinnerId] = useState<string | null>(null);
+  const [crownDurationMs, setCrownDurationMs] = useState<number>(0);
   const [username, setUsername] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [email, setEmail] = useState("");
@@ -294,6 +297,9 @@ export default function MainPagerScreen() {
           reactions: reactionsByPhoto[p.id] ?? [],
         }));
         setPhotos(entries);
+        const crown = computeCrownWinner(entries, prevRevealDate, currentRevealDate);
+        setCrownWinnerId(crown?.winnerId ?? null);
+        setCrownDurationMs(crown?.durationMs ?? 0);
       }
       setDataLoaded(true);
     } catch (e) {
@@ -1065,7 +1071,7 @@ export default function MainPagerScreen() {
         {/* PAGE 2: VAULT (Slides over Camera) */}
         <View key="page-2" style={[styles.page, { zIndex: 10 }]}>
           {unlocked ? (
-            <View style={styles.vaultUnlocked}><PhotoFeed photos={photos} onReact={handleReact} currentUserId={user?.id} nextUnlockDate={nextRevealDate} /></View>
+            <View style={styles.vaultUnlocked}><PhotoFeed photos={photos} onReact={handleReact} currentUserId={user?.id} nextUnlockDate={nextRevealDate} crownWinnerId={crownWinnerId} crownDurationMs={crownDurationMs} /></View>
           ) : (
             <ScrollView style={[styles.pageContent, { paddingTop: insets.top + 40 }]} contentContainerStyle={{ paddingBottom: 160 }} showsVerticalScrollIndicator={false}>
               <View style={styles.vaultHeader}><Text style={[styles.pageTitleNoPad, { flexShrink: 1, marginRight: 12 }]}>{groupName || "Groupe"}</Text><TouchableOpacity onPress={() => setShowMembersModal(true)} style={styles.groupBtn}>{isAdmin ? <GroupAddIcon /> : <GroupIcon />}</TouchableOpacity></View>
