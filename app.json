@@ -40,7 +40,6 @@
     "scheme": "happyour",
     "plugins": [
       "expo-router",
-      "@shopify/react-native-skia",
       "expo-font",
       "expo-image",
       "expo-secure-store",

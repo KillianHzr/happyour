@@ -153,6 +153,8 @@ export default function MainPagerScreen() {
   const cameraRef = useRef<CameraView>(null);
   const drawingRef = useRef<DrawingCanvasRef>(null);
   const [cameraMode, setCameraMode] = useState<CameraMode>("PHOTO");
+  const [drawingColor, setDrawingColor] = useState("#FFFFFF");
+  const [isDrawingActive, setIsDrawingActive] = useState(false);
   const [facing, setFacing] = useState<CameraType>('back');
   const [flash, setFlash] = useState<FlashMode>('off');
   const [zoom, setZoom] = useState(0);
@@ -442,6 +444,10 @@ export default function MainPagerScreen() {
       return;
     }
     if (cameraMode === "DESSIN") {
+      if (!isDrawingActive) {
+        setIsDrawingActive(true);
+        return;
+      }
       if (!drawingRef.current) return;
       setCapturing(true);
       try {
@@ -643,6 +649,7 @@ export default function MainPagerScreen() {
     startUpload(fileName, capturedUri, "image/jpeg", dbData);
     setCapturedUri(null);
     setNote("");
+    setIsDrawingActive(false);
     fetchData();
   };
 
@@ -726,9 +733,17 @@ export default function MainPagerScreen() {
           {!capturedUri && !capturedAudioUri ? (
             cameraMode === "TEXTE" ? (
               <View style={styles.textModeContainer}><TextInput style={styles.textModeInput} placeholder="Écris..." placeholderTextColor="rgba(255,255,255,0.3)" multiline value={textModeContent} onChangeText={setTextModeContent} autoFocus disabled={isBlocked} /></View>
-            ) : cameraMode === "DESSIN" ? (
+            ) : cameraMode === "DESSIN" && !isDrawingActive ? (
+              <View style={styles.audioModeContainer}>
+                <Svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+                  <Path d="M12 20h9" />
+                  <Path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                </Svg>
+                <Text style={styles.audioHintText}>Appuie pour commencer à dessiner</Text>
+              </View>
+            ) : cameraMode === "DESSIN" && isDrawingActive ? (
               <View style={StyleSheet.absoluteFill}>
-                <DrawingCanvas ref={drawingRef} />
+                <DrawingCanvas ref={drawingRef} color={drawingColor} />
               </View>
             ) : cameraMode === "AUDIO" ? (
               <View style={styles.audioModeContainer}>
@@ -789,6 +804,15 @@ export default function MainPagerScreen() {
           {/* Camera UI Overlay */}
           {!capturedUri && !capturedAudioUri && (
             <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+              {cameraMode === "DESSIN" && isDrawingActive && (
+                <TouchableOpacity
+                  pointerEvents="auto"
+                  style={[styles.drawingCancelBtn, { top: Math.max(insets.top, 16) + 8 }]}
+                  onPress={() => setIsDrawingActive(false)}
+                >
+                  <CloseIcon />
+                </TouchableOpacity>
+              )}
               {isRecording && (
                 <View style={[styles.recordingTimer, { top: Math.max(insets.top, 40) }]}>
                   <View style={styles.recordingDot} />
@@ -803,13 +827,49 @@ export default function MainPagerScreen() {
               )}
               
               <View style={[styles.cameraFooter, { bottom: NAVBAR_HEIGHT + 24 }]}>
-                <View style={styles.modeSlider}>
-                  {["PHOTO", "VIDEO", "AUDIO", "DESSIN", "TEXTE"].map((m: any) => (
-                    <TouchableOpacity key={m} onPress={() => setCameraMode(m)} disabled={isRecording || isAudioRecording || isBlocked}><Text style={[styles.modeText, cameraMode === m && styles.modeTextActive]}>{m}</Text></TouchableOpacity>
-                  ))}
-                </View>
+                {cameraMode === "DESSIN" && isDrawingActive ? (
+                  <View style={styles.drawingToolbar}>
+                    <TouchableOpacity
+                      style={styles.drawingUndoBtn}
+                      onPress={() => drawingRef.current?.undo()}
+                    >
+                      <Svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <Path d="M1 4v6h6" /><Path d="M3.51 15a9 9 0 1 0 .49-3.51L1 10" />
+                      </Svg>
+                    </TouchableOpacity>
+                    {["#FFFFFF","#FF3B30","#FF9F0A","#FFD60A","#30D158","#0A84FF","#BF5AF2","#FF375F","#000000"].map((c) => (
+                      <TouchableOpacity
+                        key={c}
+                        onPress={() => setDrawingColor(c)}
+                        style={[
+                          styles.drawingColorDot,
+                          { backgroundColor: c },
+                          c === "#FFFFFF" && { borderWidth: 1, borderColor: "rgba(255,255,255,0.4)" },
+                          c === "#000000" && { borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
+                          drawingColor === c && styles.drawingColorDotActive,
+                        ]}
+                      />
+                    ))}
+                    <TouchableOpacity
+                      style={styles.drawingUndoBtn}
+                      onPress={() => drawingRef.current?.redo()}
+                    >
+                      <Svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <Path d="M23 4v6h-6" /><Path d="M20.49 15a9 9 0 1 1-.49-3.51L23 10" />
+                      </Svg>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.modeSlider}>
+                    {["PHOTO", "VIDEO", "AUDIO", "DESSIN", "TEXTE"].map((m: any) => (
+                      <TouchableOpacity key={m} onPress={() => { setCameraMode(m); if (m !== "DESSIN") setIsDrawingActive(false); }} disabled={isRecording || isAudioRecording || isBlocked}>
+                        <Text style={[styles.modeText, cameraMode === m && styles.modeTextActive]}>{m}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
                 <View style={styles.captureRow}>
-                  {(cameraMode !== "TEXTE" && cameraMode !== "DESSIN") && <View style={styles.sideControlPlaceholder} />}
+                  {cameraMode !== "TEXTE" && <View style={styles.sideControlPlaceholder} />}
                   <TouchableOpacity
                     style={[styles.captureBtn, (cameraMode === "VIDEO" || isRecording) && styles.captureBtnVideo, isRecording && styles.captureBtnRecording, cameraMode === "AUDIO" && styles.captureBtnAudio, isAudioRecording && styles.captureBtnAudioRecording]}
                     onPress={handleCapture}
@@ -820,7 +880,12 @@ export default function MainPagerScreen() {
                   >
                     <View style={[styles.captureInner, (cameraMode === "VIDEO" || isRecording) && styles.captureInnerVideo, isRecording && styles.captureInnerRecording, cameraMode === "AUDIO" && styles.captureInnerAudio, isAudioRecording && styles.captureInnerAudioRecording]}>
                       {cameraMode === "TEXTE" && <SendIcon color="#000" />}
-                      {cameraMode === "DESSIN" && (
+                      {cameraMode === "DESSIN" && !isDrawingActive && (
+                        <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <Path d="M12 20h9" /><Path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                        </Svg>
+                      )}
+                      {cameraMode === "DESSIN" && isDrawingActive && (
                         <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                           <Path d="M20 6L9 17l-5-5" />
                         </Svg>
@@ -842,7 +907,7 @@ export default function MainPagerScreen() {
                       <FlipIcon />
                     </TouchableOpacity>
                   )}
-                  {cameraMode === "AUDIO" && <View style={styles.sideControlPlaceholder} />}
+                  {(cameraMode === "AUDIO" || cameraMode === "DESSIN") && <View style={styles.sideControlPlaceholder} />}
                 </View>
               </View>
             </View>
@@ -856,7 +921,7 @@ export default function MainPagerScreen() {
                 <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
                   <TouchableOpacity 
                     style={[styles.backCaptureBtnInside, { top: 16 }]} 
-                    onPress={() => { setCapturedUri(null); setNote(""); }} 
+                    onPress={() => { setCapturedUri(null); setNote(""); setIsDrawingActive(false); }}
                     disabled={isBlocked}
                   >
                     <CloseIcon />
@@ -1170,6 +1235,11 @@ const styles = StyleSheet.create({
   debugBtnText: { color: "#FFD700", fontFamily: "Inter_600SemiBold", fontSize: 14 },
   cameraFooter: { position: "absolute", left: 0, right: 0, alignItems: "center", gap: 24 },
   modeSlider: { flexDirection: "row", gap: 20, backgroundColor: "rgba(0,0,0,0.3)", paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, marginBottom: 12 },
+  drawingToolbar: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999, marginBottom: 12 },
+  drawingColorDot: { width: 22, height: 22, borderRadius: 11 },
+  drawingColorDotActive: { transform: [{ scale: 1.35 }], shadowColor: "#FFF", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.7, shadowRadius: 5, elevation: 6 },
+  drawingUndoBtn: { width: 30, height: 30, borderRadius: 15, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
+  drawingCancelBtn: { position: "absolute", left: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
   modeText: { color: "rgba(255,255,255,0.4)", fontFamily: "Inter_700Bold", fontSize: 12 },
   modeTextActive: { color: "#FFF" },
   captureRow: { flexDirection: "row", alignItems: "center", gap: 32 },
