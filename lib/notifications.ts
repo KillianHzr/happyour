@@ -169,12 +169,38 @@ export async function cancelAllRecapNotifications() {
   try {
     const all = await Notifications.getAllScheduledNotificationsAsync();
     for (const n of all) {
-      if (n.identifier.startsWith("recap_")) {
+      if (n.identifier.startsWith("recap_") || n.identifier.startsWith("countdown_")) {
         await Notifications.cancelScheduledNotificationAsync(n.identifier);
       }
     }
   } catch (e) {
     console.warn("cancelAllRecapNotifications error:", e);
+  }
+}
+
+export async function scheduleCountdownNotification(
+  groupId: string,
+  groupName: string,
+  unlockDate: Date
+) {
+  if (!Notifications) return;
+  const now = new Date();
+  const sixHoursBefore = new Date(unlockDate.getTime() - 6 * 3600 * 1000);
+  const secondsUntil = Math.floor((sixHoursBefore.getTime() - now.getTime()) / 1000);
+  if (secondsUntil <= 0) return;
+  try {
+    await Notifications.scheduleNotificationAsync({
+      identifier: `countdown_${groupId}`,
+      content: {
+        title: "Le coffre ouvre bientôt 🔓",
+        body: `Plus que 6h avant de découvrir les moments de "${groupName}"`,
+        data: { type: "recap", groupId },
+        channelId: "default",
+      },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: secondsUntil },
+    });
+  } catch (e) {
+    console.warn("scheduleCountdownNotification error:", e);
   }
 }
 
@@ -199,6 +225,7 @@ export async function scheduleAllRecaps(userId: string) {
     const groupName = m.groups?.name;
     if (groupName) {
       await scheduleRecapNotification(m.group_id, groupName, sunday);
+      await scheduleCountdownNotification(m.group_id, groupName, sunday);
     }
   }
 }
