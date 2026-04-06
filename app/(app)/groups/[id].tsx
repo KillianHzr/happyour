@@ -70,9 +70,15 @@ export default function MainPagerScreen() {
   const [revealConfig, setRevealConfig] = useState({ day: 0, hour: 20 });
 
   const { revealDate } = getWeekBounds(revealConfig.day, revealConfig.hour);
-  const nextRevealDate = new Date(revealDate);
-  nextRevealDate.setDate(revealDate.getDate() + 7);
-  const unlocked = __DEV__ ? debugUnlocked : new Date() >= revealDate;
+  const revealEndDate = new Date(revealDate.getTime() + 12 * 60 * 60 * 1000);
+  const nextRevealDate = new Date(revealDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  const now = new Date();
+  const isAfterRevealWindow = now >= revealEndDate;
+  const unlocked = __DEV__ ? debugUnlocked : (now >= revealDate && now < revealEndDate);
+
+  // When after the 12h window, the locked state counts toward the NEXT reveal
+  const lockedRevealDate = isAfterRevealWindow ? nextRevealDate : revealDate;
 
   const fetchData = useCallback(async () => {
     if (!user || !id) return;
@@ -85,6 +91,15 @@ export default function MainPagerScreen() {
       const cfg = { reveal_day: cfgMap["reveal_day"] ?? 0, reveal_hour: cfgMap["reveal_hour"] ?? 20 };
       setRevealConfig({ day: cfg.reveal_day, hour: cfg.reveal_hour });
       const { revealDate: currentRevealDate, prevRevealDate } = getWeekBounds(cfg.reveal_day, cfg.reveal_hour);
+      const currentRevealEndDate = new Date(currentRevealDate.getTime() + 12 * 60 * 60 * 1000);
+      const currentNextRevealDate = new Date(currentRevealDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const afterRevealWindow = new Date() >= currentRevealEndDate;
+
+      // Photos window:
+      // - Before/during reveal: prevRevealDate → currentRevealDate  (reveal content + crown)
+      // - After reveal window:  currentRevealDate → nextRevealDate  (new collection count only)
+      const photoStart = afterRevealWindow ? currentRevealDate : prevRevealDate;
+      const photoEnd = afterRevealWindow ? currentNextRevealDate : currentRevealDate;
 
       const [groupRes, profileRes, photosRes, membersRes] = await Promise.all([
         supabase.from("groups").select("name").eq("id", id).single(),
@@ -92,8 +107,8 @@ export default function MainPagerScreen() {
         supabase.from("photos")
           .select("id, image_path, created_at, note, user_id, profiles:user_id(username, avatar_url)")
           .eq("group_id", id)
-          .gte("created_at", prevRevealDate.toISOString())
-          .lt("created_at", currentRevealDate.toISOString())
+          .gte("created_at", photoStart.toISOString())
+          .lt("created_at", photoEnd.toISOString())
           .order("created_at", { ascending: true }),
         supabase.from("group_members").select("user_id, role, profiles:user_id(username, avatar_url)").eq("group_id", id),
       ]);
@@ -112,44 +127,53 @@ export default function MainPagerScreen() {
       }
       if (photosRes.data) {
         setPhotoCount(photosRes.data.length);
-        const photoIds = photosRes.data.map((p: any) => p.id);
-        const reactionsRes = photoIds.length > 0
-          ? await supabase
-              .from("reactions")
-              .select("id, photo_id, user_id, emoji, profiles:user_id(username, avatar_url)")
-              .in("photo_id", photoIds)
-              .eq("type", "emoji")
-          : { data: [] };
 
-        const reactionsByPhoto: Record<string, Reaction[]> = {};
-        for (const r of reactionsRes.data ?? []) {
-          if (!r.emoji) continue;
-          if (!reactionsByPhoto[r.photo_id]) reactionsByPhoto[r.photo_id] = [];
-          reactionsByPhoto[r.photo_id].push({
-            id: r.id,
-            user_id: r.user_id,
-            username: r.profiles?.username ?? "?",
-            avatar_url: r.profiles?.avatar_url ?? null,
-            sticker_id: r.emoji as StickerId,
-          });
+        if (afterRevealWindow) {
+          // Reveal window is over — only the count matters for the new collection period
+          setPhotos([]);
+          setCrownWinnerId(null);
+          setCrownDurationMs(0);
+        } else {
+          // Before or during reveal — full processing for PhotoFeed + crown
+          const photoIds = photosRes.data.map((p: any) => p.id);
+          const reactionsRes = photoIds.length > 0
+            ? await supabase
+                .from("reactions")
+                .select("id, photo_id, user_id, emoji, profiles:user_id(username, avatar_url)")
+                .in("photo_id", photoIds)
+                .eq("type", "emoji")
+            : { data: [] };
+
+          const reactionsByPhoto: Record<string, Reaction[]> = {};
+          for (const r of reactionsRes.data ?? []) {
+            if (!r.emoji) continue;
+            if (!reactionsByPhoto[r.photo_id]) reactionsByPhoto[r.photo_id] = [];
+            reactionsByPhoto[r.photo_id].push({
+              id: r.id,
+              user_id: r.user_id,
+              username: r.profiles?.username ?? "?",
+              avatar_url: r.profiles?.avatar_url ?? null,
+              sticker_id: r.emoji as StickerId,
+            });
+          }
+
+          const entries: PhotoEntry[] = photosRes.data.map((p: any) => ({
+            id: p.id,
+            url: p.image_path === "text_mode" ? "" : r2Storage.getPublicUrl(p.image_path),
+            fallback_url: p.image_path === "text_mode" ? undefined : supabase.storage.from("moments").getPublicUrl(p.image_path).data.publicUrl,
+            created_at: p.created_at,
+            note: p.note ?? null,
+            username: p.profiles?.username ?? "Anonyme",
+            avatar_url: p.profiles?.avatar_url,
+            image_path: p.image_path,
+            user_id: p.user_id,
+            reactions: reactionsByPhoto[p.id] ?? [],
+          }));
+          setPhotos(entries);
+          const crown = computeCrownWinner(entries, prevRevealDate, currentRevealDate);
+          setCrownWinnerId(crown?.winnerId ?? null);
+          setCrownDurationMs(crown?.durationMs ?? 0);
         }
-
-        const entries: PhotoEntry[] = photosRes.data.map((p: any) => ({
-          id: p.id,
-          url: p.image_path === "text_mode" ? "" : r2Storage.getPublicUrl(p.image_path),
-          fallback_url: p.image_path === "text_mode" ? undefined : supabase.storage.from("moments").getPublicUrl(p.image_path).data.publicUrl,
-          created_at: p.created_at,
-          note: p.note ?? null,
-          username: p.profiles?.username ?? "Anonyme",
-          avatar_url: p.profiles?.avatar_url,
-          image_path: p.image_path,
-          user_id: p.user_id,
-          reactions: reactionsByPhoto[p.id] ?? [],
-        }));
-        setPhotos(entries);
-        const crown = computeCrownWinner(entries, prevRevealDate, currentRevealDate);
-        setCrownWinnerId(crown?.winnerId ?? null);
-        setCrownDurationMs(crown?.durationMs ?? 0);
       }
       setDataLoaded(true);
     } catch {
@@ -315,7 +339,7 @@ export default function MainPagerScreen() {
             currentUserId={user?.id}
             nextRevealDate={nextRevealDate}
             photoCount={photoCount}
-            revealDate={revealDate}
+            revealDate={lockedRevealDate}
             isAdmin={isAdmin}
             onOpenMembers={() => setShowMembersModal(true)}
             onSimulateReveal={() => setDebugUnlocked(true)}
