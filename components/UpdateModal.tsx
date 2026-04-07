@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Modal, View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Platform } from "react-native";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as IntentLauncher from "expo-intent-launcher";
 import { colors, theme } from "../lib/theme";
 
@@ -25,8 +25,10 @@ export default function UpdateModal({ visible, apkUrl }: UpdateModalProps) {
       const downloadResumable = FileSystem.createDownloadResumable(
         apkUrl, fileUri, {},
         (downloadProgress) => {
-          const pct = downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite;
-          setProgress(Math.round(pct * 100));
+          const { totalBytesWritten, totalBytesExpectedToWrite } = downloadProgress;
+          if (totalBytesExpectedToWrite > 0) {
+            setProgress(Math.round((totalBytesWritten / totalBytesExpectedToWrite) * 100));
+          }
         }
       );
       const result = await downloadResumable.downloadAsync();
