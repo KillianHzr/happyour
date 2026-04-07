@@ -36,6 +36,7 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
 
   const cameraRef = useRef<CameraView>(null);
   const drawingRef = useRef<DrawingCanvasRef>(null);
+  const textInputRef = useRef<any>(null);
   const recordingTimer = useRef<NodeJS.Timeout | null>(null);
   const startTouchY = useRef<number | null>(null);
   const audioTimer = useRef<NodeJS.Timeout | null>(null);
@@ -285,16 +286,20 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
             behavior={Platform.OS === "ios" ? "padding" : "height"}
             keyboardVerticalOffset={0}
           >
-            <TextInput
-              style={[styles.textModeInput, { fontSize: textModeContent.length <= 40 ? 32 : textModeContent.length <= 100 ? 26 : textModeContent.length <= 200 ? 21 : textModeContent.length <= 300 ? 17 : 14 }]}
-              placeholder="Écris..."
-              placeholderTextColor="rgba(255,255,255,0.3)"
-              multiline
-              value={textModeContent}
-              onChangeText={setTextModeContent}
-              autoFocus
-              textAlignVertical="top"
-            />
+            <Pressable style={{ flex: 1, width: "100%" }} onPress={() => textInputRef.current?.focus()}>
+              <TextInput
+                ref={textInputRef}
+                style={[styles.textModeInput, { fontSize: textModeContent.length <= 120 ? 32 : textModeContent.length <= 260 ? 26 : textModeContent.length <= 450 ? 21 : textModeContent.length <= 650 ? 17 : 14 }]}
+                placeholder="Écris..."
+                placeholderTextColor="rgba(255,255,255,0.3)"
+                multiline
+                value={textModeContent}
+                onChangeText={setTextModeContent}
+                autoFocus
+                textAlignVertical="top"
+                pointerEvents="auto"
+              />
+            </Pressable>
           </KeyboardAvoidingView>
         ) : cameraMode === "DESSIN" ? (
           <View style={[styles.cameraPageContainer, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: 24, paddingHorizontal: 12 }]}>
@@ -414,7 +419,6 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
                           style={[
                             styles.drawingColorDot,
                             { backgroundColor: c },
-                            (c === "#FFFFFF" || c === "#000000") && { borderWidth: 1, borderColor: "rgba(255,255,255,0.4)" },
                             drawingColor === c && styles.drawingColorDotActive,
                           ]}
                         />
@@ -673,12 +677,12 @@ const styles = StyleSheet.create({
   drawingToolbar: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "rgba(0,0,0,0.55)", paddingHorizontal: 12, paddingVertical: 10, borderRadius: 20, marginBottom: 12 },
   drawingColorGrid: { flexDirection: "column", gap: 6 },
   drawingColorRow: { flexDirection: "row", gap: 6 },
-  drawingColorDot: { width: 22, height: 22, borderRadius: 11 },
-  drawingColorDotActive: { transform: [{ scale: 1.35 }], shadowColor: "#FFF", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.7, shadowRadius: 5, elevation: 6 },
+  drawingColorDot: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.5)" },
+  drawingColorDotActive: { transform: [{ scale: 1.35 }], borderColor: "#FFF", shadowColor: "#FFF", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.7, shadowRadius: 5, elevation: 6 },
   drawingBrushRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 16, marginTop: 4 },
   drawingBrushBtn: { width: 36, height: 36, justifyContent: "center", alignItems: "center" },
-  drawingBrushDot: { opacity: 0.6 },
-  drawingBrushDotActive: { opacity: 1, shadowColor: "#FFF", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 4, elevation: 5 },
+  drawingBrushDot: { borderWidth: 1.5, borderColor: "rgba(255,255,255,0.5)", opacity: 0.7 },
+  drawingBrushDotActive: { opacity: 1, borderColor: "#FFF", shadowColor: "#FFF", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 4, elevation: 5 },
   drawingUndoBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
   drawingUndoBtnDisabled: { backgroundColor: "rgba(255,255,255,0.06)" },
   drawingCancelBtn: { position: "absolute", left: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
