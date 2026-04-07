@@ -70,8 +70,8 @@ export default function VaultCounter({ totalCount, unlockDate, lastPoster }: Pro
               <Text style={styles.lastPosterInitial}>{lastPoster.username[0]?.toUpperCase() ?? "?"}</Text>
             </View>
           )}
-          <Text style={styles.lastPosterName}>{lastPoster.username}</Text>
-          <Text style={styles.lastPosterHint}>a la couronne — partage un moment pour la récupérer !</Text>
+          <Text style={styles.lastPosterName}>{lastPoster.username} a la couronne</Text>
+          <Text style={styles.lastPosterHint}>Partage un moment pour la récupérer !</Text>
         </View>
       ) : (
         <View style={styles.iconContainer}>
