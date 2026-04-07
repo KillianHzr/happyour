@@ -3,8 +3,6 @@ import { View, StyleSheet, PanResponder } from "react-native";
 import { Canvas, Path, Fill, Skia, useCanvasRef } from "@shopify/react-native-skia";
 import * as FileSystem from "expo-file-system/legacy";
 
-const STROKE_WIDTH = 6;
-
 export interface DrawingCanvasRef {
   capture: () => Promise<string | null>;
   undo: () => void;
@@ -15,10 +13,11 @@ type Point = { x: number; y: number };
 type Stroke = {
   path: ReturnType<typeof Skia.Path.Make>;
   color: string;
+  strokeWidth: number;
 };
 
-export const DrawingCanvas = forwardRef<DrawingCanvasRef, { color: string; onHistoryChange?: (canUndo: boolean, canRedo: boolean) => void }>(
-  ({ color, onHistoryChange }, ref) => {
+export const DrawingCanvas = forwardRef<DrawingCanvasRef, { color: string; strokeWidth?: number; onHistoryChange?: (canUndo: boolean, canRedo: boolean) => void }>(
+  ({ color, strokeWidth = 6, onHistoryChange }, ref) => {
     const canvasRef = useCanvasRef();
     const canvasViewRef = useRef<View>(null);
     const canvasLayoutRef = useRef({ pageX: 0, pageY: 0 });
@@ -29,11 +28,11 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { color: string; onHis
     const activeStrokeRef = useRef<Stroke | null>(null);
     const lastPointRef = useRef<Point | null>(null);
     const selectedColorRef = useRef(color);
+    const selectedStrokeWidthRef = useRef(strokeWidth);
     const redoStackRef = useRef<Stroke[]>([]);
 
-    useEffect(() => {
-      selectedColorRef.current = color;
-    }, [color]);
+    useEffect(() => { selectedColorRef.current = color; }, [color]);
+    useEffect(() => { selectedStrokeWidthRef.current = strokeWidth; }, [strokeWidth]);
 
     useEffect(() => {
       onHistoryChange?.(completedStrokes.length > 0, redoStackRef.current.length > 0);
@@ -77,7 +76,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { color: string; onHis
           const path = Skia.Path.Make();
           path.moveTo(x, y);
           lastPointRef.current = { x, y };
-          activeStrokeRef.current = { path, color: selectedColorRef.current };
+          activeStrokeRef.current = { path, color: selectedColorRef.current, strokeWidth: selectedStrokeWidthRef.current };
           forceUpdate((n) => n + 1);
         },
         onPanResponderMove: (evt) => {
@@ -128,7 +127,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { color: string; onHis
               path={stroke.path}
               color={stroke.color}
               style="stroke"
-              strokeWidth={STROKE_WIDTH}
+              strokeWidth={stroke.strokeWidth}
               strokeCap="round"
               strokeJoin="round"
             />
@@ -138,7 +137,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { color: string; onHis
               path={activeStrokeRef.current.path}
               color={activeStrokeRef.current.color}
               style="stroke"
-              strokeWidth={STROKE_WIDTH}
+              strokeWidth={activeStrokeRef.current.strokeWidth}
               strokeCap="round"
               strokeJoin="round"
             />

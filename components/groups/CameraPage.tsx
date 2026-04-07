@@ -42,6 +42,7 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
 
   const [cameraMode, setCameraMode] = useState<CameraMode>("PHOTO");
   const [drawingColor, setDrawingColor] = useState("#000000");
+  const [drawingStrokeWidth, setDrawingStrokeWidth] = useState(6);
   const [isDrawingActive, setIsDrawingActive] = useState(false);
   const [facing, setFacing] = useState<CameraType>("back");
   const [flash, setFlash] = useState<FlashMode>("off");
@@ -302,7 +303,7 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
                   <Text style={styles.drawingHintText}>Appuie pour commencer à dessiner</Text>
                 </TouchableOpacity>
               ) : (
-                <DrawingCanvas ref={drawingRef} color={drawingColor} onHistoryChange={(u, r) => { setCanUndo(u); setCanRedo(r); }} />
+                <DrawingCanvas ref={drawingRef} color={drawingColor} strokeWidth={drawingStrokeWidth} onHistoryChange={(u, r) => { setCanUndo(u); setCanRedo(r); }} />
               )}
             </View>
           </View>
@@ -396,8 +397,9 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
                 </TouchableOpacity>
                 <View style={styles.drawingColorGrid}>
                   {[
-                    ["#000000","#FFFFFF","#FF3B30","#FF9F0A","#FFD60A","#30D158","#0A84FF"],
-                    ["#BF5AF2","#FF2D92","#FF6B35","#5AC8FA","#34C759","#A2845E","#8E8E93"],
+                    ["#000000","#FFFFFF","#FF3B30","#FF9F0A","#FFD60A"],
+                    ["#30D158","#0A84FF","#BF5AF2","#FF2D92","#FF6B35"],
+                    ["#5AC8FA","#34C759","#A2845E","#8E8E93","#1C1C1E"],
                   ].map((row, ri) => (
                     <View key={ri} style={styles.drawingColorRow}>
                       {row.map((c) => (
@@ -407,14 +409,24 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
                           style={[
                             styles.drawingColorDot,
                             { backgroundColor: c },
-                            c === "#FFFFFF" && { borderWidth: 1, borderColor: "rgba(255,255,255,0.4)" },
-                            c === "#000000" && { borderWidth: 1, borderColor: "rgba(255,255,255,0.4)" },
+                            (c === "#FFFFFF" || c === "#000000") && { borderWidth: 1, borderColor: "rgba(255,255,255,0.4)" },
                             drawingColor === c && styles.drawingColorDotActive,
                           ]}
                         />
                       ))}
                     </View>
                   ))}
+                  <View style={styles.drawingBrushRow}>
+                    {([3, 6, 12] as const).map((size) => (
+                      <TouchableOpacity key={size} onPress={() => setDrawingStrokeWidth(size)} style={styles.drawingBrushBtn}>
+                        <View style={[
+                          styles.drawingBrushDot,
+                          { width: size * 2.5, height: size * 2.5, borderRadius: size * 1.25, backgroundColor: drawingColor },
+                          drawingStrokeWidth === size && styles.drawingBrushDotActive,
+                        ]} />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 </View>
                 <TouchableOpacity style={[styles.drawingUndoBtn, !canRedo && styles.drawingUndoBtnDisabled]} onPress={() => drawingRef.current?.redo()} disabled={!canRedo}>
                   <Svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={canRedo ? "#FFF" : "rgba(255,255,255,0.25)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -654,10 +666,14 @@ const styles = StyleSheet.create({
   drawingIdleOverlay: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12 },
   drawingHintText: { color: "rgba(0,0,0,0.25)", fontFamily: "Inter_400Regular", fontSize: 13, letterSpacing: 0.5 },
   drawingToolbar: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "rgba(0,0,0,0.55)", paddingHorizontal: 12, paddingVertical: 10, borderRadius: 20, marginBottom: 12 },
-  drawingColorGrid: { flexDirection: "column", gap: 5 },
-  drawingColorRow: { flexDirection: "row", gap: 5 },
-  drawingColorDot: { width: 20, height: 20, borderRadius: 10 },
+  drawingColorGrid: { flexDirection: "column", gap: 6 },
+  drawingColorRow: { flexDirection: "row", gap: 6 },
+  drawingColorDot: { width: 22, height: 22, borderRadius: 11 },
   drawingColorDotActive: { transform: [{ scale: 1.35 }], shadowColor: "#FFF", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.7, shadowRadius: 5, elevation: 6 },
+  drawingBrushRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 16, marginTop: 4 },
+  drawingBrushBtn: { width: 36, height: 36, justifyContent: "center", alignItems: "center" },
+  drawingBrushDot: { opacity: 0.6 },
+  drawingBrushDotActive: { opacity: 1, shadowColor: "#FFF", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 4, elevation: 5 },
   drawingUndoBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
   drawingUndoBtnDisabled: { backgroundColor: "rgba(255,255,255,0.06)" },
   drawingCancelBtn: { position: "absolute", left: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
