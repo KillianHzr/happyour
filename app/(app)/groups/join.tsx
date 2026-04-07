@@ -13,6 +13,7 @@ import { supabase } from "../../../lib/supabase";
 import { useAuth } from "../../../lib/auth-context";
 import { useToast } from "../../../lib/toast-context";
 import { translateError } from "../../../lib/error-messages";
+import { scheduleFirstMomentReminder } from "../../../lib/notifications";
 import { colors, theme } from "../../../lib/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Loader from "../../../components/Loader";
@@ -57,6 +58,7 @@ export default function JoinGroupScreen() {
         }
       } else {
         showToast("Succès", `Tu as rejoint "${group.name}" !`, "success");
+        scheduleFirstMomentReminder(group.id, group.name);
         router.replace(`/(app)/groups/${group.id}`);
       }
     } catch (e: any) {

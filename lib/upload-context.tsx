@@ -3,7 +3,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { decode } from "base64-arraybuffer";
 import { r2Storage } from "./r2";
 import { supabase } from "./supabase";
-import { notifyNewPhoto } from "./notifications";
+import { notifyNewPhoto, cancelFirstMomentReminder } from "./notifications";
 
 type UploadTask = {
   id: string;
@@ -108,8 +108,9 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
         if (dbError) throw dbError;
 
         console.log(`[Upload ${taskId}] 4. Envoi notification...`);
-        // 4. Notification
+        // 4. Notification + annulation reminder premier moment
         notifyNewPhoto(dbData.group_id, groupName, username, dbData.user_id);
+        cancelFirstMomentReminder(dbData.group_id);
 
         console.log(`[Upload ${taskId}] 5. Succès !`);
         // Succès

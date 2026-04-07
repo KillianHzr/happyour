@@ -253,6 +253,48 @@ export async function notifyGroupInvite(
   await sendPushToTokens([token], "Nouvelle invitation !", `Tu as ete invite a rejoindre "${groupName}"`, { type: "invite", groupName });
 }
 
+// ── First moment reminder ──
+
+export async function scheduleFirstMomentReminder(groupId: string, groupName: string) {
+  const now = new Date();
+  const target = new Date(now.getTime() + 4 * 3600 * 1000);
+
+  let sendAt: Date;
+  const h = target.getHours();
+
+  if (h >= 9 && h < 20) {
+    sendAt = target;
+  } else {
+    sendAt = new Date(now);
+    sendAt.setHours(13, 0, 0, 0);
+    if (sendAt <= now) sendAt.setDate(sendAt.getDate() + 1);
+  }
+
+  const secondsUntil = Math.floor((sendAt.getTime() - now.getTime()) / 1000);
+  if (secondsUntil <= 0) return;
+
+  try {
+    await Notifications.scheduleNotificationAsync({
+      identifier: `first_moment_${groupId}`,
+      content: {
+        title: groupName,
+        body: "Partage ton premier souvenir avec le groupe !",
+        data: { type: "new_photo", groupId },
+        channelId: "default",
+      },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: secondsUntil },
+    });
+  } catch (e) {
+    console.warn("scheduleFirstMomentReminder error:", e);
+  }
+}
+
+export async function cancelFirstMomentReminder(groupId: string) {
+  try {
+    await Notifications.cancelScheduledNotificationAsync(`first_moment_${groupId}`);
+  } catch (_) {}
+}
+
 // ── Setup notification handler (FIXED WARNING) ──
 
 export function setupNotificationHandler() {
