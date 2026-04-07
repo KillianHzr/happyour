@@ -9,10 +9,13 @@ import {
   Share,
   KeyboardAvoidingView,
   Platform,
+  Modal,
+  ActivityIndicator,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, router } from "expo-router";
 import { supabase } from "../../../../lib/supabase";
+import { useAuth } from "../../../../lib/auth-context";
 import { colors, theme } from "../../../../lib/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Loader from "../../../../components/Loader";
@@ -31,19 +34,56 @@ const ShareIcon = () => (
   </Svg>
 );
 
+const RefreshIcon = () => (
+  <Svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+    <Path d="M23 4V10H17" stroke="#FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <Path d="M1 20V14H7" stroke="#FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <Path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" stroke="#FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+  </Svg>
+);
+
+function generateCode(length = 6): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+}
+
 export default function InviteScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const [inviteCode, setInviteCode] = useState("");
   const [targetUsername, setTargetUsername] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
 
   useEffect(() => {
     if (!id) return;
     supabase.from("groups").select("invite_code").eq("id", id).single().then(({ data }) => {
       if (data) setInviteCode(data.invite_code);
     });
-  }, [id]);
+    if (user?.id) {
+      supabase.from("group_members").select("role").eq("group_id", id).eq("user_id", user.id).single().then(({ data }) => {
+        setIsAdmin(data?.role === "admin");
+      });
+    }
+  }, [id, user?.id]);
+
+  const handleRegenerateCode = async () => {
+    setRegenerating(true);
+    setShowConfirm(false);
+    try {
+      const newCode = generateCode();
+      const { error } = await supabase.from("groups").update({ invite_code: newCode }).eq("id", id);
+      if (error) throw error;
+      setInviteCode(newCode);
+    } catch (e: any) {
+      Alert.alert("Erreur", e.message);
+    } finally {
+      setRegenerating(false);
+    }
+  };
 
   const handleInviteByUsername = async () => {
     if (!targetUsername.trim()) return;
@@ -124,8 +164,30 @@ export default function InviteScreen() {
               <TouchableOpacity style={styles.copyBtn} onPress={handleCopyCode}>
                 <CopyIcon />
               </TouchableOpacity>
+              {isAdmin && (
+                <TouchableOpacity style={styles.copyBtn} onPress={() => setShowConfirm(true)} disabled={regenerating}>
+                  {regenerating ? <ActivityIndicator color="#FFF" size="small" /> : <RefreshIcon />}
+                </TouchableOpacity>
+              )}
             </View>
           </View>
+
+          <Modal visible={showConfirm} transparent animationType="fade">
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalBox}>
+                <Text style={styles.modalTitle}>Changer le code ?</Text>
+                <Text style={styles.modalDesc}>
+                  L'ancien code ne fonctionnera plus. Les membres actuels ne sont pas affectés.
+                </Text>
+                <TouchableOpacity style={styles.modalConfirmBtn} onPress={handleRegenerateCode}>
+                  <Text style={styles.modalConfirmText}>Changer le code</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowConfirm(false)}>
+                  <Text style={styles.modalCancelText}>Annuler</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
 
           <TouchableOpacity style={styles.shareBtn} onPress={handleShareCode}>
             <ShareIcon />
@@ -163,4 +225,13 @@ const styles = StyleSheet.create({
   
   shareBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, backgroundColor: "rgba(255,255,255,0.1)", padding: 20, borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
   shareBtnText: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 16 },
+
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center", padding: 24 },
+  modalBox: { backgroundColor: "#1A1A1A", borderRadius: 20, padding: 28, width: "100%", borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
+  modalTitle: { fontFamily: "Inter_700Bold", fontSize: 20, color: "#FFF", marginBottom: 12 },
+  modalDesc: { fontFamily: "Inter_400Regular", fontSize: 14, color: colors.secondary, lineHeight: 20, marginBottom: 28 },
+  modalConfirmBtn: { backgroundColor: "#E53E3E", padding: 16, borderRadius: 14, alignItems: "center", marginBottom: 10 },
+  modalConfirmText: { fontFamily: "Inter_700Bold", fontSize: 16, color: "#FFF" },
+  modalCancelBtn: { padding: 16, borderRadius: 14, alignItems: "center" },
+  modalCancelText: { fontFamily: "Inter_600SemiBold", fontSize: 16, color: colors.secondary },
 });
