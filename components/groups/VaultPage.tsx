@@ -61,7 +61,11 @@ export default function VaultPage({
 
       <View style={styles.body}>
         <View style={styles.lockedContent}>
-          <VaultCounter totalCount={photoCount} unlockDate={revealDate} />
+          <VaultCounter
+            totalCount={photoCount}
+            unlockDate={revealDate}
+            lastPoster={photos.length > 0 ? { avatar_url: photos[photos.length - 1].avatar_url, username: photos[photos.length - 1].username } : null}
+          />
         </View>
       </View>
 

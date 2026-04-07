@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import Svg, { Path } from "react-native-svg";
+import { Image } from "expo-image";
 import { colors, theme } from "../lib/theme";
 
-type Props = { 
+type Props = {
   totalCount: number;
   unlockDate: Date;
+  lastPoster?: { avatar_url?: string | null; username: string } | null;
 };
 
 const LockIcon = () => (
@@ -27,7 +29,7 @@ const LockIcon = () => (
   </Svg>
 );
 
-export default function VaultCounter({ totalCount, unlockDate }: Props) {
+export default function VaultCounter({ totalCount, unlockDate, lastPoster }: Props) {
   const [timeLeft, setTimeLeft] = useState("");
 
   useEffect(() => {
@@ -54,9 +56,28 @@ export default function VaultCounter({ totalCount, unlockDate }: Props) {
 
   return (
     <View style={[theme.glassCard, styles.container]}>
-      <View style={styles.iconContainer}>
-        <LockIcon />
-      </View>
+      {lastPoster ? (
+        <View style={styles.lastPosterWrap}>
+          <View style={styles.crownWrap}>
+            <Svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+              <Path d="M2 19l2-9 4.5 4L12 5l3.5 9L20 10l2 9H2z" stroke="rgba(255,215,0,0.9)" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+            </Svg>
+          </View>
+          {lastPoster.avatar_url ? (
+            <Image source={{ uri: lastPoster.avatar_url }} style={styles.lastPosterAvatar} />
+          ) : (
+            <View style={[styles.lastPosterAvatar, styles.lastPosterAvatarFallback]}>
+              <Text style={styles.lastPosterInitial}>{lastPoster.username[0]?.toUpperCase() ?? "?"}</Text>
+            </View>
+          )}
+          <Text style={styles.lastPosterName}>{lastPoster.username}</Text>
+          <Text style={styles.lastPosterHint}>a la couronne — partage un moment pour la récupérer !</Text>
+        </View>
+      ) : (
+        <View style={styles.iconContainer}>
+          <LockIcon />
+        </View>
+      )}
       
       <View style={styles.statsRow}>
         <View style={styles.statItem}>
@@ -87,6 +108,13 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     opacity: 0.6,
   },
+  lastPosterWrap: { alignItems: "center", marginBottom: 24 },
+  crownWrap: { marginBottom: -8, zIndex: 1 },
+  lastPosterAvatar: { width: 56, height: 56, borderRadius: 28, borderWidth: 2, borderColor: "rgba(255,215,0,0.7)" },
+  lastPosterAvatarFallback: { backgroundColor: "#FFF", justifyContent: "center", alignItems: "center" },
+  lastPosterInitial: { fontFamily: "Inter_700Bold", fontSize: 22, color: "#000" },
+  lastPosterName: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: "rgba(255,255,255,0.7)", marginTop: 8 },
+  lastPosterHint: { fontFamily: "Inter_400Regular", fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 4, textAlign: "center" },
   statsRow: {
     flexDirection: "row",
     alignItems: "center",
