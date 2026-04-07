@@ -41,7 +41,7 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
   const audioTimer = useRef<NodeJS.Timeout | null>(null);
 
   const [cameraMode, setCameraMode] = useState<CameraMode>("PHOTO");
-  const [drawingColor, setDrawingColor] = useState("#FFFFFF");
+  const [drawingColor, setDrawingColor] = useState("#000000");
   const [isDrawingActive, setIsDrawingActive] = useState(false);
   const [facing, setFacing] = useState<CameraType>("back");
   const [flash, setFlash] = useState<FlashMode>("off");
@@ -56,6 +56,8 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
   const [textModeContent, setTextModeContent] = useState("");
   const [note, setNote] = useState("");
   const [isAudioRecording, setIsAudioRecording] = useState(false);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
   const [audioSeconds, setAudioSeconds] = useState(0);
   const [capturedAudioUri, setCapturedAudioUri] = useState<string | null>(null);
 
@@ -99,8 +101,8 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
 
   // Inform parent about scroll lock state
   useEffect(() => {
-    onScrollLock(!!capturedUri || !!capturedAudioUri || isPinching);
-  }, [capturedUri, capturedAudioUri, isPinching]);
+    onScrollLock(!!capturedUri || !!capturedAudioUri || isPinching || isDrawingActive);
+  }, [capturedUri, capturedAudioUri, isPinching, isDrawingActive]);
 
   const isEditing = !!capturedUri || !!capturedAudioUri;
 
@@ -281,17 +283,21 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
               autoFocus
             />
           </View>
-        ) : cameraMode === "DESSIN" && !isDrawingActive ? (
-          <View style={styles.audioModeContainer}>
-            <Svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
-              <Path d="M12 20h9" />
-              <Path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-            </Svg>
-            <Text style={styles.audioHintText}>Appuie pour commencer à dessiner</Text>
-          </View>
-        ) : cameraMode === "DESSIN" && isDrawingActive ? (
-          <View style={styles.fill}>
-            <DrawingCanvas ref={drawingRef} color={drawingColor} />
+        ) : cameraMode === "DESSIN" ? (
+          <View style={[styles.cameraPageContainer, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: 24, paddingHorizontal: 12 }]}>
+            <View style={styles.drawingArea}>
+              {!isDrawingActive ? (
+                <TouchableOpacity style={styles.drawingIdleOverlay} onPress={() => setIsDrawingActive(true)} activeOpacity={0.6}>
+                  <Svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,0.2)" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+                    <Path d="M12 20h9" />
+                    <Path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                  </Svg>
+                  <Text style={styles.drawingHintText}>Appuie pour commencer à dessiner</Text>
+                </TouchableOpacity>
+              ) : (
+                <DrawingCanvas ref={drawingRef} color={drawingColor} onHistoryChange={(u, r) => { setCanUndo(u); setCanRedo(r); }} />
+              )}
+            </View>
           </View>
         ) : cameraMode === "AUDIO" ? (
           <View style={styles.audioModeContainer}>
@@ -310,7 +316,7 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
                 </View>
               </>
             ) : (
-              <>
+              <TouchableOpacity style={styles.audioIdleTouchable} onPress={startAudioRecording} activeOpacity={0.7}>
                 <Svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
                   <Path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
                   <Path d="M19 10v2a7 7 0 0 1-14 0v-2" />
@@ -318,7 +324,7 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
                   <Path d="M8 23h8" />
                 </Svg>
                 <Text style={styles.audioHintText}>Appuie pour enregistrer</Text>
-              </>
+              </TouchableOpacity>
             )}
           </View>
         ) : (
@@ -354,7 +360,7 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
           {cameraMode === "DESSIN" && isDrawingActive && (
             <TouchableOpacity
               pointerEvents="auto"
-              style={[styles.drawingCancelBtn, { top: Math.max(insets.top, 16) + 8 }]}
+              style={[styles.drawingCancelBtn, { top: Math.max(insets.top, 12) + 28 }]}
               onPress={() => setIsDrawingActive(false)}
             >
               <CloseIcon />
@@ -373,29 +379,38 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
             </View>
           )}
 
-          <View style={[styles.cameraFooter, { bottom: NAVBAR_HEIGHT + 24 }]}>
+          <View style={[styles.cameraFooter, { bottom: (cameraMode === "DESSIN" && isDrawingActive) ? insets.bottom + 16 : NAVBAR_HEIGHT + 24 }]}>
             {cameraMode === "DESSIN" && isDrawingActive ? (
               <View style={styles.drawingToolbar}>
-                <TouchableOpacity style={styles.drawingUndoBtn} onPress={() => drawingRef.current?.undo()}>
-                  <Svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <TouchableOpacity style={[styles.drawingUndoBtn, !canUndo && styles.drawingUndoBtnDisabled]} onPress={() => drawingRef.current?.undo()} disabled={!canUndo}>
+                  <Svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={canUndo ? "#FFF" : "rgba(255,255,255,0.25)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <Path d="M1 4v6h6" /><Path d="M3.51 15a9 9 0 1 0 .49-3.51L1 10" />
                   </Svg>
                 </TouchableOpacity>
-                {["#FFFFFF","#FF3B30","#FF9F0A","#FFD60A","#30D158","#0A84FF","#BF5AF2","#FF375F","#000000"].map((c) => (
-                  <TouchableOpacity
-                    key={c}
-                    onPress={() => setDrawingColor(c)}
-                    style={[
-                      styles.drawingColorDot,
-                      { backgroundColor: c },
-                      c === "#FFFFFF" && { borderWidth: 1, borderColor: "rgba(255,255,255,0.4)" },
-                      c === "#000000" && { borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
-                      drawingColor === c && styles.drawingColorDotActive,
-                    ]}
-                  />
-                ))}
-                <TouchableOpacity style={styles.drawingUndoBtn} onPress={() => drawingRef.current?.redo()}>
-                  <Svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <View style={styles.drawingColorGrid}>
+                  {[
+                    ["#000000","#FFFFFF","#FF3B30","#FF9F0A","#FFD60A","#30D158","#0A84FF"],
+                    ["#BF5AF2","#FF2D92","#FF6B35","#5AC8FA","#34C759","#A2845E","#8E8E93"],
+                  ].map((row, ri) => (
+                    <View key={ri} style={styles.drawingColorRow}>
+                      {row.map((c) => (
+                        <TouchableOpacity
+                          key={c}
+                          onPress={() => setDrawingColor(c)}
+                          style={[
+                            styles.drawingColorDot,
+                            { backgroundColor: c },
+                            c === "#FFFFFF" && { borderWidth: 1, borderColor: "rgba(255,255,255,0.4)" },
+                            c === "#000000" && { borderWidth: 1, borderColor: "rgba(255,255,255,0.4)" },
+                            drawingColor === c && styles.drawingColorDotActive,
+                          ]}
+                        />
+                      ))}
+                    </View>
+                  ))}
+                </View>
+                <TouchableOpacity style={[styles.drawingUndoBtn, !canRedo && styles.drawingUndoBtnDisabled]} onPress={() => drawingRef.current?.redo()} disabled={!canRedo}>
+                  <Svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={canRedo ? "#FFF" : "rgba(255,255,255,0.25)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <Path d="M23 4v6h-6" /><Path d="M20.49 15a9 9 0 1 1-.49-3.51L23 10" />
                   </Svg>
                 </TouchableOpacity>
@@ -471,8 +486,14 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
       {/* Photo preview */}
       {capturedUri && isActive && (
         <View style={[styles.previewContainer, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12, paddingHorizontal: 12 }]}>
-          <View style={styles.previewImageWrapper}>
-            <Image source={{ uri: capturedUri }} style={styles.previewImage} contentFit="cover" />
+          <View style={[styles.previewImageWrapper, cameraMode === "DESSIN" && { backgroundColor: "#000" }]}>
+            {cameraMode === "DESSIN" ? (
+              <View style={styles.drawingPreviewCenter}>
+                <Image source={{ uri: capturedUri }} style={styles.drawingPreviewImage} contentFit="fill" />
+              </View>
+            ) : (
+              <Image source={{ uri: capturedUri }} style={styles.previewImage} contentFit="cover" />
+            )}
             <View style={styles.fill} pointerEvents="box-none">
               <TouchableOpacity
                 style={[styles.backCaptureBtnInside, { top: 16 }]}
@@ -622,11 +643,18 @@ const styles = StyleSheet.create({
   modeSlider: { flexDirection: "row", gap: 20, backgroundColor: "rgba(0,0,0,0.3)", paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, marginBottom: 12 },
   modeText: { color: "rgba(255,255,255,0.4)", fontFamily: "Inter_700Bold", fontSize: 12 },
   modeTextActive: { color: "#FFF" },
-  drawingToolbar: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999, marginBottom: 12 },
-  drawingColorDot: { width: 22, height: 22, borderRadius: 11 },
+  drawingArea: { width: "100%", aspectRatio: 3 / 4, borderRadius: 32, overflow: "hidden", backgroundColor: "#FFF" },
+  drawingIdleOverlay: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12 },
+  drawingHintText: { color: "rgba(0,0,0,0.25)", fontFamily: "Inter_400Regular", fontSize: 13, letterSpacing: 0.5 },
+  drawingToolbar: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "rgba(0,0,0,0.55)", paddingHorizontal: 12, paddingVertical: 10, borderRadius: 20, marginBottom: 12 },
+  drawingColorGrid: { flexDirection: "column", gap: 5 },
+  drawingColorRow: { flexDirection: "row", gap: 5 },
+  drawingColorDot: { width: 20, height: 20, borderRadius: 10 },
   drawingColorDotActive: { transform: [{ scale: 1.35 }], shadowColor: "#FFF", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.7, shadowRadius: 5, elevation: 6 },
-  drawingUndoBtn: { width: 30, height: 30, borderRadius: 15, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
+  drawingUndoBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
+  drawingUndoBtnDisabled: { backgroundColor: "rgba(255,255,255,0.06)" },
   drawingCancelBtn: { position: "absolute", left: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
+  audioIdleTouchable: { flex: 1, justifyContent: "center", alignItems: "center", gap: 20 },
   captureRow: { flexDirection: "row", alignItems: "center", gap: 32 },
   sideControlPlaceholder: { width: 48 },
   flipBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center" },
@@ -645,7 +673,10 @@ const styles = StyleSheet.create({
   recordingText: { color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 14 },
   previewContainer: { flex: 1, backgroundColor: "#000", alignItems: "center" },
   previewImageWrapper: { flex: 1, width: "100%", borderRadius: 32, overflow: "hidden", backgroundColor: "#1A1A1A" },
+
   previewImage: { width: "100%", height: "100%" },
+  drawingPreviewCenter: { ...StyleSheet.absoluteFillObject, justifyContent: "flex-start", alignItems: "center" },
+  drawingPreviewImage: { width: "100%", aspectRatio: 3 / 4, borderRadius: 28, overflow: "hidden", backgroundColor: "#FFF" },
   previewContent: { position: "absolute", left: 24, right: 24 },
   previewNoteBox: { backgroundColor: "rgba(0,0,0,0.5)", padding: 16, borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
   previewNoteText: { color: "#FFF", fontSize: 16, fontFamily: "Inter_600SemiBold", textAlign: "center" },

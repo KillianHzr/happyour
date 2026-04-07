@@ -349,24 +349,26 @@ export default function MainPagerScreen() {
         </View>
       </Animated.ScrollView>
 
-      {/* NAV BAR */}
-      <View style={[styles.tabBarContainer, { paddingBottom: insets.bottom }]}>
-        <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
-        <View style={styles.tabBarContent}>
-          <TouchableOpacity style={styles.tab} onPress={() => jumpTo(0)} disabled={cameraScrollLocked}>
-            <ProfileIcon color={currentPage === 0 ? "#FFF" : "rgba(255,255,255,0.4)"} size={24} />
-            <Text style={[styles.tabLabel, currentPage === 0 && styles.tabLabelActive]}>Profil</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.tab} onPress={() => jumpTo(1)} disabled={cameraScrollLocked}>
-            <MomentIcon color={currentPage === 1 ? "#FFF" : "rgba(255,255,255,0.4)"} size={28} />
-            <Text style={[styles.tabLabel, currentPage === 1 && styles.tabLabelActive]}>Moment</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.tab} onPress={() => jumpTo(2)} disabled={cameraScrollLocked}>
-            <VaultIcon color={currentPage === 2 ? "#FFF" : "rgba(255,255,255,0.4)"} size={24} />
-            <Text style={[styles.tabLabel, currentPage === 2 && styles.tabLabelActive]}>Coffre</Text>
-          </TouchableOpacity>
+      {/* NAV BAR — masquée pendant une capture / dessin actif */}
+      {!cameraScrollLocked && (
+        <View style={[styles.tabBarContainer, { paddingBottom: insets.bottom }]}>
+          <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
+          <View style={styles.tabBarContent}>
+            <TouchableOpacity style={styles.tab} onPress={() => jumpTo(0)}>
+              <ProfileIcon color={currentPage === 0 ? "#FFF" : "rgba(255,255,255,0.4)"} size={24} />
+              <Text style={[styles.tabLabel, currentPage === 0 && styles.tabLabelActive]}>Profil</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.tab} onPress={() => jumpTo(1)}>
+              <MomentIcon color={currentPage === 1 ? "#FFF" : "rgba(255,255,255,0.4)"} size={28} />
+              <Text style={[styles.tabLabel, currentPage === 1 && styles.tabLabelActive]}>Moment</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.tab} onPress={() => jumpTo(2)}>
+              <VaultIcon color={currentPage === 2 ? "#FFF" : "rgba(255,255,255,0.4)"} size={24} />
+              <Text style={[styles.tabLabel, currentPage === 2 && styles.tabLabelActive]}>Coffre</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      )}
 
       <MembersModal
         visible={showMembersModal}

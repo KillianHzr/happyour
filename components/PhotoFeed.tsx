@@ -12,8 +12,10 @@ import {
   Platform,
   PanResponder,
   Animated,
+  ActivityIndicator,
 } from "react-native";
 import { Image } from "expo-image";
+import * as FileSystem from "expo-file-system/legacy";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { LinearGradient } from "expo-linear-gradient";
@@ -96,8 +98,20 @@ function ExpandableNote({ text, maxLines }: { text: string; maxLines: number }) 
   );
 }
 
-function PhotoImage({ url, fallback_url }: { url: string; fallback_url?: string }) {
+function PhotoImage({ url, fallback_url, isDrawing }: { url: string; fallback_url?: string; isDrawing?: boolean }) {
   const [src, setSrc] = useState(url);
+  if (isDrawing) {
+    return (
+      <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center" }]}>
+        <Image
+          source={{ uri: src }}
+          style={{ width: "100%", aspectRatio: 3 / 4, borderRadius: 24, backgroundColor: "#FFF" }}
+          contentFit="fill"
+          onError={() => { if (fallback_url && src !== fallback_url) setSrc(fallback_url); }}
+        />
+      </View>
+    );
+  }
   return (
     <Image
       source={{ uri: src }}
@@ -223,22 +237,6 @@ function StickerPicker({ visible, onClose, onSelect, myReaction }: {
   );
 }
 
-function EndCountdown({ targetDate }: { targetDate: Date }) {
-  const [timeLeft, setTimeLeft] = useState("");
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const distance = targetDate.getTime() - Date.now();
-      if (distance < 0) { setTimeLeft("00:00:00"); return; }
-      const d = Math.floor(distance / 86400000);
-      const h = Math.floor((distance % 86400000) / 3600000);
-      const m = Math.floor((distance % 3600000) / 60000);
-      const s = Math.floor((distance % 60000) / 1000);
-      setTimeLeft(`${d > 0 ? d + "j " : ""}${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [targetDate]);
-  return <Text style={styles.countdownText}>{timeLeft}</Text>;
-}
 
 function formatDayLabel(dateStr: string) {
   const d = new Date(dateStr);
@@ -403,10 +401,10 @@ function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId 
 }
 
 // --- Moment vidéo ---
-function VideoMoment({ moment, isVisible, isNearVisible, onReact, currentUserId, crownWinnerId }: {
+function VideoMoment({ moment, isVisible, cachedUrl, onReact, currentUserId, crownWinnerId }: {
   moment: PhotoEntry;
   isVisible: boolean;
-  isNearVisible: boolean;
+  cachedUrl: string;
   onReact?: (photoId: string, stickerId: StickerId) => void;
   currentUserId?: string;
   crownWinnerId?: string | null;
@@ -414,17 +412,10 @@ function VideoMoment({ moment, isVisible, isNearVisible, onReact, currentUserId,
   const insets = useSafeAreaInsets();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [videoUrl, setVideoUrl] = useState(moment.url);
 
-  const player = useVideoPlayer(isNearVisible ? videoUrl : null, (p) => {
-    p.addListener("statusChange", (status) => {
-      if (status.error && moment.fallback_url && videoUrl !== moment.fallback_url) {
-        setVideoUrl(moment.fallback_url);
-      }
-    });
+  const player = useVideoPlayer(cachedUrl || null, (p) => {
     p.loop = true;
     p.muted = false;
-    if (isVisible && !isPaused) p.play();
   });
 
   const isOwn = moment.user_id === currentUserId;
@@ -446,24 +437,23 @@ function VideoMoment({ moment, isVisible, isNearVisible, onReact, currentUserId,
   return (
     <View style={[styles.fullscreenPage, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12 }]}>
       <View style={styles.momentWrapper}>
-        {isNearVisible ? (
-          <>
-            <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />
-            <Pressable style={StyleSheet.absoluteFill} onPress={() => setIsPaused((v) => !v)}>
-              {isVisible && isPaused && (
-                <View style={styles.pauseOverlay} pointerEvents="none">
-                  <View style={styles.pauseCircle}>
-                    <Svg width="24" height="24" viewBox="0 0 24 24" fill="#FFF">
-                      <Path d="M8 5v14l11-7z" />
-                    </Svg>
-                  </View>
+        <>
+          <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center" }]} pointerEvents="none">
+            <ActivityIndicator size="large" color="rgba(255,255,255,0.5)" />
+          </View>
+          <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setIsPaused((v) => !v)}>
+            {isVisible && isPaused && (
+              <View style={styles.pauseOverlay} pointerEvents="none">
+                <View style={styles.pauseCircle}>
+                  <Svg width="24" height="24" viewBox="0 0 24 24" fill="#FFF">
+                    <Path d="M8 5v14l11-7z" />
+                  </Svg>
                 </View>
-              )}
-            </Pressable>
-          </>
-        ) : (
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]} />
-        )}
+              </View>
+            )}
+          </Pressable>
+        </>
 
         <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
           <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.momentOverlay}>
@@ -496,9 +486,11 @@ function RevealIntroPage({ groupName, isVisible }: { groupName?: string; isVisib
   const scale = useRef(new Animated.Value(0.9)).current;
   const hintOpacity = useRef(new Animated.Value(0)).current;
   const hintY = useRef(new Animated.Value(0)).current;
+  const hasPlayed = useRef(false);
 
   useEffect(() => {
-    if (!isVisible) return;
+    if (!isVisible || hasPlayed.current) return;
+    hasPlayed.current = true;
     opacity.setValue(0);
     scale.setValue(0.9);
     hintOpacity.setValue(0);
@@ -575,6 +567,62 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
   const insets = useSafeAreaInsets();
   const [visibleIndex, setVisibleIndex] = useState(0);
   const [openPickerId, setOpenPickerId] = useState<string | null>(null);
+  const [countdownText, setCountdownText] = useState("");
+
+  const [videoCache, setVideoCache] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    // Prefetch photos into expo-image disk cache
+    photos.forEach((p) => {
+      if (p.url && p.image_path !== "text_mode" && !p.image_path.endsWith(".m4a") && !p.image_path.endsWith(".mp4")) {
+        Image.prefetch(p.url);
+        if (p.fallback_url) Image.prefetch(p.fallback_url);
+      }
+    });
+
+    // Download videos to local filesystem cache
+    const videos = photos.filter((p) => p.url && p.image_path.endsWith(".mp4"));
+    const localPaths: string[] = [];
+    let cancelled = false;
+
+    (async () => {
+      const entries: Record<string, string> = {};
+      await Promise.all(videos.map(async (p) => {
+        const filename = p.image_path.replace(/\//g, "_");
+        const localUri = `${FileSystem.cacheDirectory}reveal_${filename}`;
+        localPaths.push(localUri);
+        try {
+          const info = await FileSystem.getInfoAsync(localUri);
+          if (!info.exists) await FileSystem.downloadAsync(p.url!, localUri);
+          entries[p.url!] = localUri;
+        } catch {
+          entries[p.url!] = p.url!; // fallback to remote
+        }
+      }));
+      if (!cancelled) setVideoCache(entries);
+    })();
+
+    return () => {
+      cancelled = true;
+      // Clear video cache when reveal closes
+      localPaths.forEach((uri) => FileSystem.deleteAsync(uri, { idempotent: true }));
+    };
+  }, [photos]);
+
+  useEffect(() => {
+    const tick = () => {
+      const distance = nextUnlockDate.getTime() - Date.now();
+      if (distance < 0) { setCountdownText("00:00:00"); return; }
+      const d = Math.floor(distance / 86400000);
+      const h = Math.floor((distance % 86400000) / 3600000);
+      const m = Math.floor((distance % 3600000) / 60000);
+      const s = Math.floor((distance % 60000) / 1000);
+      setCountdownText(`${d > 0 ? d + "j " : ""}${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [nextUnlockDate]);
 
   const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     if (viewableItems.length > 0 && viewableItems[0].index != null) {
@@ -628,7 +676,7 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
           <View style={styles.endLogoMark} />
           <Text style={styles.endTitle}>Reveal terminé.</Text>
           <Text style={styles.endSubtitle}>Prochain rewind dans :</Text>
-          <EndCountdown targetDate={nextUnlockDate} />
+          <Text style={styles.countdownText}>{countdownText}</Text>
         </View>
       );
     }
@@ -637,6 +685,7 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
     const isTextOnly = moment.image_path === "text_mode";
     const isAudio = moment.image_path.endsWith(".m4a");
     const isVideo = moment.image_path.endsWith(".mp4");
+    const isDrawing = moment.image_path.includes("_draw");
     const isOwn = moment.user_id === currentUserId;
     const textLen = moment.note?.length ?? 0;
     const fontSize = textLen <= 40 ? 32 : textLen <= 100 ? 26 : textLen <= 200 ? 21 : textLen <= 300 ? 17 : 15;
@@ -647,8 +696,7 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
     }
 
     if (isVideo) {
-      const isNearVisible = Math.abs(index - visibleIndex) <= 1;
-      return <VideoMoment moment={moment} isVisible={index === visibleIndex} isNearVisible={isNearVisible} onReact={onReact} currentUserId={currentUserId} crownWinnerId={crownWinnerId} />;
+      return <VideoMoment moment={moment} isVisible={index === visibleIndex} onReact={onReact} currentUserId={currentUserId} crownWinnerId={crownWinnerId} cachedUrl={videoCache[moment.url] ?? moment.url} />;
     }
 
     const isCrown = crownWinnerId === moment.user_id;
@@ -677,7 +725,7 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
               </View>
             </View>
           ) : (
-            <PhotoImage url={moment.url} fallback_url={moment.fallback_url} />
+            <PhotoImage url={moment.url} fallback_url={moment.fallback_url} isDrawing={isDrawing} />
           )}
 
           <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
@@ -741,8 +789,10 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
       getItemLayout={(_, i) => ({ length: SCREEN_HEIGHT, offset: SCREEN_HEIGHT * i, index: i })}
       onViewableItemsChanged={onViewableItemsChanged}
       viewabilityConfig={viewabilityConfig}
-      windowSize={3}
-      removeClippedSubviews={Platform.OS === 'android'}
+      windowSize={21}
+      maxToRenderPerBatch={3}
+      initialNumToRender={3}
+      removeClippedSubviews={Platform.OS === "android"}
       style={styles.list}
     />
   );

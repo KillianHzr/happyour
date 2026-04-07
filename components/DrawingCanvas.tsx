@@ -17,8 +17,8 @@ type Stroke = {
   color: string;
 };
 
-export const DrawingCanvas = forwardRef<DrawingCanvasRef, { color: string }>(
-  ({ color }, ref) => {
+export const DrawingCanvas = forwardRef<DrawingCanvasRef, { color: string; onHistoryChange?: (canUndo: boolean, canRedo: boolean) => void }>(
+  ({ color, onHistoryChange }, ref) => {
     const canvasRef = useCanvasRef();
     const canvasViewRef = useRef<View>(null);
     const canvasLayoutRef = useRef({ pageX: 0, pageY: 0 });
@@ -34,6 +34,10 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { color: string }>(
     useEffect(() => {
       selectedColorRef.current = color;
     }, [color]);
+
+    useEffect(() => {
+      onHistoryChange?.(completedStrokes.length > 0, redoStackRef.current.length > 0);
+    }, [completedStrokes]);
 
     useImperativeHandle(ref, () => ({
       capture: async () => {
@@ -117,7 +121,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { color: string }>(
         {...panResponder.panHandlers}
       >
         <Canvas ref={canvasRef} style={StyleSheet.absoluteFill}>
-          <Fill color="#0A0A0A" />
+          <Fill color="white" />
           {completedStrokes.map((stroke, i) => (
             <Path
               key={i}
