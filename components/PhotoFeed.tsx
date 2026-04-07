@@ -21,7 +21,7 @@ import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
-import { STICKERS, type StickerId } from "./stickers";
+import { STICKERS, type StickerId, getMonthlyStickers } from "./stickers";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const NAVBAR_HEIGHT = 100;
@@ -210,6 +210,7 @@ function StickerPicker({ visible, onClose, onSelect, myReaction }: {
   onSelect: (id: StickerId) => void;
   myReaction?: StickerId | null;
 }) {
+  const monthlyStickers = getMonthlyStickers();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.pickerBackdrop} onPress={onClose}>
@@ -217,7 +218,7 @@ function StickerPicker({ visible, onClose, onSelect, myReaction }: {
           <View style={styles.pickerHandle} />
           <Text style={styles.pickerTitle}>Réagir</Text>
           <View style={styles.pickerGrid}>
-            {STICKERS.map(({ id, Component, label }) => {
+            {monthlyStickers.map(({ id, Component, label }) => {
               const isActive = myReaction === id;
               return (
                 <TouchableOpacity
