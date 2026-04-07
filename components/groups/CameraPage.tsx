@@ -280,17 +280,22 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
       {/* Camera view / capture modes */}
       {!capturedUri && !capturedAudioUri && (
         cameraMode === "TEXTE" ? (
-          <View style={styles.textModeContainer}>
+          <KeyboardAvoidingView
+            style={[styles.textModeContainer, { paddingTop: Math.max(insets.top, 12) + 48 }]}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            keyboardVerticalOffset={0}
+          >
             <TextInput
-              style={styles.textModeInput}
+              style={[styles.textModeInput, { fontSize: textModeContent.length <= 40 ? 32 : textModeContent.length <= 100 ? 26 : textModeContent.length <= 200 ? 21 : textModeContent.length <= 300 ? 17 : 14 }]}
               placeholder="Écris..."
               placeholderTextColor="rgba(255,255,255,0.3)"
               multiline
               value={textModeContent}
               onChangeText={setTextModeContent}
               autoFocus
+              textAlignVertical="top"
             />
-          </View>
+          </KeyboardAvoidingView>
         ) : cameraMode === "DESSIN" ? (
           <View style={[styles.cameraPageContainer, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: 24, paddingHorizontal: 12 }]}>
             <View style={styles.drawingArea}>
@@ -649,8 +654,8 @@ const styles = StyleSheet.create({
   cameraPageContainer: { flex: 1, backgroundColor: "#000", alignItems: "center" },
   cameraInner: { flex: 1, width: "100%" },
   flashBtn: { position: "absolute", top: 16, right: 16, width: 48, height: 48, borderRadius: 24, backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "center", alignItems: "center" },
-  textModeContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: 40, backgroundColor: "#0A0A0A" },
-  textModeInput: { fontSize: 32, color: "#FFF", fontFamily: "Inter_700Bold", textAlign: "center", width: "100%" },
+  textModeContainer: { flex: 1, justifyContent: "flex-start", backgroundColor: "#0A0A0A", paddingHorizontal: 32 },
+  textModeInput: { color: "#FFF", fontFamily: "Inter_700Bold", textAlign: "center", width: "100%", paddingTop: 0 },
   audioModeContainer: { flex: 1, justifyContent: "center", alignItems: "center", gap: 20, backgroundColor: "#0A0A0A" },
   audioRecordingIndicator: { flexDirection: "row", alignItems: "center", gap: 12 },
   audioRedDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#FF3B30" },
