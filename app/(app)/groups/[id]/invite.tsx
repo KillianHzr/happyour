@@ -132,7 +132,7 @@ export default function InviteScreen() {
 
   const handleShareCode = async () => {
     try {
-      const message = `Rejoins mon cercle privé sur HappyOur !\n\nCode d'invitation : ${inviteCode}\n\nTélécharge l'app ici : https://happyour-landing.vercel.app`;
+      const message = `Rejoins mon cercle privé sur HappyOur !\n\nCode d'invitation : ${inviteCode}\n\nTélécharge l'app ici : https://app-gobelins-m2-landing.vercel.app/`;
       await Share.share({ message });
     } catch (e: any) {
       Alert.alert("Erreur", e.message);
