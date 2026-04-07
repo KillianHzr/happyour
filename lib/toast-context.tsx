@@ -142,9 +142,9 @@ function UploadBanner({ upload }: { upload: { id: string; progress: number; stat
 
   const label =
     upload.status === "uploading"
-      ? upload.type === "video" ? "Envoi de la vidéo..." : upload.type === "texte" ? "Envoi du texte..." : "Envoi de la photo..."
+      ? upload.type === "video" ? "Envoi de la vidéo..." : upload.type === "texte" ? "Envoi du texte..." : upload.type === "audio" ? "Envoi de l'audio..." : upload.type === "dessin" ? "Envoi du dessin..." : "Envoi de la photo..."
       : upload.status === "success"
-      ? upload.type === "video" ? "Vidéo envoyée !" : upload.type === "texte" ? "Texte envoyé !" : "Photo envoyée !"
+      ? upload.type === "video" ? "Vidéo envoyée !" : upload.type === "texte" ? "Texte envoyé !" : upload.type === "audio" ? "Audio envoyé !" : upload.type === "dessin" ? "Dessin envoyé !" : "Photo envoyée !"
       : "Erreur lors de l'envoi";
 
   const iconBg =

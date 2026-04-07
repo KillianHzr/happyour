@@ -9,7 +9,7 @@ type UploadTask = {
   id: string;
   progress: number;
   status: "uploading" | "success" | "error";
-  type: "photo" | "video" | "texte" | "audio";
+  type: "photo" | "video" | "texte" | "audio" | "dessin";
 };
 
 type UploadContextType = {
@@ -36,13 +36,15 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
     const taskId = Math.random().toString(36).substring(7);
     
     // Identification plus robuste du type
-    let type: "photo" | "video" | "texte" | "audio" = "photo";
+    let type: "photo" | "video" | "texte" | "audio" | "dessin" = "photo";
     if (fileName === null) {
       type = "texte";
     } else if (contentType?.includes("audio") || fileName.endsWith(".m4a")) {
       type = "audio";
     } else if (contentType?.includes("video") || fileName.endsWith(".mp4")) {
       type = "video";
+    } else if (fileName.includes("_draw")) {
+      type = "dessin";
     }
 
     console.log(`[Upload] Nouveau moment: ${type} (ID: ${taskId})`);

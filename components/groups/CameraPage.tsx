@@ -25,11 +25,12 @@ type CameraMode = "PHOTO" | "VIDEO" | "AUDIO" | "DESSIN" | "TEXTE";
 type Props = {
   groupId: string;
   userId: string;
+  isActive: boolean;
   onUploadSuccess: () => void;
   onScrollLock: (locked: boolean) => void;
 };
 
-export default function CameraPage({ groupId, userId, onUploadSuccess, onScrollLock }: Props) {
+export default function CameraPage({ groupId, userId, isActive, onUploadSuccess, onScrollLock }: Props) {
   const insets = useSafeAreaInsets();
   const { startUpload } = useUpload();
 
@@ -139,8 +140,14 @@ export default function CameraPage({ groupId, userId, onUploadSuccess, onScrollL
   const startAudioRecording = async () => {
     const perm = await AudioModule.requestRecordingPermissionsAsync();
     if (!perm.granted) { Alert.alert("Permission refusée", "L'accès au micro est requis."); return; }
-    await audioRecorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
-    audioRecorder.record();
+    try {
+      await AudioModule.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      await audioRecorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
+      audioRecorder.record();
+    } catch (e: any) {
+      Alert.alert("Erreur", "Impossible de démarrer l'enregistrement.");
+      return;
+    }
     setIsAudioRecording(true);
     setAudioSeconds(0);
     audioTimer.current = setInterval(() => setAudioSeconds(s => s + 1), 1000);
@@ -158,6 +165,7 @@ export default function CameraPage({ groupId, userId, onUploadSuccess, onScrollL
   const stopAudioRecording = async () => {
     if (!isAudioRecording) return;
     await audioRecorder.stop();
+    await AudioModule.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
     if (audioTimer.current) clearInterval(audioTimer.current);
     audioWaveAnims.forEach(({ anim }) => { anim.stopAnimation(); anim.setValue(0.15); });
     setIsAudioRecording(false);
@@ -461,7 +469,7 @@ export default function CameraPage({ groupId, userId, onUploadSuccess, onScrollL
       )}
 
       {/* Photo preview */}
-      {capturedUri && (
+      {capturedUri && isActive && (
         <View style={[styles.previewContainer, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12, paddingHorizontal: 12 }]}>
           <View style={styles.previewImageWrapper}>
             <Image source={{ uri: capturedUri }} style={styles.previewImage} contentFit="cover" />
@@ -507,7 +515,7 @@ export default function CameraPage({ groupId, userId, onUploadSuccess, onScrollL
       )}
 
       {/* Audio preview */}
-      {capturedAudioUri && (
+      {capturedAudioUri && isActive && (
         <View style={[styles.previewContainer, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12, paddingHorizontal: 12 }]}>
           <View style={[styles.previewImageWrapper, { justifyContent: "center", alignItems: "center" }]}>
             <View style={[styles.fill, { backgroundColor: "#0A0A0A" }]} />

@@ -306,7 +306,7 @@ export default function MainPagerScreen() {
         style={styles.pager}
       >
         {/* PAGE 0: PROFILE */}
-        <View style={styles.page}>
+        <View style={[styles.page, { zIndex: 2 }]}>
           <ProfilePage
             userId={user?.id ?? ""}
             username={username}
@@ -322,13 +322,14 @@ export default function MainPagerScreen() {
           <CameraPage
             groupId={id ?? ""}
             userId={user?.id ?? ""}
+            isActive={currentPage === 1}
             onUploadSuccess={fetchData}
             onScrollLock={setCameraScrollLocked}
           />
         </Animated.View>
 
         {/* PAGE 2: VAULT */}
-        <View style={styles.page}>
+        <View style={[styles.page, { zIndex: 2 }]}>
           <VaultPage
             unlocked={unlocked}
             photos={photos}
