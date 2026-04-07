@@ -104,6 +104,14 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
     onScrollLock(!!capturedUri || !!capturedAudioUri || isPinching || isDrawingActive);
   }, [capturedUri, capturedAudioUri, isPinching, isDrawingActive]);
 
+  useEffect(() => {
+    if (cameraMode === "AUDIO" && !capturedAudioUri) {
+      AudioModule.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true }).catch(() => {});
+    } else {
+      AudioModule.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true }).catch(() => {});
+    }
+  }, [cameraMode, capturedAudioUri]);
+
   const isEditing = !!capturedUri || !!capturedAudioUri;
 
   // ── Handlers ──
@@ -143,9 +151,9 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
     const perm = await AudioModule.requestRecordingPermissionsAsync();
     if (!perm.granted) { Alert.alert("Permission refusée", "L'accès au micro est requis."); return; }
     try {
-      await AudioModule.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      try { await audioRecorder.stop(); } catch (_) {}
       await audioRecorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
-      audioRecorder.record();
+      await audioRecorder.record();
     } catch (e: any) {
       Alert.alert("Erreur", "Impossible de démarrer l'enregistrement.");
       return;
@@ -167,7 +175,6 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
   const stopAudioRecording = async () => {
     if (!isAudioRecording) return;
     await audioRecorder.stop();
-    await AudioModule.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
     if (audioTimer.current) clearInterval(audioTimer.current);
     audioWaveAnims.forEach(({ anim }) => { anim.stopAnimation(); anim.setValue(0.15); });
     setIsAudioRecording(false);
