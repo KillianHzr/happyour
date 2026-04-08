@@ -62,6 +62,7 @@ type Props = {
   crownWinnerId?: string | null;
   crownDurationMs?: number;
   groupName?: string;
+  onScrollLock?: (locked: boolean) => void;
 };
 
 const ReactIcon = () => (
@@ -261,12 +262,13 @@ function fmtAudio(s: number) {
 }
 
 // --- Moment audio ---
-function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId }: {
+function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId, onScrollLock }: {
   moment: PhotoEntry;
   isVisible: boolean;
   onReact?: (photoId: string, stickerId: StickerId) => void;
   currentUserId?: string;
   crownWinnerId?: string | null;
+  onScrollLock?: (locked: boolean) => void;
 }) {
   const insets = useSafeAreaInsets();
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -277,11 +279,15 @@ function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId 
   const isOwn = moment.user_id === currentUserId;
   const myReaction = moment.reactions.find((r) => r.user_id === currentUserId)?.sticker_id ?? null;
 
-  // Refs pour PanResponder (évite les closures périmées)
-  const seekBarRef = useRef<View>(null);
-  const seekLayoutRef = useRef({ pageX: 0, width: 1 });
+  const seekWidthRef = useRef(1);
+  const seekOriginXRef = useRef(0);
+  const isDraggingRef = useRef(false);
+  const dragRatioRef = useRef(0);
+  const lastSeekTimeRef = useRef(0);
   const playerRef = useRef(player);
   const durationRef = useRef(0);
+  const fillRef = useRef<View>(null);
+  const thumbRef = useRef<View>(null);
   useEffect(() => { playerRef.current = player; }, [player]);
   useEffect(() => { durationRef.current = status.duration ?? 0; }, [status.duration]);
 
@@ -289,18 +295,26 @@ function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId 
     if (!isVisible) player.pause();
   }, [isVisible]);
 
+  // Pendant la lecture, mettre à jour la barre via setNativeProps (sans re-render)
+  const progressRef = useRef(0);
+  const progress = status.duration > 0 ? (status.currentTime ?? 0) / status.duration : 0;
+  useEffect(() => {
+    if (isDraggingRef.current) return;
+    progressRef.current = progress;
+    fillRef.current?.setNativeProps({ style: { width: `${progress * 100}%` } });
+    thumbRef.current?.setNativeProps({ style: { left: `${Math.min(progress * 100, 100)}%` } });
+  }, [progress]);
+
   const togglePlay = () => {
     if (status.playing) {
       player.pause();
     } else {
-      if (durationRef.current > 0 && (status.currentTime ?? 0) >= durationRef.current - 0.1) {
-        player.seekTo(0);
-      }
+      const duration = status.duration ?? 0;
+      if (duration > 0 && (status.currentTime ?? 0) >= duration - 0.1) player.seekTo(0);
       player.play();
     }
   };
 
-  // PanResponder : capture le touch avant le ScrollView parent, fonctionne même hors zone
   const seekPan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -308,19 +322,37 @@ function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId 
       onStartShouldSetPanResponderCapture: () => true,
       onMoveShouldSetPanResponderCapture: () => true,
       onPanResponderGrant: (evt) => {
-        const relX = evt.nativeEvent.pageX - seekLayoutRef.current.pageX;
-        const ratio = Math.max(0, Math.min(1, relX / seekLayoutRef.current.width));
-        playerRef.current.seekTo(ratio * durationRef.current);
+        seekOriginXRef.current = evt.nativeEvent.pageX - evt.nativeEvent.locationX;
+        isDraggingRef.current = true;
+        onScrollLock?.(true);
+        const ratio = Math.max(0, Math.min(1, evt.nativeEvent.locationX / seekWidthRef.current));
+        dragRatioRef.current = ratio;
+        fillRef.current?.setNativeProps({ style: { width: `${ratio * 100}%` } });
+        thumbRef.current?.setNativeProps({ style: { left: `${Math.min(ratio * 100, 100)}%` } });
       },
       onPanResponderMove: (evt) => {
-        const relX = evt.nativeEvent.pageX - seekLayoutRef.current.pageX;
-        const ratio = Math.max(0, Math.min(1, relX / seekLayoutRef.current.width));
-        playerRef.current.seekTo(ratio * durationRef.current);
+        const relX = evt.nativeEvent.pageX - seekOriginXRef.current;
+        const ratio = Math.max(0, Math.min(1, relX / seekWidthRef.current));
+        dragRatioRef.current = ratio;
+        fillRef.current?.setNativeProps({ style: { width: `${ratio * 100}%` } });
+        thumbRef.current?.setNativeProps({ style: { left: `${Math.min(ratio * 100, 100)}%` } });
+        const now = Date.now();
+        if (now - lastSeekTimeRef.current > 100) {
+          lastSeekTimeRef.current = now;
+          playerRef.current.seekTo(ratio * durationRef.current);
+        }
+      },
+      onPanResponderRelease: () => {
+        isDraggingRef.current = false;
+        playerRef.current.seekTo(dragRatioRef.current * durationRef.current);
+        onScrollLock?.(false);
+      },
+      onPanResponderTerminate: () => {
+        isDraggingRef.current = false;
+        onScrollLock?.(false);
       },
     })
   ).current;
-
-  const progress = status.duration > 0 ? (status.currentTime ?? 0) / status.duration : 0;
 
   return (
     <View style={[styles.fullscreenPage, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12 }]}>
@@ -351,23 +383,15 @@ function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId 
                 </Svg>
               </TouchableOpacity>
               <View style={styles.audioProgressWrapper}>
-                {/* Zone de touch large, PanResponder capture avant le parent */}
                 <View
-                  ref={seekBarRef}
                   style={styles.audioSeekHitArea}
-                  onLayout={() => {
-                    seekBarRef.current?.measure((_x, _y, width, _h, pageX) => {
-                      seekLayoutRef.current = { pageX, width };
-                    });
-                  }}
+                  onLayout={(e) => { seekWidthRef.current = e.nativeEvent.layout.width; }}
                   {...seekPan.panHandlers}
                 >
                   <View style={styles.audioSeekTrack}>
-                    <View style={[styles.audioSeekFill, { width: `${progress * 100}%` as any }]} />
+                    <View ref={fillRef} style={[styles.audioSeekFill, { width: `${progress * 100}%` as any }]} />
                   </View>
-                  {progress > 0 && (
-                    <View style={[styles.audioSeekThumb, { left: `${Math.min(progress * 100, 100)}%` as any }]} pointerEvents="none" />
-                  )}
+                  <View ref={thumbRef} style={[styles.audioSeekThumb, { left: `${Math.min(progress * 100, 100)}%` as any }]} pointerEvents="none" />
                 </View>
                 <View style={styles.audioTimesRow}>
                   <Text style={styles.audioTimeText}>{fmtAudio(status.currentTime)}</Text>
@@ -564,11 +588,12 @@ function CrownRevealPage({ winner, durationMs }: { winner: PhotoEntry; durationM
   );
 }
 
-export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDate, crownWinnerId, crownDurationMs = 0, groupName }: Props) {
+export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDate, crownWinnerId, crownDurationMs = 0, groupName, onScrollLock }: Props) {
   const insets = useSafeAreaInsets();
   const [visibleIndex, setVisibleIndex] = useState(0);
   const [openPickerId, setOpenPickerId] = useState<string | null>(null);
   const [countdownText, setCountdownText] = useState("");
+  const flatListRef = useRef<FlatList>(null);
 
   const [videoCache, setVideoCache] = useState<Record<string, string>>({});
 
@@ -693,7 +718,7 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
     const myReaction = moment.reactions.find((r) => r.user_id === currentUserId)?.sticker_id ?? null;
 
     if (isAudio) {
-      return <AudioMoment moment={moment} isVisible={index === visibleIndex} onReact={onReact} currentUserId={currentUserId} crownWinnerId={crownWinnerId} />;
+      return <AudioMoment moment={moment} isVisible={index === visibleIndex} onReact={onReact} currentUserId={currentUserId} crownWinnerId={crownWinnerId} onScrollLock={(locked) => { flatListRef.current?.setNativeProps({ scrollEnabled: !locked }); onScrollLock?.(locked); }} />;
     }
 
     if (isVideo) {
@@ -779,6 +804,7 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
 
   return (
     <FlatList
+      ref={flatListRef}
       data={items}
       renderItem={renderItem}
       keyExtractor={(_, i) => i.toString()}

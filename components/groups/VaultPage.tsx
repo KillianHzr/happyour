@@ -21,12 +21,13 @@ type Props = {
   onOpenMembers: () => void;
   onSimulateReveal: () => void;
   groupId: string;
+  onScrollLock?: (locked: boolean) => void;
 };
 
 export default function VaultPage({
   unlocked, photos, crownWinnerId, crownDurationMs, groupName,
   onReact, currentUserId, nextRevealDate, photoCount, revealDate,
-  isAdmin, onOpenMembers, onSimulateReveal, groupId,
+  isAdmin, onOpenMembers, onSimulateReveal, groupId, onScrollLock,
 }: Props) {
   const insets = useSafeAreaInsets();
 
@@ -41,6 +42,7 @@ export default function VaultPage({
           crownWinnerId={crownWinnerId}
           crownDurationMs={crownDurationMs}
           groupName={groupName}
+          onScrollLock={onScrollLock}
         />
       </View>
     );

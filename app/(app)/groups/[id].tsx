@@ -263,6 +263,11 @@ export default function MainPagerScreen() {
 
   const scrollEnabled = !cameraScrollLocked;
 
+  const lockScrollDirect = useCallback((locked: boolean) => {
+    if (!locked && cameraScrollLocked) return; // camera has priority
+    scrollRef.current?.setNativeProps({ scrollEnabled: !locked });
+  }, [cameraScrollLocked]);
+
   const handlePagerTouchStart = (e: any) => {
     pagerTouchRef.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY, decided: false };
     scrollRef.current?.setNativeProps({ scrollEnabled });
@@ -299,6 +304,7 @@ export default function MainPagerScreen() {
         horizontal pagingEnabled showsHorizontalScrollIndicator={false}
         bounces={false} overScrollMode="never"
         scrollEnabled={scrollEnabled}
+        delaysContentTouches={false}
         onMomentumScrollEnd={(e) => setCurrentPage(Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH))}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })}
         scrollEventThrottle={16}
@@ -345,6 +351,7 @@ export default function MainPagerScreen() {
             onOpenMembers={() => setShowMembersModal(true)}
             onSimulateReveal={() => setDebugUnlocked(true)}
             groupId={id ?? ""}
+            onScrollLock={lockScrollDirect}
           />
         </View>
       </Animated.ScrollView>

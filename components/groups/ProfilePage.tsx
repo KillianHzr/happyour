@@ -163,7 +163,7 @@ export default function ProfilePage({ userId, username, avatarUrl, email, onAvat
               style={styles.editSheetInput}
               value={newUsername}
               onChangeText={setNewUsername}
-              autoFocus
+              autofocus="off"
               maxLength={30}
               autoCapitalize="none"
               returnKeyType="done"

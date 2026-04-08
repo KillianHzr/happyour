@@ -108,9 +108,9 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
 
   useEffect(() => {
     if (cameraMode === "AUDIO" && !capturedAudioUri) {
-      AudioModule.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true }).catch(() => {});
+      AudioModule.setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true }).catch(() => {});
     } else {
-      AudioModule.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true }).catch(() => {});
+      AudioModule.setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
     }
   }, [cameraMode, capturedAudioUri]);
 
@@ -155,9 +155,11 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
     try {
       try { await audioRecorder.stop(); } catch (_) {}
       await audioRecorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
+      await AudioModule.setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await audioRecorder.record();
     } catch (e: any) {
-      Alert.alert("Erreur", "Impossible de démarrer l'enregistrement.");
+      console.error("Erreur startAudioRecording:", e);
+      Alert.alert("Erreur", `Impossible de démarrer l'enregistrement : ${e.message || e.toString()}`);
       return;
     }
     setIsAudioRecording(true);
@@ -295,7 +297,7 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
                 multiline
                 value={textModeContent}
                 onChangeText={setTextModeContent}
-                autoFocus
+                autofocus="off"
                 textAlignVertical="top"
                 pointerEvents="auto"
               />
@@ -553,7 +555,7 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
           <Modal visible={isEditingNote} transparent animationType="fade">
             <BlurView intensity={100} tint="dark" style={styles.fill}>
               <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.noteEditorContainer}>
-                <TextInput style={styles.largeNoteInput} placeholder="Note..." placeholderTextColor="rgba(255,255,255,0.3)" value={note} onChangeText={setNote} maxLength={140} multiline autoFocus />
+                <TextInput style={styles.largeNoteInput} placeholder="Note..." placeholderTextColor="rgba(255,255,255,0.3)" value={note} onChangeText={setNote} maxLength={140} multiline autofocus="off" />
                 <TouchableOpacity style={styles.doneNoteBtn} onPress={() => setIsEditingNote(false)}>
                   <Text style={styles.doneNoteText}>Terminé</Text>
                 </TouchableOpacity>
@@ -640,7 +642,7 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
           <Modal visible={isEditingNote} transparent animationType="fade">
             <BlurView intensity={100} tint="dark" style={styles.fill}>
               <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.noteEditorContainer}>
-                <TextInput style={styles.largeNoteInput} placeholder="Note..." placeholderTextColor="rgba(255,255,255,0.3)" value={note} onChangeText={setNote} maxLength={140} multiline autoFocus />
+                <TextInput style={styles.largeNoteInput} placeholder="Note..." placeholderTextColor="rgba(255,255,255,0.3)" value={note} onChangeText={setNote} maxLength={140} multiline autofocus="off" />
                 <TouchableOpacity style={styles.doneNoteBtn} onPress={() => setIsEditingNote(false)}>
                   <Text style={styles.doneNoteText}>Terminé</Text>
                 </TouchableOpacity>

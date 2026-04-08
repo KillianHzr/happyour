@@ -88,7 +88,7 @@ export default function JoinGroupScreen() {
           autoCapitalize="characters"
           value={code}
           onChangeText={setCode}
-          autoFocus
+          autofocus="off"
         />
 
         <TouchableOpacity 

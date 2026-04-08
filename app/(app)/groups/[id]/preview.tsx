@@ -187,7 +187,7 @@ export default function PreviewScreen() {
       <Modal visible={isEditingNote} transparent animationType="fade">
         <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill}>
           <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.noteEditorContainer}>
-            <TextInput style={styles.largeNoteInput} placeholder="Note..." placeholderTextColor="rgba(255,255,255,0.3)" value={note} onChangeText={setNote} maxLength={140} multiline autoFocus />
+            <TextInput style={styles.largeNoteInput} placeholder="Note..." placeholderTextColor="rgba(255,255,255,0.3)" value={note} onChangeText={setNote} maxLength={140} multiline autofocus="off" />
             <TouchableOpacity style={styles.doneNoteBtn} onPress={() => setIsEditingNote(false)}><Text style={styles.doneNoteText}>Terminé</Text></TouchableOpacity>
           </KeyboardAvoidingView>
         </BlurView>
