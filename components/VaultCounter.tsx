@@ -10,24 +10,26 @@ type Props = {
   lastPoster?: { avatar_url?: string | null; username: string } | null;
 };
 
-const LockIcon = () => (
-  <Svg width="40" height="40" viewBox="0 0 24 24" fill="none">
-    <Path
-      d="M17 11H7C5.89543 11 5 11.8954 5 13V19C5 20.1046 5.89543 21 7 21H17C18.1046 21 19 20.1046 19 19V13C19 11.8954 18.1046 11 17 11Z"
-      stroke="#FFFFFF"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    <Path
-      d="M7 11V7C7 5.67392 7.52678 4.40215 8.46447 3.46447C9.40215 2.52678 10.6739 2 12 2C13.3261 2 14.5979 2.52678 15.5355 3.46447C16.4732 4.40215 17 5.67392 17 7V11"
-      stroke="#FFFFFF"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </Svg>
-);
+// Import SVGs as components
+import VaultNormal from "../assets/icons/Vault.svg";
+import VaultStars from "../assets/icons/Vault_stars.svg";
+import VaultFull from "../assets/icons/Vault_stars2.svg";
+
+const VaultIcon = ({ count }: { count: number }) => {
+  const iconProps = {
+    width: 80,
+    height: 80,
+    color: "#FFFFFF", // This will be used as currentColor in the SVGs
+  };
+
+  if (count >= 15) {
+    return <VaultFull {...iconProps} />;
+  }
+  if (count >= 5) {
+    return <VaultStars {...iconProps} />;
+  }
+  return <VaultNormal {...iconProps} />;
+};
 
 export default function VaultCounter({ totalCount, unlockDate, lastPoster }: Props) {
   const [timeLeft, setTimeLeft] = useState("");
@@ -56,7 +58,7 @@ export default function VaultCounter({ totalCount, unlockDate, lastPoster }: Pro
 
   return (
     <View style={[theme.glassCard, styles.container]}>
-      {lastPoster ? (
+      {lastPoster && (
         <View style={styles.lastPosterWrap}>
           <View style={styles.crownWrap}>
             <Svg width="28" height="28" viewBox="0 0 24 24" fill="none">
@@ -73,11 +75,11 @@ export default function VaultCounter({ totalCount, unlockDate, lastPoster }: Pro
           <Text style={styles.lastPosterName}>{lastPoster.username} a la couronne</Text>
           <Text style={styles.lastPosterHint}>Partage un moment pour la récupérer !</Text>
         </View>
-      ) : (
-        <View style={styles.iconContainer}>
-          <LockIcon />
-        </View>
       )}
+
+      <View style={styles.iconContainer}>
+        <VaultIcon count={totalCount} />
+      </View>
       
       <View style={styles.statsRow}>
         <View style={styles.statItem}>
