@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import {
-  View, Text, StyleSheet, Dimensions, Animated, TouchableOpacity,
+  View, Text, StyleSheet, Dimensions, Animated, Easing, TouchableOpacity,
   Alert, KeyboardAvoidingView, Platform, TextInput, Modal, Pressable, ActivityIndicator, PanResponder,
 } from "react-native";
 import { Image } from "expo-image";
@@ -40,6 +40,8 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
   const recordingTimer = useRef<NodeJS.Timeout | null>(null);
   const startTouchY = useRef<number | null>(null);
   const audioTimer = useRef<NodeJS.Timeout | null>(null);
+  const isAudioRecordingRef = useRef(false);
+  const audioProgressAnim = useRef(new Animated.Value(0)).current;
 
   const [cameraMode, setCameraMode] = useState<CameraMode>("PHOTO");
   const [drawingColor, setDrawingColor] = useState("#000000");
@@ -130,8 +132,13 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
     if (cameraMode !== "VIDEO") setCameraMode("VIDEO");
     setIsRecording(true);
     setRecordingSeconds(0);
-    recordingTimer.current = setInterval(() => setRecordingSeconds(s => s + 1), 1000);
     await new Promise(resolve => setTimeout(resolve, 500));
+    recordingTimer.current = setInterval(() => {
+      setRecordingSeconds(s => {
+        if (s >= 14) { stopVideoRecording(); return s; }
+        return s + 1;
+      });
+    }, 1000);
     try {
       const video = await cameraRef.current.recordAsync({ quality: "1080p", maxDuration: 15 });
       if (video?.uri) {
@@ -162,9 +169,21 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
       Alert.alert("Erreur", `Impossible de démarrer l'enregistrement : ${e.message || e.toString()}`);
       return;
     }
+    isAudioRecordingRef.current = true;
     setIsAudioRecording(true);
     setAudioSeconds(0);
+    audioProgressAnim.setValue(0);
+    Animated.timing(audioProgressAnim, {
+      toValue: 1,
+      duration: 30000,
+      easing: Easing.linear,
+      useNativeDriver: false,
+    }).start();
     audioTimer.current = setInterval(() => setAudioSeconds(s => s + 1), 1000);
+    // Auto-stop at exactly 30s
+    setTimeout(() => {
+      if (isAudioRecordingRef.current) stopAudioRecordingDirect();
+    }, 30000);
     audioWaveAnims.forEach(({ anim, duration, delay }) => {
       Animated.loop(
         Animated.sequence([
@@ -176,14 +195,18 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
     });
   };
 
-  const stopAudioRecording = async () => {
-    if (!isAudioRecording) return;
-    await audioRecorder.stop();
-    if (audioTimer.current) clearInterval(audioTimer.current);
+  const stopAudioRecordingDirect = async () => {
+    if (!isAudioRecordingRef.current) return;
+    isAudioRecordingRef.current = false;
+    try { await audioRecorder.stop(); } catch (_) {}
+    if (audioTimer.current) { clearInterval(audioTimer.current); audioTimer.current = null; }
+    audioProgressAnim.stopAnimation();
     audioWaveAnims.forEach(({ anim }) => { anim.stopAnimation(); anim.setValue(0.15); });
     setIsAudioRecording(false);
     if (audioRecorder.uri) setCapturedAudioUri(audioRecorder.uri);
   };
+
+  const stopAudioRecording = stopAudioRecordingDirect;
 
   const handleCapture = async () => {
     if (cameraMode === "TEXTE") {
@@ -323,11 +346,13 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
           <View style={styles.audioModeContainer}>
             {isAudioRecording ? (
               <>
+                {/* Barre de progression en haut */}
+                <View style={[styles.audioProgressBar, { top: insets.top + 8 }]}>
+                  <Animated.View style={[styles.audioProgressFill, { width: audioProgressAnim.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }]} />
+                </View>
                 <View style={styles.audioRecordingIndicator}>
                   <View style={styles.audioRedDot} />
-                  <Text style={styles.audioTimerText}>
-                    {Math.floor(audioSeconds / 60).toString().padStart(2, "0")}:{(audioSeconds % 60).toString().padStart(2, "0")}
-                  </Text>
+                  <Text style={styles.audioTimerText}>{audioSeconds}s / 30s</Text>
                 </View>
                 <View style={styles.audioWaveformRow} pointerEvents="none">
                   {audioWaveAnims.map(({ anim }, i) => (
@@ -390,12 +415,6 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
             <View style={[styles.recordingTimer, { top: Math.max(insets.top, 40) }]}>
               <View style={styles.recordingDot} />
               <Text style={styles.recordingText}>{recordingSeconds}s / 15s</Text>
-            </View>
-          )}
-          {isAudioRecording && (
-            <View style={[styles.recordingTimer, { top: Math.max(insets.top, 40) }]}>
-              <View style={[styles.recordingDot, { backgroundColor: "#A78BFA" }]} />
-              <Text style={styles.recordingText}>{Math.floor(audioSeconds / 60)}:{(audioSeconds % 60).toString().padStart(2, "0")}</Text>
             </View>
           )}
 
@@ -663,9 +682,11 @@ const styles = StyleSheet.create({
   textModeContainer: { flex: 1, justifyContent: "flex-start", backgroundColor: "#0A0A0A", paddingHorizontal: 32 },
   textModeInput: { color: "#FFF", fontFamily: "Inter_700Bold", textAlign: "center", width: "100%", paddingTop: 0 },
   audioModeContainer: { flex: 1, justifyContent: "center", alignItems: "center", gap: 20, backgroundColor: "#0A0A0A" },
+  audioProgressBar: { position: "absolute", left: 16, right: 16, height: 3, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.15)", overflow: "hidden" },
+  audioProgressFill: { height: "100%", borderRadius: 2, backgroundColor: "#A78BFA" },
   audioRecordingIndicator: { flexDirection: "row", alignItems: "center", gap: 12 },
   audioRedDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#FF3B30" },
-  audioTimerText: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 38, letterSpacing: 2 },
+  audioTimerText: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 38, letterSpacing: 2, width: 260, textAlign: "center" },
   audioHintText: { color: "rgba(255,255,255,0.3)", fontFamily: "Inter_400Regular", fontSize: 13, letterSpacing: 0.5, marginTop: 4 },
   audioWaveformRow: { flexDirection: "row", alignItems: "center", gap: 4, height: 52 },
   audioWaveformBar: { width: 3.5, height: 44, borderRadius: 2, backgroundColor: "#FFF" },

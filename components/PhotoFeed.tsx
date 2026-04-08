@@ -272,6 +272,7 @@ function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId,
 }) {
   const insets = useSafeAreaInsets();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
 
   const player = useAudioPlayer(isVisible ? moment.url : "");
   const status = useAudioPlayerStatus(player);
@@ -313,6 +314,13 @@ function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId,
       if (duration > 0 && (status.currentTime ?? 0) >= duration - 0.1) player.seekTo(0);
       player.play();
     }
+  };
+
+  const SPEEDS = [0.5, 1, 1.5, 2];
+  const cycleSpeed = () => {
+    const next = SPEEDS[(SPEEDS.indexOf(playbackSpeed) + 1) % SPEEDS.length];
+    setPlaybackSpeed(next);
+    player.setPlaybackRate(next);
   };
 
   const seekPan = useRef(
@@ -381,6 +389,9 @@ function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId,
                     <Path d="M8 5v14l11-7z" />
                   )}
                 </Svg>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={cycleSpeed} style={styles.audioSpeedBtn}>
+                <Text style={styles.audioSpeedText}>{playbackSpeed === 0.5 ? "×0.5" : playbackSpeed === 1 ? "×1" : playbackSpeed === 1.5 ? "×1.5" : "×2"}</Text>
               </TouchableOpacity>
               <View style={styles.audioProgressWrapper}>
                 <View
@@ -893,6 +904,8 @@ const styles = StyleSheet.create({
   audioWaveBar: { width: 3, borderRadius: 2, backgroundColor: "#FFF" },
   audioPlayerRow: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 16 },
   audioPlayBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
+  audioSpeedBtn: { width: 40, height: 28, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
+  audioSpeedText: { color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 12 },
   audioProgressWrapper: { flex: 1, gap: 4 },
   audioSeekHitArea: { paddingVertical: 14, justifyContent: "center" },
   audioSeekTrack: { height: 3, backgroundColor: "rgba(255,255,255,0.22)", borderRadius: 2 },
