@@ -141,19 +141,19 @@ export default function MainPagerScreen() {
                 .from("reactions")
                 .select("id, photo_id, user_id, emoji, profiles:user_id(username, avatar_url)")
                 .in("photo_id", photoIds)
-                .eq("type", "emoji")
+                // No type filter to ensure we see EVERYTHING that could cause a unique constraint conflict
             : { data: [] };
 
           const reactionsByPhoto: Record<string, Reaction[]> = {};
           for (const r of reactionsRes.data ?? []) {
-            if (!r.emoji) continue;
+            const stickerId = (r.emoji || "") as StickerId;
             if (!reactionsByPhoto[r.photo_id]) reactionsByPhoto[r.photo_id] = [];
             reactionsByPhoto[r.photo_id].push({
               id: r.id,
               user_id: r.user_id,
               username: r.profiles?.username ?? "?",
               avatar_url: r.profiles?.avatar_url ?? null,
-              sticker_id: r.emoji as StickerId,
+              sticker_id: stickerId,
             });
           }
 
@@ -199,21 +199,35 @@ export default function MainPagerScreen() {
 
   const handleReact = async (photoId: string, stickerId: StickerId) => {
     if (!user) return;
-    const existing = photos.find((p) => p.id === photoId)?.reactions.find((r) => r.user_id === user.id);
+    const photo = photos.find((p) => p.id === photoId);
+    const existing = photo?.reactions.find((r) => r.user_id === user.id);
+
     try {
-      if (existing) {
-        if (existing.sticker_id === stickerId) {
-          await supabase.from("reactions").delete().eq("id", existing.id);
-          setPhotos((prev) => prev.map((p) => p.id === photoId ? { ...p, reactions: p.reactions.filter((r) => r.id !== existing.id) } : p));
-        } else {
-          await supabase.from("reactions").update({ emoji: stickerId }).eq("id", existing.id);
-          setPhotos((prev) => prev.map((p) => p.id === photoId ? { ...p, reactions: p.reactions.map((r) => r.id === existing.id ? { ...r, sticker_id: stickerId } : r) } : p));
-        }
+      if (existing && existing.sticker_id === stickerId) {
+        await supabase.from("reactions").delete().eq("id", existing.id);
+        setPhotos((prev) => prev.map((p) => p.id === photoId ? { ...p, reactions: p.reactions.filter((r) => r.id !== existing.id) } : p));
       } else {
-        const { data } = await supabase.from("reactions").insert({ photo_id: photoId, user_id: user.id, type: "emoji", emoji: stickerId }).select("id").single();
-        if (data) setPhotos((prev) => prev.map((p) => p.id === photoId ? { ...p, reactions: [...p.reactions, { id: data.id, user_id: user.id, username, avatar_url: avatarUrl, sticker_id: stickerId }] } : p));
+        const { data, error } = await supabase
+          .from("reactions")
+          .upsert(
+            { photo_id: photoId, user_id: user.id, type: "emoji", emoji: stickerId },
+            { onConflict: "photo_id,user_id" }
+          )
+          .select("id")
+          .single();
+
+        if (error) throw error;
+        if (data) {
+          const newReaction: Reaction = { id: data.id, user_id: user.id, username, avatar_url: avatarUrl, sticker_id: stickerId };
+          setPhotos((prev) => prev.map((p) => {
+            if (p.id !== photoId) return p;
+            const filtered = p.reactions.filter((r) => r.user_id !== user.id);
+            return { ...p, reactions: [...filtered, newReaction] };
+          }));
+        }
       }
-    } catch {
+    } catch (e) {
+      console.error("[handleReact] Error:", e);
       Alert.alert("Erreur", "Impossible d'enregistrer la réaction.");
     }
   };

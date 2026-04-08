@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Slot } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useFonts, Inter_400Regular, Inter_600SemiBold, Inter_700Bold } from "@expo-google-fonts/inter";
+import { useFonts, Inter_400Regular, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold } from "@expo-google-fonts/inter";
 import { View, StyleSheet } from "react-native";
 // import { GestureHandlerRootView } from "react-native-gesture-handler"; // activer après rebuild natif
 import * as Updates from "expo-updates";
@@ -14,7 +14,7 @@ import SplashScreen from "../components/SplashScreen";
 setupNotificationHandler();
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_600SemiBold, Inter_700Bold });
+  const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold });
   const [checksReady, setChecksReady] = useState(false);
   const [splashDone, setSplashDone] = useState(false);
 

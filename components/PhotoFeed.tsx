@@ -13,6 +13,8 @@ import {
   PanResponder,
   Animated,
   ActivityIndicator,
+  TextInput,
+  KeyboardAvoidingView as RNKeyboardAvoidingView,
 } from "react-native";
 import { Image } from "expo-image";
 import * as FileSystem from "expo-file-system/legacy";
@@ -20,11 +22,43 @@ import { useVideoPlayer, VideoView } from "expo-video";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BlurView } from "expo-blur";
 import Svg, { Path } from "react-native-svg";
 import { STICKERS, type StickerId, getMonthlyStickers } from "./stickers";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const NAVBAR_HEIGHT = 100;
+
+function TextSticker({ text, fontSize = 16 }: { text: string; fontSize?: number }) {
+  // Simulation de stroke via shadow en React Native (mobile)
+  // Sur Web, on utilise -webkit-text-stroke via style as any
+  const textStyle = {
+    color: "#000",
+    fontFamily: "Inter_800ExtraBold",
+    fontSize: fontSize,
+    fontStyle: "normal",
+    fontWeight: "800",
+    lineHeight: "normal",
+    textTransform: "uppercase",
+    ...Platform.select({
+      web: {
+        "-webkit-text-stroke-width": "3px",
+        "-webkit-text-stroke-color": "#FFF065",
+      } as any,
+      default: {
+        textShadowColor: "#FFF065",
+        textShadowOffset: { width: 0, height: 0 },
+        textShadowRadius: 4,
+      },
+    }),
+  } as const;
+
+  return (
+    <View style={styles.textStickerContainer}>
+      <Text style={textStyle}>{text}</Text>
+    </View>
+  );
+}
 
 export type Reaction = {
   id: string;
@@ -165,24 +199,29 @@ function ReactionsRow({ reactions, currentUserId, onReact, photoId, crownWinnerI
 }) {
   if (reactions.length === 0) return null;
 
-  const groups = STICKERS
-    .map(({ id, Component }) => ({
-      id,
-      Component,
-      users: reactions.filter((r) => r.sticker_id === id),
-    }))
-    .filter((g) => g.users.length > 0);
+  const stickerIdsInReactions = Array.from(new Set(reactions.map((r) => r.sticker_id)));
+  const groups = stickerIdsInReactions.map((sid) => {
+    const predefined = STICKERS.find((s) => s.id === sid);
+    return {
+      id: sid,
+      text: predefined ? predefined.text : sid,
+      users: reactions.filter((r) => r.sticker_id === sid),
+    };
+  });
 
   return (
     <View style={styles.reactionsRow}>
-      {groups.map(({ id, Component, users }) => {
+      {groups.map(({ id, text, users }) => {
         const iMine = users.some((r) => r.user_id === currentUserId);
         const isCrownReaction = crownWinnerId != null && users.some((r) => r.user_id === crownWinnerId);
         return (
           <TouchableOpacity
             key={id}
             style={[styles.reactionBubble, iMine && styles.reactionBubbleMine, isCrownReaction && styles.reactionBubbleCrown]}
-            onPress={() => onReact?.(photoId, id as StickerId)}
+            onPress={() => {
+              console.log("[ReactionsRow] onPress", { photoId, id });
+              onReact?.(photoId, id as StickerId);
+            }}
             activeOpacity={0.75}
           >
             <View style={styles.reactionAvatarStack}>
@@ -193,7 +232,7 @@ function ReactionsRow({ reactions, currentUserId, onReact, photoId, crownWinnerI
               ))}
             </View>
             <View style={styles.reactionStickerWrap}>
-              <Component width={32} height={12} />
+              <TextSticker text={text} fontSize={12} />
             </View>
             {users.length > 2 && (
               <Text style={styles.reactionCount}>+{users.length - 2}</Text>
@@ -205,37 +244,107 @@ function ReactionsRow({ reactions, currentUserId, onReact, photoId, crownWinnerI
   );
 }
 
+import { CloseIcon } from "./groups/GroupIcons";
+
 function StickerPicker({ visible, onClose, onSelect, myReaction }: {
   visible: boolean;
   onClose: () => void;
   onSelect: (id: StickerId) => void;
   myReaction?: StickerId | null;
 }) {
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [customText, setCustomText] = useState("");
   const monthlyStickers = getMonthlyStickers();
+  const inputRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    if (showCustomInput) {
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, [showCustomInput]);
+
+  const handleCustomSubmit = () => {
+    const trimmed = customText.trim();
+    if (trimmed) {
+      console.log("[StickerPicker] handleCustomSubmit", trimmed);
+      onSelect(trimmed);
+      setCustomText("");
+      setShowCustomInput(false);
+      onClose();
+    }
+  };
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.pickerBackdrop} onPress={onClose}>
-        <Pressable style={styles.pickerSheet} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.pickerHandle} />
-          <Text style={styles.pickerTitle}>Réagir</Text>
-          <View style={styles.pickerGrid}>
-            {monthlyStickers.map(({ id, Component, label }) => {
-              const isActive = myReaction === id;
-              return (
-                <TouchableOpacity
-                  key={id}
-                  style={[styles.pickerItem, isActive && styles.pickerItemActive]}
-                  onPress={() => { onSelect(id as StickerId); onClose(); }}
-                  activeOpacity={0.7}
-                >
-                  <Component width={52} height={20} />
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+    <>
+      <Modal visible={visible && !showCustomInput} transparent animationType="fade" onRequestClose={onClose}>
+        <Pressable style={styles.pickerBackdrop} onPress={onClose}>
+          <Pressable style={styles.pickerSheet} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.pickerHandle} />
+            <Text style={styles.pickerTitle}>Réagir</Text>
+            <View style={styles.pickerGrid}>
+              {monthlyStickers.map(({ id, text }) => {
+                const isActive = myReaction === id;
+                return (
+                  <TouchableOpacity
+                    key={id}
+                    style={[styles.pickerItem, isActive && styles.pickerItemActive]}
+                    onPress={() => {
+                      console.log("[StickerPicker] onSelect predefined", id);
+                      onSelect(id as StickerId);
+                      onClose();
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <TextSticker text={text} fontSize={14} />
+                  </TouchableOpacity>
+                );
+              })}
+              <TouchableOpacity
+                style={styles.pickerItem}
+                onPress={() => setShowCustomInput(true)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.customStickerBtn}>
+                  <Text style={styles.customStickerPlus}>+</Text>
+                </View>
+                <Text style={styles.pickerLabel}>Perso</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
         </Pressable>
-      </Pressable>
-    </Modal>
+      </Modal>
+
+      <Modal visible={showCustomInput} transparent animationType="fade" onRequestClose={() => setShowCustomInput(false)}>
+        <RNKeyboardAvoidingView behavior="padding" style={styles.customModalContainer}>
+           <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+           <TouchableOpacity style={styles.customModalClose} onPress={() => setShowCustomInput(false)}>
+             <CloseIcon />
+           </TouchableOpacity>
+           <View style={styles.customInputWrapper}>
+              {customText.length > 0 && (
+                <View style={styles.customPreview}>
+                  <TextSticker text={customText} fontSize={32} />
+                </View>
+              )}
+              <TextInput
+                ref={inputRef}
+                style={[styles.customTextInput, { fontSize: customText.length <= 6 ? 38 : 24 }]}
+                placeholder="Ton sticker..."
+                placeholderTextColor="rgba(255,255,255,0.3)"
+                value={customText}
+                onChangeText={setCustomText}
+                maxLength={10}
+                autoCapitalize="characters"
+                returnKeyType="done"
+                onSubmitEditing={handleCustomSubmit}
+              />
+              <TouchableOpacity style={[styles.customSendBtn, !customText.trim() && styles.customSendBtnDisabled]} onPress={handleCustomSubmit} disabled={!customText.trim()}>
+                <Text style={styles.customSendText}>Ajouter</Text>
+              </TouchableOpacity>
+           </View>
+        </RNKeyboardAvoidingView>
+      </Modal>
+    </>
   );
 }
 
@@ -913,4 +1022,15 @@ const styles = StyleSheet.create({
   audioSeekThumb: { position: "absolute", width: 13, height: 13, borderRadius: 7, backgroundColor: "#FFF", marginLeft: -6, top: 14 - 5 },
   audioTimesRow: { flexDirection: "row", justifyContent: "space-between" },
   audioTimeText: { fontSize: 11, color: "rgba(255,255,255,0.5)", fontFamily: "Inter_400Regular" },
+  textStickerContainer: { justifyContent: "center", alignItems: "center" },
+  customStickerBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
+  customStickerPlus: { color: "#FFF", fontSize: 24, fontFamily: "Inter_700Bold" },
+  customModalContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  customModalClose: { position: "absolute", top: 60, right: 20, width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", zIndex: 10 },
+  customInputWrapper: { width: "100%", alignItems: "center", paddingHorizontal: 40, gap: 32 },
+  customPreview: { marginBottom: 10, transform: [{ scale: 1.2 }] },
+  customTextInput: { width: "100%", color: "#FFF", fontFamily: "Inter_800ExtraBold", textAlign: "center", padding: 20 },
+  customSendBtn: { backgroundColor: "#FFF", paddingHorizontal: 32, paddingVertical: 14, borderRadius: 100 },
+  customSendBtnDisabled: { opacity: 0.5 },
+  customSendText: { color: "#000", fontFamily: "Inter_700Bold", fontSize: 16 },
 });
