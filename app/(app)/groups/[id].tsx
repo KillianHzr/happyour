@@ -344,6 +344,9 @@ export default function MainPagerScreen() {
             groupName={groupName}
             onReact={handleReact}
             currentUserId={user?.id}
+            currentUsername={username}
+            currentAvatarUrl={avatarUrl}
+            isVisible={currentPage === 2}
             nextRevealDate={nextRevealDate}
             photoCount={photoCount}
             revealDate={lockedRevealDate}

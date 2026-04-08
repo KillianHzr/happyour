@@ -5,6 +5,7 @@ import PhotoFeed, { type PhotoEntry } from "../PhotoFeed";
 import VaultCounter from "../VaultCounter";
 import { type StickerId } from "../stickers";
 import { GroupIcon, GroupAddIcon } from "./GroupIcons";
+import LiveReactions from "../reveal/LiveReactions";
 
 type Props = {
   unlocked: boolean;
@@ -14,6 +15,9 @@ type Props = {
   groupName: string;
   onReact: (photoId: string, stickerId: StickerId) => void;
   currentUserId?: string;
+  currentUsername?: string;
+  currentAvatarUrl?: string | null;
+  isVisible: boolean;
   nextRevealDate: Date;
   photoCount: number;
   revealDate: Date;
@@ -26,7 +30,7 @@ type Props = {
 
 export default function VaultPage({
   unlocked, photos, crownWinnerId, crownDurationMs, groupName,
-  onReact, currentUserId, nextRevealDate, photoCount, revealDate,
+  onReact, currentUserId, currentUsername, currentAvatarUrl, isVisible, nextRevealDate, photoCount, revealDate,
   isAdmin, onOpenMembers, onSimulateReveal, groupId, onScrollLock,
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -44,6 +48,15 @@ export default function VaultPage({
           groupName={groupName}
           onScrollLock={onScrollLock}
         />
+        {currentUserId && currentUsername && (
+          <LiveReactions
+            groupId={groupId}
+            currentUserId={currentUserId}
+            currentUsername={currentUsername}
+            currentAvatarUrl={currentAvatarUrl ?? null}
+            isVisible={isVisible}
+          />
+        )}
       </View>
     );
   }
