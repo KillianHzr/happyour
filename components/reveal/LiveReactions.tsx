@@ -8,6 +8,7 @@ import {
   Pressable,
 } from "react-native";
 import { Image } from "expo-image";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
 
 const EMOTES = [
@@ -24,7 +25,7 @@ type Participant = {
   username: string;
   avatarUrl: string | null;
   currentEmote: string | null;
-  emoteY: Animated.Value;
+  emoteX: Animated.Value;
   emoteOpacity: Animated.Value;
   avatarScale: Animated.Value;
 };
@@ -35,7 +36,7 @@ type Props = {
   currentUsername: string;
   currentAvatarUrl: string | null;
   isVisible: boolean;
-  bottomOffset?: number; // above navbar
+  bottomOffset?: number;
 };
 
 export default function LiveReactions({
@@ -46,6 +47,7 @@ export default function LiveReactions({
   isVisible,
   bottomOffset = 110,
 }: Props) {
+  const insets = useSafeAreaInsets();
   const [participants, setParticipants] = useState<Map<string, Participant>>(new Map());
   const [showEmoteWheel, setShowEmoteWheel] = useState(false);
   const [disabled, setDisabled] = useState(false);
@@ -60,29 +62,29 @@ export default function LiveReactions({
     username,
     avatarUrl,
     currentEmote: null,
-    emoteY: new Animated.Value(0),
+    emoteX: new Animated.Value(0),
     emoteOpacity: new Animated.Value(0),
     avatarScale: new Animated.Value(1),
   });
 
   const playEmote = (p: Participant, emoji: string) => {
     p.currentEmote = emoji;
-    p.emoteY.setValue(0);
+    p.emoteX.setValue(0);
     p.emoteOpacity.setValue(1);
 
     Animated.parallel([
-      // Emoji floats up
-      Animated.timing(p.emoteY, {
-        toValue: -70,
+      // Emoji shoots left across the screen
+      Animated.timing(p.emoteX, {
+        toValue: -280,
         duration: 900,
         useNativeDriver: true,
       }),
-      // Emoji fades out after delay
+      // Fade out in the second half
       Animated.sequence([
-        Animated.delay(500),
+        Animated.delay(450),
         Animated.timing(p.emoteOpacity, {
           toValue: 0,
-          duration: 400,
+          duration: 450,
           useNativeDriver: true,
         }),
       ]),
@@ -185,12 +187,34 @@ export default function LiveReactions({
   if (disabled) return null;
 
   return (
-    <View style={[styles.root, { bottom: bottomOffset }]} pointerEvents="box-none">
+    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
 
-      {/* Emote wheel overlay */}
+      {/* Avatars — top right, vertical stack */}
+      <View style={[styles.avatarsCol, { top: insets.top + 8 }]} pointerEvents="none">
+        {list.map((p) => (
+          <View key={p.userId} style={styles.avatarWrapper}>
+            <Animated.Text
+              style={[styles.floatingEmote, { transform: [{ translateX: p.emoteX }], opacity: p.emoteOpacity }]}
+            >
+              {p.currentEmote ?? ""}
+            </Animated.Text>
+            <Animated.View style={{ transform: [{ scale: p.avatarScale }] }}>
+              {p.avatarUrl ? (
+                <Image source={{ uri: p.avatarUrl }} style={styles.avatar} contentFit="cover" />
+              ) : (
+                <View style={[styles.avatar, styles.avatarFallback]}>
+                  <Text style={styles.avatarInitial}>{p.username[0]?.toUpperCase() ?? "?"}</Text>
+                </View>
+              )}
+            </Animated.View>
+          </View>
+        ))}
+      </View>
+
+      {/* Emote wheel */}
       {showEmoteWheel && (
         <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowEmoteWheel(false)} pointerEvents="auto">
-          <View style={styles.wheelContainer}>
+          <View style={[styles.wheelAnchor, { bottom: bottomOffset + 52 }]}>
             <View style={styles.wheel}>
               {EMOTES.map((e) => (
                 <TouchableOpacity
@@ -207,88 +231,43 @@ export default function LiveReactions({
         </Pressable>
       )}
 
-      {/* Bottom row: avatars + emote button */}
-      <View style={styles.row} pointerEvents="box-none">
-        <View style={styles.avatarsRow} pointerEvents="none">
-          {list.map((p) => (
-            <View key={p.userId} style={styles.avatarWrapper}>
-              {/* Floating emote */}
-              <Animated.Text
-                style={[
-                  styles.floatingEmote,
-                  { transform: [{ translateY: p.emoteY }], opacity: p.emoteOpacity },
-                ]}
-              >
-                {p.currentEmote ?? ""}
-              </Animated.Text>
+      {/* Emote trigger button — bottom right */}
+      <TouchableOpacity
+        style={[styles.emoteBtn, { bottom: bottomOffset }]}
+        onPress={() => setShowEmoteWheel((v) => !v)}
+        activeOpacity={0.8}
+        pointerEvents="auto"
+      >
+        <Text style={styles.emoteBtnIcon}>😊</Text>
+      </TouchableOpacity>
 
-              {/* Avatar */}
-              <Animated.View style={{ transform: [{ scale: p.avatarScale }] }}>
-                {p.avatarUrl ? (
-                  <Image source={{ uri: p.avatarUrl }} style={styles.avatar} contentFit="cover" />
-                ) : (
-                  <View style={[styles.avatar, styles.avatarFallback]}>
-                    <Text style={styles.avatarInitial}>{p.username[0]?.toUpperCase() ?? "?"}</Text>
-                  </View>
-                )}
-              </Animated.View>
-
-              {/* Username */}
-              <Text style={styles.username} numberOfLines={1}>{p.username}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Emote trigger button */}
-        <TouchableOpacity
-          style={styles.emoteBtn}
-          onPress={() => setShowEmoteWheel((v) => !v)}
-          activeOpacity={0.8}
-          pointerEvents="auto"
-        >
-          <Text style={styles.emoteBtnIcon}>😊</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
+  avatarsCol: {
     position: "absolute",
-    left: 0,
-    right: 0,
-    alignItems: "flex-end",
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    paddingHorizontal: 16,
-    width: "100%",
-    justifyContent: "space-between",
-  },
-  avatarsRow: {
-    flexDirection: "row",
-    gap: 12,
-    alignItems: "flex-end",
-    flex: 1,
-    flexWrap: "wrap",
+    right: 14,
+    gap: 8,
+    alignItems: "center",
   },
   avatarWrapper: {
     alignItems: "center",
-    width: 48,
+    width: 36,
   },
   floatingEmote: {
-    fontSize: 26,
+    fontSize: 22,
     position: "absolute",
-    top: -10,
+    right: 0,
+    top: 6,
   },
   avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.6)",
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.5)",
   },
   avatarFallback: {
     backgroundColor: "#6D28D9",
@@ -298,36 +277,25 @@ const styles = StyleSheet.create({
   avatarInitial: {
     color: "#FFF",
     fontFamily: "Inter_700Bold",
-    fontSize: 18,
-  },
-  username: {
-    color: "rgba(255,255,255,0.7)",
-    fontFamily: "Inter_600SemiBold",
-    fontSize: 10,
-    marginTop: 3,
-    maxWidth: 48,
+    fontSize: 14,
   },
   emoteBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    position: "absolute",
+    left: 14,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: "rgba(0,0,0,0.4)",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.2)",
     justifyContent: "center",
     alignItems: "center",
-    marginLeft: 8,
-    marginBottom: 2,
   },
-  emoteBtnIcon: { fontSize: 22 },
-
-  // Emote wheel
-  wheelContainer: {
-    flex: 1,
-    justifyContent: "flex-end",
-    alignItems: "flex-end",
-    paddingRight: 16,
-    paddingBottom: 60,
+  emoteBtnIcon: { fontSize: 20 },
+  wheelAnchor: {
+    position: "absolute",
+    left: 14,
+    alignItems: "flex-start",
   },
   wheel: {
     flexDirection: "row",
