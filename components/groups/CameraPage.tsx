@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect } from "react";
 import {
-  View, Text, StyleSheet, Dimensions, Animated, Easing, TouchableOpacity,
+  View, Text, StyleSheet, Animated, Easing, TouchableOpacity,
   Alert, KeyboardAvoidingView, Platform, TextInput, Modal, Pressable, ActivityIndicator, PanResponder,
 } from "react-native";
 import { Image } from "expo-image";
 import { BlurView } from "expo-blur";
 import { CameraView, type CameraType, type FlashMode } from "expo-camera";
-import { manipulateAsync, SaveFormat, FlipType } from "expo-image-manipulator";
+import { manipulateAsync, FlipType, SaveFormat } from "expo-image-manipulator";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import Svg, { Path } from "react-native-svg";
@@ -17,7 +17,6 @@ import StandardCamera from "../StandardCamera";
 import DrawingCanvas, { type DrawingCanvasRef } from "../DrawingCanvas";
 import { SendIcon, FeatherIcon, FlipIcon, CloseIcon, FlashIcon } from "./GroupIcons";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const NAVBAR_HEIGHT = 100;
 
 type CameraMode = "PHOTO" | "VIDEO" | "AUDIO" | "DESSIN" | "TEXTE";
@@ -58,8 +57,6 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [capturing, setCapturing] = useState(false);
   const [capturedUri, setCapturedUri] = useState<string | null>(null);
-  const [capturedFacing, setCapturedFacing] = useState<CameraType>("back");
-  const [capturedIsLandscape, setCapturedIsLandscape] = useState(false);
   const [isEditingNote, setIsEditingNote] = useState(false);
   const [textModeContent, setTextModeContent] = useState("");
   const [note, setNote] = useState("");
@@ -286,37 +283,29 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
     if (!cameraRef.current || isRecording || capturing) return;
     setCapturing(true);
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.9 });
+      // skipProcessing:true preserves the physical EXIF orientation tag.
+      // manipulateAsync (UIImage on iOS) then auto-corrects that EXIF to
+      // portrait-upright. We read the original EXIF orientation and apply
+      // an explicit rotation on top to restore the physical device orientation,
+      // so the saved image matches exactly what was visible in the viewfinder.
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.9, skipProcessing: true, exif: true });
       if (photo?.uri) {
-        const paddingTop = Math.max(insets.top, 12) + 12;
-        const paddingBottom = NAVBAR_HEIGHT + 12;
-        const uiWidth = SCREEN_WIDTH - 24;
-        const uiHeight = SCREEN_HEIGHT - paddingTop - paddingBottom;
-        const targetRatio = uiWidth / uiHeight;
+        const exifOrientation = (photo.exif as any)?.Orientation ?? 1;
+        let rotation = 0;
+        if (exifOrientation === 1) rotation = 90;
+        else if (exifOrientation === 3) rotation = -90;
+        else if (exifOrientation === 8) rotation = 180;
+        // exifOrientation === 6 → 0° (no rotation)
 
-        const isLandscape = photo.width > photo.height;
-        // Effective dimensions after an optional 90° rotation
-        const effW = isLandscape ? photo.height : photo.width;
-        const effH = isLandscape ? photo.width : photo.height;
-
-        let actions: any[] = [];
-        // Rotate landscape content into portrait orientation before cropping
-        if (isLandscape) actions.push({ rotate: 90 });
-
-        const sensorRatio = effW / effH;
-        if (sensorRatio > targetRatio) {
-          const cropWidth = effH * targetRatio;
-          actions.push({ crop: { originX: (effW - cropWidth) / 2, originY: 0, width: cropWidth, height: effH } });
-        } else {
-          const cropHeight = effW / targetRatio;
-          actions.push({ crop: { originX: 0, originY: (effH - cropHeight) / 2, width: effW, height: cropHeight } });
-        }
+        const actions: any[] = [];
+        if (rotation !== 0) actions.push({ rotate: rotation });
         if (facing === "front") actions.push({ flip: FlipType.Horizontal });
-        actions.push({ resize: { width: 1080 } });
-        const manipResult = await manipulateAsync(photo.uri, actions, { compress: 0.92, format: SaveFormat.JPEG, base64: false });
-        setCapturedUri(manipResult.uri);
-        setCapturedFacing(facing);
-        setCapturedIsLandscape(isLandscape);
+
+        const result = await manipulateAsync(photo.uri, actions, {
+          compress: 0.92,
+          format: SaveFormat.JPEG,
+        });
+        setCapturedUri(result.uri);
       }
     } catch (e: any) {
       console.error("Capture error:", e);
@@ -332,7 +321,7 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
     const fileName = `${groupId}/${userId}_${Date.now()}${cameraMode === "DESSIN" ? "_draw" : ""}.jpg`;
     startUpload(fileName, capturedUri, "image/jpeg", dbData);
     setCapturedUri(null);
-    setNote("");
+        setNote("");
     setIsDrawingActive(false);
     onUploadSuccess();
   };
@@ -601,11 +590,7 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
             ) : (
               <Image
                 source={{ uri: capturedUri }}
-                style={[styles.previewImage, capturedIsLandscape && {
-                  transform: [
-                    ...(capturedFacing === "front" ? [{ scaleX: -1 }] : []),
-                  ],
-                }]}
+                style={styles.previewImage}
                 contentFit="cover"
               />
             )}
