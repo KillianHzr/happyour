@@ -8,6 +8,7 @@ interface Props {
   flash?: FlashMode;
   zoom?: number;
   mode?: "picture" | "video";
+  mirror?: boolean;
   onZoomChange?: (zoom: number) => void;
   onPinchingChange?: (isPinching: boolean) => void;
   onDoubleTap?: () => void;
@@ -19,6 +20,7 @@ const StandardCamera = forwardRef<CameraView, Props>(({
   flash = 'off',
   zoom: initialZoom = 0,
   mode = 'picture',
+  mirror = false,
   onZoomChange,
   onPinchingChange,
   onDoubleTap
@@ -146,6 +148,8 @@ const StandardCamera = forwardRef<CameraView, Props>(({
           flash={flash}
           zoom={localZoom}
           mode={mode}
+          mirror={mirror}
+          videoQuality="1080p"
           enableTorch={false}
           autofocus="off"
           responsiveOrientationWhenOrientationLocked

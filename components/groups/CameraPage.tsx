@@ -42,6 +42,9 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
   const audioTimer = useRef<NodeJS.Timeout | null>(null);
   const isAudioRecordingRef = useRef(false);
   const audioProgressAnim = useRef(new Animated.Value(0)).current;
+  const isWarmingUp = useRef(false);
+  const warmUpCancelled = useRef(false);
+  const warmUpPromise = useRef<Promise<any> | null>(null);
 
   const [cameraMode, setCameraMode] = useState<CameraMode>("PHOTO");
   const [drawingColor, setDrawingColor] = useState("#000000");
@@ -56,6 +59,7 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
   const [capturing, setCapturing] = useState(false);
   const [capturedUri, setCapturedUri] = useState<string | null>(null);
   const [capturedFacing, setCapturedFacing] = useState<CameraType>("back");
+  const [capturedIsLandscape, setCapturedIsLandscape] = useState(false);
   const [isEditingNote, setIsEditingNote] = useState(false);
   const [textModeContent, setTextModeContent] = useState("");
   const [note, setNote] = useState("");
@@ -116,6 +120,37 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
     }
   }, [cameraMode, capturedAudioUri]);
 
+  // Pre-warm AVCaptureMovieFileOutput when entering VIDEO mode so iOS doesn't
+  // lazy-init the recording session on the first press of record (which causes
+  // a freeze + FOV shift). We trigger a silent short recording and stop it
+  // immediately — the iOS reconfiguration happens during the mode switch, not
+  // when the user presses record.
+  useEffect(() => {
+    if (cameraMode !== "VIDEO" || !isActive) return;
+    warmUpCancelled.current = false;
+
+    const doWarmUp = async () => {
+      await new Promise(r => setTimeout(r, 300));
+      if (warmUpCancelled.current || !cameraRef.current) return;
+
+      isWarmingUp.current = true;
+      try {
+        const p = cameraRef.current.recordAsync({ maxDuration: 1 });
+        warmUpPromise.current = p;
+        await new Promise(r => setTimeout(r, 200));
+        // Only stop if not already cancelled by startVideoRecording
+        if (!warmUpCancelled.current) cameraRef.current.stopRecording();
+        try { await p; } catch (_) {}
+      } finally {
+        warmUpPromise.current = null;
+        isWarmingUp.current = false;
+      }
+    };
+
+    doWarmUp();
+    return () => { warmUpCancelled.current = true; };
+  }, [cameraMode, isActive]);
+
   const isEditing = !!capturedUri || !!capturedAudioUri;
 
   // ── Handlers ──
@@ -130,9 +165,21 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
   const startVideoRecording = async () => {
     if (!cameraRef.current || isRecording) return;
     if (cameraMode !== "VIDEO") setCameraMode("VIDEO");
+
+    // If pre-warm is still running, cancel it and wait for it to fully resolve
+    // before starting the real recording — avoids its stopRecording() firing
+    // mid-recording and killing the real session.
+    if (isWarmingUp.current) {
+      warmUpCancelled.current = true;
+      cameraRef.current.stopRecording();
+      if (warmUpPromise.current) {
+        try { await warmUpPromise.current; } catch (_) {}
+      }
+      isWarmingUp.current = false;
+    }
+
     setIsRecording(true);
     setRecordingSeconds(0);
-    await new Promise(resolve => setTimeout(resolve, 500));
     recordingTimer.current = setInterval(() => {
       setRecordingSeconds(s => {
         if (s >= 14) { stopVideoRecording(); return s; }
@@ -140,7 +187,7 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
       });
     }, 1000);
     try {
-      const video = await cameraRef.current.recordAsync({ quality: "1080p", maxDuration: 15 });
+      const video = await cameraRef.current.recordAsync({ maxDuration: 15 });
       if (video?.uri) {
         setCaptureData(null, video.uri, "video");
         router.push(`/(app)/groups/${groupId}/preview`);
@@ -246,20 +293,30 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
         const uiWidth = SCREEN_WIDTH - 24;
         const uiHeight = SCREEN_HEIGHT - paddingTop - paddingBottom;
         const targetRatio = uiWidth / uiHeight;
-        const sensorRatio = photo.width / photo.height;
+
+        const isLandscape = photo.width > photo.height;
+        // Effective dimensions after an optional 90° rotation
+        const effW = isLandscape ? photo.height : photo.width;
+        const effH = isLandscape ? photo.width : photo.height;
+
         let actions: any[] = [];
+        // Rotate landscape content into portrait orientation before cropping
+        if (isLandscape) actions.push({ rotate: 90 });
+
+        const sensorRatio = effW / effH;
         if (sensorRatio > targetRatio) {
-          const cropWidth = photo.height * targetRatio;
-          actions.push({ crop: { originX: (photo.width - cropWidth) / 2, originY: 0, width: cropWidth, height: photo.height } });
+          const cropWidth = effH * targetRatio;
+          actions.push({ crop: { originX: (effW - cropWidth) / 2, originY: 0, width: cropWidth, height: effH } });
         } else {
-          const cropHeight = photo.width / targetRatio;
-          actions.push({ crop: { originX: 0, originY: (photo.height - cropHeight) / 2, width: photo.width, height: cropHeight } });
+          const cropHeight = effW / targetRatio;
+          actions.push({ crop: { originX: 0, originY: (effH - cropHeight) / 2, width: effW, height: cropHeight } });
         }
         if (facing === "front") actions.push({ flip: FlipType.Horizontal });
         actions.push({ resize: { width: 1080 } });
         const manipResult = await manipulateAsync(photo.uri, actions, { compress: 0.92, format: SaveFormat.JPEG, base64: false });
         setCapturedUri(manipResult.uri);
         setCapturedFacing(facing);
+        setCapturedIsLandscape(isLandscape);
       }
     } catch (e: any) {
       console.error("Capture error:", e);
@@ -378,10 +435,11 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
               <StandardCamera
                 ref={cameraRef}
                 isActive={!capturedUri}
-                mode={cameraMode === "VIDEO" ? "video" : "picture"}
+                mode="video"
                 facing={facing}
                 flash={flash}
                 zoom={zoom}
+                mirror={cameraMode === "VIDEO" && facing === "front"}
                 onZoomChange={setZoom}
                 onPinchingChange={setIsPinching}
                 onDoubleTap={() => setFacing(prev => prev === "back" ? "front" : "back")}
@@ -541,7 +599,15 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
                 <Image source={{ uri: capturedUri }} style={styles.drawingPreviewImage} contentFit="fill" />
               </View>
             ) : (
-              <Image source={{ uri: capturedUri }} style={styles.previewImage} contentFit="cover" />
+              <Image
+                source={{ uri: capturedUri }}
+                style={[styles.previewImage, capturedIsLandscape && {
+                  transform: [
+                    ...(capturedFacing === "front" ? [{ scaleX: -1 }] : []),
+                  ],
+                }]}
+                contentFit="cover"
+              />
             )}
             <View style={styles.fill} pointerEvents="box-none">
               <TouchableOpacity
