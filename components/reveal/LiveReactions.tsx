@@ -10,39 +10,31 @@ import {
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
-import { Accelerometer } from "expo-sensors/build/Accelerometer";
-import Svg, { Rect, G } from "react-native-svg";
+import Accelerometer from "expo-sensors/build/Accelerometer";
+import Svg, { Path } from "react-native-svg";
 
 // ─── shake detection tunables ─────────────────────────────────────────────────
-const ACCEL_INTERVAL_MS = 33;   // ~30 Hz
-const SHAKE_THRESHOLD   = 0.85; // delta-g per sample to count as a "hit"
-const SHAKE_WINDOW_MS   = 2000; // rolling window
-const SHAKE_MIN_HITS    = 10;   // hits needed in window to fire
-const WAVE_COOLDOWN_MS  = 6000; // min ms between two waves
-const WAVE_DURATION_MS  = 2400; // total duration of wave animation
+// Strategy: count X-axis direction reversals (left→right or right→left).
+// Picking up / changing grip = sustained movement in one direction → no reversal → no trigger.
+// Left-right shake = rapid alternation → many reversals → triggers.
+const ACCEL_INTERVAL_MS  = 25;   // ~40 Hz for better reversal resolution
+const SHAKE_X_THRESHOLD  = 0.45; // X-axis g value to register a direction
+const SHAKE_MIN_REVERSALS = 5;   // number of L↔R reversals needed to fire
+const SHAKE_WINDOW_MS    = 1200; // rolling window for reversals
+const WAVE_COOLDOWN_MS   = 6000; // min ms between two waves
 
 // ─── HandSvg ─────────────────────────────────────────────────────────────────
 // Wrist at the bottom; rotate the container around its bottom-center to wave.
 
 function HandSvg({ size }: { size: number }) {
-  const c = "#FFD166";
-  const s = "#E8A820";
   return (
-    <Svg width={size} height={size} viewBox="0 0 80 80">
-      {/* Pinky */}
-      <Rect x="8"  y="20" width="11" height="28" rx="5.5" fill={c} stroke={s} strokeWidth="1" />
-      {/* Ring */}
-      <Rect x="22" y="14" width="11" height="34" rx="5.5" fill={c} stroke={s} strokeWidth="1" />
-      {/* Middle */}
-      <Rect x="36" y="10" width="11" height="38" rx="5.5" fill={c} stroke={s} strokeWidth="1" />
-      {/* Index */}
-      <Rect x="50" y="14" width="11" height="34" rx="5.5" fill={c} stroke={s} strokeWidth="1" />
-      {/* Thumb — angled away */}
-      <G transform="rotate(-38, 70, 40)">
-        <Rect x="60" y="27" width="11" height="24" rx="5.5" fill={c} stroke={s} strokeWidth="1" />
-      </G>
-      {/* Palm */}
-      <Rect x="8" y="38" width="54" height="30" rx="8" fill={c} stroke={s} strokeWidth="1" />
+    <Svg width={size} height={size} viewBox="0 0 48 48">
+      <Path
+        fill="#FFD166"
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M29.404 3.11a2 2 0 0 0 .901 2.681c2.917 1.449 5.531 5.003 6.233 8.396a2 2 0 1 0 3.917-.81c-.926-4.479-4.25-9.122-8.37-11.168a2 2 0 0 0-2.68.901m11.846-.488a2 2 0 0 0-.391 2.801c1.376 1.823 2.024 4.503 1.731 6.246a2 2 0 1 0 3.945.662c.494-2.942-.519-6.716-2.484-9.318a2 2 0 0 0-2.801-.39M5.203 22.11a2 2 0 0 1 2.064 1.934c.106 3.255 2.252 7.11 5.047 9.158a2 2 0 1 1-2.365 3.226c-3.688-2.703-6.53-7.656-6.68-12.254a2 2 0 0 1 1.934-2.064M1.726 33.675a2 2 0 0 1 2.735.723c1.148 1.974 3.369 3.608 5.09 4.012a2 2 0 1 1-.915 3.894c-2.905-.682-5.993-3.076-7.633-5.895a2 2 0 0 1 .723-2.734m29.735-23.18c-.86-1.49-2.664-2.566-4.416-1.759a6 6 0 0 0-.494.255a8 8 0 0 0-.813.534c-1.383 1.029-1.284 2.834-.534 4.132l3.695 6.399a1.247 1.247 0 0 1-2.164 1.24a1657 1657 0 0 0-4.584-7.96c-.606-1.04-1.776-1.951-3.15-1.53a6.7 6.7 0 0 0-1.376.607q-.51.295-.902.588c-1.34.986-1.344 2.708-.61 4a707 707 0 0 0 4.79 8.236c.35.596.149 1.363-.45 1.708a1.24 1.24 0 0 1-1.694-.454l-2.915-5.05c-.598-1.035-1.773-1.957-3.14-1.452a7.4 7.4 0 0 0-1.139.541c-.34.197-.645.403-.915.608c-1.419 1.078-1.356 2.96-.566 4.327l4.923 8.528c1.434 2.494 3.616 5.507 5.854 8.03c3.14 3.537 8.077 4.016 12.192 1.84a74 74 0 0 0 2.392-1.324c2.378-1.373 4.068-2.509 5.22-3.356c1.496-1.1 2.614-2.602 3.303-4.312c1.94-4.818 2.895-10.203 3.293-12.986c.19-1.326-.037-2.806-1.068-3.84a8.7 8.7 0 0 0-1.473-1.18c-.934-.596-1.969-.598-2.853-.2c-.873.395-1.595 1.174-1.977 2.144a122 122 0 0 0-1.14 3.021a1.25 1.25 0 0 1-.265.74l-.02.056l-.01-.019a1.24 1.24 0 0 1-.607.393c-3.085.895-5.763 3.851-4.945 7.529a1.25 1.25 0 0 1-2.44.542c-1.197-5.38 2.791-9.342 6.69-10.472q.062-.018.125-.03z"
+      />
     </Svg>
   );
 }
@@ -50,19 +42,30 @@ function HandSvg({ size }: { size: number }) {
 // ─── WavingHand ───────────────────────────────────────────────────────────────
 // Rotates around the bottom-center (wrist). Trigger increments start a new wave.
 
-function WavingHand({ size, trigger }: { size: number; trigger: number }) {
+// SWING_DURATION = sum of all swing steps = 1230ms
+const SWING_DURATION = 140 + 190 + 190 + 190 + 190 + 190 + 140;
+
+function WavingHand({
+  size,
+  trigger,
+  ownOpacity = true,
+}: {
+  size: number;
+  trigger: number;
+  ownOpacity?: boolean;
+}) {
   const rotation = useRef(new Animated.Value(0)).current;
   const opacity  = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (trigger === 0) return;
     rotation.setValue(0);
-    opacity.setValue(1);
+    if (ownOpacity) opacity.setValue(1);
 
     const swing = (toValue: number, dur: number) =>
       Animated.timing(rotation, { toValue, duration: dur, useNativeDriver: true });
 
-    Animated.sequence([
+    const swings = Animated.sequence([
       swing(25, 140),
       swing(-20, 190),
       swing(25, 190),
@@ -70,8 +73,16 @@ function WavingHand({ size, trigger }: { size: number; trigger: number }) {
       swing(25, 190),
       swing(-20, 190),
       swing(0,  140),
-      Animated.timing(opacity, { toValue: 0, duration: 350, useNativeDriver: true }),
-    ]).start();
+    ]);
+
+    if (ownOpacity) {
+      Animated.sequence([
+        swings,
+        Animated.timing(opacity, { toValue: 0, duration: 350, useNativeDriver: true }),
+      ]).start();
+    } else {
+      swings.start();
+    }
   }, [trigger]);
 
   const rotate = rotation.interpolate({
@@ -79,12 +90,11 @@ function WavingHand({ size, trigger }: { size: number; trigger: number }) {
     outputRange: ["-25deg", "25deg"],
   });
 
-  // Simulate transform-origin at bottom-center (wrist)
   const pivot = size / 2;
   return (
     <Animated.View
       style={{
-        opacity,
+        ...(ownOpacity ? { opacity } : {}),
         transform: [
           { translateY: pivot },
           { rotate },
@@ -100,7 +110,7 @@ function WavingHand({ size, trigger }: { size: number; trigger: number }) {
 // ─── BigWave — centred overlay shown on the waving user's own screen ──────────
 
 function BigWave({ trigger }: { trigger: number }) {
-  const scale   = useRef(new Animated.Value(0.5)).current;
+  const scale   = useRef(new Animated.Value(0.6)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -108,13 +118,14 @@ function BigWave({ trigger }: { trigger: number }) {
     scale.setValue(0.6);
     opacity.setValue(0);
 
+    // Fade in → hold for the full swing → fade out together with hand
     Animated.sequence([
       Animated.parallel([
         Animated.spring(scale,   { toValue: 1, useNativeDriver: true, tension: 90, friction: 7 }),
         Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: true }),
       ]),
-      Animated.delay(WAVE_DURATION_MS - 180 - 450),
-      Animated.timing(opacity, { toValue: 0, duration: 450, useNativeDriver: true }),
+      Animated.delay(SWING_DURATION - 180),
+      Animated.timing(opacity, { toValue: 0, duration: 350, useNativeDriver: true }),
     ]).start();
   }, [trigger]);
 
@@ -128,7 +139,7 @@ function BigWave({ trigger }: { trigger: number }) {
       ]}
     >
       <View style={styles.bigWaveCard}>
-        <WavingHand size={100} trigger={trigger} />
+        <WavingHand size={100} trigger={trigger} ownOpacity={false} />
         <Text style={styles.bigWaveLabel}>Coucou !</Text>
       </View>
     </Animated.View>
@@ -169,9 +180,9 @@ export default function LiveReactions({
 
   const channelRef   = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const pRef         = useRef<Map<string, Participant>>(new Map());
-  const lastWaveRef  = useRef(0);
-  const shakeHitsRef = useRef<number[]>([]);
-  const prevAccelRef = useRef<{ x: number; y: number; z: number } | null>(null);
+  const lastWaveRef       = useRef(0);
+  const reversalsRef      = useRef<number[]>([]); // timestamps of X-axis direction reversals
+  const lastXDirectionRef = useRef<0 | 1 | -1>(0); // last committed X direction
 
   const sync = () => setParticipants(new Map(pRef.current));
 
@@ -297,32 +308,32 @@ export default function LiveReactions({
 
     Accelerometer.setUpdateInterval(ACCEL_INTERVAL_MS);
 
-    const sub = Accelerometer.addListener(({ x, y, z }) => {
-      const prev = prevAccelRef.current;
-      prevAccelRef.current = { x, y, z };
-      if (!prev) return;
+    const sub = Accelerometer.addListener(({ x }) => {
+      // Determine current X direction (ignore values in the dead-zone)
+      const dir: 1 | -1 | 0 = x > SHAKE_X_THRESHOLD ? 1 : x < -SHAKE_X_THRESHOLD ? -1 : 0;
+      if (dir === 0) return;
 
-      const delta = Math.sqrt(
-        (x - prev.x) ** 2 + (y - prev.y) ** 2 + (z - prev.z) ** 2,
-      );
+      // Register a reversal only when direction actually flips
+      if (dir !== lastXDirectionRef.current && lastXDirectionRef.current !== 0) {
+        const now = Date.now();
+        reversalsRef.current.push(now);
+        // Trim outside window
+        reversalsRef.current = reversalsRef.current.filter((t) => now - t < SHAKE_WINDOW_MS);
 
-      const now = Date.now();
-      if (delta > SHAKE_THRESHOLD) shakeHitsRef.current.push(now);
-
-      // Trim hits outside the rolling window
-      shakeHitsRef.current = shakeHitsRef.current.filter((t) => now - t < SHAKE_WINDOW_MS);
-
-      if (shakeHitsRef.current.length >= SHAKE_MIN_HITS) {
-        shakeHitsRef.current = [];
-        prevAccelRef.current = null;
-        sendWave();
+        if (reversalsRef.current.length >= SHAKE_MIN_REVERSALS) {
+          reversalsRef.current = [];
+          lastXDirectionRef.current = 0;
+          sendWave();
+        }
       }
+
+      lastXDirectionRef.current = dir;
     });
 
     return () => {
       sub.remove();
-      prevAccelRef.current = null;
-      shakeHitsRef.current = [];
+      reversalsRef.current = [];
+      lastXDirectionRef.current = 0;
     };
   }, [isVisible, sendWave]);
 
