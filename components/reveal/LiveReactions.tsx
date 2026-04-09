@@ -10,7 +10,7 @@ import {
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
-import { Accelerometer } from "expo-sensors";
+import { Accelerometer } from "expo-sensors/build/Accelerometer";
 import Svg, { Rect, G } from "react-native-svg";
 
 // ─── shake detection tunables ─────────────────────────────────────────────────

@@ -69,7 +69,8 @@
           "microphonePermission": "L'app a besoin du micro pour enregistrer des messages audio."
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "expo-sensors"
     ],
     "runtimeVersion": {
       "policy": "appVersion"
