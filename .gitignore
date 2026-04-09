@@ -43,3 +43,4 @@ yarn-error.*
 # env variables
 .env
 .happyour-firebase-adminsdk-fbsvc-14d3a00763.json
+/.happyour-firebase-adminsdk-fbsvc-14d3a00763.json
