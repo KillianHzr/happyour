@@ -152,7 +152,6 @@ const StandardCamera = forwardRef<CameraView, Props>(({
           videoQuality="1080p"
           enableTorch={false}
           autofocus="off"
-          responsiveOrientationWhenOrientationLocked
         />
       )}
     </View>

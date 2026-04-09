@@ -283,29 +283,35 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
     if (!cameraRef.current || isRecording || capturing) return;
     setCapturing(true);
     try {
-      // skipProcessing:true preserves the physical EXIF orientation tag.
-      // manipulateAsync (UIImage on iOS) then auto-corrects that EXIF to
-      // portrait-upright. We read the original EXIF orientation and apply
-      // an explicit rotation on top to restore the physical device orientation,
-      // so the saved image matches exactly what was visible in the viewfinder.
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.9, skipProcessing: true, exif: true });
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.9,
+        skipProcessing: Platform.OS === "android",
+        exif: Platform.OS === "android",
+      });
       if (photo?.uri) {
-        const exifOrientation = (photo.exif as any)?.Orientation ?? 1;
-        let rotation = 0;
-        if (exifOrientation === 1) rotation = 90;
-        else if (exifOrientation === 3) rotation = -90;
-        else if (exifOrientation === 8) rotation = 180;
-        // exifOrientation === 6 → 0° (no rotation)
-
         const actions: any[] = [];
-        if (rotation !== 0) actions.push({ rotate: rotation });
+
+        if (Platform.OS === "android") {
+          // skipProcessing:true gives raw sensor pixels + EXIF orientation.
+          // manipulateAsync on Android (Bitmap) does not auto-apply EXIF,
+          // so we apply the rotation directly from the EXIF tag.
+          // For front camera, rotation direction is inverted due to the horizontal flip.
+          const exif = (photo.exif as any)?.Orientation ?? 1;
+          const isFront = facing === "front";
+          if (exif === 8) { if (!isFront) actions.push({ rotate: 180 }); }
+          else if (exif === 6) { if (isFront) actions.push({ rotate: 180 }); }
+          else if (exif === 3) actions.push({ rotate: isFront ? 90 : -90 });
+          else if (exif === 1) actions.push({ rotate: isFront ? -90 : 90 });
+        }
+
         if (facing === "front") actions.push({ flip: FlipType.Horizontal });
 
-        const result = await manipulateAsync(photo.uri, actions, {
-          compress: 0.92,
-          format: SaveFormat.JPEG,
-        });
-        setCapturedUri(result.uri);
+        if (actions.length > 0) {
+          const result = await manipulateAsync(photo.uri, actions, { compress: 0.92, format: SaveFormat.JPEG });
+          setCapturedUri(result.uri);
+        } else {
+          setCapturedUri(photo.uri);
+        }
       }
     } catch (e: any) {
       console.error("Capture error:", e);
@@ -424,7 +430,7 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
               <StandardCamera
                 ref={cameraRef}
                 isActive={!capturedUri}
-                mode="video"
+                mode={Platform.OS === "ios" ? "video" : cameraMode === "VIDEO" ? "video" : "picture"}
                 facing={facing}
                 flash={flash}
                 zoom={zoom}
