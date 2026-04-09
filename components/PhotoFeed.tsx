@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useCallback, useRef, useLayoutEffect } from "react";
+import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -23,39 +23,56 @@ import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
-import Svg, { Path } from "react-native-svg";
+import { Svg, Path, Circle, Text as SvgText } from "react-native-svg";
+// import { StrokeText } from "@charmy.tech/react-native-stroke-text";
 import { STICKERS, type StickerId, getMonthlyStickers } from "./stickers";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const NAVBAR_HEIGHT = 100;
 
-function TextSticker({ text, fontSize = 16 }: { text: string; fontSize?: number }) {
-  // Simulation de stroke via shadow en React Native (mobile)
-  // Sur Web, on utilise -webkit-text-stroke via style as any
-  const textStyle = {
-    color: "#000",
-    fontFamily: "Inter_800ExtraBold",
-    fontSize: fontSize,
-    fontStyle: "normal",
-    fontWeight: "800",
-    lineHeight: "normal",
-    textTransform: "uppercase",
-    ...Platform.select({
-      web: {
-        "-webkit-text-stroke-width": "3px",
-        "-webkit-text-stroke-color": "#FFF065",
-      } as any,
-      default: {
-        textShadowColor: "#FFF065",
-        textShadowOffset: { width: 0, height: 0 },
-        textShadowRadius: 4,
-      },
-    }),
-  } as const;
+function TextSticker({ text, fontSize = 42 }: { text: string; fontSize?: number }) {
+  const displayValue = (text || "—").toUpperCase();
+  const scale = fontSize / 42;
+  const height = scale * 80;
+  const width = (displayValue.length * fontSize * 0.85) + (20 * scale);
+  const y = scale * 55;
+  
+  // Adjusted strokeWidth: use 18 for 42px, but cap it for small fonts
+  // const strokeWidth = fontSize > 24 ? scale * 18 : Math.max(2, scale * 12);
+  const strokeWidth = 5;
 
   return (
-    <View style={styles.textStickerContainer}>
-      <Text style={textStyle}>{text}</Text>
+    <View style={{ height, width, justifyContent: 'center', alignItems: 'center' }}>
+      <Svg height={height} width={width}>
+        {/* Outer Thick Stroke */}
+        <SvgText
+          fill="none"
+          stroke="#FFF065"
+          strokeWidth={strokeWidth}
+          strokeLinejoin="round"
+          fontSize={fontSize}
+          fontWeight="bold"
+          fontFamily="Inter_700Bold"
+          x="50%"
+          y={y}
+          textAnchor="middle"
+        >
+          {displayValue}
+        </SvgText>
+        
+        {/* Inner Main Text */}
+        <SvgText
+          fill="black"
+          fontSize={fontSize}
+          fontWeight="bold"
+          fontFamily="Inter_700Bold"
+          x="50%"
+          y={y}
+          textAnchor="middle"
+        >
+          {displayValue}
+        </SvgText>
+      </Svg>
     </View>
   );
 }
@@ -100,11 +117,10 @@ type Props = {
 };
 
 const ReactIcon = () => (
-  <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-    <Path
-      d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
-      fill="rgba(255,255,255,0.9)"
-    />
+  <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <Circle cx="12" cy="12" r="10" />
+    <Path d="M8 12h8" />
+    <Path d="M12 8v8" />
   </Svg>
 );
 
@@ -114,7 +130,6 @@ function ExpandableNote({ text, maxLines }: { text: string; maxLines: number }) 
 
   return (
     <TouchableOpacity onPress={() => isTruncated && setExpanded(v => !v)} activeOpacity={0.8}>
-      {/* Texte caché sans limite pour mesurer le vrai nombre de lignes */}
       <View style={{ height: 0, overflow: 'hidden' }}>
         <Text
           style={styles.momentNote}
@@ -300,13 +315,15 @@ function StickerPicker({ visible, onClose, onSelect, myReaction }: {
                 );
               })}
               <TouchableOpacity
-                style={styles.pickerItem}
+                style={[styles.pickerItem, { flexDirection: "row", justifyContent: "center" }]}
                 onPress={() => setShowCustomInput(true)}
                 activeOpacity={0.7}
               >
-                <View style={styles.customStickerBtn}>
-                  <Text style={styles.customStickerPlus}>+</Text>
-                </View>
+                <Svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 8 }}>
+                  <Circle cx="12" cy="12" r="10" />
+                  <Path d="M8 12h8" />
+                  <Path d="M12 8v8" />
+                </Svg>
                 <Text style={styles.pickerLabel}>Perso</Text>
               </TouchableOpacity>
             </View>
@@ -405,7 +422,6 @@ function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId,
     if (!isVisible) player.pause();
   }, [isVisible]);
 
-  // Pendant la lecture, mettre à jour la barre via setNativeProps (sans re-render)
   const progressRef = useRef(0);
   const progress = status.duration > 0 ? (status.currentTime ?? 0) / status.duration : 0;
   useEffect(() => {
@@ -475,8 +491,6 @@ function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId,
     <View style={[styles.fullscreenPage, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12 }]}>
       <View style={styles.momentWrapper}>
         <View style={[StyleSheet.absoluteFill, { backgroundColor: "#0A0A0A" }]} />
-
-        {/* Waveform décoratif */}
         <View style={styles.audioWaveContainer} pointerEvents="none">
           {WAVE_HEIGHTS.map((h, i) => (
             <View
@@ -485,29 +499,19 @@ function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId,
             />
           ))}
         </View>
-
         <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
           <LinearGradient colors={["transparent", "rgba(0,0,0,0.92)"]} style={styles.momentOverlay}>
-            {/* Lecteur audio */}
             <View style={styles.audioPlayerRow}>
               <TouchableOpacity onPress={togglePlay} style={styles.audioPlayBtn}>
                 <Svg width="26" height="26" viewBox="0 0 24 24" fill="#FFF">
-                  {status.playing ? (
-                    <Path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-                  ) : (
-                    <Path d="M8 5v14l11-7z" />
-                  )}
+                  {status.playing ? ( <Path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /> ) : ( <Path d="M8 5v14l11-7z" /> )}
                 </Svg>
               </TouchableOpacity>
               <TouchableOpacity onPress={cycleSpeed} style={styles.audioSpeedBtn}>
                 <Text style={styles.audioSpeedText}>{playbackSpeed === 0.5 ? "×0.5" : playbackSpeed === 1 ? "×1" : playbackSpeed === 1.5 ? "×1.5" : "×2"}</Text>
               </TouchableOpacity>
               <View style={styles.audioProgressWrapper}>
-                <View
-                  style={styles.audioSeekHitArea}
-                  onLayout={(e) => { seekWidthRef.current = e.nativeEvent.layout.width; }}
-                  {...seekPan.panHandlers}
-                >
+                <View style={styles.audioSeekHitArea} onLayout={(e) => { seekWidthRef.current = e.nativeEvent.layout.width; }} {...seekPan.panHandlers}>
                   <View style={styles.audioSeekTrack}>
                     <View ref={fillRef} style={[styles.audioSeekFill, { width: `${progress * 100}%` as any }]} />
                   </View>
@@ -519,8 +523,6 @@ function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId,
                 </View>
               </View>
             </View>
-
-            {/* Auteur */}
             <View style={styles.authorInfo}>
               <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={crownWinnerId === moment.user_id} />
               <View style={{ flex: 1 }}>
@@ -568,11 +570,7 @@ function VideoMoment({ moment, isVisible, cachedUrl, onReact, currentUserId, cro
 
   useEffect(() => {
     if (!player) return;
-    if (isVisible && !isPaused) {
-      player.play();
-    } else {
-      player.pause();
-    }
+    if (isVisible && !isPaused) { player.play(); } else { player.pause(); }
   }, [isVisible, isPaused, player]);
 
   useEffect(() => {
@@ -582,24 +580,19 @@ function VideoMoment({ moment, isVisible, cachedUrl, onReact, currentUserId, cro
   return (
     <View style={[styles.fullscreenPage, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12 }]}>
       <View style={styles.momentWrapper}>
-        <>
-          <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center" }]} pointerEvents="none">
-            <ActivityIndicator size="large" color="rgba(255,255,255,0.5)" />
-          </View>
-          <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setIsPaused((v) => !v)}>
-            {isVisible && isPaused && (
-              <View style={styles.pauseOverlay} pointerEvents="none">
-                <View style={styles.pauseCircle}>
-                  <Svg width="24" height="24" viewBox="0 0 24 24" fill="#FFF">
-                    <Path d="M8 5v14l11-7z" />
-                  </Svg>
-                </View>
+        <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center" }]} pointerEvents="none">
+          <ActivityIndicator size="large" color="rgba(255,255,255,0.5)" />
+        </View>
+        <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => setIsPaused((v) => !v)}>
+          {isVisible && isPaused && (
+            <View style={styles.pauseOverlay} pointerEvents="none">
+              <View style={styles.pauseCircle}>
+                <Svg width="24" height="24" viewBox="0 0 24 24" fill="#FFF"><Path d="M8 5v14l11-7z" /></Svg>
               </View>
-            )}
-          </Pressable>
-        </>
-
+            </View>
+          )}
+        </Pressable>
         <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
           <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.momentOverlay}>
             <View style={styles.authorInfo}>
@@ -714,23 +707,18 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
   const [openPickerId, setOpenPickerId] = useState<string | null>(null);
   const [countdownText, setCountdownText] = useState("");
   const flatListRef = useRef<FlatList>(null);
-
   const [videoCache, setVideoCache] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    // Prefetch photos into expo-image disk cache
     photos.forEach((p) => {
       if (p.url && p.image_path !== "text_mode" && !p.image_path.endsWith(".m4a") && !p.image_path.endsWith(".mp4")) {
         Image.prefetch(p.url);
         if (p.fallback_url) Image.prefetch(p.fallback_url);
       }
     });
-
-    // Download videos to local filesystem cache
     const videos = photos.filter((p) => p.url && p.image_path.endsWith(".mp4"));
     const localPaths: string[] = [];
     let cancelled = false;
-
     (async () => {
       const entries: Record<string, string> = {};
       await Promise.all(videos.map(async (p) => {
@@ -741,16 +729,12 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
           const info = await FileSystem.getInfoAsync(localUri);
           if (!info.exists) await FileSystem.downloadAsync(p.url!, localUri);
           entries[p.url!] = localUri;
-        } catch {
-          entries[p.url!] = p.url!; // fallback to remote
-        }
+        } catch { entries[p.url!] = p.url!; }
       }));
       if (!cancelled) setVideoCache(entries);
     })();
-
     return () => {
       cancelled = true;
-      // Clear video cache when reveal closes
       localPaths.forEach((uri) => FileSystem.deleteAsync(uri, { idempotent: true }));
     };
   }, [photos]);
@@ -771,9 +755,7 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
   }, [nextUnlockDate]);
 
   const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-    if (viewableItems.length > 0 && viewableItems[0].index != null) {
-      setVisibleIndex(viewableItems[0].index);
-    }
+    if (viewableItems.length > 0 && viewableItems[0].index != null) { setVisibleIndex(viewableItems[0].index); }
   }, []);
   const viewabilityConfig = useMemo(() => ({ itemVisiblePercentThreshold: 50 }), []);
 
@@ -796,35 +778,18 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
   }, [photos, crownWinnerId]);
 
   const renderItem = ({ item, index }: { item: FeedItem; index: number }) => {
-    if (item.type === "intro") {
-      return <RevealIntroPage groupName={groupName} isVisible={index === visibleIndex} />;
-    }
-
+    if (item.type === "intro") { return <RevealIntroPage groupName={groupName} isVisible={index === visibleIndex} />; }
     if (item.type === "crown") {
       const winner = photos.find((p) => p.user_id === crownWinnerId);
       if (!winner) return null;
       return <CrownRevealPage winner={winner} durationMs={crownDurationMs} />;
     }
-
     if (item.type === "separator") {
       const [day, date] = item.label.split("\n");
-      return (
-        <View style={styles.fullscreenPage}>
-          <Text style={styles.separatorDay}>{day}</Text>
-          <Text style={styles.separatorDate}>{date}</Text>
-        </View>
-      );
+      return ( <View style={styles.fullscreenPage}><Text style={styles.separatorDay}>{day}</Text><Text style={styles.separatorDate}>{date}</Text></View> );
     }
-
     if (item.type === "end") {
-      return (
-        <View style={styles.fullscreenPage}>
-          <View style={styles.endLogoMark} />
-          <Text style={styles.endTitle}>Reveal terminé.</Text>
-          <Text style={styles.endSubtitle}>Prochain rewind dans :</Text>
-          <Text style={styles.countdownText}>{countdownText}</Text>
-        </View>
-      );
+      return ( <View style={styles.fullscreenPage}><View style={styles.endLogoMark} /><Text style={styles.endTitle}>Reveal terminé.</Text><Text style={styles.endSubtitle}>Prochain rewind dans :</Text><Text style={styles.countdownText}>{countdownText}</Text></View> );
     }
 
     const moment = item.data;
@@ -835,17 +800,13 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
     const isOwn = moment.user_id === currentUserId;
     const textLen = moment.note?.length ?? 0;
     const fontSize = textLen <= 40 ? 32 : textLen <= 100 ? 26 : textLen <= 200 ? 21 : textLen <= 300 ? 17 : 15;
-    const myReaction = moment.reactions.find((r) => r.user_id === currentUserId)?.sticker_id ?? null;
 
     if (isAudio) {
       return <AudioMoment moment={moment} isVisible={index === visibleIndex} onReact={onReact} currentUserId={currentUserId} crownWinnerId={crownWinnerId} onScrollLock={(locked) => { flatListRef.current?.setNativeProps({ scrollEnabled: !locked }); onScrollLock?.(locked); }} />;
     }
-
     if (isVideo) {
       return <VideoMoment moment={moment} isVisible={index === visibleIndex} onReact={onReact} currentUserId={currentUserId} crownWinnerId={crownWinnerId} cachedUrl={videoCache[moment.url] ?? moment.url} />;
     }
-
-    const isCrown = crownWinnerId === moment.user_id;
 
     return (
       <View style={[styles.fullscreenPage, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12 }]}>
@@ -855,93 +816,64 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
               <View style={styles.quoteContainer}>
                 <Text style={[styles.textMomentContent, { fontSize, lineHeight: Math.round(fontSize * 1.4) }]}>{moment.note}</Text>
                 <View style={styles.citationFooter}>
-                  <View style={styles.citationAvatar}>
-                    <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} isCrown={isCrown} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.citationUsername}>{moment.username}</Text>
-                    <Text style={styles.citationTime}>{formatTime(moment.created_at)}</Text>
-                  </View>
-                  {!isOwn && (
-                    <TouchableOpacity style={styles.reactBtnInline} onPress={() => setOpenPickerId(moment.id)}>
-                      <ReactIcon />
-                    </TouchableOpacity>
-                  )}
+                  <View style={styles.citationAvatar}><CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} isCrown={crownWinnerId === moment.user_id} /></View>
+                  <View style={{ flex: 1 }}><Text style={styles.citationUsername}>{moment.username}</Text><Text style={styles.citationTime}>{formatTime(moment.created_at)}</Text></View>
+                  {!isOwn && ( <TouchableOpacity style={styles.reactBtnInline} onPress={() => setOpenPickerId(moment.id)}><ReactIcon /></TouchableOpacity> )}
                 </View>
               </View>
             </View>
-          ) : (
-            <PhotoImage url={moment.url} fallback_url={moment.fallback_url} isDrawing={isDrawing} />
-          )}
-
+          ) : ( <PhotoImage url={moment.url} fallback_url={moment.fallback_url} isDrawing={isDrawing} /> )}
           <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
             <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.momentOverlay}>
               {!isTextOnly && (
                 <View style={styles.authorInfo}>
-                  <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={isCrown} />
+                  <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={crownWinnerId === moment.user_id} />
                   <View style={{ flex: 1 }}>
-                    <View style={styles.usernameLine}>
-                      <Text style={styles.username}>{moment.username}</Text>
-                      <Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text>
-                    </View>
+                    <View style={styles.usernameLine}><Text style={styles.username}>{moment.username}</Text><Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text></View>
                     {moment.note && <ExpandableNote text={moment.note} maxLines={2} />}
                   </View>
-                  {!isOwn && (
-                    <TouchableOpacity style={styles.reactBtnInline} onPress={() => setOpenPickerId(moment.id)}>
-                      <ReactIcon />
-                    </TouchableOpacity>
-                  )}
+                  {!isOwn && ( <TouchableOpacity style={styles.reactBtnInline} onPress={() => setOpenPickerId(moment.id)}><ReactIcon /></TouchableOpacity> )}
                 </View>
               )}
               <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={isOwn ? undefined : onReact} photoId={moment.id} crownWinnerId={crownWinnerId} />
             </LinearGradient>
           </View>
         </View>
-
-        {!isOwn && (
-          <StickerPicker
-            visible={openPickerId === moment.id}
-            onClose={() => setOpenPickerId(null)}
-            onSelect={(sid) => { onReact?.(moment.id, sid); setOpenPickerId(null); }}
-            myReaction={myReaction}
-          />
-        )}
       </View>
     );
   };
 
-  if (photos.length === 0) {
-    return (
-      <View style={[styles.list, { justifyContent: "center", alignItems: "center" }]}>
-        <View style={styles.endLogoMark} />
-        <Text style={[styles.endTitle, { marginTop: 24 }]}>Aucun moment cette semaine.</Text>
-        <Text style={[styles.endSubtitle, { textAlign: "center", paddingHorizontal: 40, marginTop: 8 }]}>
-          Les moments partagés apparaîtront ici après le reveal.
-        </Text>
-      </View>
-    );
-  }
+  const activePhoto = useMemo(() => photos.find(p => p.id === openPickerId), [photos, openPickerId]);
+  const myReaction = useMemo(() => activePhoto?.reactions.find(r => r.user_id === currentUserId)?.sticker_id, [activePhoto, currentUserId]);
 
   return (
-    <FlatList
-      ref={flatListRef}
-      data={items}
-      renderItem={renderItem}
-      keyExtractor={(_, i) => i.toString()}
-      pagingEnabled
-      snapToInterval={SCREEN_HEIGHT}
-      snapToAlignment="start"
-      decelerationRate="fast"
-      showsVerticalScrollIndicator={false}
-      getItemLayout={(_, i) => ({ length: SCREEN_HEIGHT, offset: SCREEN_HEIGHT * i, index: i })}
-      onViewableItemsChanged={onViewableItemsChanged}
-      viewabilityConfig={viewabilityConfig}
-      windowSize={21}
-      maxToRenderPerBatch={3}
-      initialNumToRender={3}
-      removeClippedSubviews={Platform.OS === "android"}
-      style={styles.list}
-    />
+    <View style={styles.list}>
+      <FlatList
+        ref={flatListRef}
+        data={items}
+        renderItem={renderItem}
+        keyExtractor={(_, i) => i.toString()}
+        pagingEnabled
+        snapToInterval={SCREEN_HEIGHT}
+        snapToAlignment="start"
+        decelerationRate="fast"
+        showsVerticalScrollIndicator={false}
+        getItemLayout={(_, i) => ({ length: SCREEN_HEIGHT, offset: SCREEN_HEIGHT * i, index: i })}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
+        windowSize={21}
+        maxToRenderPerBatch={3}
+        initialNumToRender={3}
+        removeClippedSubviews={Platform.OS === "android"}
+        style={styles.list}
+      />
+      <StickerPicker
+        visible={!!openPickerId}
+        onClose={() => setOpenPickerId(null)}
+        onSelect={(sid) => { if (openPickerId) onReact?.(openPickerId, sid); setOpenPickerId(null); }}
+        myReaction={myReaction}
+      />
+    </View>
   );
 }
 
@@ -968,30 +900,20 @@ const styles = StyleSheet.create({
   reactionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   reactionBubble: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 20, paddingHorizontal: 8, paddingVertical: 5, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
   reactionBubbleMine: { backgroundColor: "rgba(255,255,255,0.28)", borderColor: "rgba(255,255,255,0.4)" },
-  reactionBubbleCrown: { borderColor: "#FFD700", borderWidth: 1.5 },
+  reactionBubbleCrown: { borderColor: "#FFF065", borderWidth: 1.5 },
   reactionAvatarStack: { flexDirection: "row" },
   reactionAvatarWrap: { borderRadius: 10, overflow: "hidden", borderWidth: 1.5, borderColor: "rgba(0,0,0,0.3)" },
   reactionStickerWrap: { marginLeft: 2 },
   reactionCount: { color: "rgba(255,255,255,0.7)", fontFamily: "Inter_700Bold", fontSize: 11, marginLeft: 2 },
-  reactBtnInline: {
-    marginLeft: 12,
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
-  },
+  reactBtnInline: { marginLeft: 12, width: 42, height: 42, borderRadius: 21, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
   pickerBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
   pickerSheet: { backgroundColor: "#1A1A1A", borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingBottom: 40, paddingTop: 12, paddingHorizontal: 20 },
   pickerHandle: { width: 36, height: 4, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 2, alignSelf: "center", marginBottom: 20 },
   pickerTitle: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 18, marginBottom: 20 },
   pickerGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  pickerItem: { flex: 1, minWidth: "28%", alignItems: "center", gap: 8, paddingVertical: 16, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.06)", borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" },
+  pickerItem: { flex: 1, minWidth: "28%", height: 64, alignItems: "center", justifyContent: "center", borderRadius: 18, backgroundColor: "rgba(255,255,255,0.06)", borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" },
   pickerItemActive: { backgroundColor: "rgba(255,255,255,0.18)", borderColor: "rgba(255,255,255,0.35)" },
-  pickerLabel: { color: "rgba(255,255,255,0.5)", fontFamily: "Inter_600SemiBold", fontSize: 11 },
+  pickerLabel: { color: "rgba(255,255,255,0.8)", fontFamily: "Inter_600SemiBold", fontSize: 14 },
   revealIntroEyebrow: { fontFamily: "Inter_400Regular", fontSize: 13, color: "rgba(255,255,255,0.4)", letterSpacing: 4, textTransform: "uppercase", marginBottom: 10 },
   revealIntroTitle: { fontFamily: "Inter_700Bold", fontSize: 58, color: "#FFF", letterSpacing: -1.5, lineHeight: 62 },
   revealIntroGroup: { fontFamily: "Inter_400Regular", fontSize: 18, color: "rgba(255,255,255,0.4)", marginTop: 10, textAlign: "center" },

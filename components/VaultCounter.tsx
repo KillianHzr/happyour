@@ -58,6 +58,8 @@ export default function VaultCounter({ totalCount, unlockDate, lastPoster }: Pro
 
   return (
     <View style={[theme.glassCard, styles.container]}>
+    
+
       {lastPoster && (
         <View style={styles.lastPosterWrap}>
           <View style={styles.crownWrap}>
