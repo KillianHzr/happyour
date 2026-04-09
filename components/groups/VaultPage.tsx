@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Svg, { Text as SvgText } from "react-native-svg";
 import { scheduleImmediateLocalNotification } from "../../lib/notifications";
 import PhotoFeed, { type PhotoEntry } from "../PhotoFeed";
 import VaultCounter from "../VaultCounter";
@@ -61,6 +62,8 @@ export default function VaultPage({
     );
   }
 
+  const lastPoster = photos.length > 0 ? photos[photos.length - 1] : null;
+
   return (
     <ScrollView
       style={[styles.scroll, { paddingTop: insets.top + 40 }]}
@@ -76,10 +79,11 @@ export default function VaultPage({
 
       <View style={styles.body}>
         <View style={styles.lockedContent}>
+        
           <VaultCounter
             totalCount={photoCount}
             unlockDate={revealDate}
-            lastPoster={photos.length > 0 ? { avatar_url: photos[photos.length - 1].avatar_url, username: photos[photos.length - 1].username } : null}
+            lastPoster={lastPoster ? { avatar_url: lastPoster.avatar_url, username: lastPoster.username } : null}
           />
         </View>
       </View>
