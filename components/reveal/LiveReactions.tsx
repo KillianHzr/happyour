@@ -226,18 +226,18 @@ export default function LiveReactions({
     }
   }, [currentUserId]);
 
-  // ── presence + wave broadcast channel ─────────────────────────────────────
+  // ── presence + wave broadcast channel lifecycle ───────────────────────────
   useEffect(() => {
-    if (!isVisible) return;
-
-    const channel = supabase.channel(`reveal:${groupId}`, {
+    // We want the channel to stay alive as long as the component is mounted for this groupId.
+    // Toggling isVisible will only track/untrack, not destroy/recreate the channel,
+    // avoiding the Supabase error "cannot add callbacks after subscribe()".
+    const ch = supabase.channel(`reveal:${groupId}`, {
       config: { presence: { key: currentUserId } },
     });
-    channelRef.current = channel;
+    channelRef.current = ch;
 
-    channel
-      .on("presence", { event: "sync" }, () => {
-        const state = channel.presenceState<{
+    ch.on("presence", { event: "sync" }, () => {
+        const state = ch.presenceState<{
           userId: string;
           username: string;
           avatarUrl: string | null;
@@ -266,22 +266,31 @@ export default function LiveReactions({
           return next;
         });
       })
-      .subscribe(async (status) => {
-        if (status === "SUBSCRIBED") {
-          await channel
-            .track({ userId: currentUserId, username: currentUsername, avatarUrl: currentAvatarUrl })
-            .catch(() => {});
-        }
-      });
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(ch);
+      channelRef.current = null;
+      pRef.current.clear();
+      setParticipants(new Map());
+      setWaveTriggers(new Map());
+    };
+  }, [groupId, currentUserId]); 
+
+  // ── presence tracking lifecycle ───────────────────────────────────────────
+  useEffect(() => {
+    const ch = channelRef.current;
+    if (!ch || !isVisible) return;
+
+    // Track presence when visible
+    ch.track({ userId: currentUserId, username: currentUsername, avatarUrl: currentAvatarUrl })
+      .catch(() => {});
 
     const handleAppState = async (nextState: AppStateStatus) => {
-      const ch = channelRef.current;
-      if (!ch) return;
       if (nextState === "background" || nextState === "inactive") {
         await ch.untrack().catch(() => {});
       } else if (nextState === "active") {
-        await ch
-          .track({ userId: currentUserId, username: currentUsername, avatarUrl: currentAvatarUrl })
+        await ch.track({ userId: currentUserId, username: currentUsername, avatarUrl: currentAvatarUrl })
           .catch(() => {});
       }
     };
@@ -289,18 +298,10 @@ export default function LiveReactions({
 
     return () => {
       appStateSub.remove();
-      const ch = channelRef.current;
-      channelRef.current = null;
-      pRef.current.clear();
-      setParticipants(new Map());
-      setWaveTriggers(new Map());
-      if (ch) {
-        ch.untrack()
-          .catch(() => {})
-          .finally(() => supabase.removeChannel(ch));
-      }
+      // Untrack when not visible or unmounting
+      ch.untrack().catch(() => {});
     };
-  }, [isVisible, groupId, currentUserId, currentUsername, currentAvatarUrl]);
+  }, [isVisible, currentUserId, currentUsername, currentAvatarUrl]);
 
   // ── shake detection ────────────────────────────────────────────────────────
   useEffect(() => {

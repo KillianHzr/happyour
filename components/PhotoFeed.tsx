@@ -489,7 +489,7 @@ function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId,
 
   return (
     <View style={[styles.fullscreenPage, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12 }]}>
-      <View style={styles.momentWrapper}>
+      <View style={[styles.momentWrapper, isOwn && styles.momentWrapperOwn]}>
         <View style={[StyleSheet.absoluteFill, { backgroundColor: "#0A0A0A" }]} />
         <View style={styles.audioWaveContainer} pointerEvents="none">
           {WAVE_HEIGHTS.map((h, i) => (
@@ -579,7 +579,7 @@ function VideoMoment({ moment, isVisible, cachedUrl, onReact, currentUserId, cro
 
   return (
     <View style={[styles.fullscreenPage, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12 }]}>
-      <View style={styles.momentWrapper}>
+      <View style={[styles.momentWrapper, isOwn && styles.momentWrapperOwn]}>
         <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center" }]} pointerEvents="none">
           <ActivityIndicator size="large" color="rgba(255,255,255,0.5)" />
         </View>
@@ -810,7 +810,7 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
 
     return (
       <View style={[styles.fullscreenPage, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12 }]}>
-        <View style={styles.momentWrapper}>
+        <View style={[styles.momentWrapper, isOwn && styles.momentWrapperOwn]}>
           {isTextOnly ? (
             <View style={styles.textMomentBg}>
               <View style={styles.quoteContainer}>
@@ -881,6 +881,15 @@ const styles = StyleSheet.create({
   list: { flex: 1, backgroundColor: "#000" },
   fullscreenPage: { width: SCREEN_WIDTH, height: SCREEN_HEIGHT, justifyContent: "center", alignItems: "center", backgroundColor: "#000", paddingHorizontal: 12 },
   momentWrapper: { flex: 1, width: '100%', borderRadius: 32, overflow: "hidden", backgroundColor: "#1A1A1A" },
+  momentWrapperOwn: {
+    borderWidth: 2,
+    borderColor: "#FFF065",
+    shadowColor: "#FFF065",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 15,
+    elevation: 8,
+  },
   separatorDay: { fontFamily: "Inter_700Bold", fontSize: 48, color: "#FFF", textAlign: "center", letterSpacing: -2 },
   separatorDate: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginTop: 8 },
   textMomentBg: { flex: 1, width: "100%", justifyContent: "center", alignItems: "center", padding: 32, backgroundColor: "#050505" },
