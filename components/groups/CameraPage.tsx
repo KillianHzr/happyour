@@ -21,17 +21,23 @@ const NAVBAR_HEIGHT = 100;
 
 type CameraMode = "PHOTO" | "VIDEO" | "AUDIO" | "DESSIN" | "TEXTE";
 
+type GroupInfo = { id: string; name: string };
+
 type Props = {
   groupId: string;
   userId: string;
   isActive: boolean;
-  onUploadSuccess: () => void;
+  allGroups: GroupInfo[];
   onScrollLock: (locked: boolean) => void;
 };
 
-export default function CameraPage({ groupId, userId, isActive, onUploadSuccess, onScrollLock }: Props) {
+export default function CameraPage({ groupId, userId, isActive, allGroups, onScrollLock }: Props) {
   const insets = useSafeAreaInsets();
   const { startUpload } = useUpload();
+
+  const [showGroupPicker, setShowGroupPicker] = useState(false);
+  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
+  const [pendingUploadType, setPendingUploadType] = useState<"photo" | "audio" | "text" | null>(null);
 
   const cameraRef = useRef<CameraView>(null);
   const drawingRef = useRef<DrawingCanvasRef>(null);
@@ -255,7 +261,7 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
   const handleCapture = async () => {
     if (cameraMode === "TEXTE") {
       if (!textModeContent.trim()) return;
-      handleUploadText();
+      openGroupPicker("text");
       return;
     }
     if (cameraMode === "AUDIO") {
@@ -321,34 +327,48 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
     }
   };
 
-  const handleUploadPhoto = () => {
-    if (!capturedUri) return;
-    const dbData = { group_id: groupId, user_id: userId, note: note.trim() || null };
-    const fileName = `${groupId}/${userId}_${Date.now()}${cameraMode === "DESSIN" ? "_draw" : ""}.jpg`;
-    startUpload(fileName, capturedUri, "image/jpeg", dbData);
-    setCapturedUri(null);
-        setNote("");
-    setIsDrawingActive(false);
-    onUploadSuccess();
+  const openGroupPicker = (type: "photo" | "audio" | "text") => {
+    // If only one group, skip the picker and upload directly
+    if (allGroups.length <= 1) {
+      confirmUpload(type, [groupId]);
+      return;
+    }
+    setPendingUploadType(type);
+    setSelectedGroupIds([groupId]);
+    setShowGroupPicker(true);
   };
 
-  const handleUploadAudio = () => {
-    if (!capturedAudioUri) return;
-    const dbData = { group_id: groupId, user_id: userId, note: note.trim() || null };
-    const fileName = `${groupId}/${userId}_${Date.now()}.m4a`;
-    startUpload(fileName, capturedAudioUri, "audio/m4a", dbData);
-    setCapturedAudioUri(null);
-    setNote("");
-    onUploadSuccess();
+  const toggleGroup = (id: string) => {
+    setSelectedGroupIds((prev) =>
+      prev.includes(id) ? prev.filter((g) => g !== id) : [...prev, id]
+    );
   };
 
-  const handleUploadText = () => {
-    if (!textModeContent.trim()) return;
-    const content = textModeContent.trim();
-    const dbData = { group_id: groupId, user_id: userId, note: content };
-    startUpload(null, null, null, dbData);
-    setTextModeContent("");
-    onUploadSuccess();
+  const confirmUpload = (type: "photo" | "audio" | "text", groupIds: string[]) => {
+    const ts = Date.now();
+    groupIds.forEach((gId, i) => {
+      if (type === "photo" && capturedUri) {
+        const dbData = { group_id: gId, user_id: userId, note: note.trim() || null };
+        const suffix = cameraMode === "DESSIN" ? "_draw" : "";
+        startUpload(`${gId}/${userId}_${ts + i}${suffix}.jpg`, capturedUri, "image/jpeg", dbData);
+      } else if (type === "audio" && capturedAudioUri) {
+        const dbData = { group_id: gId, user_id: userId, note: note.trim() || null };
+        startUpload(`${gId}/${userId}_${ts + i}.m4a`, capturedAudioUri, "audio/m4a", dbData);
+      } else if (type === "text") {
+        const dbData = { group_id: gId, user_id: userId, note: textModeContent.trim() };
+        startUpload(null, null, null, dbData);
+      }
+    });
+    if (type === "photo") { setCapturedUri(null); setNote(""); setIsDrawingActive(false); }
+    if (type === "audio") { setCapturedAudioUri(null); setNote(""); }
+    if (type === "text") { setTextModeContent(""); }
+  };
+
+  const handleConfirmGroupPicker = () => {
+    if (selectedGroupIds.length === 0 || !pendingUploadType) return;
+    setShowGroupPicker(false);
+    confirmUpload(pendingUploadType, selectedGroupIds);
+    setPendingUploadType(null);
   };
 
   // ── Render ──
@@ -620,7 +640,7 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
                 )}
               </View>
               <View style={[styles.postCaptureActions, { bottom: 20 }]}>
-                <TouchableOpacity style={styles.sendCaptureBtn} onPress={handleUploadPhoto}>
+                <TouchableOpacity style={styles.sendCaptureBtn} onPress={() => openGroupPicker("photo")}>
                   <View style={styles.sendCaptureInner}>
                     <SendIcon color="#000" />
                   </View>
@@ -708,7 +728,7 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
               )}
             </View>
             <View style={[styles.postCaptureActions, { bottom: 20 }]}>
-              <TouchableOpacity style={styles.sendCaptureBtn} onPress={handleUploadAudio}>
+              <TouchableOpacity style={styles.sendCaptureBtn} onPress={() => openGroupPicker("audio")}>
                 <View style={styles.sendCaptureInner}>
                   <SendIcon color="#000" />
                 </View>
@@ -727,6 +747,50 @@ export default function CameraPage({ groupId, userId, isActive, onUploadSuccess,
           </Modal>
         </View>
       )}
+
+      {/* ── Group Picker ── */}
+      <Modal
+        visible={showGroupPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowGroupPicker(false)}
+      >
+        <Pressable style={pickerStyles.overlay} onPress={() => setShowGroupPicker(false)}>
+          <Pressable style={pickerStyles.card} onPress={() => {}}>
+            <Text style={pickerStyles.title}>Envoyer dans...</Text>
+            {allGroups.map((g) => {
+              const selected = selectedGroupIds.includes(g.id);
+              return (
+                <TouchableOpacity
+                  key={g.id}
+                  style={pickerStyles.row}
+                  onPress={() => toggleGroup(g.id)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[pickerStyles.checkbox, selected && pickerStyles.checkboxOn]}>
+                    {selected && (
+                      <Svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+                        <Path d="M20 6L9 17L4 12" stroke="#000" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </Svg>
+                    )}
+                  </View>
+                  <Text style={pickerStyles.groupName}>{g.name}</Text>
+                </TouchableOpacity>
+              );
+            })}
+            <TouchableOpacity
+              style={[pickerStyles.sendBtn, selectedGroupIds.length === 0 && { opacity: 0.35 }]}
+              onPress={handleConfirmGroupPicker}
+              disabled={selectedGroupIds.length === 0}
+            >
+              <Text style={pickerStyles.sendBtnText}>Envoyer</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowGroupPicker(false)} style={pickerStyles.cancelWrap}>
+              <Text style={pickerStyles.cancelText}>Annuler</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </>
   );
 }
@@ -809,4 +873,18 @@ const styles = StyleSheet.create({
   audioPreviewFill: { height: 3, backgroundColor: "#FFF", borderRadius: 2 },
   audioPreviewThumb: { position: "absolute", width: 13, height: 13, borderRadius: 7, backgroundColor: "#FFF", marginLeft: -6, top: 14 - 5 },
   audioPreviewTime: { fontSize: 11, color: "rgba(255,255,255,0.5)", fontFamily: "Inter_400Regular" },
+});
+
+const pickerStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.78)", justifyContent: "center", alignItems: "center", padding: 28 },
+  card: { backgroundColor: "#1C1C1E", borderRadius: 20, padding: 24, width: "100%" },
+  title: { fontSize: 18, fontFamily: "Inter_700Bold", color: "#FFF", marginBottom: 20 },
+  row: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(255,255,255,0.08)" },
+  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: "rgba(255,255,255,0.3)", justifyContent: "center", alignItems: "center" },
+  checkboxOn: { backgroundColor: "#FFF", borderColor: "#FFF" },
+  groupName: { color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 16, flex: 1 },
+  sendBtn: { backgroundColor: "#FFF", borderRadius: 14, paddingVertical: 14, alignItems: "center", marginTop: 20, marginBottom: 8 },
+  sendBtnText: { color: "#000", fontSize: 16, fontFamily: "Inter_700Bold" },
+  cancelWrap: { alignItems: "center", paddingVertical: 8 },
+  cancelText: { color: "rgba(255,255,255,0.4)", fontFamily: "Inter_600SemiBold", fontSize: 15 },
 });

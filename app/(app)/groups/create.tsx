@@ -1,17 +1,13 @@
 import { useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-} from "react-native";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet } from "react-native";
 import { router } from "expo-router";
 import { useAuth } from "../../../lib/auth-context";
 import { useToast } from "../../../lib/toast-context";
 import { translateError } from "../../../lib/error-messages";
 import { supabase } from "../../../lib/supabase";
 import { colors, theme } from "../../../lib/theme";
+
+const MAX_GROUPS = 3;
 
 export default function CreateGroupScreen() {
   const { user } = useAuth();
@@ -25,6 +21,16 @@ export default function CreateGroupScreen() {
 
     setLoading(true);
     try {
+      const { count } = await supabase
+        .from("group_members")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id);
+
+      if ((count ?? 0) >= MAX_GROUPS) {
+        showToast("Limite atteinte", `Tu peux appartenir à ${MAX_GROUPS} groupes maximum.`, "info");
+        return;
+      }
+
       const { data: group, error } = await supabase
         .from("groups")
         .insert({ name: name.trim(), created_by: user.id })

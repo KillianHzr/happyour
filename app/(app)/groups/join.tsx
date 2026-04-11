@@ -1,13 +1,5 @@
 import { useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-} from "react-native";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
 import { router } from "expo-router";
 import { supabase } from "../../../lib/supabase";
 import { useAuth } from "../../../lib/auth-context";
@@ -17,6 +9,8 @@ import { scheduleFirstMomentReminder } from "../../../lib/notifications";
 import { colors, theme } from "../../../lib/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Loader from "../../../components/Loader";
+
+const MAX_GROUPS = 3;
 
 export default function JoinGroupScreen() {
   const { user } = useAuth();
@@ -29,6 +23,16 @@ export default function JoinGroupScreen() {
     if (!code.trim() || !user) return;
     setLoading(true);
     try {
+      const { count } = await supabase
+        .from("group_members")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id);
+
+      if ((count ?? 0) >= MAX_GROUPS) {
+        showToast("Limite atteinte", `Tu peux appartenir à ${MAX_GROUPS} groupes maximum.`, "info");
+        return;
+      }
+
       const cleanCode = code.trim().toUpperCase();
       const { data: group, error: groupErr } = await supabase
         .from("groups")
@@ -36,14 +40,8 @@ export default function JoinGroupScreen() {
         .eq("invite_code", cleanCode)
         .maybeSingle();
 
-      if (groupErr) {
-        showToast("Erreur", translateError(groupErr.message));
-        return;
-      }
-      if (!group) {
-        showToast("Erreur", "Code invalide ou groupe introuvable.");
-        return;
-      }
+      if (groupErr) { showToast("Erreur", translateError(groupErr.message)); return; }
+      if (!group) { showToast("Erreur", "Code invalide ou groupe introuvable."); return; }
 
       const { error: joinErr } = await supabase
         .from("group_members")
@@ -69,10 +67,7 @@ export default function JoinGroupScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <View style={[styles.content, { paddingTop: insets.top + 20 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Text style={styles.backText}>← Retour</Text>
@@ -88,11 +83,10 @@ export default function JoinGroupScreen() {
           autoCapitalize="characters"
           value={code}
           onChangeText={setCode}
-          autofocus="off"
         />
 
-        <TouchableOpacity 
-          style={[theme.accentButton, styles.button]} 
+        <TouchableOpacity
+          style={[theme.accentButton, styles.button]}
           onPress={handleJoin}
           disabled={loading || !code.trim()}
         >

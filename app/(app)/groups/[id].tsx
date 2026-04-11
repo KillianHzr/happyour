@@ -1,13 +1,16 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { View, Text, StyleSheet, Dimensions, Animated, TouchableOpacity, Alert } from "react-native";
+import { View, Text, StyleSheet, Dimensions, Animated, TouchableOpacity, Alert, TextInput, Modal, Pressable, KeyboardAvoidingView, Platform } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { BlurView } from "expo-blur";
 import { supabase } from "../../../lib/supabase";
 import { r2Storage } from "../../../lib/r2";
 import { useAuth } from "../../../lib/auth-context";
+import { useToast } from "../../../lib/toast-context";
+import { translateError } from "../../../lib/error-messages";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { computeCrownWinner } from "../../../lib/crown";
 import { useUpload } from "../../../lib/upload-context";
+import Svg, { Path } from "react-native-svg";
 
 import { type PhotoEntry, type Reaction } from "../../../components/PhotoFeed";
 import { type StickerId } from "../../../components/stickers";
@@ -17,11 +20,27 @@ import { ProfileIcon, VaultIcon, MomentIcon } from "../../../components/icons";
 import ProfilePage from "../../../components/groups/ProfilePage";
 import CameraPage from "../../../components/groups/CameraPage";
 import VaultPage from "../../../components/groups/VaultPage";
-import MembersModal from "../../../components/groups/MembersModal";
-import LeaveGroupModal from "../../../components/groups/LeaveGroupModal";
+import GroupSettingsModal from "../../../components/groups/GroupSettingsModal";
+import BottomSheet from "../../../components/BottomSheet";
+import PhotoFeed from "../../../components/PhotoFeed";
+import LiveReactions from "../../../components/reveal/LiveReactions";
+import { scheduleImmediateLocalNotification, scheduleFirstMomentReminder } from "../../../lib/notifications";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const NAVBAR_HEIGHT = 100;
+
+type GroupInfo = { id: string; name: string; invite_code: string };
+
+type GroupData = {
+  name: string;
+  inviteCode: string;
+  members: any[];
+  photoCount: number;
+  photos: PhotoEntry[];
+  crownWinnerId: string | null;
+  crownDurationMs: number;
+  isAdmin: boolean;
+};
 
 function getWeekBounds(revealDayOfWeek = 0, revealHour = 20) {
   const now = new Date();
@@ -42,6 +61,7 @@ function getWeekBounds(revealDayOfWeek = 0, revealHour = 20) {
 export default function MainPagerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const insets = useSafeAreaInsets();
   const { activeUploads } = useUpload();
 
@@ -49,25 +69,48 @@ export default function MainPagerScreen() {
   const scrollRef = useRef<Animated.ScrollView>(null);
   const pagerTouchRef = useRef<{ x: number; y: number; decided: boolean } | null>(null);
 
-  const [groupName, setGroupName] = useState("");
-  const [members, setMembers] = useState<any[]>([]);
-  const [photoCount, setPhotoCount] = useState(0);
-  const [photos, setPhotos] = useState<PhotoEntry[]>([]);
-  const [crownWinnerId, setCrownWinnerId] = useState<string | null>(null);
-  const [crownDurationMs, setCrownDurationMs] = useState<number>(0);
+  // Multi-group
+  const [allGroups, setAllGroups] = useState<GroupInfo[]>([]);
+  const [activeGroupId, setActiveGroupId] = useState<string>(id ?? "");
+
+  // Group data (all groups preloaded)
+  const [groupData, setGroupData] = useState<Record<string, GroupData>>({});
+  const [dataLoaded, setDataLoaded] = useState(false);
+  const [revealConfig, setRevealConfig] = useState({ day: 0, hour: 20 });
+
+  // User profile
   const [username, setUsername] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [email, setEmail] = useState("");
-  const [dataLoaded, setDataLoaded] = useState(false);
+
+  // Pager
   const [currentPage, setCurrentPage] = useState(1);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [showMembersModal, setShowMembersModal] = useState(false);
-  const [showLeaveModal, setShowLeaveModal] = useState(false);
-  const [leaveNextAdmin, setLeaveNextAdmin] = useState<string | null>(null);
-  const [isLeaving, setIsLeaving] = useState(false);
   const [cameraScrollLocked, setCameraScrollLocked] = useState(false);
+
+  // Modals
+  const [showReveal, setShowReveal] = useState(false);
+  const [showGroupSettings, setShowGroupSettings] = useState(false);
+  const [showAddGroupModal, setShowAddGroupModal] = useState(false);
+  const [addGroupView, setAddGroupView] = useState<null | "create" | "join">(null);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [joinCode, setJoinCode] = useState("");
+  const [addGroupLoading, setAddGroupLoading] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
+
+  // DEV
   const [debugUnlocked, setDebugUnlocked] = useState(false);
-  const [revealConfig, setRevealConfig] = useState({ day: 0, hour: 20 });
+
+  // Derived from active group data
+  const activeData = groupData[activeGroupId] ?? null;
+  const groupName = activeData?.name ?? "";
+  const groupInviteCode = activeData?.inviteCode ?? "";
+  const members = activeData?.members ?? [];
+  const photoCount = activeData?.photoCount ?? 0;
+  const photos = activeData?.photos ?? [];
+  const crownWinnerId = activeData?.crownWinnerId ?? null;
+  const crownDurationMs = activeData?.crownDurationMs ?? 0;
+  const isAdmin = activeData?.isAdmin ?? false;
 
   const { revealDate } = getWeekBounds(revealConfig.day, revealConfig.hour);
   const revealEndDate = new Date(revealDate.getTime() + 12 * 60 * 60 * 1000);
@@ -76,12 +119,11 @@ export default function MainPagerScreen() {
   const now = new Date();
   const isAfterRevealWindow = now >= revealEndDate;
   const unlocked = __DEV__ ? debugUnlocked : (now >= revealDate && now < revealEndDate);
-
-  // When after the 12h window, the locked state counts toward the NEXT reveal
   const lockedRevealDate = isAfterRevealWindow ? nextRevealDate : revealDate;
 
-  const fetchData = useCallback(async () => {
-    if (!user || !id) return;
+  // ── Fetch all groups data at once ──
+  const fetchAllData = useCallback(async () => {
+    if (!user) return;
     try {
       const { data: cfgRows } = await supabase
         .from("app_config")
@@ -90,185 +132,381 @@ export default function MainPagerScreen() {
       const cfgMap = Object.fromEntries((cfgRows ?? []).map((r: any) => [r.key, Number(r.value)]));
       const cfg = { reveal_day: cfgMap["reveal_day"] ?? 0, reveal_hour: cfgMap["reveal_hour"] ?? 20 };
       setRevealConfig({ day: cfg.reveal_day, hour: cfg.reveal_hour });
+
       const { revealDate: currentRevealDate, prevRevealDate } = getWeekBounds(cfg.reveal_day, cfg.reveal_hour);
       const currentRevealEndDate = new Date(currentRevealDate.getTime() + 12 * 60 * 60 * 1000);
       const currentNextRevealDate = new Date(currentRevealDate.getTime() + 7 * 24 * 60 * 60 * 1000);
       const afterRevealWindow = new Date() >= currentRevealEndDate;
-
-      // Photos window:
-      // - Before/during reveal: prevRevealDate → currentRevealDate  (reveal content + crown)
-      // - After reveal window:  currentRevealDate → nextRevealDate  (new collection count only)
       const photoStart = afterRevealWindow ? currentRevealDate : prevRevealDate;
       const photoEnd = afterRevealWindow ? currentNextRevealDate : currentRevealDate;
 
-      const [groupRes, profileRes, photosRes, membersRes] = await Promise.all([
-        supabase.from("groups").select("name").eq("id", id).single(),
+      const [groupsRes, profileRes] = await Promise.all([
+        supabase.from("group_members").select("groups(id, name, invite_code)").eq("user_id", user.id),
         supabase.from("profiles").select("username, avatar_url, email").eq("id", user.id).single(),
-        supabase.from("photos")
-          .select("id, image_path, created_at, note, user_id, profiles:user_id(username, avatar_url)")
-          .eq("group_id", id)
-          .gte("created_at", photoStart.toISOString())
-          .lt("created_at", photoEnd.toISOString())
-          .order("created_at", { ascending: true }),
-        supabase.from("group_members").select("user_id, role, profiles:user_id(username, avatar_url)").eq("group_id", id),
       ]);
 
-      if (groupRes.data) setGroupName(groupRes.data.name);
+      const groups: GroupInfo[] = (groupsRes.data ?? []).map((g: any) => g.groups).filter(Boolean);
+      setAllGroups(groups);
+
       if (profileRes.data) {
         setUsername(profileRes.data.username);
         setAvatarUrl(profileRes.data.avatar_url);
         setEmail(profileRes.data.email || user.email || "");
       }
-      if (membersRes.data) {
-        const me = membersRes.data.find((m: any) => m.user_id === user?.id);
-        if (!me) { router.replace("/(app)/groups"); return; }
-        setMembers(membersRes.data.map((m: any) => ({ ...m.profiles, user_id: m.user_id })));
-        setIsAdmin(me?.role === "admin");
-      }
-      if (photosRes.data) {
-        setPhotoCount(photosRes.data.length);
 
-        if (afterRevealWindow) {
-          // Reveal window is over — only the count matters for the new collection period
-          setPhotos([]);
-          setCrownWinnerId(null);
-          setCrownDurationMs(0);
-        } else {
-          // Before or during reveal — full processing for PhotoFeed + crown
-          const photoIds = photosRes.data.map((p: any) => p.id);
-          const reactionsRes = photoIds.length > 0
-            ? await supabase
-                .from("reactions")
-                .select("id, photo_id, user_id, emoji, profiles:user_id(username, avatar_url)")
-                .in("photo_id", photoIds)
-                // No type filter to ensure we see EVERYTHING that could cause a unique constraint conflict
-            : { data: [] };
+      const dataEntries = await Promise.all(
+        groups.map(async (g) => {
+          const [membersRes, photosRes] = await Promise.all([
+            supabase.from("group_members").select("user_id, role, profiles:user_id(username, avatar_url)").eq("group_id", g.id),
+            supabase.from("photos")
+              .select("id, image_path, created_at, note, user_id, profiles:user_id(username, avatar_url)")
+              .eq("group_id", g.id)
+              .gte("created_at", photoStart.toISOString())
+              .lt("created_at", photoEnd.toISOString())
+              .order("created_at", { ascending: true }),
+          ]);
 
-          const reactionsByPhoto: Record<string, Reaction[]> = {};
-          for (const r of reactionsRes.data ?? []) {
-            const stickerId = (r.emoji || "") as StickerId;
-            if (!reactionsByPhoto[r.photo_id]) reactionsByPhoto[r.photo_id] = [];
-            reactionsByPhoto[r.photo_id].push({
-              id: r.id,
-              user_id: r.user_id,
-              username: r.profiles?.username ?? "?",
-              avatar_url: r.profiles?.avatar_url ?? null,
-              sticker_id: stickerId,
-            });
+          const membersData = (membersRes.data ?? []).map((m: any) => ({
+            ...m.profiles, user_id: m.user_id, role: m.role,
+          }));
+          const me = (membersRes.data ?? []).find((m: any) => m.user_id === user.id);
+          const isAdminForGroup = me?.role === "admin" ?? false;
+          const photoCount = photosRes.data?.length ?? 0;
+
+          let groupPhotos: PhotoEntry[] = [];
+          let crownWinnerId: string | null = null;
+          let crownDurationMs = 0;
+
+          if (!afterRevealWindow && photosRes.data && photosRes.data.length > 0) {
+            const photoIds = photosRes.data.map((p: any) => p.id);
+            const reactionsRes = await supabase
+              .from("reactions")
+              .select("id, photo_id, user_id, emoji, profiles:user_id(username, avatar_url)")
+              .in("photo_id", photoIds);
+
+            const reactionsByPhoto: Record<string, Reaction[]> = {};
+            for (const r of reactionsRes.data ?? []) {
+              const stickerId = (r.emoji || "") as StickerId;
+              if (!reactionsByPhoto[r.photo_id]) reactionsByPhoto[r.photo_id] = [];
+              reactionsByPhoto[r.photo_id].push({
+                id: r.id, user_id: r.user_id,
+                username: r.profiles?.username ?? "?",
+                avatar_url: r.profiles?.avatar_url ?? null,
+                sticker_id: stickerId,
+              });
+            }
+
+            groupPhotos = photosRes.data.map((p: any) => ({
+              id: p.id,
+              url: p.image_path === "text_mode" ? "" : r2Storage.getPublicUrl(p.image_path),
+              fallback_url: p.image_path === "text_mode" ? undefined : supabase.storage.from("moments").getPublicUrl(p.image_path).data.publicUrl,
+              created_at: p.created_at,
+              note: p.note ?? null,
+              username: p.profiles?.username ?? "Anonyme",
+              avatar_url: p.profiles?.avatar_url,
+              image_path: p.image_path,
+              user_id: p.user_id,
+              reactions: reactionsByPhoto[p.id] ?? [],
+            }));
+            const crown = computeCrownWinner(groupPhotos, prevRevealDate, currentRevealDate);
+            crownWinnerId = crown?.winnerId ?? null;
+            crownDurationMs = crown?.durationMs ?? 0;
           }
 
-          const entries: PhotoEntry[] = photosRes.data.map((p: any) => ({
-            id: p.id,
-            url: p.image_path === "text_mode" ? "" : r2Storage.getPublicUrl(p.image_path),
-            fallback_url: p.image_path === "text_mode" ? undefined : supabase.storage.from("moments").getPublicUrl(p.image_path).data.publicUrl,
-            created_at: p.created_at,
-            note: p.note ?? null,
-            username: p.profiles?.username ?? "Anonyme",
-            avatar_url: p.profiles?.avatar_url,
-            image_path: p.image_path,
-            user_id: p.user_id,
-            reactions: reactionsByPhoto[p.id] ?? [],
-          }));
-          setPhotos(entries);
-          const crown = computeCrownWinner(entries, prevRevealDate, currentRevealDate);
-          setCrownWinnerId(crown?.winnerId ?? null);
-          setCrownDurationMs(crown?.durationMs ?? 0);
-        }
-      }
-      setDataLoaded(true);
-    } catch {
-      setDataLoaded(true);
-    }
-  }, [id, user]);
+          return [g.id, {
+            name: g.name,
+            inviteCode: g.invite_code,
+            members: membersData,
+            photoCount,
+            photos: groupPhotos,
+            crownWinnerId,
+            crownDurationMs,
+            isAdmin: isAdminForGroup,
+          }] as [string, GroupData];
+        })
+      );
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+      setGroupData(Object.fromEntries(dataEntries));
+    } catch {}
+    setDataLoaded(true);
+  }, [user]);
+
+  const fetchAllDataRef = useRef(fetchAllData);
+  fetchAllDataRef.current = fetchAllData;
+
+  useEffect(() => { fetchAllData(); }, [fetchAllData]);
 
   useEffect(() => {
     const hasJustFinished = activeUploads.some((u) => u.status === "success");
-    if (hasJustFinished) fetchData();
-  }, [activeUploads, fetchData]);
+    if (hasJustFinished) fetchAllData();
+  }, [activeUploads, fetchAllData]);
 
+  // Keep a ref so the real-time callback always reads the latest reveal config
+  const revealConfigRef = useRef(revealConfig);
+  revealConfigRef.current = revealConfig;
+
+  // ── Real-time: subscribe to all groups, patch only the new photo ──
+  const groupIdsKey = allGroups.map((g) => g.id).sort().join(",");
   useEffect(() => {
-    if (!id) return;
-    const channel = supabase
-      .channel(`group-${id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "photos", filter: `group_id=eq.${id}` }, () => fetchData())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [id, fetchData]);
+    if (!groupIdsKey || !user) return;
 
+    const channels = allGroups.map((g) =>
+      supabase
+        .channel(`photos-${g.id}`)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "photos", filter: `group_id=eq.${g.id}` },
+          async (payload: any) => {
+            // Own uploads are already handled by onUploadSuccess — skip
+            if (payload.new?.user_id === user.id) return;
+
+            // Reveal-window guard: during reveal window photos array is hidden
+            const cfg = revealConfigRef.current;
+            const { revealDate: rv, prevRevealDate: prv } = getWeekBounds(cfg.day, cfg.hour);
+            const afterRevealWindow = new Date() >= new Date(rv.getTime() + 12 * 60 * 60 * 1000);
+
+            // Always increment count; only add to photos list outside reveal window
+            const { data: photoRow } = await supabase
+              .from("photos")
+              .select("id, image_path, created_at, note, user_id, profiles:user_id(username, avatar_url)")
+              .eq("id", payload.new.id)
+              .single();
+
+            if (!photoRow) return;
+
+            const newEntry: PhotoEntry = {
+              id: photoRow.id,
+              url: photoRow.image_path === "text_mode" ? "" : r2Storage.getPublicUrl(photoRow.image_path),
+              fallback_url: photoRow.image_path === "text_mode"
+                ? undefined
+                : supabase.storage.from("moments").getPublicUrl(photoRow.image_path).data.publicUrl,
+              created_at: photoRow.created_at,
+              note: photoRow.note ?? null,
+              username: (photoRow.profiles as any)?.username ?? "Anonyme",
+              avatar_url: (photoRow.profiles as any)?.avatar_url ?? null,
+              image_path: photoRow.image_path,
+              user_id: photoRow.user_id,
+              reactions: [],
+            };
+
+            setGroupData((prev) => {
+              const gData = prev[g.id];
+              if (!gData) return prev;
+              // Deduplicate
+              if (gData.photos.some((p) => p.id === newEntry.id)) return prev;
+
+              const updatedPhotos = afterRevealWindow ? gData.photos : [...gData.photos, newEntry];
+              let crownWinnerId = gData.crownWinnerId;
+              let crownDurationMs = gData.crownDurationMs;
+              if (!afterRevealWindow) {
+                const crown = computeCrownWinner(updatedPhotos, prv, rv);
+                crownWinnerId = crown?.winnerId ?? null;
+                crownDurationMs = crown?.durationMs ?? 0;
+              }
+              return {
+                ...prev,
+                [g.id]: {
+                  ...gData,
+                  photoCount: gData.photoCount + 1,
+                  photos: updatedPhotos,
+                  crownWinnerId,
+                  crownDurationMs,
+                },
+              };
+            });
+          }
+        )
+        .subscribe()
+    );
+
+    return () => { channels.forEach((c) => supabase.removeChannel(c)); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupIdsKey, user?.id]);
+
+  // ── Group switching ──
+  const handleSwitchGroup = useCallback((groupId: string) => {
+    if (groupId === activeGroupId) return;
+    setActiveGroupId(groupId);
+  }, [activeGroupId]);
+
+  // ── Reactions ──
   const handleReact = async (photoId: string, stickerId: StickerId) => {
     if (!user) return;
     const photo = photos.find((p) => p.id === photoId);
     const existing = photo?.reactions.find((r) => r.user_id === user.id);
 
+    const updatePhotos = (updater: (p: PhotoEntry[]) => PhotoEntry[]) =>
+      setGroupData((prev) => ({
+        ...prev,
+        [activeGroupId]: { ...prev[activeGroupId], photos: updater(prev[activeGroupId]?.photos ?? []) },
+      }));
+
     try {
       if (existing && existing.sticker_id === stickerId) {
         await supabase.from("reactions").delete().eq("id", existing.id);
-        setPhotos((prev) => prev.map((p) => p.id === photoId ? { ...p, reactions: p.reactions.filter((r) => r.id !== existing.id) } : p));
+        updatePhotos((p) => p.map((e) => e.id === photoId ? { ...e, reactions: e.reactions.filter((r) => r.id !== existing.id) } : e));
       } else {
         const { data, error } = await supabase
           .from("reactions")
-          .upsert(
-            { photo_id: photoId, user_id: user.id, type: "emoji", emoji: stickerId },
-            { onConflict: "photo_id,user_id" }
-          )
+          .upsert({ photo_id: photoId, user_id: user.id, type: "emoji", emoji: stickerId }, { onConflict: "photo_id,user_id" })
           .select("id")
           .single();
-
         if (error) throw error;
         if (data) {
           const newReaction: Reaction = { id: data.id, user_id: user.id, username, avatar_url: avatarUrl, sticker_id: stickerId };
-          setPhotos((prev) => prev.map((p) => {
-            if (p.id !== photoId) return p;
-            const filtered = p.reactions.filter((r) => r.user_id !== user.id);
-            return { ...p, reactions: [...filtered, newReaction] };
+          updatePhotos((p) => p.map((e) => {
+            if (e.id !== photoId) return e;
+            return { ...e, reactions: [...e.reactions.filter((r) => r.user_id !== user.id), newReaction] };
           }));
         }
       }
     } catch (e) {
-      console.error("[handleReact] Error:", e);
       Alert.alert("Erreur", "Impossible d'enregistrer la réaction.");
     }
   };
 
-  const jumpTo = (page: number) => {
-    scrollRef.current?.scrollTo({ x: page * SCREEN_WIDTH, animated: false });
-    scrollX.setValue(page * SCREEN_WIDTH);
-    setCurrentPage(page);
-  };
-
-  const openLeaveModal = () => {
-    const others = members.filter((m: any) => m.user_id !== user?.id);
-    setLeaveNextAdmin(isAdmin && others.length > 0 ? others[0].username : null);
-    setShowLeaveModal(true);
+  // ── Group management ──
+  const handleRenameGroup = async (newName: string) => {
+    if (!activeGroupId || !newName.trim()) return;
+    await supabase.from("groups").update({ name: newName.trim() }).eq("id", activeGroupId);
+    setGroupData((prev) => ({ ...prev, [activeGroupId]: { ...prev[activeGroupId], name: newName.trim() } }));
+    setAllGroups((prev) => prev.map((g) => g.id === activeGroupId ? { ...g, name: newName.trim() } : g));
   };
 
   const handleLeaveGroup = async () => {
-    if (!user || !id) return;
+    if (!user || !activeGroupId) return;
     setIsLeaving(true);
     try {
       const others = members.filter((m: any) => m.user_id !== user.id);
       if (isAdmin && others.length > 0) {
-        await supabase.from("group_members").update({ role: "admin" }).eq("group_id", id).eq("user_id", others[0].user_id);
+        await supabase.from("group_members").update({ role: "admin" }).eq("group_id", activeGroupId).eq("user_id", others[0].user_id);
       }
-      await supabase.from("group_members").delete().eq("group_id", id).eq("user_id", user.id);
-      router.replace("/(app)/groups");
+      await supabase.from("group_members").delete().eq("group_id", activeGroupId).eq("user_id", user.id);
+      const remaining = allGroups.filter((g) => g.id !== activeGroupId);
+      if (remaining.length > 0) {
+        setAllGroups(remaining);
+        setGroupData((prev) => { const next = { ...prev }; delete next[activeGroupId]; return next; });
+        setShowLeaveConfirm(false);
+        setShowGroupSettings(false);
+        setActiveGroupId(remaining[0].id);
+      } else {
+        router.replace("/(app)/groups");
+      }
     } catch (e: any) {
       Alert.alert("Erreur", e.message);
     } finally {
       setIsLeaving(false);
-      setShowLeaveModal(false);
     }
   };
 
-  const handleRemoveMember = async (memberId: string) => {
+  const handleDeleteGroup = async () => {
+    if (!activeGroupId) return;
     try {
-      await supabase.from("group_members").delete().eq("group_id", id).eq("user_id", memberId);
-      setMembers((prev) => prev.filter((m: any) => m.user_id !== memberId));
+      await supabase.from("groups").delete().eq("id", activeGroupId);
+      const remaining = allGroups.filter((g) => g.id !== activeGroupId);
+      if (remaining.length > 0) {
+        setAllGroups(remaining);
+        setGroupData((prev) => { const next = { ...prev }; delete next[activeGroupId]; return next; });
+        setActiveGroupId(remaining[0].id);
+      } else {
+        router.replace("/(app)/groups");
+      }
     } catch (e: any) {
       Alert.alert("Erreur", e.message);
     }
+  };
+
+  const handleTransferAdmin = async (newAdminId: string) => {
+    if (!user || !activeGroupId) return;
+    await supabase.from("group_members").update({ role: "admin" }).eq("group_id", activeGroupId).eq("user_id", newAdminId);
+    await supabase.from("group_members").update({ role: "member" }).eq("group_id", activeGroupId).eq("user_id", user.id);
+    setGroupData((prev) => ({ ...prev, [activeGroupId]: { ...prev[activeGroupId], isAdmin: false } }));
+  };
+
+  const closeAddGroupModal = () => {
+    setShowAddGroupModal(false);
+    setAddGroupView(null);
+    setNewGroupName("");
+    setJoinCode("");
+  };
+
+  const handleCreateGroup = async () => {
+    if (!newGroupName.trim() || !user) return;
+    setAddGroupLoading(true);
+    try {
+      const { count } = await supabase
+        .from("group_members")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id);
+      if ((count ?? 0) >= 3) {
+        showToast("Limite atteinte", "Tu peux appartenir à 3 groupes maximum.", "info");
+        return;
+      }
+      const { data: group, error } = await supabase
+        .from("groups")
+        .insert({ name: newGroupName.trim(), created_by: user.id })
+        .select()
+        .single();
+      if (error) throw error;
+      await supabase.from("group_members").insert({ group_id: group.id, user_id: user.id, role: "admin" });
+      closeAddGroupModal();
+      await fetchAllData();
+      setActiveGroupId(group.id);
+    } catch (e: any) {
+      showToast("Erreur", translateError(e.message));
+    } finally {
+      setAddGroupLoading(false);
+    }
+  };
+
+  const handleJoinGroup = async () => {
+    if (!joinCode.trim() || !user) return;
+    setAddGroupLoading(true);
+    try {
+      const { count } = await supabase
+        .from("group_members")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id);
+      if ((count ?? 0) >= 3) {
+        showToast("Limite atteinte", "Tu peux appartenir à 3 groupes maximum.", "info");
+        return;
+      }
+      const cleanCode = joinCode.trim().toUpperCase();
+      const { data: group, error: groupErr } = await supabase
+        .from("groups")
+        .select("id, name")
+        .eq("invite_code", cleanCode)
+        .maybeSingle();
+      if (groupErr) throw groupErr;
+      if (!group) { showToast("Erreur", "Code invalide ou groupe introuvable."); return; }
+      const { error: joinErr } = await supabase
+        .from("group_members")
+        .insert({ group_id: group.id, user_id: user.id });
+      if (joinErr) {
+        if (joinErr.message.includes("unique")) {
+          showToast("Info", "Tu fais déjà partie de ce groupe.", "info");
+        } else {
+          throw joinErr;
+        }
+      } else {
+        showToast("Succès", `Tu as rejoint "${group.name}" !`, "success");
+        scheduleFirstMomentReminder(group.id, group.name);
+      }
+      closeAddGroupModal();
+      await fetchAllData();
+      setActiveGroupId(group.id);
+    } catch (e: any) {
+      showToast("Erreur", translateError(e.message));
+    } finally {
+      setAddGroupLoading(false);
+    }
+  };
+
+  // ── Pager ──
+  const jumpTo = (page: number) => {
+    scrollRef.current?.scrollTo({ x: page * SCREEN_WIDTH, animated: false });
+    scrollX.setValue(page * SCREEN_WIDTH);
+    setCurrentPage(page);
   };
 
   const cameraTranslateX = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH] });
@@ -278,7 +516,7 @@ export default function MainPagerScreen() {
   const scrollEnabled = !cameraScrollLocked;
 
   const lockScrollDirect = useCallback((locked: boolean) => {
-    if (!locked && cameraScrollLocked) return; // camera has priority
+    if (!locked && cameraScrollLocked) return;
     scrollRef.current?.setNativeProps({ scrollEnabled: !locked });
   }, [cameraScrollLocked]);
 
@@ -340,10 +578,10 @@ export default function MainPagerScreen() {
         {/* PAGE 1: CAMERA */}
         <Animated.View style={[styles.page, { transform: [{ translateX: cameraTranslateX }, { scale: cameraScale }], opacity: cameraOpacity }]}>
           <CameraPage
-            groupId={id ?? ""}
+            groupId={activeGroupId}
             userId={user?.id ?? ""}
             isActive={currentPage === 1}
-            onUploadSuccess={fetchData}
+            allGroups={allGroups}
             onScrollLock={setCameraScrollLocked}
           />
         </Animated.View>
@@ -351,30 +589,44 @@ export default function MainPagerScreen() {
         {/* PAGE 2: VAULT */}
         <View style={[styles.page, { zIndex: 2 }]}>
           <VaultPage
-            unlocked={unlocked}
-            photos={photos}
-            crownWinnerId={crownWinnerId}
-            crownDurationMs={crownDurationMs}
+            allGroups={allGroups}
+            activeGroupId={activeGroupId}
+            onSwitchGroup={handleSwitchGroup}
+            onAddGroup={() => setShowAddGroupModal(true)}
             groupName={groupName}
-            onReact={handleReact}
-            currentUserId={user?.id}
-            currentUsername={username}
-            currentAvatarUrl={avatarUrl}
-            isVisible={currentPage === 2}
-            nextRevealDate={nextRevealDate}
-            photoCount={photoCount}
-            revealDate={lockedRevealDate}
+            inviteCode={groupInviteCode}
             isAdmin={isAdmin}
-            onOpenMembers={() => setShowMembersModal(true)}
-            onSimulateReveal={() => setDebugUnlocked(true)}
-            groupId={id ?? ""}
-            onScrollLock={lockScrollDirect}
+            currentUserId={user?.id}
+            members={members}
+            photoCount={photoCount}
+            photos={photos}
+            revealDate={lockedRevealDate}
+            unlocked={unlocked}
+            onOpenReveal={() => setShowReveal(true)}
+            onOpenSettings={() => setShowGroupSettings(true)}
+            onLeaveGroup={() => setShowLeaveConfirm(true)}
+            onRemoveMember={async (memberId) => {
+              const { error } = await supabase.from("group_members").delete().eq("group_id", activeGroupId).eq("user_id", memberId);
+              if (error) throw new Error(error.message);
+              setGroupData((prev) => ({
+                ...prev,
+                [activeGroupId]: {
+                  ...prev[activeGroupId],
+                  members: (prev[activeGroupId]?.members ?? []).filter((m: any) => m.user_id !== memberId),
+                },
+              }));
+            }}
+            groupId={activeGroupId}
+            onSimulateReveal={__DEV__ ? () => setDebugUnlocked(true) : undefined}
+            onDebugNotifReveal={__DEV__ ? () => scheduleImmediateLocalNotification("Le coffre est ouvert !", `Les moments de "${groupName}" sont disponibles`, { type: "recap", groupId: activeGroupId }) : undefined}
+            onDebugNotifPhoto={__DEV__ ? () => scheduleImmediateLocalNotification(groupName || "Groupe", "Un ami a partagé un moment !", { type: "new_photo", groupId: activeGroupId }) : undefined}
+            onDebugNotifInvite={__DEV__ ? () => scheduleImmediateLocalNotification("Nouvelle invitation !", `Tu as été invité à rejoindre "${groupName}"`, { type: "invite", groupName: groupName || "Groupe" }) : undefined}
           />
         </View>
       </Animated.ScrollView>
 
-      {/* NAV BAR — masquée pendant une capture / dessin actif */}
-      {!cameraScrollLocked && (
+      {/* NAV BAR — masquée pendant une capture ou le reveal */}
+      {!cameraScrollLocked && !showReveal && (
         <View style={[styles.tabBarContainer, { paddingBottom: insets.bottom }]}>
           <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
           <View style={styles.tabBarContent}>
@@ -394,25 +646,160 @@ export default function MainPagerScreen() {
         </View>
       )}
 
-      <MembersModal
-        visible={showMembersModal}
-        onClose={() => setShowMembersModal(false)}
-        members={members}
+      {/* ── REVEAL OVERLAY ── */}
+      {showReveal && (
+        <View style={[StyleSheet.absoluteFill, styles.revealOverlay]}>
+          <TouchableOpacity
+            style={[styles.revealBackBtn, { top: insets.top + 12 }]}
+            onPress={() => setShowReveal(false)}
+          >
+            <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <Path d="M19 12H5M12 5l-7 7 7 7" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+          </TouchableOpacity>
+          <PhotoFeed
+            photos={photos}
+            onReact={handleReact}
+            currentUserId={user?.id}
+            nextUnlockDate={nextRevealDate}
+            crownWinnerId={crownWinnerId}
+            crownDurationMs={crownDurationMs}
+            groupName={groupName}
+            onScrollLock={lockScrollDirect}
+          />
+          {user?.id && username && (
+            <LiveReactions
+              groupId={activeGroupId}
+              currentUserId={user.id}
+              currentUsername={username}
+              currentAvatarUrl={avatarUrl ?? null}
+              isVisible={true}
+            />
+          )}
+        </View>
+      )}
+
+      {/* ── GROUP SETTINGS MODAL ── */}
+      <GroupSettingsModal
+        visible={showGroupSettings}
+        onClose={() => setShowGroupSettings(false)}
+        groupName={groupName}
         isAdmin={isAdmin}
+        members={members}
         userId={user?.id ?? ""}
-        groupId={id ?? ""}
-        onRemoveMember={handleRemoveMember}
-        onLeave={() => { setShowMembersModal(false); openLeaveModal(); }}
+        onRename={handleRenameGroup}
+        onLeave={handleLeaveGroup}
+        onDelete={handleDeleteGroup}
+        onTransferAdmin={handleTransferAdmin}
       />
 
-      <LeaveGroupModal
-        visible={showLeaveModal}
-        onClose={() => setShowLeaveModal(false)}
-        onConfirm={handleLeaveGroup}
-        isAdmin={isAdmin}
-        leaveNextAdmin={leaveNextAdmin}
-        isLeaving={isLeaving}
-      />
+      {/* ── LEAVE CONFIRM (non-admin) ── */}
+      <BottomSheet visible={showLeaveConfirm} onClose={() => setShowLeaveConfirm(false)}>
+        <Text style={styles.leaveTitle}>Quitter le groupe</Text>
+        <Text style={styles.leaveBody}>Tu ne pourras plus accéder aux moments de ce groupe.</Text>
+        <TouchableOpacity style={styles.leaveConfirmBtn} onPress={handleLeaveGroup} disabled={isLeaving}>
+          <Text style={styles.leaveConfirmText}>{isLeaving ? "..." : "Quitter"}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setShowLeaveConfirm(false)} style={styles.leaveCancelWrap}>
+          <Text style={styles.leaveCancelText}>Annuler</Text>
+        </TouchableOpacity>
+      </BottomSheet>
+
+      {/* ── ADD GROUP (choix) ── */}
+      <BottomSheet visible={showAddGroupModal} onClose={closeAddGroupModal}>
+        <Text style={styles.addGroupTitle}>Ajouter un groupe</Text>
+        <Text style={styles.addGroupSub}>Tu peux rejoindre ou créer jusqu'à 3 groupes.</Text>
+        <TouchableOpacity
+          style={styles.addGroupPrimary}
+          onPress={() => { setShowAddGroupModal(false); setAddGroupView("create"); }}
+        >
+          <Text style={styles.addGroupPrimaryText}>Créer un groupe</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.addGroupSecondary}
+          onPress={() => { setShowAddGroupModal(false); setAddGroupView("join"); }}
+        >
+          <Text style={styles.addGroupSecondaryText}>Rejoindre avec un code</Text>
+        </TouchableOpacity>
+      </BottomSheet>
+
+      {/* ── CREATE GROUP DIALOG ── */}
+      <Modal
+        visible={addGroupView === "create"}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { setAddGroupView(null); setNewGroupName(""); }}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.dialogOverlay}
+        >
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => { setAddGroupView(null); setNewGroupName(""); }} />
+          <View style={styles.dialog}>
+            <Text style={styles.dialogTitle}>Nouveau groupe</Text>
+            <TextInput
+              style={styles.dialogInput}
+              placeholder="Nom du groupe"
+              placeholderTextColor="rgba(255,255,255,0.3)"
+              value={newGroupName}
+              onChangeText={setNewGroupName}
+              maxLength={25}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={handleCreateGroup}
+            />
+            <TouchableOpacity
+              style={[styles.dialogBtn, (!newGroupName.trim() || addGroupLoading) && { opacity: 0.45 }]}
+              onPress={handleCreateGroup}
+              disabled={!newGroupName.trim() || addGroupLoading}
+            >
+              <Text style={styles.dialogBtnText}>{addGroupLoading ? "Création..." : "Créer"}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => { setAddGroupView(null); setNewGroupName(""); }} style={styles.dialogCancel}>
+              <Text style={styles.dialogCancelText}>Annuler</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ── JOIN GROUP DIALOG ── */}
+      <Modal
+        visible={addGroupView === "join"}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { setAddGroupView(null); setJoinCode(""); }}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.dialogOverlay}
+        >
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => { setAddGroupView(null); setJoinCode(""); }} />
+          <View style={styles.dialog}>
+            <Text style={styles.dialogTitle}>Rejoindre un cercle</Text>
+            <TextInput
+              style={[styles.dialogInput, styles.dialogCodeInput]}
+              placeholder="CODE-1234"
+              placeholderTextColor="rgba(255,255,255,0.3)"
+              autoCapitalize="characters"
+              value={joinCode}
+              onChangeText={setJoinCode}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={handleJoinGroup}
+            />
+            <TouchableOpacity
+              style={[styles.dialogBtn, (!joinCode.trim() || addGroupLoading) && { opacity: 0.45 }]}
+              onPress={handleJoinGroup}
+              disabled={!joinCode.trim() || addGroupLoading}
+            >
+              <Text style={styles.dialogBtnText}>{addGroupLoading ? "..." : "Rejoindre"}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => { setAddGroupView(null); setJoinCode(""); }} style={styles.dialogCancel}>
+              <Text style={styles.dialogCancelText}>Annuler</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -422,9 +809,55 @@ const styles = StyleSheet.create({
   loaderWrap: { flex: 1, backgroundColor: "#000", justifyContent: "center", alignItems: "center" },
   pager: { flex: 1 },
   page: { width: SCREEN_WIDTH, height: "100%", backgroundColor: "#000" },
+
+  // Navbar
   tabBarContainer: { position: "absolute", bottom: 0, left: 0, right: 0, height: NAVBAR_HEIGHT, overflow: "hidden", zIndex: 100, backgroundColor: "rgba(10,10,10,0.92)" },
   tabBarContent: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-evenly", paddingTop: 12 },
   tab: { alignItems: "center", justifyContent: "center", gap: 4, flex: 1 },
   tabLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold", color: "rgba(255,255,255,0.4)" },
   tabLabelActive: { color: "#FFF" },
+
+  // Reveal overlay
+  revealOverlay: { zIndex: 200, backgroundColor: "#000" },
+  revealBackBtn: {
+    position: "absolute", left: 16, zIndex: 201,
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center", alignItems: "center",
+  },
+
+  // Leave confirm
+  leaveTitle: { fontSize: 20, fontFamily: "Inter_700Bold", color: "#FFF", marginBottom: 12 },
+  leaveBody: { fontSize: 15, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.55)", marginBottom: 28, lineHeight: 22 },
+  leaveConfirmBtn: { backgroundColor: "#FF3B30", borderRadius: 16, paddingVertical: 15, alignItems: "center", marginBottom: 10 },
+  leaveConfirmText: { color: "#FFF", fontSize: 16, fontFamily: "Inter_700Bold" },
+  leaveCancelWrap: { alignItems: "center", paddingVertical: 8 },
+  leaveCancelText: { color: "rgba(255,255,255,0.35)", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+
+  // Add group
+  addGroupTitle: { fontSize: 20, fontFamily: "Inter_700Bold", color: "#FFF", marginBottom: 8 },
+  addGroupSub: { fontSize: 14, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.45)", marginBottom: 24 },
+  addGroupPrimary: { backgroundColor: "#FFF", borderRadius: 16, paddingVertical: 16, alignItems: "center", marginBottom: 12 },
+  addGroupPrimaryText: { color: "#000", fontSize: 16, fontFamily: "Inter_700Bold" },
+  addGroupSecondary: { backgroundColor: "rgba(255,255,255,0.08)", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)", borderRadius: 16, paddingVertical: 16, alignItems: "center", marginBottom: 12 },
+  addGroupSecondaryText: { color: "#FFF", fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  // Centered input dialogs
+  dialogOverlay: {
+    flex: 1, backgroundColor: "rgba(0,0,0,0.78)",
+    justifyContent: "center", alignItems: "center", padding: 28,
+  },
+  dialog: { backgroundColor: "#1C1C1E", borderRadius: 20, padding: 24, width: "100%" },
+  dialogTitle: { fontSize: 18, fontFamily: "Inter_700Bold", color: "#FFF", marginBottom: 16 },
+  dialogInput: {
+    backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 12,
+    paddingHorizontal: 16, paddingVertical: 14, color: "#FFF",
+    fontFamily: "Inter_600SemiBold", fontSize: 16,
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.15)",
+    marginBottom: 14,
+  },
+  dialogCodeInput: { fontSize: 22, textAlign: "center", letterSpacing: 3, fontFamily: "Inter_700Bold" },
+  dialogBtn: { backgroundColor: "#FFF", borderRadius: 14, paddingVertical: 14, alignItems: "center", marginBottom: 8 },
+  dialogBtnText: { color: "#000", fontSize: 16, fontFamily: "Inter_700Bold" },
+  dialogCancel: { alignItems: "center", paddingVertical: 8 },
+  dialogCancelText: { color: "rgba(255,255,255,0.4)", fontFamily: "Inter_600SemiBold", fontSize: 15 },
 });
