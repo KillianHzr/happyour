@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import {
   Animated, PanResponder, StyleSheet, Modal,
-  Pressable, View, Easing,
+  Pressable, View, Easing, KeyboardAvoidingView, Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -103,7 +103,10 @@ export default function BottomSheet({ visible, onClose, children }: Props) {
 
   return (
     <Modal visible={mounted} transparent animationType="none" onRequestClose={handleClose}>
-      <View style={styles.root}>
+      <KeyboardAvoidingView
+        style={styles.root}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
         {/* Overlay */}
         <Animated.View style={[styles.overlay, { opacity: overlayAnim }]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
@@ -123,7 +126,7 @@ export default function BottomSheet({ visible, onClose, children }: Props) {
 
           {children}
         </Animated.View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

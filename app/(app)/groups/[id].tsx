@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { View, Text, StyleSheet, Dimensions, Animated, TouchableOpacity, Alert, TextInput, Modal, Pressable, KeyboardAvoidingView, Platform } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { View, Text, StyleSheet, Dimensions, Animated, TouchableOpacity, Alert, TextInput, AppState } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { BlurView } from "expo-blur";
 import { supabase } from "../../../lib/supabase";
@@ -86,6 +87,7 @@ export default function MainPagerScreen() {
   // Pager
   const [currentPage, setCurrentPage] = useState(1);
   const [cameraScrollLocked, setCameraScrollLocked] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Modals
   const [showReveal, setShowReveal] = useState(false);
@@ -245,83 +247,42 @@ export default function MainPagerScreen() {
   const revealConfigRef = useRef(revealConfig);
   revealConfigRef.current = revealConfig;
 
-  // ── Real-time: subscribe to all groups, patch only the new photo ──
-  const groupIdsKey = allGroups.map((g) => g.id).sort().join(",");
+  // ── Real-time + AppState refresh ──
+  // Un seul channel sans filtre — les filtres group_id=eq.X nécessitent
+  // REPLICA IDENTITY FULL côté Supabase, sans quoi les events ne sont jamais émis.
+  // RLS garantit qu'on ne reçoit que les events des groupes dont on est membre.
   useEffect(() => {
-    if (!groupIdsKey || !user) return;
+    if (!user) return;
+    const channel = supabase
+      .channel(`user-rt-${user.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "photos" },
+        () => fetchAllDataRef.current())
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "group_members" },
+        () => fetchAllDataRef.current())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id]);
 
-    const channels = allGroups.map((g) =>
-      supabase
-        .channel(`photos-${g.id}`)
-        .on(
-          "postgres_changes",
-          { event: "INSERT", schema: "public", table: "photos", filter: `group_id=eq.${g.id}` },
-          async (payload: any) => {
-            // Own uploads are already handled by onUploadSuccess — skip
-            if (payload.new?.user_id === user.id) return;
+  // Rafraîchit les données quand l'app revient au premier plan
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") fetchAllDataRef.current();
+    });
+    return () => sub.remove();
+  }, []);
 
-            // Reveal-window guard: during reveal window photos array is hidden
-            const cfg = revealConfigRef.current;
-            const { revealDate: rv, prevRevealDate: prv } = getWeekBounds(cfg.day, cfg.hour);
-            const afterRevealWindow = new Date() >= new Date(rv.getTime() + 12 * 60 * 60 * 1000);
+  // Polling toutes les 30s (filet de sécurité si Realtime non configuré)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (AppState.currentState === "active") fetchAllDataRef.current();
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, []);
 
-            // Always increment count; only add to photos list outside reveal window
-            const { data: photoRow } = await supabase
-              .from("photos")
-              .select("id, image_path, created_at, note, user_id, profiles:user_id(username, avatar_url)")
-              .eq("id", payload.new.id)
-              .single();
-
-            if (!photoRow) return;
-
-            const newEntry: PhotoEntry = {
-              id: photoRow.id,
-              url: photoRow.image_path === "text_mode" ? "" : r2Storage.getPublicUrl(photoRow.image_path),
-              fallback_url: photoRow.image_path === "text_mode"
-                ? undefined
-                : supabase.storage.from("moments").getPublicUrl(photoRow.image_path).data.publicUrl,
-              created_at: photoRow.created_at,
-              note: photoRow.note ?? null,
-              username: (photoRow.profiles as any)?.username ?? "Anonyme",
-              avatar_url: (photoRow.profiles as any)?.avatar_url ?? null,
-              image_path: photoRow.image_path,
-              user_id: photoRow.user_id,
-              reactions: [],
-            };
-
-            setGroupData((prev) => {
-              const gData = prev[g.id];
-              if (!gData) return prev;
-              // Deduplicate
-              if (gData.photos.some((p) => p.id === newEntry.id)) return prev;
-
-              const updatedPhotos = afterRevealWindow ? gData.photos : [...gData.photos, newEntry];
-              let crownWinnerId = gData.crownWinnerId;
-              let crownDurationMs = gData.crownDurationMs;
-              if (!afterRevealWindow) {
-                const crown = computeCrownWinner(updatedPhotos, prv, rv);
-                crownWinnerId = crown?.winnerId ?? null;
-                crownDurationMs = crown?.durationMs ?? 0;
-              }
-              return {
-                ...prev,
-                [g.id]: {
-                  ...gData,
-                  photoCount: gData.photoCount + 1,
-                  photos: updatedPhotos,
-                  crownWinnerId,
-                  crownDurationMs,
-                },
-              };
-            });
-          }
-        )
-        .subscribe()
-    );
-
-    return () => { channels.forEach((c) => supabase.removeChannel(c)); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupIdsKey, user?.id]);
+  // Persiste le groupe actif pour le prochain lancement de l'app
+  useEffect(() => {
+    if (activeGroupId) AsyncStorage.setItem("lastGroupId", activeGroupId);
+  }, [activeGroupId]);
 
   // ── Group switching ──
   const handleSwitchGroup = useCallback((groupId: string) => {
@@ -617,6 +578,12 @@ export default function MainPagerScreen() {
               }));
             }}
             groupId={activeGroupId}
+            refreshing={refreshing}
+            onRefresh={async () => {
+              setRefreshing(true);
+              await fetchAllData();
+              setRefreshing(false);
+            }}
             onSimulateReveal={__DEV__ ? () => setDebugUnlocked(true) : undefined}
             onDebugNotifReveal={__DEV__ ? () => scheduleImmediateLocalNotification("Le coffre est ouvert !", `Les moments de "${groupName}" sont disponibles`, { type: "recap", groupId: activeGroupId }) : undefined}
             onDebugNotifPhoto={__DEV__ ? () => scheduleImmediateLocalNotification(groupName || "Groupe", "Un ami a partagé un moment !", { type: "new_photo", groupId: activeGroupId }) : undefined}
@@ -705,40 +672,32 @@ export default function MainPagerScreen() {
         </TouchableOpacity>
       </BottomSheet>
 
-      {/* ── ADD GROUP (choix) ── */}
+      {/* ── ADD GROUP (choix + formulaires en sous-vues) ── */}
       <BottomSheet visible={showAddGroupModal} onClose={closeAddGroupModal}>
-        <Text style={styles.addGroupTitle}>Ajouter un groupe</Text>
-        <Text style={styles.addGroupSub}>Tu peux rejoindre ou créer jusqu'à 3 groupes.</Text>
-        <TouchableOpacity
-          style={styles.addGroupPrimary}
-          onPress={() => { setShowAddGroupModal(false); setAddGroupView("create"); }}
-        >
-          <Text style={styles.addGroupPrimaryText}>Créer un groupe</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.addGroupSecondary}
-          onPress={() => { setShowAddGroupModal(false); setAddGroupView("join"); }}
-        >
-          <Text style={styles.addGroupSecondaryText}>Rejoindre avec un code</Text>
-        </TouchableOpacity>
-      </BottomSheet>
+        {addGroupView === null && (
+          <>
+            <Text style={styles.addGroupTitle}>Ajouter un groupe</Text>
+            <Text style={styles.addGroupSub}>Tu peux rejoindre ou créer jusqu'à 3 groupes.</Text>
+            <TouchableOpacity
+              style={styles.addGroupPrimary}
+              onPress={() => setAddGroupView("create")}
+            >
+              <Text style={styles.addGroupPrimaryText}>Créer un groupe</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.addGroupSecondary}
+              onPress={() => setAddGroupView("join")}
+            >
+              <Text style={styles.addGroupSecondaryText}>Rejoindre avec un code</Text>
+            </TouchableOpacity>
+          </>
+        )}
 
-      {/* ── CREATE GROUP DIALOG ── */}
-      <Modal
-        visible={addGroupView === "create"}
-        transparent
-        animationType="fade"
-        onRequestClose={() => { setAddGroupView(null); setNewGroupName(""); }}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.dialogOverlay}
-        >
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => { setAddGroupView(null); setNewGroupName(""); }} />
-          <View style={styles.dialog}>
-            <Text style={styles.dialogTitle}>Nouveau groupe</Text>
+        {addGroupView === "create" && (
+          <>
+            <Text style={styles.addGroupTitle}>Nouveau groupe</Text>
             <TextInput
-              style={styles.dialogInput}
+              style={styles.sheetInput}
               placeholder="Nom du groupe"
               placeholderTextColor="rgba(255,255,255,0.3)"
               value={newGroupName}
@@ -749,35 +708,23 @@ export default function MainPagerScreen() {
               onSubmitEditing={handleCreateGroup}
             />
             <TouchableOpacity
-              style={[styles.dialogBtn, (!newGroupName.trim() || addGroupLoading) && { opacity: 0.45 }]}
+              style={[styles.addGroupPrimary, (!newGroupName.trim() || addGroupLoading) && { opacity: 0.45 }]}
               onPress={handleCreateGroup}
               disabled={!newGroupName.trim() || addGroupLoading}
             >
-              <Text style={styles.dialogBtnText}>{addGroupLoading ? "Création..." : "Créer"}</Text>
+              <Text style={styles.addGroupPrimaryText}>{addGroupLoading ? "Création..." : "Créer"}</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => { setAddGroupView(null); setNewGroupName(""); }} style={styles.dialogCancel}>
-              <Text style={styles.dialogCancelText}>Annuler</Text>
+            <TouchableOpacity onPress={() => { setAddGroupView(null); setNewGroupName(""); }} style={styles.sheetCancelWrap}>
+              <Text style={styles.sheetCancelText}>Retour</Text>
             </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+          </>
+        )}
 
-      {/* ── JOIN GROUP DIALOG ── */}
-      <Modal
-        visible={addGroupView === "join"}
-        transparent
-        animationType="fade"
-        onRequestClose={() => { setAddGroupView(null); setJoinCode(""); }}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.dialogOverlay}
-        >
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => { setAddGroupView(null); setJoinCode(""); }} />
-          <View style={styles.dialog}>
-            <Text style={styles.dialogTitle}>Rejoindre un cercle</Text>
+        {addGroupView === "join" && (
+          <>
+            <Text style={styles.addGroupTitle}>Rejoindre un cercle</Text>
             <TextInput
-              style={[styles.dialogInput, styles.dialogCodeInput]}
+              style={[styles.sheetInput, styles.sheetCodeInput]}
               placeholder="CODE-1234"
               placeholderTextColor="rgba(255,255,255,0.3)"
               autoCapitalize="characters"
@@ -788,18 +735,18 @@ export default function MainPagerScreen() {
               onSubmitEditing={handleJoinGroup}
             />
             <TouchableOpacity
-              style={[styles.dialogBtn, (!joinCode.trim() || addGroupLoading) && { opacity: 0.45 }]}
+              style={[styles.addGroupPrimary, (!joinCode.trim() || addGroupLoading) && { opacity: 0.45 }]}
               onPress={handleJoinGroup}
               disabled={!joinCode.trim() || addGroupLoading}
             >
-              <Text style={styles.dialogBtnText}>{addGroupLoading ? "..." : "Rejoindre"}</Text>
+              <Text style={styles.addGroupPrimaryText}>{addGroupLoading ? "..." : "Rejoindre"}</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => { setAddGroupView(null); setJoinCode(""); }} style={styles.dialogCancel}>
-              <Text style={styles.dialogCancelText}>Annuler</Text>
+            <TouchableOpacity onPress={() => { setAddGroupView(null); setJoinCode(""); }} style={styles.sheetCancelWrap}>
+              <Text style={styles.sheetCancelText}>Retour</Text>
             </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+          </>
+        )}
+      </BottomSheet>
     </View>
   );
 }
@@ -841,23 +788,15 @@ const styles = StyleSheet.create({
   addGroupPrimaryText: { color: "#000", fontSize: 16, fontFamily: "Inter_700Bold" },
   addGroupSecondary: { backgroundColor: "rgba(255,255,255,0.08)", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)", borderRadius: 16, paddingVertical: 16, alignItems: "center", marginBottom: 12 },
   addGroupSecondaryText: { color: "#FFF", fontSize: 16, fontFamily: "Inter_600SemiBold" },
-  // Centered input dialogs
-  dialogOverlay: {
-    flex: 1, backgroundColor: "rgba(0,0,0,0.78)",
-    justifyContent: "center", alignItems: "center", padding: 28,
-  },
-  dialog: { backgroundColor: "#1C1C1E", borderRadius: 20, padding: 24, width: "100%" },
-  dialogTitle: { fontSize: 18, fontFamily: "Inter_700Bold", color: "#FFF", marginBottom: 16 },
-  dialogInput: {
+  // Sheet inputs (create/join inside BottomSheet)
+  sheetInput: {
     backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 12,
     paddingHorizontal: 16, paddingVertical: 14, color: "#FFF",
     fontFamily: "Inter_600SemiBold", fontSize: 16,
     borderWidth: 1, borderColor: "rgba(255,255,255,0.15)",
-    marginBottom: 14,
+    marginBottom: 16,
   },
-  dialogCodeInput: { fontSize: 22, textAlign: "center", letterSpacing: 3, fontFamily: "Inter_700Bold" },
-  dialogBtn: { backgroundColor: "#FFF", borderRadius: 14, paddingVertical: 14, alignItems: "center", marginBottom: 8 },
-  dialogBtnText: { color: "#000", fontSize: 16, fontFamily: "Inter_700Bold" },
-  dialogCancel: { alignItems: "center", paddingVertical: 8 },
-  dialogCancelText: { color: "rgba(255,255,255,0.4)", fontFamily: "Inter_600SemiBold", fontSize: 15 },
+  sheetCodeInput: { fontSize: 22, textAlign: "center", letterSpacing: 3, fontFamily: "Inter_700Bold" },
+  sheetCancelWrap: { alignItems: "center", paddingVertical: 8 },
+  sheetCancelText: { color: "rgba(255,255,255,0.4)", fontFamily: "Inter_600SemiBold", fontSize: 15 },
 });

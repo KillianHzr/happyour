@@ -1,6 +1,6 @@
 import { useRef, useEffect, useMemo, useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Easing,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Easing, RefreshControl,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
@@ -32,6 +32,8 @@ type Props = {
   onLeaveGroup: () => void;
   onRemoveMember?: (userId: string) => Promise<void>;
   groupId: string;
+  onRefresh: () => Promise<void>;
+  refreshing: boolean;
   onSimulateReveal?: () => void;
   onDebugNotifReveal?: () => void;
   onDebugNotifPhoto?: () => void;
@@ -90,7 +92,7 @@ export default function VaultPage({
   allGroups, activeGroupId, onSwitchGroup, onAddGroup,
   groupName, inviteCode, isAdmin, currentUserId, members, photoCount, photos, revealDate,
   unlocked, onOpenReveal, onOpenSettings, onLeaveGroup, onRemoveMember,
-  groupId, onSimulateReveal, onDebugNotifReveal, onDebugNotifPhoto, onDebugNotifInvite,
+  groupId, onRefresh, refreshing, onSimulateReveal, onDebugNotifReveal, onDebugNotifPhoto, onDebugNotifInvite,
 }: Props) {
   const insets = useSafeAreaInsets();
   const timeLeft = useCountdown(revealDate);
@@ -248,6 +250,13 @@ export default function VaultPage({
         style={{ flex: 1 }}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 120 }]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="rgba(255,255,255,0.4)"
+          />
+        }
       >
         {/* Group header */}
         <View style={styles.groupHeader}>

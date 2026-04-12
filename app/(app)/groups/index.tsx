@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { router, useFocusEffect } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../../../lib/supabase";
 import { useAuth } from "../../../lib/auth-context";
 import { colors } from "../../../lib/theme";
@@ -29,17 +30,29 @@ export default function GroupsHomeScreen() {
     if (!user) return;
     (async () => {
       setLoading(true);
-      const { data } = await supabase
+
+      // Fetch all groups the user belongs to
+      const { data: memberships } = await supabase
         .from("group_members")
         .select("group_id")
-        .eq("user_id", user.id)
-        .limit(1)
-        .maybeSingle();
-      if (data?.group_id) {
-        router.replace(`/(app)/groups/${data.group_id}`);
-      } else {
+        .eq("user_id", user.id);
+
+      if (!memberships || memberships.length === 0) {
         setLoading(false);
+        return;
       }
+
+      const memberGroupIds = new Set(memberships.map((m: any) => m.group_id));
+
+      // Try to restore last active group
+      const lastGroupId = await AsyncStorage.getItem("lastGroupId");
+      if (lastGroupId && memberGroupIds.has(lastGroupId)) {
+        router.replace(`/(app)/groups/${lastGroupId}`);
+        return;
+      }
+
+      // Fall back to first group
+      router.replace(`/(app)/groups/${memberships[0].group_id}`);
     })();
   }, [user]));
 
