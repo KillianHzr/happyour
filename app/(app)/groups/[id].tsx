@@ -143,11 +143,14 @@ export default function MainPagerScreen() {
       const photoEnd = afterRevealWindow ? currentNextRevealDate : currentRevealDate;
 
       const [groupsRes, profileRes] = await Promise.all([
-        supabase.from("group_members").select("groups(id, name, invite_code)").eq("user_id", user.id),
+        supabase.from("group_members").select("groups(id, name, invite_code, created_at)").eq("user_id", user.id),
         supabase.from("profiles").select("username, avatar_url, email").eq("id", user.id).single(),
       ]);
 
-      const groups: GroupInfo[] = (groupsRes.data ?? []).map((g: any) => g.groups).filter(Boolean);
+      const groups: GroupInfo[] = (groupsRes.data ?? [])
+        .map((g: any) => g.groups)
+        .filter(Boolean)
+        .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       setAllGroups(groups);
 
       if (profileRes.data) {
@@ -340,9 +343,21 @@ export default function MainPagerScreen() {
     try {
       const others = members.filter((m: any) => m.user_id !== user.id);
       if (isAdmin && others.length > 0) {
-        await supabase.from("group_members").update({ role: "admin" }).eq("group_id", activeGroupId).eq("user_id", others[0].user_id);
+        const { error: transferErr } = await supabase
+          .from("group_members")
+          .update({ role: "admin" })
+          .eq("group_id", activeGroupId)
+          .eq("user_id", others[0].user_id);
+        if (transferErr) throw new Error(transferErr.message);
       }
-      await supabase.from("group_members").delete().eq("group_id", activeGroupId).eq("user_id", user.id);
+      const { data: deleted, error: leaveErr } = await supabase
+        .from("group_members")
+        .delete()
+        .eq("group_id", activeGroupId)
+        .eq("user_id", user.id)
+        .select();
+      if (leaveErr) throw new Error(leaveErr.message);
+      if (!deleted || deleted.length === 0) throw new Error("Aucune ligne supprimée — vérifie la politique RLS sur group_members.");
       const remaining = allGroups.filter((g) => g.id !== activeGroupId);
       if (remaining.length > 0) {
         setAllGroups(remaining);
