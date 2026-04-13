@@ -115,7 +115,7 @@ export default function MainPagerScreen() {
   const isAdmin = activeData?.isAdmin ?? false;
 
   const { revealDate } = getWeekBounds(revealConfig.day, revealConfig.hour);
-  const revealEndDate = new Date(revealDate.getTime() + 12 * 60 * 60 * 1000);
+  const revealEndDate = new Date(revealDate.getTime() + 16 * 60 * 60 * 1000);
   const nextRevealDate = new Date(revealDate.getTime() + 7 * 24 * 60 * 60 * 1000);
 
   const now = new Date();
@@ -136,7 +136,7 @@ export default function MainPagerScreen() {
       setRevealConfig({ day: cfg.reveal_day, hour: cfg.reveal_hour });
 
       const { revealDate: currentRevealDate, prevRevealDate } = getWeekBounds(cfg.reveal_day, cfg.reveal_hour);
-      const currentRevealEndDate = new Date(currentRevealDate.getTime() + 12 * 60 * 60 * 1000);
+      const currentRevealEndDate = new Date(currentRevealDate.getTime() + 16 * 60 * 60 * 1000);
       const currentNextRevealDate = new Date(currentRevealDate.getTime() + 7 * 24 * 60 * 60 * 1000);
       const afterRevealWindow = new Date() >= currentRevealEndDate;
       const photoStart = afterRevealWindow ? currentRevealDate : prevRevealDate;
