@@ -11,6 +11,7 @@ import { translateError } from "../../../lib/error-messages";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { computeCrownWinner } from "../../../lib/crown";
 import { useUpload } from "../../../lib/upload-context";
+import { mediaCache } from "../../../lib/media-cache";
 import Svg, { Path } from "react-native-svg";
 
 import { type PhotoEntry, type Reaction } from "../../../components/PhotoFeed";
@@ -126,6 +127,8 @@ export default function MainPagerScreen() {
   // ── Fetch all groups data at once ──
   const fetchAllData = useCallback(async () => {
     if (!user) return;
+    // Ensure the local media manifest is loaded before building PhotoEntries
+    await mediaCache.load();
     try {
       const { data: cfgRows } = await supabase
         .from("app_config")
@@ -201,20 +204,24 @@ export default function MainPagerScreen() {
               });
             }
 
-            groupPhotos = photosRes.data.map((p: any) => ({
-              id: p.id,
-              url: p.image_path === "text_mode" ? "" : r2Storage.getPublicUrl(p.image_path),
-              fallback_url: p.image_path === "text_mode" ? undefined : supabase.storage.from("moments").getPublicUrl(p.image_path).data.publicUrl,
-              created_at: p.created_at,
-              note: p.note ?? null,
-              username: p.profiles?.username ?? "Anonyme",
-              avatar_url: p.profiles?.avatar_url,
-              image_path: p.image_path,
-              second_image_path: p.second_image_path ?? null,
-              second_note: p.second_note ?? null,
-              user_id: p.user_id,
-              reactions: reactionsByPhoto[p.id] ?? [],
-            }));
+            groupPhotos = photosRes.data.map((p: any) => {
+              const r2Url = p.image_path === "text_mode" ? "" : r2Storage.getPublicUrl(p.image_path);
+              const url = mediaCache.getLocalUri(p.image_path) ?? r2Url;
+              return {
+                id: p.id,
+                url,
+                fallback_url: p.image_path === "text_mode" ? undefined : supabase.storage.from("moments").getPublicUrl(p.image_path).data.publicUrl,
+                created_at: p.created_at,
+                note: p.note ?? null,
+                username: p.profiles?.username ?? "Anonyme",
+                avatar_url: p.profiles?.avatar_url,
+                image_path: p.image_path,
+                second_image_path: p.second_image_path ?? null,
+                second_note: p.second_note ?? null,
+                user_id: p.user_id,
+                reactions: reactionsByPhoto[p.id] ?? [],
+              };
+            });
             const crown = computeCrownWinner(groupPhotos, prevRevealDate, currentRevealDate);
             crownWinnerId = crown?.winnerId ?? null;
             crownDurationMs = crown?.durationMs ?? 0;
@@ -234,6 +241,26 @@ export default function MainPagerScreen() {
       );
 
       setGroupData(Object.fromEntries(dataEntries));
+
+      // Background prefetch/download of all media for this week — fire & forget
+      const allPhotosForSync = dataEntries.flatMap(([, gd]) =>
+        gd.photos.map((p) => ({
+          image_path: p.image_path,
+          second_image_path: p.second_image_path,
+          url: p.image_path === "text_mode" ? "" : r2Storage.getPublicUrl(p.image_path),
+          second_url: p.second_image_path && p.second_image_path !== "text_mode"
+            ? r2Storage.getPublicUrl(p.second_image_path)
+            : undefined,
+        }))
+      );
+      // Purge media from previous weeks (stale entries not in current week's set)
+      const activePaths = allPhotosForSync.flatMap((p) => [
+        p.image_path,
+        ...(p.second_image_path ? [p.second_image_path] : []),
+      ]);
+      mediaCache.cleanup(activePaths);
+
+      mediaCache.sync(allPhotosForSync);
     } catch {}
     setDataLoaded(true);
   }, [user]);

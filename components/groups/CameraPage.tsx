@@ -695,7 +695,7 @@ export default function CameraPage({ groupId, userId, isActive, allGroups, onScr
               )}
             </View>
           )}
-          {showBottomSlotBar && <SlotBar isSlot1Preview={isSlot1Preview} isSlot1WithSlot2={isSlot1WithSlot2} isSlot2Preview={isSlot2Preview} slot1={slot1} slot2={slot2} renderSlotThumbnail={renderSlotThumbnail} onAddSecond={() => { setTextModeContent(""); setCapturingSecond(true); capturingSecondRef.current = true; }} onSend={openGroupPicker} onViewSlot1={() => setViewingSlot(1)} onViewSlot2={() => setViewingSlot(2)} />}
+          {showBottomSlotBar && <SlotBar isSlot1Preview={isSlot1Preview} isSlot1WithSlot2={isSlot1WithSlot2} isSlot2Preview={isSlot2Preview} slot1={slot1} slot2={slot2} renderSlotThumbnail={renderSlotThumbnail} onAddSecond={() => { setTextModeContent(""); setIsDrawingActive(false); setCapturingSecond(true); capturingSecondRef.current = true; }} onSend={openGroupPicker} onViewSlot1={() => setViewingSlot(1)} onViewSlot2={() => setViewingSlot(2)} />}
           <Modal visible={isEditingNote} transparent animationType="fade">
             <BlurView intensity={100} tint="dark" style={styles.fill}>
               <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.noteEditorContainer}>
@@ -772,7 +772,7 @@ export default function CameraPage({ groupId, userId, isActive, allGroups, onScr
               </View>
             )}
           </View>
-          {showBottomSlotBar && <SlotBar isSlot1Preview={isSlot1Preview} isSlot1WithSlot2={isSlot1WithSlot2} isSlot2Preview={isSlot2Preview} slot1={slot1} slot2={slot2} renderSlotThumbnail={renderSlotThumbnail} onAddSecond={() => { setTextModeContent(""); setCapturingSecond(true); capturingSecondRef.current = true; }} onSend={openGroupPicker} onViewSlot1={() => setViewingSlot(1)} onViewSlot2={() => setViewingSlot(2)} />}
+          {showBottomSlotBar && <SlotBar isSlot1Preview={isSlot1Preview} isSlot1WithSlot2={isSlot1WithSlot2} isSlot2Preview={isSlot2Preview} slot1={slot1} slot2={slot2} renderSlotThumbnail={renderSlotThumbnail} onAddSecond={() => { setTextModeContent(""); setIsDrawingActive(false); setCapturingSecond(true); capturingSecondRef.current = true; }} onSend={openGroupPicker} onViewSlot1={() => setViewingSlot(1)} onViewSlot2={() => setViewingSlot(2)} />}
           <Modal visible={isEditingNote} transparent animationType="fade">
             <BlurView intensity={100} tint="dark" style={styles.fill}>
               <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.noteEditorContainer}>

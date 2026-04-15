@@ -152,7 +152,13 @@ function ExpandableNote({ text, maxLines }: { text: string; maxLines: number }) 
 }
 
 function PhotoImage({ url, fallback_url, isDrawing }: { url: string; fallback_url?: string; isDrawing?: boolean }) {
-  const [src, setSrc] = useState(url);
+  const [useFallback, setUseFallback] = useState(false);
+  const prevUrlRef = useRef(url);
+  if (prevUrlRef.current !== url) {
+    prevUrlRef.current = url;
+    if (useFallback) setUseFallback(false);
+  }
+  const src = useFallback && fallback_url ? fallback_url : url;
   if (isDrawing) {
     return (
       <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center" }]}>
@@ -160,7 +166,7 @@ function PhotoImage({ url, fallback_url, isDrawing }: { url: string; fallback_ur
           source={{ uri: src }}
           style={{ width: "100%", aspectRatio: 3 / 4, borderRadius: 24, backgroundColor: "#FFF" }}
           contentFit="fill"
-          onError={() => { if (fallback_url && src !== fallback_url) setSrc(fallback_url); }}
+          onError={() => { if (fallback_url) setUseFallback(true); }}
         />
       </View>
     );
@@ -181,28 +187,84 @@ function SecondCaptureThumbnail({ secondPath, secondNote, onPress }: {
 }) {
   const isText = secondPath === "text_mode";
   const isAudio = secondPath.endsWith(".m4a");
-  return (
-    <TouchableOpacity onPress={onPress} style={styles.secondThumb} activeOpacity={0.8}>
-      {isText ? (
-        <View style={styles.secondThumbBg}>
-          <Text style={styles.secondThumbText} numberOfLines={3}>{secondNote ?? ""}</Text>
+  const isVideo = secondPath.endsWith(".mp4");
+  const isDrawing = secondPath.includes("_draw");
+
+  const renderContent = () => {
+    if (isText) {
+      return (
+        <View style={[styles.secondThumbBg, { backgroundColor: "#111", justifyContent: "center", padding: 6 }]}>
+          <Text style={styles.secondThumbText} numberOfLines={5}>{secondNote ?? ""}</Text>
         </View>
-      ) : isAudio ? (
-        <View style={styles.secondThumbBg}>
-          <Svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <Path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-            <Path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
-          </Svg>
+      );
+    }
+    if (isAudio) {
+      return (
+        <View style={[styles.secondThumbBg, { backgroundColor: "#111", gap: 5 }]}>
+          {/* Mini waveform */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+            {[8, 14, 10, 18, 12, 16, 9].map((h, i) => (
+              <View key={i} style={{ width: 2.5, height: h, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.55)" }} />
+            ))}
+          </View>
+          {/* Play icon */}
+          <View style={styles.secondThumbPlayBadge}>
+            <Svg width="8" height="8" viewBox="0 0 24 24" fill="#FFF">
+              <Path d="M8 5v14l11-7z" />
+            </Svg>
+          </View>
         </View>
-      ) : (
+      );
+    }
+    if (isVideo) {
+      return (
+        <View style={[styles.secondThumbBg, { backgroundColor: "#000" }]}>
+          <Image
+            source={{ uri: r2Storage.getPublicUrl(secondPath) }}
+            style={styles.secondThumbImage}
+            contentFit="cover"
+          />
+          {/* Play badge over video */}
+          <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center" }]}>
+            <View style={styles.secondThumbPlayCircle}>
+              <Svg width="10" height="10" viewBox="0 0 24 24" fill="#FFF">
+                <Path d="M8 5v14l11-7z" />
+              </Svg>
+            </View>
+          </View>
+        </View>
+      );
+    }
+    if (isDrawing) {
+      return (
         <Image
           source={{ uri: r2Storage.getPublicUrl(secondPath) }}
           style={styles.secondThumbImage}
-          contentFit={secondPath.includes("_draw") ? "contain" : "cover"}
+          contentFit="contain"
         />
-      )}
+      );
+    }
+    // Regular photo
+    return (
+      <Image
+        source={{ uri: r2Storage.getPublicUrl(secondPath) }}
+        style={styles.secondThumbImage}
+        contentFit="cover"
+      />
+    );
+  };
+
+  // Drawing uses 3:4 ratio (same as in the reveal), others use 9:16 portrait
+  const thumbStyle = isDrawing
+    ? [styles.secondThumb, { width: 48, height: 64 }]
+    : styles.secondThumb;
+
+  return (
+    <TouchableOpacity onPress={onPress} style={thumbStyle} activeOpacity={0.8}>
+      {renderContent()}
+      {/* Swap indicator */}
       <View style={styles.secondThumbOverlay}>
-        <Svg width="10" height="9" viewBox="0 0 20 18" fill="none">
+        <Svg width="8" height="8" viewBox="0 0 20 18" fill="none">
           <Path d="M1 13L5 17M5 17L9 13M5 17L5 1M19 5L15 1M15 1L11 5M15 1L15 17" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
         </Svg>
       </View>
@@ -210,11 +272,12 @@ function SecondCaptureThumbnail({ secondPath, secondNote, onPress }: {
   );
 }
 
-function PhotoMomentPage({ moment, currentUserId, crownWinnerId, onReact }: {
+function PhotoMomentPage({ moment, currentUserId, crownWinnerId, onReact, isVisible }: {
   moment: PhotoEntry;
   currentUserId?: string;
   crownWinnerId?: string | null;
   onReact?: (photoId: string, stickerId: StickerId) => void;
+  isVisible?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const [swapped, setSwapped] = useState(false);
@@ -232,28 +295,65 @@ function PhotoMomentPage({ moment, currentUserId, crownWinnerId, onReact }: {
   const thumbnailPath = hasSecond ? (swapped ? moment.image_path : moment.second_image_path!) : null;
   const thumbnailNote = swapped ? moment.note : moment.second_note;
 
+  const swapFade = useRef(new Animated.Value(1)).current;
+  const handleSwap = () => {
+    Animated.timing(swapFade, { toValue: 0, duration: 80, useNativeDriver: true }).start(() => {
+      setSwapped(v => !v);
+      Animated.timing(swapFade, { toValue: 1, duration: 160, useNativeDriver: true }).start();
+    });
+  };
+
   const isTextOnly = effectivePath === "text_mode";
   const isDrawing = effectivePath.includes("_draw");
+  const isEffectiveAudio = effectivePath.endsWith(".m4a");
+  const isEffectiveVideo = effectivePath.endsWith(".mp4");
   const textLen = effectiveNote?.length ?? 0;
   const fontSize = textLen <= 40 ? 32 : textLen <= 100 ? 26 : textLen <= 200 ? 21 : textLen <= 300 ? 17 : 15;
+
+  // Audio player for swapped audio second capture
+  const audioPlayer = useAudioPlayer(isEffectiveAudio ? effectiveUrl : "");
+  const audioStatus = useAudioPlayerStatus(audioPlayer);
+  useEffect(() => { if (!isEffectiveAudio || isVisible === false) audioPlayer.pause(); }, [isEffectiveAudio, isVisible]);
+
+  // Video player for swapped video second capture
+  const videoPlayer = useVideoPlayer(isEffectiveVideo ? effectiveUrl : null, (p) => { p.loop = true; });
+  useEffect(() => {
+    if (isEffectiveVideo) videoPlayer.play();
+    else videoPlayer.pause();
+  }, [isEffectiveVideo]);
+
+  const renderMainContent = () => {
+    if (isTextOnly) {
+      return (
+        <View style={styles.textMomentBg}>
+          <View style={styles.quoteContainer}>
+            <Text style={[styles.textMomentContent, { fontSize, lineHeight: Math.round(fontSize * 1.4) }]}>{effectiveNote}</Text>
+            <View style={styles.citationFooter}>
+              <View style={styles.citationAvatar}><CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} isCrown={crownWinnerId === moment.user_id} /></View>
+              <View style={{ flex: 1 }}><Text style={styles.citationUsername}>{moment.username}</Text><Text style={styles.citationTime}>{formatTime(moment.created_at)}</Text></View>
+              {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => setPickerOpen(true)}><ReactIcon /></TouchableOpacity>}
+            </View>
+          </View>
+        </View>
+      );
+    }
+    if (isEffectiveAudio) {
+      return <AudioPlayerView player={audioPlayer} status={audioStatus} />;
+    }
+    if (isEffectiveVideo) {
+      return (
+        <VideoView player={videoPlayer} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />
+      );
+    }
+    return <PhotoImage url={effectiveUrl} fallback_url={swapped ? undefined : moment.fallback_url} isDrawing={isDrawing} />;
+  };
 
   return (
     <View style={[styles.fullscreenPage, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12 }]}>
       <View style={styles.momentWrapper}>
-        {isTextOnly ? (
-          <View style={styles.textMomentBg}>
-            <View style={styles.quoteContainer}>
-              <Text style={[styles.textMomentContent, { fontSize, lineHeight: Math.round(fontSize * 1.4) }]}>{effectiveNote}</Text>
-              <View style={styles.citationFooter}>
-                <View style={styles.citationAvatar}><CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} isCrown={crownWinnerId === moment.user_id} /></View>
-                <View style={{ flex: 1 }}><Text style={styles.citationUsername}>{moment.username}</Text><Text style={styles.citationTime}>{formatTime(moment.created_at)}</Text></View>
-                {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => setPickerOpen(true)}><ReactIcon /></TouchableOpacity>}
-              </View>
-            </View>
-          </View>
-        ) : (
-          <PhotoImage url={effectiveUrl} fallback_url={swapped ? undefined : moment.fallback_url} isDrawing={isDrawing} />
-        )}
+        <Animated.View style={[StyleSheet.absoluteFill, { opacity: swapFade }]}>
+          {renderMainContent()}
+        </Animated.View>
         <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
           <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.momentOverlay}>
             {!isTextOnly && (
@@ -269,7 +369,9 @@ function PhotoMomentPage({ moment, currentUserId, crownWinnerId, onReact }: {
             <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={isOwn ? undefined : onReact} photoId={moment.id} crownWinnerId={crownWinnerId} />
           </LinearGradient>
           {thumbnailPath && (
-            <SecondCaptureThumbnail secondPath={thumbnailPath} secondNote={thumbnailNote} onPress={() => setSwapped(v => !v)} />
+            <Animated.View style={[StyleSheet.absoluteFill, { opacity: swapFade }]} pointerEvents="box-none">
+              <SecondCaptureThumbnail secondPath={thumbnailPath} secondNote={thumbnailNote} onPress={handleSwap} />
+            </Animated.View>
           )}
         </View>
       </View>
@@ -492,26 +594,13 @@ function fmtAudio(s: number) {
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
-// --- Moment audio ---
-function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId, onScrollLock }: {
-  moment: PhotoEntry;
-  isVisible: boolean;
-  onReact?: (photoId: string, stickerId: StickerId) => void;
-  currentUserId?: string;
-  crownWinnerId?: string | null;
+// --- Shared audio player UI (used by AudioMoment and PhotoMomentPage swapped-audio) ---
+function AudioPlayerView({ player, status, onScrollLock }: {
+  player: ReturnType<typeof useAudioPlayer>;
+  status: ReturnType<typeof useAudioPlayerStatus>;
   onScrollLock?: (locked: boolean) => void;
 }) {
-  const insets = useSafeAreaInsets();
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
-  const [swapped, setSwapped] = useState(false);
-
-  const hasSecond = !!moment.second_image_path;
-  const player = useAudioPlayer(isVisible && !swapped ? moment.url : "");
-  const status = useAudioPlayerStatus(player);
-
-  const isOwn = moment.user_id === currentUserId;
-  const myReaction = moment.reactions.find((r) => r.user_id === currentUserId)?.sticker_id ?? null;
 
   const seekWidthRef = useRef(1);
   const seekOriginXRef = useRef(0);
@@ -525,25 +614,17 @@ function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId,
   useEffect(() => { playerRef.current = player; }, [player]);
   useEffect(() => { durationRef.current = status.duration ?? 0; }, [status.duration]);
 
-  useEffect(() => {
-    if (!isVisible) player.pause();
-  }, [isVisible]);
-
-  const progressRef = useRef(0);
   const progress = status.duration > 0 ? (status.currentTime ?? 0) / status.duration : 0;
   useEffect(() => {
     if (isDraggingRef.current) return;
-    progressRef.current = progress;
     fillRef.current?.setNativeProps({ style: { width: `${progress * 100}%` } });
     thumbRef.current?.setNativeProps({ style: { left: `${Math.min(progress * 100, 100)}%` } });
   }, [progress]);
 
   const togglePlay = () => {
-    if (status.playing) {
-      player.pause();
-    } else {
-      const duration = status.duration ?? 0;
-      if (duration > 0 && (status.currentTime ?? 0) >= duration - 0.1) player.seekTo(0);
+    if (status.playing) { player.pause(); }
+    else {
+      if ((status.duration ?? 0) > 0 && (status.currentTime ?? 0) >= (status.duration ?? 0) - 0.1) player.seekTo(0);
       player.play();
     }
   };
@@ -577,126 +658,128 @@ function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId,
         fillRef.current?.setNativeProps({ style: { width: `${ratio * 100}%` } });
         thumbRef.current?.setNativeProps({ style: { left: `${Math.min(ratio * 100, 100)}%` } });
         const now = Date.now();
-        if (now - lastSeekTimeRef.current > 100) {
-          lastSeekTimeRef.current = now;
-          playerRef.current.seekTo(ratio * durationRef.current);
-        }
+        if (now - lastSeekTimeRef.current > 100) { lastSeekTimeRef.current = now; playerRef.current.seekTo(ratio * durationRef.current); }
       },
       onPanResponderRelease: () => {
         isDraggingRef.current = false;
         playerRef.current.seekTo(dragRatioRef.current * durationRef.current);
         onScrollLock?.(false);
       },
-      onPanResponderTerminate: () => {
-        isDraggingRef.current = false;
-        onScrollLock?.(false);
-      },
+      onPanResponderTerminate: () => { isDraggingRef.current = false; onScrollLock?.(false); },
     })
   ).current;
 
-  // When swapped, show the second capture as main content
-  if (swapped && hasSecond) {
-    const secondPath = moment.second_image_path!;
-    const secondIsText = secondPath === "text_mode";
-    const secondIsDrawing = secondPath.includes("_draw");
-    const secondUrl = secondIsText ? "" : r2Storage.getPublicUrl(secondPath);
-    const secondNote = moment.second_note;
-    const textLen = secondNote?.length ?? 0;
-    const fontSize = textLen <= 40 ? 32 : textLen <= 100 ? 26 : textLen <= 200 ? 21 : textLen <= 300 ? 17 : 15;
-    return (
-      <View style={[styles.fullscreenPage, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12 }]}>
-        <View style={styles.momentWrapper}>
-          {secondIsText ? (
-            <View style={styles.textMomentBg}>
-              <View style={styles.quoteContainer}>
-                <Text style={[styles.textMomentContent, { fontSize, lineHeight: Math.round(fontSize * 1.4) }]}>{secondNote}</Text>
-                <View style={styles.citationFooter}>
-                  <View style={styles.citationAvatar}><CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} isCrown={crownWinnerId === moment.user_id} /></View>
-                  <View style={{ flex: 1 }}><Text style={styles.citationUsername}>{moment.username}</Text><Text style={styles.citationTime}>{formatTime(moment.created_at)}</Text></View>
-                  {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => setPickerOpen(true)}><ReactIcon /></TouchableOpacity>}
-                </View>
-              </View>
+  return (
+    <View style={[StyleSheet.absoluteFill, { backgroundColor: "#0A0A0A", justifyContent: "center", alignItems: "center", gap: 24, paddingHorizontal: 16 }]}>
+      <View style={styles.audioWaveContainer} pointerEvents="none">
+        {WAVE_HEIGHTS.map((h, i) => (
+          <View key={i} style={[styles.audioWaveBar, { height: h, opacity: progress > i / WAVE_HEIGHTS.length ? 0.9 : 0.25 }]} />
+        ))}
+      </View>
+      <View style={styles.audioPlayerRow}>
+        <TouchableOpacity onPress={togglePlay} style={styles.audioPlayBtn}>
+          <Svg width="26" height="26" viewBox="0 0 24 24" fill="#FFF">
+            {status.playing ? <Path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /> : <Path d="M8 5v14l11-7z" />}
+          </Svg>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={cycleSpeed} style={styles.audioSpeedBtn}>
+          <Text style={styles.audioSpeedText}>{playbackSpeed === 0.5 ? "×0.5" : playbackSpeed === 1 ? "×1" : playbackSpeed === 1.5 ? "×1.5" : "×2"}</Text>
+        </TouchableOpacity>
+        <View style={styles.audioProgressWrapper}>
+          <View style={styles.audioSeekHitArea} onLayout={(e) => { seekWidthRef.current = e.nativeEvent.layout.width; }} {...seekPan.panHandlers}>
+            <View style={styles.audioSeekTrack}>
+              <View ref={fillRef} style={[styles.audioSeekFill, { width: `${progress * 100}%` as any }]} />
             </View>
-          ) : (
-            <PhotoImage url={secondUrl} isDrawing={secondIsDrawing} />
-          )}
-          <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-            <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.momentOverlay}>
-              {!secondIsText && (
-                <View style={styles.authorInfo}>
-                  <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={crownWinnerId === moment.user_id} />
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.usernameLine}><Text style={styles.username}>{moment.username}</Text><Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text></View>
-                    {secondNote && <ExpandableNote text={secondNote} maxLines={2} />}
-                  </View>
-                  {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => setPickerOpen(true)}><ReactIcon /></TouchableOpacity>}
-                </View>
-              )}
-              <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={isOwn ? undefined : onReact} photoId={moment.id} crownWinnerId={crownWinnerId} />
-            </LinearGradient>
-            <SecondCaptureThumbnail secondPath={moment.image_path} secondNote={moment.note} onPress={() => setSwapped(false)} />
+            <View ref={thumbRef} style={[styles.audioSeekThumb, { left: `${Math.min(progress * 100, 100)}%` as any }]} pointerEvents="none" />
+          </View>
+          <View style={styles.audioTimesRow}>
+            <Text style={styles.audioTimeText}>{fmtAudio(status.currentTime)}</Text>
+            <Text style={styles.audioTimeText}>{fmtAudio(status.duration)}</Text>
           </View>
         </View>
-        {!isOwn && <StickerPicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={(sid) => { onReact?.(moment.id, sid); setPickerOpen(false); }} myReaction={myReaction} />}
       </View>
-    );
-  }
+    </View>
+  );
+}
+
+// --- Moment audio ---
+function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId, onScrollLock }: {
+  moment: PhotoEntry;
+  isVisible: boolean;
+  onReact?: (photoId: string, stickerId: StickerId) => void;
+  currentUserId?: string;
+  crownWinnerId?: string | null;
+  onScrollLock?: (locked: boolean) => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [swapped, setSwapped] = useState(false);
+
+  const hasSecond = !!moment.second_image_path;
+  const player = useAudioPlayer(!swapped ? moment.url : "");
+  const status = useAudioPlayerStatus(player);
+  const isOwn = moment.user_id === currentUserId;
+  const myReaction = moment.reactions.find((r) => r.user_id === currentUserId)?.sticker_id ?? null;
+
+  useEffect(() => { if (!isVisible) player.pause(); }, [isVisible]);
+
+  const renderContent = () => {
+    if (swapped && hasSecond) {
+      const secondPath = moment.second_image_path!;
+      const secondIsText = secondPath === "text_mode";
+      const secondIsDrawing = secondPath.includes("_draw");
+      const secondUrl = secondIsText ? "" : r2Storage.getPublicUrl(secondPath);
+      const secondNote = moment.second_note;
+      const textLen = secondNote?.length ?? 0;
+      const fontSize = textLen <= 40 ? 32 : textLen <= 100 ? 26 : textLen <= 200 ? 21 : textLen <= 300 ? 17 : 15;
+      if (secondIsText) {
+        return (
+          <View style={styles.textMomentBg}>
+            <View style={styles.quoteContainer}>
+              <Text style={[styles.textMomentContent, { fontSize, lineHeight: Math.round(fontSize * 1.4) }]}>{secondNote}</Text>
+              <View style={styles.citationFooter}>
+                <View style={styles.citationAvatar}><CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} isCrown={crownWinnerId === moment.user_id} /></View>
+                <View style={{ flex: 1 }}><Text style={styles.citationUsername}>{moment.username}</Text><Text style={styles.citationTime}>{formatTime(moment.created_at)}</Text></View>
+                {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => setPickerOpen(true)}><ReactIcon /></TouchableOpacity>}
+              </View>
+            </View>
+          </View>
+        );
+      }
+      return <PhotoImage url={secondUrl} isDrawing={secondIsDrawing} />;
+    }
+    // Primary: audio
+    return <AudioPlayerView player={player} status={status} onScrollLock={onScrollLock} />;
+  };
+
+  const overlayNote = swapped && hasSecond ? moment.second_note : moment.note;
+  const overlayIsText = swapped && hasSecond ? moment.second_image_path === "text_mode" : false;
 
   return (
     <View style={[styles.fullscreenPage, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12 }]}>
       <View style={styles.momentWrapper}>
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: "#0A0A0A" }]} />
-        <View style={styles.audioWaveContainer} pointerEvents="none">
-          {WAVE_HEIGHTS.map((h, i) => (
-            <View
-              key={i}
-              style={[styles.audioWaveBar, { height: h, opacity: progress > i / WAVE_HEIGHTS.length ? 0.9 : 0.25 }]}
-            />
-          ))}
-        </View>
+        {renderContent()}
         <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
           <LinearGradient colors={["transparent", "rgba(0,0,0,0.92)"]} style={styles.momentOverlay}>
-            <View style={styles.audioPlayerRow}>
-              <TouchableOpacity onPress={togglePlay} style={styles.audioPlayBtn}>
-                <Svg width="26" height="26" viewBox="0 0 24 24" fill="#FFF">
-                  {status.playing ? ( <Path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /> ) : ( <Path d="M8 5v14l11-7z" /> )}
-                </Svg>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={cycleSpeed} style={styles.audioSpeedBtn}>
-                <Text style={styles.audioSpeedText}>{playbackSpeed === 0.5 ? "×0.5" : playbackSpeed === 1 ? "×1" : playbackSpeed === 1.5 ? "×1.5" : "×2"}</Text>
-              </TouchableOpacity>
-              <View style={styles.audioProgressWrapper}>
-                <View style={styles.audioSeekHitArea} onLayout={(e) => { seekWidthRef.current = e.nativeEvent.layout.width; }} {...seekPan.panHandlers}>
-                  <View style={styles.audioSeekTrack}>
-                    <View ref={fillRef} style={[styles.audioSeekFill, { width: `${progress * 100}%` as any }]} />
-                  </View>
-                  <View ref={thumbRef} style={[styles.audioSeekThumb, { left: `${Math.min(progress * 100, 100)}%` as any }]} pointerEvents="none" />
+            {!overlayIsText && (
+              <View style={styles.authorInfo}>
+                <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={crownWinnerId === moment.user_id} />
+                <View style={{ flex: 1 }}>
+                  <View style={styles.usernameLine}><Text style={styles.username}>{moment.username}</Text><Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text></View>
+                  {overlayNote && <ExpandableNote text={overlayNote} maxLines={3} />}
                 </View>
-                <View style={styles.audioTimesRow}>
-                  <Text style={styles.audioTimeText}>{fmtAudio(status.currentTime)}</Text>
-                  <Text style={styles.audioTimeText}>{fmtAudio(status.duration)}</Text>
-                </View>
+                {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => setPickerOpen(true)}><ReactIcon /></TouchableOpacity>}
               </View>
-            </View>
-            <View style={styles.authorInfo}>
-              <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={crownWinnerId === moment.user_id} />
-              <View style={{ flex: 1 }}>
-                <View style={styles.usernameLine}>
-                  <Text style={styles.username}>{moment.username}</Text>
-                  <Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text>
-                </View>
-                {moment.note && <ExpandableNote text={moment.note} maxLines={3} />}
-              </View>
-              {!isOwn && (
-                <TouchableOpacity style={styles.reactBtnInline} onPress={() => setPickerOpen(true)}>
-                  <ReactIcon />
-                </TouchableOpacity>
-              )}
-            </View>
+            )}
             <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={isOwn ? undefined : onReact} photoId={moment.id} crownWinnerId={crownWinnerId} />
           </LinearGradient>
           {hasSecond && (
-            <SecondCaptureThumbnail secondPath={moment.second_image_path!} secondNote={moment.second_note} onPress={() => setSwapped(true)} />
+            <SecondCaptureThumbnail
+              secondPath={swapped ? moment.image_path : moment.second_image_path!}
+              secondNote={swapped ? moment.note : moment.second_note}
+              onPress={() => setSwapped(v => !v)}
+            />
           )}
         </View>
       </View>
@@ -920,21 +1003,15 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
   const [videoCache, setVideoCache] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    photos.forEach((p) => {
-      if (p.url && p.image_path !== "text_mode" && !p.image_path.endsWith(".m4a") && !p.image_path.endsWith(".mp4")) {
-        Image.prefetch(p.url);
-        if (p.fallback_url) Image.prefetch(p.fallback_url);
-      }
-    });
-    const videos = photos.filter((p) => p.url && p.image_path.endsWith(".mp4"));
-    const localPaths: string[] = [];
+    // Videos that are already local (served from mediaCache) don't need downloading again.
+    // For any video whose URL is still a remote URL, download it for this session.
+    const videos = photos.filter((p) => p.url && p.image_path.endsWith(".mp4") && p.url.startsWith("http"));
     let cancelled = false;
     (async () => {
       const entries: Record<string, string> = {};
       await Promise.all(videos.map(async (p) => {
-        const filename = p.image_path.replace(/\//g, "_");
-        const localUri = `${FileSystem.cacheDirectory}reveal_${filename}`;
-        localPaths.push(localUri);
+        const filename = "reveal_" + p.image_path.replace(/\//g, "_");
+        const localUri = `${FileSystem.cacheDirectory}${filename}`;
         try {
           const info = await FileSystem.getInfoAsync(localUri);
           if (!info.exists) await FileSystem.downloadAsync(p.url!, localUri);
@@ -943,10 +1020,7 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
       }));
       if (!cancelled) setVideoCache(entries);
     })();
-    return () => {
-      cancelled = true;
-      localPaths.forEach((uri) => FileSystem.deleteAsync(uri, { idempotent: true }));
-    };
+    return () => { cancelled = true; };
   }, [photos]);
 
   useEffect(() => {
@@ -1018,7 +1092,7 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
       return <VideoMoment moment={moment} isVisible={index === visibleIndex} onReact={onReact} currentUserId={currentUserId} crownWinnerId={crownWinnerId} cachedUrl={videoCache[moment.url] ?? moment.url} />;
     }
 
-    return <PhotoMomentPage moment={moment} currentUserId={currentUserId} crownWinnerId={crownWinnerId} onReact={onReact} />;
+    return <PhotoMomentPage moment={moment} currentUserId={currentUserId} crownWinnerId={crownWinnerId} onReact={onReact} isVisible={index === visibleIndex} />;
   };
 
   const activePhoto = useMemo(() => photos.find(p => p.id === openPickerId), [photos, openPickerId]);
@@ -1109,9 +1183,9 @@ const styles = StyleSheet.create({
   countdownText: { fontFamily: "Inter_700Bold", fontSize: 32, color: "#FFF", marginTop: 12, letterSpacing: 2 },
   pauseOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: "center", alignItems: "center" },
   pauseCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" },
-  audioWaveContainer: { position: "absolute", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 3, bottom: "38%", left: 24, right: 24 },
+  audioWaveContainer: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 3 },
   audioWaveBar: { width: 3, borderRadius: 2, backgroundColor: "#FFF" },
-  audioPlayerRow: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 16 },
+  audioPlayerRow: { flexDirection: "row", alignItems: "center", gap: 14, alignSelf: "stretch" },
   audioPlayBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
   audioSpeedBtn: { width: 40, height: 28, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
   audioSpeedText: { color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 12 },
@@ -1133,4 +1207,12 @@ const styles = StyleSheet.create({
   customSendBtn: { backgroundColor: "#FFF", paddingHorizontal: 32, paddingVertical: 14, borderRadius: 100 },
   customSendBtnDisabled: { opacity: 0.5 },
   customSendText: { color: "#000", fontFamily: "Inter_700Bold", fontSize: 16 },
+  // Second capture thumbnail (bottom-right of momentWrapper)
+  secondThumb: { position: "absolute", bottom: 72, right: 14, width: 48, height: 85, borderRadius: 8, overflow: "hidden", borderWidth: 1.5, borderColor: "rgba(255,255,255,0.25)" },
+  secondThumbBg: { flex: 1, backgroundColor: "#1A1A1A", justifyContent: "center", alignItems: "center" },
+  secondThumbText: { color: "rgba(255,255,255,0.85)", fontFamily: "Inter_600SemiBold", fontSize: 7.5, textAlign: "center", lineHeight: 11 },
+  secondThumbImage: { width: "100%", height: "100%" },
+  secondThumbOverlay: { position: "absolute", bottom: 4, right: 4, width: 14, height: 14, borderRadius: 3, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center" },
+  secondThumbPlayBadge: { width: 18, height: 18, borderRadius: 9, backgroundColor: "rgba(255,255,255,0.2)", justifyContent: "center", alignItems: "center", paddingLeft: 1 },
+  secondThumbPlayCircle: { width: 22, height: 22, borderRadius: 11, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", paddingLeft: 2 },
 });

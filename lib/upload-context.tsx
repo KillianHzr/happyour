@@ -132,7 +132,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
 
         setActiveUploads((prev) => prev.map(t => t.id === taskId ? { ...t, progress: 0.8 } : t));
 
-        console.log(`[Upload ${taskId}] 3. Enregistrement en BDD...`);
+        console.log(`[Upload ${taskId}] 3. Enregistrement en BDD... secondPath=${secondPath}`);
         // 3. Enregistrement en BDD
         const { error: dbError } = await supabase.from("photos").insert({
           group_id: dbData.group_id,
