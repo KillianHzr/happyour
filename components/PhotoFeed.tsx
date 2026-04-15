@@ -26,6 +26,7 @@ import { BlurView } from "expo-blur";
 import { Svg, Path, Circle, Text as SvgText } from "react-native-svg";
 // import { StrokeText } from "@charmy.tech/react-native-stroke-text";
 import { STICKERS, type StickerId, getMonthlyStickers } from "./stickers";
+import { r2Storage } from "../lib/r2";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const NAVBAR_HEIGHT = 100;
@@ -94,6 +95,8 @@ export type PhotoEntry = {
   username: string;
   avatar_url?: string | null;
   image_path: string;
+  second_image_path?: string | null;
+  second_note?: string | null;
   user_id: string;
   reactions: Reaction[];
 };
@@ -170,6 +173,108 @@ function PhotoImage({ url, fallback_url, isDrawing }: { url: string; fallback_ur
       contentPosition={{ top: 0, left: "50%" }}
       onError={() => { if (fallback_url && src !== fallback_url) setSrc(fallback_url); }}
     />
+  );
+}
+
+function SecondCaptureThumbnail({ secondPath, secondNote, onPress }: {
+  secondPath: string; secondNote?: string | null; onPress: () => void;
+}) {
+  const isText = secondPath === "text_mode";
+  const isAudio = secondPath.endsWith(".m4a");
+  return (
+    <TouchableOpacity onPress={onPress} style={styles.secondThumb} activeOpacity={0.8}>
+      {isText ? (
+        <View style={styles.secondThumbBg}>
+          <Text style={styles.secondThumbText} numberOfLines={3}>{secondNote ?? ""}</Text>
+        </View>
+      ) : isAudio ? (
+        <View style={styles.secondThumbBg}>
+          <Svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <Path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+            <Path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
+          </Svg>
+        </View>
+      ) : (
+        <Image
+          source={{ uri: r2Storage.getPublicUrl(secondPath) }}
+          style={styles.secondThumbImage}
+          contentFit={secondPath.includes("_draw") ? "contain" : "cover"}
+        />
+      )}
+      <View style={styles.secondThumbOverlay}>
+        <Svg width="10" height="9" viewBox="0 0 20 18" fill="none">
+          <Path d="M1 13L5 17M5 17L9 13M5 17L5 1M19 5L15 1M15 1L11 5M15 1L15 17" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        </Svg>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+function PhotoMomentPage({ moment, currentUserId, crownWinnerId, onReact }: {
+  moment: PhotoEntry;
+  currentUserId?: string;
+  crownWinnerId?: string | null;
+  onReact?: (photoId: string, stickerId: StickerId) => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const [swapped, setSwapped] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const myReaction = moment.reactions.find((r) => r.user_id === currentUserId)?.sticker_id ?? null;
+  const isOwn = moment.user_id === currentUserId;
+
+  const hasSecond = !!moment.second_image_path;
+  const effectivePath = swapped && hasSecond ? moment.second_image_path! : moment.image_path;
+  const effectiveNote = swapped && hasSecond ? moment.second_note : moment.note;
+  const effectiveUrl = swapped && hasSecond
+    ? (moment.second_image_path === "text_mode" ? "" : r2Storage.getPublicUrl(moment.second_image_path!))
+    : moment.url;
+
+  const thumbnailPath = hasSecond ? (swapped ? moment.image_path : moment.second_image_path!) : null;
+  const thumbnailNote = swapped ? moment.note : moment.second_note;
+
+  const isTextOnly = effectivePath === "text_mode";
+  const isDrawing = effectivePath.includes("_draw");
+  const textLen = effectiveNote?.length ?? 0;
+  const fontSize = textLen <= 40 ? 32 : textLen <= 100 ? 26 : textLen <= 200 ? 21 : textLen <= 300 ? 17 : 15;
+
+  return (
+    <View style={[styles.fullscreenPage, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12 }]}>
+      <View style={styles.momentWrapper}>
+        {isTextOnly ? (
+          <View style={styles.textMomentBg}>
+            <View style={styles.quoteContainer}>
+              <Text style={[styles.textMomentContent, { fontSize, lineHeight: Math.round(fontSize * 1.4) }]}>{effectiveNote}</Text>
+              <View style={styles.citationFooter}>
+                <View style={styles.citationAvatar}><CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} isCrown={crownWinnerId === moment.user_id} /></View>
+                <View style={{ flex: 1 }}><Text style={styles.citationUsername}>{moment.username}</Text><Text style={styles.citationTime}>{formatTime(moment.created_at)}</Text></View>
+                {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => setPickerOpen(true)}><ReactIcon /></TouchableOpacity>}
+              </View>
+            </View>
+          </View>
+        ) : (
+          <PhotoImage url={effectiveUrl} fallback_url={swapped ? undefined : moment.fallback_url} isDrawing={isDrawing} />
+        )}
+        <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+          <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.momentOverlay}>
+            {!isTextOnly && (
+              <View style={styles.authorInfo}>
+                <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={crownWinnerId === moment.user_id} />
+                <View style={{ flex: 1 }}>
+                  <View style={styles.usernameLine}><Text style={styles.username}>{moment.username}</Text><Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text></View>
+                  {effectiveNote && <ExpandableNote text={effectiveNote} maxLines={2} />}
+                </View>
+                {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => setPickerOpen(true)}><ReactIcon /></TouchableOpacity>}
+              </View>
+            )}
+            <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={isOwn ? undefined : onReact} photoId={moment.id} crownWinnerId={crownWinnerId} />
+          </LinearGradient>
+          {thumbnailPath && (
+            <SecondCaptureThumbnail secondPath={thumbnailPath} secondNote={thumbnailNote} onPress={() => setSwapped(v => !v)} />
+          )}
+        </View>
+      </View>
+      {!isOwn && <StickerPicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={(sid) => { onReact?.(moment.id, sid); setPickerOpen(false); }} myReaction={myReaction} />}
+    </View>
   );
 }
 
@@ -399,8 +504,10 @@ function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId,
   const insets = useSafeAreaInsets();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [swapped, setSwapped] = useState(false);
 
-  const player = useAudioPlayer(isVisible ? moment.url : "");
+  const hasSecond = !!moment.second_image_path;
+  const player = useAudioPlayer(isVisible && !swapped ? moment.url : "");
   const status = useAudioPlayerStatus(player);
 
   const isOwn = moment.user_id === currentUserId;
@@ -487,6 +594,54 @@ function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId,
     })
   ).current;
 
+  // When swapped, show the second capture as main content
+  if (swapped && hasSecond) {
+    const secondPath = moment.second_image_path!;
+    const secondIsText = secondPath === "text_mode";
+    const secondIsDrawing = secondPath.includes("_draw");
+    const secondUrl = secondIsText ? "" : r2Storage.getPublicUrl(secondPath);
+    const secondNote = moment.second_note;
+    const textLen = secondNote?.length ?? 0;
+    const fontSize = textLen <= 40 ? 32 : textLen <= 100 ? 26 : textLen <= 200 ? 21 : textLen <= 300 ? 17 : 15;
+    return (
+      <View style={[styles.fullscreenPage, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12 }]}>
+        <View style={styles.momentWrapper}>
+          {secondIsText ? (
+            <View style={styles.textMomentBg}>
+              <View style={styles.quoteContainer}>
+                <Text style={[styles.textMomentContent, { fontSize, lineHeight: Math.round(fontSize * 1.4) }]}>{secondNote}</Text>
+                <View style={styles.citationFooter}>
+                  <View style={styles.citationAvatar}><CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} isCrown={crownWinnerId === moment.user_id} /></View>
+                  <View style={{ flex: 1 }}><Text style={styles.citationUsername}>{moment.username}</Text><Text style={styles.citationTime}>{formatTime(moment.created_at)}</Text></View>
+                  {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => setPickerOpen(true)}><ReactIcon /></TouchableOpacity>}
+                </View>
+              </View>
+            </View>
+          ) : (
+            <PhotoImage url={secondUrl} isDrawing={secondIsDrawing} />
+          )}
+          <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+            <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.momentOverlay}>
+              {!secondIsText && (
+                <View style={styles.authorInfo}>
+                  <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={crownWinnerId === moment.user_id} />
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.usernameLine}><Text style={styles.username}>{moment.username}</Text><Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text></View>
+                    {secondNote && <ExpandableNote text={secondNote} maxLines={2} />}
+                  </View>
+                  {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => setPickerOpen(true)}><ReactIcon /></TouchableOpacity>}
+                </View>
+              )}
+              <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={isOwn ? undefined : onReact} photoId={moment.id} crownWinnerId={crownWinnerId} />
+            </LinearGradient>
+            <SecondCaptureThumbnail secondPath={moment.image_path} secondNote={moment.note} onPress={() => setSwapped(false)} />
+          </View>
+        </View>
+        {!isOwn && <StickerPicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={(sid) => { onReact?.(moment.id, sid); setPickerOpen(false); }} myReaction={myReaction} />}
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.fullscreenPage, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12 }]}>
       <View style={styles.momentWrapper}>
@@ -540,9 +695,12 @@ function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId,
             </View>
             <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={isOwn ? undefined : onReact} photoId={moment.id} crownWinnerId={crownWinnerId} />
           </LinearGradient>
+          {hasSecond && (
+            <SecondCaptureThumbnail secondPath={moment.second_image_path!} secondNote={moment.second_note} onPress={() => setSwapped(true)} />
+          )}
         </View>
       </View>
-      {!isOwn && <StickerPicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={(sid) => onReact?.(moment.id, sid)} myReaction={myReaction} />}
+      {!isOwn && <StickerPicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={(sid) => { onReact?.(moment.id, sid); setPickerOpen(false); }} myReaction={myReaction} />}
     </View>
   );
 }
@@ -559,8 +717,10 @@ function VideoMoment({ moment, isVisible, cachedUrl, onReact, currentUserId, cro
   const insets = useSafeAreaInsets();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [swapped, setSwapped] = useState(false);
 
-  const player = useVideoPlayer(cachedUrl || null, (p) => {
+  const hasSecond = !!moment.second_image_path;
+  const player = useVideoPlayer((!swapped && cachedUrl) ? cachedUrl : null, (p) => {
     p.loop = true;
     p.muted = false;
   });
@@ -576,6 +736,53 @@ function VideoMoment({ moment, isVisible, cachedUrl, onReact, currentUserId, cro
   useEffect(() => {
     if (!isVisible) setIsPaused(false);
   }, [isVisible]);
+
+  if (swapped && hasSecond) {
+    const secondPath = moment.second_image_path!;
+    const secondIsText = secondPath === "text_mode";
+    const secondIsDrawing = secondPath.includes("_draw");
+    const secondUrl = secondIsText ? "" : r2Storage.getPublicUrl(secondPath);
+    const secondNote = moment.second_note;
+    const textLen = secondNote?.length ?? 0;
+    const fontSize = textLen <= 40 ? 32 : textLen <= 100 ? 26 : textLen <= 200 ? 21 : textLen <= 300 ? 17 : 15;
+    return (
+      <View style={[styles.fullscreenPage, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12 }]}>
+        <View style={styles.momentWrapper}>
+          {secondIsText ? (
+            <View style={styles.textMomentBg}>
+              <View style={styles.quoteContainer}>
+                <Text style={[styles.textMomentContent, { fontSize, lineHeight: Math.round(fontSize * 1.4) }]}>{secondNote}</Text>
+                <View style={styles.citationFooter}>
+                  <View style={styles.citationAvatar}><CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} isCrown={crownWinnerId === moment.user_id} /></View>
+                  <View style={{ flex: 1 }}><Text style={styles.citationUsername}>{moment.username}</Text><Text style={styles.citationTime}>{formatTime(moment.created_at)}</Text></View>
+                  {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => setPickerOpen(true)}><ReactIcon /></TouchableOpacity>}
+                </View>
+              </View>
+            </View>
+          ) : (
+            <PhotoImage url={secondUrl} isDrawing={secondIsDrawing} />
+          )}
+          <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+            <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.momentOverlay}>
+              {!secondIsText && (
+                <View style={styles.authorInfo}>
+                  <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={crownWinnerId === moment.user_id} />
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.usernameLine}><Text style={styles.username}>{moment.username}</Text><Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text></View>
+                    {secondNote && <ExpandableNote text={secondNote} maxLines={2} />}
+                  </View>
+                  {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => setPickerOpen(true)}><ReactIcon /></TouchableOpacity>}
+                </View>
+              )}
+              <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={isOwn ? undefined : onReact} photoId={moment.id} crownWinnerId={crownWinnerId} />
+            </LinearGradient>
+            <SecondCaptureThumbnail secondPath={moment.image_path} secondNote={moment.note} onPress={() => setSwapped(false)} />
+          </View>
+        </View>
+        {!isOwn && <StickerPicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={(sid) => { onReact?.(moment.id, sid); setPickerOpen(false); }} myReaction={myReaction} />}
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.fullscreenPage, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12 }]}>
@@ -612,9 +819,12 @@ function VideoMoment({ moment, isVisible, cachedUrl, onReact, currentUserId, cro
             </View>
             <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={isOwn ? undefined : onReact} photoId={moment.id} crownWinnerId={crownWinnerId} />
           </LinearGradient>
+          {hasSecond && (
+            <SecondCaptureThumbnail secondPath={moment.second_image_path!} secondNote={moment.second_note} onPress={() => setSwapped(true)} />
+          )}
         </View>
       </View>
-      {!isOwn && <StickerPicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={(sid) => onReact?.(moment.id, sid)} myReaction={myReaction} />}
+      {!isOwn && <StickerPicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={(sid) => { onReact?.(moment.id, sid); setPickerOpen(false); }} myReaction={myReaction} />}
     </View>
   );
 }
@@ -808,39 +1018,7 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
       return <VideoMoment moment={moment} isVisible={index === visibleIndex} onReact={onReact} currentUserId={currentUserId} crownWinnerId={crownWinnerId} cachedUrl={videoCache[moment.url] ?? moment.url} />;
     }
 
-    return (
-      <View style={[styles.fullscreenPage, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12 }]}>
-        <View style={styles.momentWrapper}>
-          {isTextOnly ? (
-            <View style={styles.textMomentBg}>
-              <View style={styles.quoteContainer}>
-                <Text style={[styles.textMomentContent, { fontSize, lineHeight: Math.round(fontSize * 1.4) }]}>{moment.note}</Text>
-                <View style={styles.citationFooter}>
-                  <View style={styles.citationAvatar}><CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} isCrown={crownWinnerId === moment.user_id} /></View>
-                  <View style={{ flex: 1 }}><Text style={styles.citationUsername}>{moment.username}</Text><Text style={styles.citationTime}>{formatTime(moment.created_at)}</Text></View>
-                  {!isOwn && ( <TouchableOpacity style={styles.reactBtnInline} onPress={() => setOpenPickerId(moment.id)}><ReactIcon /></TouchableOpacity> )}
-                </View>
-              </View>
-            </View>
-          ) : ( <PhotoImage url={moment.url} fallback_url={moment.fallback_url} isDrawing={isDrawing} /> )}
-          <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-            <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.momentOverlay}>
-              {!isTextOnly && (
-                <View style={styles.authorInfo}>
-                  <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={crownWinnerId === moment.user_id} />
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.usernameLine}><Text style={styles.username}>{moment.username}</Text><Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text></View>
-                    {moment.note && <ExpandableNote text={moment.note} maxLines={2} />}
-                  </View>
-                  {!isOwn && ( <TouchableOpacity style={styles.reactBtnInline} onPress={() => setOpenPickerId(moment.id)}><ReactIcon /></TouchableOpacity> )}
-                </View>
-              )}
-              <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={isOwn ? undefined : onReact} photoId={moment.id} crownWinnerId={crownWinnerId} />
-            </LinearGradient>
-          </View>
-        </View>
-      </View>
-    );
+    return <PhotoMomentPage moment={moment} currentUserId={currentUserId} crownWinnerId={crownWinnerId} onReact={onReact} />;
   };
 
   const activePhoto = useMemo(() => photos.find(p => p.id === openPickerId), [photos, openPickerId]);

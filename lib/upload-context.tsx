@@ -12,13 +12,21 @@ type UploadTask = {
   type: "photo" | "video" | "texte" | "audio" | "dessin";
 };
 
+type SecondFile = {
+  fileName: string | null;
+  fileUri: string | null;
+  contentType: string | null;
+  note?: string | null; // texte de la 2e capture si text_mode
+} | null;
+
 type UploadContextType = {
   activeUploads: UploadTask[];
   startUpload: (
     fileName: string | null, // null pour le texte
     fileUri: string | null,  // null pour le texte
     contentType: string | null,
-    dbData: { group_id: string; user_id: string; note: string | null }
+    dbData: { group_id: string; user_id: string; note: string | null },
+    secondFile?: SecondFile
   ) => void;
 };
 
@@ -31,7 +39,8 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
     fileName: string | null,
     fileUri: string | null,
     contentType: string | null,
-    dbData: { group_id: string; user_id: string; note: string | null }
+    dbData: { group_id: string; user_id: string; note: string | null },
+    secondFile?: SecondFile
   ) => {
     const taskId = Math.random().toString(36).substring(7);
     
@@ -94,6 +103,33 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
           finalPath = fileName;
         }
 
+        // 2b. Upload du fichier secondaire (double capture)
+        let secondPath: string | null = null;
+        if (secondFile != null) {
+          if (secondFile.fileName === null) {
+            // text_mode second capture
+            secondPath = "text_mode";
+          } else if (secondFile.fileName && secondFile.fileUri && secondFile.contentType) {
+            const sf = secondFile as { fileName: string; fileUri: string; contentType: string };
+            const isSecondVideo = sf.contentType.includes("video") || sf.fileName.endsWith(".mp4");
+            const isSecondAudio = sf.contentType.includes("audio") || sf.fileName.endsWith(".m4a");
+            if (isSecondVideo || isSecondAudio) {
+              const presignedUrl2 = await r2Storage.getPresignedUploadUrl(sf.fileName, sf.contentType);
+              const uploadResult2 = await FileSystem.uploadAsync(presignedUrl2, sf.fileUri, {
+                httpMethod: "PUT",
+                headers: { "Content-Type": sf.contentType },
+              });
+              if (uploadResult2.status < 200 || uploadResult2.status >= 300) {
+                throw new Error(`Upload 2e capture échoué: HTTP ${uploadResult2.status}`);
+              }
+            } else {
+              const base64b = await FileSystem.readAsStringAsync(sf.fileUri, { encoding: FileSystem.EncodingType.Base64 });
+              await r2Storage.upload(sf.fileName, decode(base64b), sf.contentType);
+            }
+            secondPath = sf.fileName;
+          }
+        }
+
         setActiveUploads((prev) => prev.map(t => t.id === taskId ? { ...t, progress: 0.8 } : t));
 
         console.log(`[Upload ${taskId}] 3. Enregistrement en BDD...`);
@@ -103,6 +139,8 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
           user_id: dbData.user_id,
           image_path: finalPath,
           note: dbData.note,
+          ...(secondPath !== null ? { second_image_path: secondPath } : {}),
+          ...(secondPath === "text_mode" && secondFile?.note ? { second_note: secondFile.note } : {}),
         });
 
         if (dbError) throw dbError;

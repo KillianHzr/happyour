@@ -164,7 +164,7 @@ export default function MainPagerScreen() {
           const [membersRes, photosRes] = await Promise.all([
             supabase.from("group_members").select("user_id, role, profiles:user_id(username, avatar_url)").eq("group_id", g.id),
             supabase.from("photos")
-              .select("id, image_path, created_at, note, user_id, profiles:user_id(username, avatar_url)")
+              .select("id, image_path, second_image_path, second_note, created_at, note, user_id, profiles:user_id(username, avatar_url)")
               .eq("group_id", g.id)
               .gte("created_at", photoStart.toISOString())
               .lt("created_at", photoEnd.toISOString())
@@ -210,6 +210,8 @@ export default function MainPagerScreen() {
               username: p.profiles?.username ?? "Anonyme",
               avatar_url: p.profiles?.avatar_url,
               image_path: p.image_path,
+              second_image_path: p.second_image_path ?? null,
+              second_note: p.second_note ?? null,
               user_id: p.user_id,
               reactions: reactionsByPhoto[p.id] ?? [],
             }));
