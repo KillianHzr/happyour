@@ -114,6 +114,12 @@ type Props = {
   crownDurationMs?: number;
   groupName?: string;
   onScrollLock?: (locked: boolean) => void;
+  onActiveIndexChange?: (index: number) => void;
+};
+
+const isEmoji = (str: string) => {
+  const regexExp = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/gi;
+  return regexExp.test(str);
 };
 
 const ReactIcon = () => (
@@ -212,7 +218,9 @@ function ReactionsRow({ reactions, currentUserId, onReact, photoId, crownWinnerI
   photoId: string;
   crownWinnerId?: string | null;
 }) {
-  if (reactions.length === 0) return null;
+  if (reactions.length === 0) {
+    return null;
+  }
 
   const stickerIdsInReactions = Array.from(new Set(reactions.map((r) => r.sticker_id)));
   const groups = stickerIdsInReactions.map((sid) => {
@@ -229,6 +237,8 @@ function ReactionsRow({ reactions, currentUserId, onReact, photoId, crownWinnerI
       {groups.map(({ id, text, users }) => {
         const iMine = users.some((r) => r.user_id === currentUserId);
         const isCrownReaction = crownWinnerId != null && users.some((r) => r.user_id === crownWinnerId);
+        const emojiDetected = isEmoji(text);
+
         return (
           <TouchableOpacity
             key={id}
@@ -247,7 +257,11 @@ function ReactionsRow({ reactions, currentUserId, onReact, photoId, crownWinnerI
               ))}
             </View>
             <View style={styles.reactionStickerWrap}>
-              <TextSticker text={text} fontSize={12} />
+              {emojiDetected ? (
+                <Text style={{ fontSize: 14 }}>{text}</Text>
+              ) : (
+                <TextSticker text={text} fontSize={12} />
+              )}
             </View>
             {users.length > 2 && (
               <Text style={styles.reactionCount}>+{users.length - 2}</Text>
@@ -701,7 +715,7 @@ function CrownRevealPage({ winner, durationMs }: { winner: PhotoEntry; durationM
   );
 }
 
-export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDate, crownWinnerId, crownDurationMs = 0, groupName, onScrollLock }: Props) {
+export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDate, crownWinnerId, crownDurationMs = 0, groupName, onScrollLock, onActiveIndexChange }: Props) {
   const insets = useSafeAreaInsets();
   const [visibleIndex, setVisibleIndex] = useState(0);
   const [openPickerId, setOpenPickerId] = useState<string | null>(null);
@@ -755,8 +769,12 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
   }, [nextUnlockDate]);
 
   const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-    if (viewableItems.length > 0 && viewableItems[0].index != null) { setVisibleIndex(viewableItems[0].index); }
-  }, []);
+    if (viewableItems.length > 0 && viewableItems[0].index != null) {
+      const idx = viewableItems[0].index;
+      setVisibleIndex(idx);
+      onActiveIndexChange?.(idx);
+    }
+  }, [onActiveIndexChange]);
   const viewabilityConfig = useMemo(() => ({ itemVisiblePercentThreshold: 50 }), []);
 
   const items = useMemo<FeedItem[]>(() => {

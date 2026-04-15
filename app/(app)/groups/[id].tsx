@@ -127,6 +127,7 @@ export default function MainPagerScreen() {
   const fetchAllData = useCallback(async () => {
     if (!user) return;
     try {
+      console.log(`[fetchAllData] Start. Active Group: ${activeGroupId}`);
       const { data: cfgRows } = await supabase
         .from("app_config")
         .select("key, value")
@@ -137,10 +138,11 @@ export default function MainPagerScreen() {
 
       const { revealDate: currentRevealDate, prevRevealDate } = getWeekBounds(cfg.reveal_day, cfg.reveal_hour);
       const currentRevealEndDate = new Date(currentRevealDate.getTime() + 16 * 60 * 60 * 1000);
-      const currentNextRevealDate = new Date(currentRevealDate.getTime() + 7 * 24 * 60 * 60 * 1000);
       const afterRevealWindow = new Date() >= currentRevealEndDate;
       const photoStart = afterRevealWindow ? currentRevealDate : prevRevealDate;
-      const photoEnd = afterRevealWindow ? currentNextRevealDate : currentRevealDate;
+      const photoEnd = afterRevealWindow ? new Date(currentRevealDate.getTime() + 7 * 24 * 60 * 60 * 1000) : currentRevealDate;
+
+      console.log(`[fetchAllData] Range: ${photoStart.toISOString()} to ${photoEnd.toISOString()} (afterRevealWindow: ${afterRevealWindow})`);
 
       const [groupsRes, profileRes] = await Promise.all([
         supabase.from("group_members").select("groups(id, name, invite_code, created_at)").eq("user_id", user.id),
@@ -182,21 +184,35 @@ export default function MainPagerScreen() {
           let crownWinnerId: string | null = null;
           let crownDurationMs = 0;
 
-          if (!afterRevealWindow && photosRes.data && photosRes.data.length > 0) {
+          if (photosRes.data && photosRes.data.length > 0) {
             const photoIds = photosRes.data.map((p: any) => p.id);
-            const reactionsRes = await supabase
+            console.log(`[fetchAllData] Group ${g.name}: Fetching reactions for ${photoIds.length} photos`);
+            
+            // Removed the join that was causing PGRST200 error
+            const { data: rawReactions, error: rErr } = await supabase
               .from("reactions")
-              .select("id, photo_id, user_id, emoji, profiles:user_id(username, avatar_url)")
+              .select("id, photo_id, user_id, emoji")
               .in("photo_id", photoIds);
 
+            if (rErr) {
+              console.error(`[fetchAllData] Error fetching reactions for group ${g.id}:`, rErr);
+            }
+
+            console.log(`[fetchAllData] Group ${g.name}: DB returned ${rawReactions?.length ?? 0} reactions`);
+
             const reactionsByPhoto: Record<string, Reaction[]> = {};
-            for (const r of reactionsRes.data ?? []) {
+            for (const r of rawReactions ?? []) {
               const stickerId = (r.emoji || "") as StickerId;
               if (!reactionsByPhoto[r.photo_id]) reactionsByPhoto[r.photo_id] = [];
+              
+              // Find profile info from the membersData we already have
+              const member = membersData.find(m => m.user_id === r.user_id);
+
               reactionsByPhoto[r.photo_id].push({
-                id: r.id, user_id: r.user_id,
-                username: r.profiles?.username ?? "?",
-                avatar_url: r.profiles?.avatar_url ?? null,
+                id: r.id, 
+                user_id: r.user_id,
+                username: member?.username ?? "Anonyme",
+                avatar_url: member?.avatar_url ?? null,
                 sticker_id: stickerId,
               });
             }
@@ -231,10 +247,13 @@ export default function MainPagerScreen() {
         })
       );
 
+      console.log("[fetchAllData] Updating state with fresh data");
       setGroupData(Object.fromEntries(dataEntries));
-    } catch {}
+    } catch (err) {
+      console.error("[fetchAllData] Global error:", err);
+    }
     setDataLoaded(true);
-  }, [user]);
+  }, [user, activeGroupId]);
 
   const fetchAllDataRef = useRef(fetchAllData);
   fetchAllDataRef.current = fetchAllData;
@@ -277,10 +296,13 @@ export default function MainPagerScreen() {
   // Polling toutes les 30s (filet de sécurité si Realtime non configuré)
   useEffect(() => {
     const interval = setInterval(() => {
-      if (AppState.currentState === "active") fetchAllDataRef.current();
+      if (AppState.currentState === "active" && !showReveal) {
+        console.log("[Polling] Tick (30s), refreshing data...");
+        fetchAllDataRef.current();
+      }
     }, 30_000);
     return () => clearInterval(interval);
-  }, []);
+  }, [showReveal]);
 
   // Persiste le groupe actif pour le prochain lancement de l'app
   useEffect(() => {
@@ -485,6 +507,174 @@ export default function MainPagerScreen() {
     setCurrentPage(page);
   };
 
+  const [activePhotoId, setActivePhotoId] = useState<string | null>(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const emojiPickerAnim = useRef(new Animated.Value(0)).current;
+
+  const toggleEmojiPicker = () => {
+    const toValue = showEmojiPicker ? 0 : 1;
+    Animated.spring(emojiPickerAnim, { toValue, useNativeDriver: true, tension: 50, friction: 7 }).start();
+    setShowEmojiPicker(!showEmojiPicker);
+  };
+
+  const handleActiveIndexChange = useCallback((index: number) => {
+    if (!activeData) return;
+    console.log(`[handleActiveIndexChange] Scrolled to index: ${index}`);
+    // Puits d'indices: intro, (crown?), separator, moment, separator, moment..., end
+    const result: any[] = [];
+    result.push({ type: "intro" });
+    if (activeData.crownWinnerId) result.push({ type: "crown" });
+    let lastDate = "";
+    for (const photo of activeData.photos) {
+      const d = photo.created_at.slice(0, 10);
+      if (d !== lastDate) {
+        result.push({ type: "separator" });
+        lastDate = d;
+      }
+      result.push({ type: "moment", id: photo.id, reactions: photo.reactions.map(r => r.sticker_id) });
+    }
+    result.push({ type: "end" });
+    
+    const item = result[index];
+    if (item?.type === "moment") {
+      console.log(`[handleActiveIndexChange] Active Photo ID: ${item.id}. Reactions:`, item.reactions);
+      setActivePhotoId(item.id);
+    } else {
+      console.log(`[handleActiveIndexChange] Not a moment (type: ${item?.type})`);
+      setActivePhotoId(null);
+    }
+  }, [activeData]);
+
+  const handleEmojiReact = async (emoji: string) => {
+    if (!user || !activePhotoId) {
+      console.log("[handleEmojiReact] Canceled: No user or no activePhotoId");
+      return;
+    }
+    console.log(`[handleEmojiReact] Sending emoji ${emoji} for photo ${activePhotoId}`);
+    toggleEmojiPicker();
+
+    // Optimistic
+    const reactionId = `temp-${Math.random()}`;
+    const reactionObj: Reaction = {
+      id: reactionId,
+      user_id: user.id,
+      username: username || "Moi",
+      avatar_url: avatarUrl,
+      sticker_id: emoji as any
+    };
+
+    console.log(`[handleEmojiReact] Applying optimistic update with temp ID ${reactionId}`);
+    setGroupData(prev => {
+      const next = { ...prev };
+      const g = next[activeGroupId];
+      if (!g) return prev;
+      const newPhotos = g.photos.map(p => {
+        if (p.id !== activePhotoId) return p;
+        // Filter out any existing reaction from THIS user to enforce one-reaction-per-user
+        return { ...p, reactions: [...p.reactions.filter(r => r.user_id !== user.id), reactionObj] };
+      });
+      next[activeGroupId] = { ...g, photos: newPhotos };
+      return next;
+    });
+
+    try {
+      console.log(`[handleEmojiReact] Executing upsert for photo ${activePhotoId}, emoji: ${emoji}`);
+      const { data, error } = await supabase
+        .from("reactions")
+        .upsert({ photo_id: activePhotoId, user_id: user.id, type: "emoji", emoji }, { onConflict: "photo_id,user_id" })
+        .select("id, photo_id, user_id, emoji")
+        .single();
+      
+      if (error) {
+        console.error("[handleEmojiReact] Upsert error:", error);
+        throw error;
+      }
+      console.log(`[handleEmojiReact] Upsert success! ID: ${data.id}`);
+      
+      // Replace temp ID with real ID
+      setGroupData(prev => {
+        const next = { ...prev };
+        const g = next[activeGroupId];
+        if (!g) return prev;
+        const newPhotos = g.photos.map(p => {
+          if (p.id !== activePhotoId) return p;
+          return { ...p, reactions: p.reactions.map(r => r.id === reactionId ? { ...r, id: data.id } : r) };
+        });
+        next[activeGroupId] = { ...g, photos: newPhotos };
+        return next;
+      });
+
+    } catch (err) {
+      console.error("[handleEmojiReact] Fatal error:", err);
+    }
+  };
+
+  // Real-time reactions
+  useEffect(() => {
+    if (!user) return;
+    console.log(`[Realtime-Reactions] Initializing channel for group ${activeGroupId}. Current User: ${user.id}`);
+    const channel = supabase
+      .channel(`rt-reactions-${activeGroupId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "reactions" }, (payload) => {
+        console.log(`[Realtime-Reactions] Received ${payload.eventType} for reaction:`, payload.new || payload.old);
+        
+        const handlePayload = (nr: any, isDelete = false) => {
+          setGroupData(prev => {
+            const next = { ...prev };
+            let found = false;
+            for (const gid in next) {
+              const g = next[gid];
+              const targetPhotoId = isDelete ? (payload.old as any).photo_id : nr.photo_id;
+              if (!targetPhotoId) continue;
+
+              const pIdx = g.photos.findIndex(p => p.id === targetPhotoId);
+              if (pIdx !== -1) {
+                found = true;
+                const newPhotos = [...g.photos];
+                if (isDelete) {
+                  console.log(`[Realtime-Reactions] Deleting reaction ${payload.old.id} from state`);
+                  newPhotos[pIdx] = { ...newPhotos[pIdx], reactions: newPhotos[pIdx].reactions.filter(r => r.id !== payload.old.id) };
+                } else {
+                  if (g.photos[pIdx].reactions.some(r => r.id === nr.id && r.sticker_id === nr.emoji)) {
+                    console.log(`[Realtime-Reactions] Reaction ${nr.id} already exists with same emoji, skipping.`);
+                    return prev;
+                  }
+                  
+                  const member = g.members.find(m => m.user_id === nr.user_id);
+                  const reactionObj: Reaction = {
+                    id: nr.id, user_id: nr.user_id,
+                    username: member?.username ?? "Anonyme",
+                    avatar_url: member?.avatar_url,
+                    sticker_id: nr.emoji
+                  };
+                  
+                  console.log(`[Realtime-Reactions] Updating reaction from ${reactionObj.username} in state`);
+                  newPhotos[pIdx] = { ...newPhotos[pIdx], reactions: [...newPhotos[pIdx].reactions.filter(r => r.user_id !== nr.user_id), reactionObj] };
+                }
+                next[gid] = { ...g, photos: newPhotos };
+                return next;
+              }
+            }
+            if (!found) console.log(`[Realtime-Reactions] Photo ${isDelete ? payload.old.photo_id : nr.photo_id} not found in any group photos list`);
+            return prev;
+          });
+        };
+
+        if (payload.eventType === "DELETE") {
+          handlePayload(payload.old, true);
+        } else {
+          handlePayload(payload.new);
+        }
+      })
+      .subscribe((status) => {
+        console.log(`[Realtime-Reactions] Subscription status: ${status}`);
+      });
+    return () => { 
+      console.log(`[Realtime-Reactions] Cleaning up channel`);
+      supabase.removeChannel(channel); 
+    };
+  }, [user, activeGroupId]);
+
   const cameraTranslateX = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH] });
   const cameraScale = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [0.9, 1, 0.9] });
   const cameraOpacity = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [0.4, 1, 0.4] });
@@ -648,6 +838,7 @@ export default function MainPagerScreen() {
             crownDurationMs={crownDurationMs}
             groupName={groupName}
             onScrollLock={lockScrollDirect}
+            onActiveIndexChange={handleActiveIndexChange}
           />
           {user?.id && username && (
             <LiveReactions
@@ -657,6 +848,29 @@ export default function MainPagerScreen() {
               currentAvatarUrl={avatarUrl ?? null}
               isVisible={true}
             />
+          )}
+
+          {/* Floating Emoji Picker */}
+          {activePhotoId && (
+            <View style={styles.fabContainer}>
+              <Animated.View style={[styles.emojiPicker, { 
+                transform: [
+                  { translateY: emojiPickerAnim.interpolate({ inputRange: [0, 1], outputRange: [100, 0] }) },
+                  { scale: emojiPickerAnim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) }
+                ],
+                opacity: emojiPickerAnim
+              }]}>
+                {["❤️", "🔥", "😂", "🙌", "😮"].map(emoji => (
+                  <TouchableOpacity key={emoji} onPress={() => handleEmojiReact(emoji)} style={styles.emojiBtn}>
+                    <Text style={styles.emojiText}>{emoji}</Text>
+                  </TouchableOpacity>
+                ))}
+              </Animated.View>
+              
+              <TouchableOpacity style={styles.fab} onPress={toggleEmojiPicker} activeOpacity={0.8}>
+                <Text style={styles.fabText}>+</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
       )}
@@ -814,4 +1028,12 @@ const styles = StyleSheet.create({
   sheetCodeInput: { fontSize: 22, textAlign: "center", letterSpacing: 3, fontFamily: "Inter_700Bold" },
   sheetCancelWrap: { alignItems: "center", paddingVertical: 8 },
   sheetCancelText: { color: "rgba(255,255,255,0.4)", fontFamily: "Inter_600SemiBold", fontSize: 15 },
+
+  // Emoji Reactions
+  fabContainer: { position: "absolute", bottom: 40, right: 20, alignItems: "flex-end", zIndex: 300 },
+  fab: { width: 56, height: 56, borderRadius: 28, backgroundColor: "#FFF", justifyContent: "center", alignItems: "center", elevation: 5, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 4.65 },
+  fabText: { fontSize: 28, color: "#000", fontFamily: "Inter_700Bold" },
+  emojiPicker: { flexDirection: "row", backgroundColor: "rgba(255,255,255,0.95)", borderRadius: 30, padding: 6, marginBottom: 12, gap: 4, elevation: 5, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84 },
+  emojiBtn: { width: 44, height: 44, justifyContent: "center", alignItems: "center" },
+  emojiText: { fontSize: 24 },
 });
