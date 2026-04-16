@@ -113,6 +113,7 @@ type Props = {
   onReact?: (photoId: string, stickerId: StickerId) => void;
   currentUserId?: string;
   nextUnlockDate: Date;
+  revealEndDate?: Date;
   crownWinnerId?: string | null;
   crownDurationMs?: number;
   groupName?: string;
@@ -994,11 +995,13 @@ function CrownRevealPage({ winner, durationMs }: { winner: PhotoEntry; durationM
   );
 }
 
-export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDate, crownWinnerId, crownDurationMs = 0, groupName, onScrollLock }: Props) {
+export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDate, revealEndDate, crownWinnerId, crownDurationMs = 0, groupName, onScrollLock }: Props) {
   const insets = useSafeAreaInsets();
   const [visibleIndex, setVisibleIndex] = useState(0);
   const [openPickerId, setOpenPickerId] = useState<string | null>(null);
   const [countdownText, setCountdownText] = useState("");
+  const [revealTimeLeft, setRevealTimeLeft] = useState("");
+  const [revealMsLeft, setRevealMsLeft] = useState(Infinity);
   const flatListRef = useRef<FlatList>(null);
   const [videoCache, setVideoCache] = useState<Record<string, string>>({});
 
@@ -1037,6 +1040,22 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
   }, [nextUnlockDate]);
+
+  useEffect(() => {
+    if (!revealEndDate) return;
+    const tick = () => {
+      const ms = revealEndDate.getTime() - Date.now();
+      if (ms <= 0) { setRevealTimeLeft("Expiré"); setRevealMsLeft(0); return; }
+      setRevealMsLeft(ms);
+      const h = Math.floor(ms / 3600000);
+      const m = Math.floor((ms % 3600000) / 60000);
+      const s = Math.floor((ms % 60000) / 1000);
+      setRevealTimeLeft(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [revealEndDate]);
 
   const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     if (viewableItems.length > 0 && viewableItems[0].index != null) { setVisibleIndex(viewableItems[0].index); }
@@ -1125,12 +1144,29 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
         onSelect={(sid) => { if (openPickerId) onReact?.(openPickerId, sid); setOpenPickerId(null); }}
         myReaction={myReaction}
       />
+      {revealEndDate && revealTimeLeft !== "" && (
+        <View style={[styles.revealCountdownBar, { top: insets.top + 8 }]} pointerEvents="none">
+          <View style={[styles.revealCountdownPill, revealMsLeft < 4 * 3600000 && styles.revealCountdownPillRed]}>
+            <Svg width="12" height="12" viewBox="0 0 24 24" fill="none" style={{ marginRight: 5 }}>
+              <Path d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" stroke={revealMsLeft < 4 * 3600000 ? "#FFF" : "rgba(255,255,255,0.7)"} strokeWidth="2" strokeLinecap="round" />
+            </Svg>
+            <Text style={[styles.revealCountdownText, revealMsLeft < 4 * 3600000 && styles.revealCountdownTextRed]}>
+              {revealTimeLeft}
+            </Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   list: { flex: 1, backgroundColor: "#000" },
+  revealCountdownBar: { position: "absolute", left: 0, right: 0, alignItems: "center", zIndex: 10 },
+  revealCountdownPill: { flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: "rgba(255,255,255,0.15)" },
+  revealCountdownPillRed: { backgroundColor: "rgba(200,30,30,0.75)", borderColor: "rgba(255,100,100,0.4)" },
+  revealCountdownText: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: "rgba(255,255,255,0.85)", letterSpacing: 0.5 },
+  revealCountdownTextRed: { color: "#FFF" },
   fullscreenPage: { width: SCREEN_WIDTH, height: SCREEN_HEIGHT, justifyContent: "center", alignItems: "center", backgroundColor: "#000", paddingHorizontal: 12 },
   momentWrapper: { flex: 1, width: '100%', borderRadius: 32, overflow: "hidden", backgroundColor: "#1A1A1A" },
   separatorDay: { fontFamily: "Inter_700Bold", fontSize: 48, color: "#FFF", textAlign: "center", letterSpacing: -2 },

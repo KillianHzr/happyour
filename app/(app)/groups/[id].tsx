@@ -102,7 +102,7 @@ export default function MainPagerScreen() {
   const [isLeaving, setIsLeaving] = useState(false);
 
   // DEV
-  const [debugUnlocked, setDebugUnlocked] = useState(false);
+  const [debugUnlocked, setDebugUnlocked] = useState(true);
 
   // Derived from active group data
   const activeData = groupData[activeGroupId] ?? null;
@@ -121,7 +121,7 @@ export default function MainPagerScreen() {
 
   const now = new Date();
   const isAfterRevealWindow = now >= revealEndDate;
-  const unlocked = __DEV__ ? debugUnlocked : (now >= revealDate && now < revealEndDate);
+  const unlocked = __DEV__ ? true : (now >= revealDate && now < revealEndDate);
   const lockedRevealDate = isAfterRevealWindow ? nextRevealDate : revealDate;
 
   // ── Fetch all groups data at once ──
@@ -423,9 +423,13 @@ export default function MainPagerScreen() {
 
   const handleTransferAdmin = async (newAdminId: string) => {
     if (!user || !activeGroupId) return;
-    await supabase.from("group_members").update({ role: "admin" }).eq("group_id", activeGroupId).eq("user_id", newAdminId);
-    await supabase.from("group_members").update({ role: "member" }).eq("group_id", activeGroupId).eq("user_id", user.id);
-    setGroupData((prev) => ({ ...prev, [activeGroupId]: { ...prev[activeGroupId], isAdmin: false } }));
+    const [r1, r2] = await Promise.all([
+      supabase.from("group_members").update({ role: "admin" }).eq("group_id", activeGroupId).eq("user_id", newAdminId),
+      supabase.from("group_members").update({ role: "member" }).eq("group_id", activeGroupId).eq("user_id", user.id),
+    ]);
+    if (r1.error) throw new Error(r1.error.message);
+    if (r2.error) throw new Error(r2.error.message);
+    await fetchAllData();
   };
 
   const closeAddGroupModal = () => {
@@ -606,6 +610,7 @@ export default function MainPagerScreen() {
             photoCount={photoCount}
             photos={photos}
             revealDate={lockedRevealDate}
+            revealEndDate={unlocked ? revealEndDate : undefined}
             unlocked={unlocked}
             onOpenReveal={() => setShowReveal(true)}
             onOpenSettings={() => setShowGroupSettings(true)}
@@ -613,13 +618,7 @@ export default function MainPagerScreen() {
             onRemoveMember={async (memberId) => {
               const { error } = await supabase.from("group_members").delete().eq("group_id", activeGroupId).eq("user_id", memberId);
               if (error) throw new Error(error.message);
-              setGroupData((prev) => ({
-                ...prev,
-                [activeGroupId]: {
-                  ...prev[activeGroupId],
-                  members: (prev[activeGroupId]?.members ?? []).filter((m: any) => m.user_id !== memberId),
-                },
-              }));
+              await fetchAllData();
             }}
             groupId={activeGroupId}
             refreshing={refreshing}
@@ -673,6 +672,7 @@ export default function MainPagerScreen() {
             onReact={handleReact}
             currentUserId={user?.id}
             nextUnlockDate={nextRevealDate}
+            revealEndDate={revealEndDate}
             crownWinnerId={crownWinnerId}
             crownDurationMs={crownDurationMs}
             groupName={groupName}

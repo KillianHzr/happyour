@@ -26,6 +26,7 @@ type Props = {
   photoCount: number;
   photos: PhotoEntry[];
   revealDate: Date;
+  revealEndDate?: Date;
   unlocked: boolean;
   onOpenReveal: () => void;
   onOpenSettings: () => void;
@@ -53,24 +54,26 @@ function getStrokeWidth(count: number): number {
   return 13 + steps * 2;
 }
 
-function useCountdown(targetDate: Date) {
-  const [timeLeft, setTimeLeft] = useState("");
+function useCountdown(targetDate: Date): { text: string; msLeft: number } {
+  const [text, setText] = useState("");
+  const [msLeft, setMsLeft] = useState(0);
   useEffect(() => {
     const tick = () => {
       const diff = targetDate.getTime() - Date.now();
-      if (diff <= 0) { setTimeLeft("00:00:00"); return; }
+      if (diff <= 0) { setText("00:00:00"); setMsLeft(0); return; }
+      setMsLeft(diff);
       const d = Math.floor(diff / 86400000);
       const h = Math.floor((diff % 86400000) / 3600000);
       const m = Math.floor((diff % 3600000) / 60000);
       const s = Math.floor((diff % 60000) / 1000);
       const dStr = d > 0 ? `${d}j ` : "";
-      setTimeLeft(`${dStr}${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
+      setText(`${dStr}${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
     };
     tick();
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
   }, [targetDate]);
-  return timeLeft;
+  return { text, msLeft };
 }
 
 const APP_LINK = "app-gobelins-m2.expo.dev";
@@ -90,12 +93,14 @@ const CrownIcon = () => (
 
 export default function VaultPage({
   allGroups, activeGroupId, onSwitchGroup, onAddGroup,
-  groupName, inviteCode, isAdmin, currentUserId, members, photoCount, photos, revealDate,
+  groupName, inviteCode, isAdmin, currentUserId, members, photoCount, photos, revealDate, revealEndDate,
   unlocked, onOpenReveal, onOpenSettings, onLeaveGroup, onRemoveMember,
   groupId, onRefresh, refreshing, onSimulateReveal, onDebugNotifReveal, onDebugNotifPhoto, onDebugNotifInvite,
 }: Props) {
   const insets = useSafeAreaInsets();
-  const timeLeft = useCountdown(revealDate);
+  const { text: timeLeft } = useCountdown(revealDate);
+  const { text: revealEndLeft, msLeft: revealEndMsLeft } = useCountdown(revealEndDate ?? new Date(0));
+  const revealExpiringSoon = !!revealEndDate && revealEndMsLeft > 0 && revealEndMsLeft < 4 * 3600000;
   const [showAllMembers, setShowAllMembers] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<MemberInfo | null>(null);
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
@@ -277,6 +282,13 @@ export default function VaultPage({
           <TouchableOpacity style={styles.revealCard} onPress={onOpenReveal} activeOpacity={0.82}>
             <Text style={styles.revealEmoji}>🎉</Text>
             <Text style={styles.revealTitle}>Voir le reveal !</Text>
+            {revealEndDate && revealEndMsLeft > 0 && (
+              <View style={[styles.revealExpiry, revealExpiringSoon && styles.revealExpiryRed]}>
+                <Text style={[styles.revealExpiryText, revealExpiringSoon && styles.revealExpiryTextRed]}>
+                  Expire dans {revealEndLeft}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
         ) : (
           <View style={[styles.statsCard, strokeWidth > 0 && { borderWidth: strokeWidth }]}>
@@ -450,6 +462,10 @@ const styles = StyleSheet.create({
   revealCard: { backgroundColor: "#FFF", borderRadius: 16, paddingVertical: 32, alignItems: "center", marginBottom: 28, gap: 8 },
   revealEmoji: { fontSize: 42 },
   revealTitle: { fontFamily: "Inter_700Bold", fontSize: 22, color: "#000" },
+  revealExpiry: { marginTop: 4, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, backgroundColor: "rgba(0,0,0,0.07)" },
+  revealExpiryRed: { backgroundColor: "rgba(200,30,30,0.12)" },
+  revealExpiryText: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: "rgba(0,0,0,0.45)" },
+  revealExpiryTextRed: { color: "#C81E1E" },
 
   // Participants
   sectionTitle: { fontFamily: "Inter_700Bold", fontSize: 16, color: "#FFF", marginBottom: 14, marginTop: 4 },
