@@ -6,15 +6,12 @@ import {
   StyleSheet,
   Dimensions,
   TouchableOpacity,
-  Modal,
   Pressable,
   ViewToken,
   Platform,
   PanResponder,
   Animated,
   ActivityIndicator,
-  TextInput,
-  KeyboardAvoidingView as RNKeyboardAvoidingView,
 } from "react-native";
 import { Image } from "expo-image";
 import * as FileSystem from "expo-file-system/legacy";
@@ -22,30 +19,28 @@ import { useVideoPlayer, VideoView } from "expo-video";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { BlurView } from "expo-blur";
 import { Svg, Path, Circle, Text as SvgText } from "react-native-svg";
-// import { StrokeText } from "@charmy.tech/react-native-stroke-text";
-import { STICKERS, type StickerId, getMonthlyStickers } from "./stickers";
 import { r2Storage } from "../lib/r2";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const NAVBAR_HEIGHT = 100;
 
-function TextSticker({ text, fontSize = 42 }: { text: string; fontSize?: number }) {
+export const isEmoji = (str: string) => {
+  const regexExp = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/gi;
+  return regexExp.test(str);
+};
+
+export function TextSticker({ text, fontSize = 42 }: { text: string; fontSize?: number }) {
   const displayValue = (text || "—").toUpperCase();
   const scale = fontSize / 42;
   const height = scale * 80;
   const width = (displayValue.length * fontSize * 0.85) + (20 * scale);
   const y = scale * 55;
-  
-  // Adjusted strokeWidth: use 18 for 42px, but cap it for small fonts
-  // const strokeWidth = fontSize > 24 ? scale * 18 : Math.max(2, scale * 12);
   const strokeWidth = 5;
 
   return (
     <View style={{ height, width, justifyContent: 'center', alignItems: 'center' }}>
       <Svg height={height} width={width}>
-        {/* Outer Thick Stroke */}
         <SvgText
           fill="none"
           stroke="#FFF065"
@@ -60,8 +55,6 @@ function TextSticker({ text, fontSize = 42 }: { text: string; fontSize?: number 
         >
           {displayValue}
         </SvgText>
-        
-        {/* Inner Main Text */}
         <SvgText
           fill="black"
           fontSize={fontSize}
@@ -83,7 +76,7 @@ export type Reaction = {
   user_id: string;
   username: string;
   avatar_url?: string | null;
-  sticker_id: StickerId;
+  sticker_id: string; // Now used for both emojis and custom text strings
 };
 
 export type PhotoEntry = {
@@ -110,7 +103,6 @@ type FeedItem =
 
 type Props = {
   photos: PhotoEntry[];
-  onReact?: (photoId: string, stickerId: StickerId) => void;
   currentUserId?: string;
   nextUnlockDate: Date;
   revealEndDate?: Date;
@@ -118,13 +110,13 @@ type Props = {
   crownDurationMs?: number;
   groupName?: string;
   onScrollLock?: (locked: boolean) => void;
+  onActiveIndexChange?: (index: number) => void;
+  onOpenPicker?: (photoId: string) => void;
 };
 
-const ReactIcon = () => (
-  <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <Circle cx="12" cy="12" r="10" />
-    <Path d="M8 12h8" />
-    <Path d="M12 8v8" />
+const PlusIcon = ({ size = 22, color = "rgba(255,255,255,0.9)" }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M12 5v14M5 12h14" />
   </Svg>
 );
 
@@ -273,17 +265,15 @@ function SecondCaptureThumbnail({ secondPath, secondNote, onPress }: {
   );
 }
 
-function PhotoMomentPage({ moment, currentUserId, crownWinnerId, onReact, isVisible }: {
+function PhotoMomentPage({ moment, currentUserId, crownWinnerId, onOpenPicker, isVisible }: {
   moment: PhotoEntry;
   currentUserId?: string;
   crownWinnerId?: string | null;
-  onReact?: (photoId: string, stickerId: StickerId) => void;
+  onOpenPicker?: (photoId: string) => void;
   isVisible?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const [swapped, setSwapped] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const myReaction = moment.reactions.find((r) => r.user_id === currentUserId)?.sticker_id ?? null;
   const isOwn = moment.user_id === currentUserId;
 
   const hasSecond = !!moment.second_image_path;
@@ -332,7 +322,7 @@ function PhotoMomentPage({ moment, currentUserId, crownWinnerId, onReact, isVisi
             <View style={styles.citationFooter}>
               <View style={styles.citationAvatar}><CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} isCrown={crownWinnerId === moment.user_id} /></View>
               <View style={{ flex: 1 }}><Text style={styles.citationUsername}>{moment.username}</Text><Text style={styles.citationTime}>{formatTime(moment.created_at)}</Text></View>
-              {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => setPickerOpen(true)}><ReactIcon /></TouchableOpacity>}
+              {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
             </View>
           </View>
         </View>
@@ -364,10 +354,10 @@ function PhotoMomentPage({ moment, currentUserId, crownWinnerId, onReact, isVisi
                   <View style={styles.usernameLine}><Text style={styles.username}>{moment.username}</Text><Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text></View>
                   {effectiveNote && <ExpandableNote text={effectiveNote} maxLines={2} />}
                 </View>
-                {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => setPickerOpen(true)}><ReactIcon /></TouchableOpacity>}
+                {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
               </View>
             )}
-            <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={isOwn ? undefined : onReact} photoId={moment.id} crownWinnerId={crownWinnerId} />
+            <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} photoId={moment.id} crownWinnerId={crownWinnerId} onOpenPicker={isOwn ? undefined : onOpenPicker} />
           </LinearGradient>
           {thumbnailPath && (
             <Animated.View style={[StyleSheet.absoluteFill, { opacity: swapFade }]} pointerEvents="box-none">
@@ -376,7 +366,6 @@ function PhotoMomentPage({ moment, currentUserId, crownWinnerId, onReact, isVisi
           )}
         </View>
       </View>
-      {!isOwn && <StickerPicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={(sid) => { onReact?.(moment.id, sid); setPickerOpen(false); }} myReaction={myReaction} />}
     </View>
   );
 }
@@ -413,38 +402,35 @@ function CrownedAvatar({ avatar_url, username, size = 36, isCrown }: { avatar_ur
   );
 }
 
-function ReactionsRow({ reactions, currentUserId, onReact, photoId, crownWinnerId }: {
+function ReactionsRow({ reactions, currentUserId, photoId, crownWinnerId, onOpenPicker }: {
   reactions: Reaction[];
   currentUserId?: string;
-  onReact?: (photoId: string, stickerId: StickerId) => void;
   photoId: string;
   crownWinnerId?: string | null;
+  onOpenPicker?: (photoId: string) => void;
 }) {
   if (reactions.length === 0) return null;
 
+  // Group by text content (emoji or custom text)
   const stickerIdsInReactions = Array.from(new Set(reactions.map((r) => r.sticker_id)));
-  const groups = stickerIdsInReactions.map((sid) => {
-    const predefined = STICKERS.find((s) => s.id === sid);
-    return {
-      id: sid,
-      text: predefined ? predefined.text : sid,
-      users: reactions.filter((r) => r.sticker_id === sid),
-    };
-  });
+  const groups = stickerIdsInReactions.map((sid) => ({
+    id: sid,
+    text: sid,
+    users: reactions.filter((r) => r.sticker_id === sid),
+  }));
 
   return (
     <View style={styles.reactionsRow}>
       {groups.map(({ id, text, users }) => {
         const iMine = users.some((r) => r.user_id === currentUserId);
         const isCrownReaction = crownWinnerId != null && users.some((r) => r.user_id === crownWinnerId);
+        const emojiDetected = isEmoji(text);
+
         return (
           <TouchableOpacity
             key={id}
             style={[styles.reactionBubble, iMine && styles.reactionBubbleMine, isCrownReaction && styles.reactionBubbleCrown]}
-            onPress={() => {
-              console.log("[ReactionsRow] onPress", { photoId, id });
-              onReact?.(photoId, id as StickerId);
-            }}
+            onPress={() => onOpenPicker?.(photoId)}
             activeOpacity={0.75}
           >
             <View style={styles.reactionAvatarStack}>
@@ -455,7 +441,11 @@ function ReactionsRow({ reactions, currentUserId, onReact, photoId, crownWinnerI
               ))}
             </View>
             <View style={styles.reactionStickerWrap}>
-              <TextSticker text={text} fontSize={12} />
+              {emojiDetected ? (
+                <Text style={{ fontSize: 14 }}>{text}</Text>
+              ) : (
+                <TextSticker text={text} fontSize={12} />
+              )}
             </View>
             {users.length > 2 && (
               <Text style={styles.reactionCount}>+{users.length - 2}</Text>
@@ -466,113 +456,6 @@ function ReactionsRow({ reactions, currentUserId, onReact, photoId, crownWinnerI
     </View>
   );
 }
-
-import { CloseIcon } from "./groups/GroupIcons";
-
-function StickerPicker({ visible, onClose, onSelect, myReaction }: {
-  visible: boolean;
-  onClose: () => void;
-  onSelect: (id: StickerId) => void;
-  myReaction?: StickerId | null;
-}) {
-  const [showCustomInput, setShowCustomInput] = useState(false);
-  const [customText, setCustomText] = useState("");
-  const monthlyStickers = getMonthlyStickers();
-  const inputRef = useRef<TextInput>(null);
-
-  useEffect(() => {
-    if (showCustomInput) {
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
-  }, [showCustomInput]);
-
-  const handleCustomSubmit = () => {
-    const trimmed = customText.trim();
-    if (trimmed) {
-      console.log("[StickerPicker] handleCustomSubmit", trimmed);
-      onSelect(trimmed);
-      setCustomText("");
-      setShowCustomInput(false);
-      onClose();
-    }
-  };
-
-  return (
-    <>
-      <Modal visible={visible && !showCustomInput} transparent animationType="fade" onRequestClose={onClose}>
-        <Pressable style={styles.pickerBackdrop} onPress={onClose}>
-          <Pressable style={styles.pickerSheet} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.pickerHandle} />
-            <Text style={styles.pickerTitle}>Réagir</Text>
-            <View style={styles.pickerGrid}>
-              {monthlyStickers.map(({ id, text }) => {
-                const isActive = myReaction === id;
-                return (
-                  <TouchableOpacity
-                    key={id}
-                    style={[styles.pickerItem, isActive && styles.pickerItemActive]}
-                    onPress={() => {
-                      console.log("[StickerPicker] onSelect predefined", id);
-                      onSelect(id as StickerId);
-                      onClose();
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <TextSticker text={text} fontSize={14} />
-                  </TouchableOpacity>
-                );
-              })}
-              <TouchableOpacity
-                style={[styles.pickerItem, { flexDirection: "row", justifyContent: "center" }]}
-                onPress={() => setShowCustomInput(true)}
-                activeOpacity={0.7}
-              >
-                <Svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 8 }}>
-                  <Circle cx="12" cy="12" r="10" />
-                  <Path d="M8 12h8" />
-                  <Path d="M12 8v8" />
-                </Svg>
-                <Text style={styles.pickerLabel}>Perso</Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      <Modal visible={showCustomInput} transparent animationType="fade" onRequestClose={() => setShowCustomInput(false)}>
-        <RNKeyboardAvoidingView behavior="padding" style={styles.customModalContainer}>
-           <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
-           <TouchableOpacity style={styles.customModalClose} onPress={() => setShowCustomInput(false)}>
-             <CloseIcon />
-           </TouchableOpacity>
-           <View style={styles.customInputWrapper}>
-              {customText.length > 0 && (
-                <View style={styles.customPreview}>
-                  <TextSticker text={customText} fontSize={32} />
-                </View>
-              )}
-              <TextInput
-                ref={inputRef}
-                style={[styles.customTextInput, { fontSize: customText.length <= 6 ? 38 : 24 }]}
-                placeholder="Ton sticker..."
-                placeholderTextColor="rgba(255,255,255,0.3)"
-                value={customText}
-                onChangeText={setCustomText}
-                maxLength={10}
-                autoCapitalize="characters"
-                returnKeyType="done"
-                onSubmitEditing={handleCustomSubmit}
-              />
-              <TouchableOpacity style={[styles.customSendBtn, !customText.trim() && styles.customSendBtnDisabled]} onPress={handleCustomSubmit} disabled={!customText.trim()}>
-                <Text style={styles.customSendText}>Ajouter</Text>
-              </TouchableOpacity>
-           </View>
-        </RNKeyboardAvoidingView>
-      </Modal>
-    </>
-  );
-}
-
 
 function formatDayLabel(dateStr: string) {
   const d = new Date(dateStr);
@@ -602,6 +485,7 @@ function AudioPlayerView({ player, status, onScrollLock }: {
   onScrollLock?: (locked: boolean) => void;
 }) {
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
+
 
   const seekWidthRef = useRef(1);
   const seekOriginXRef = useRef(0);
@@ -704,24 +588,21 @@ function AudioPlayerView({ player, status, onScrollLock }: {
 }
 
 // --- Moment audio ---
-function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId, onScrollLock }: {
+function AudioMoment({ moment, isVisible, currentUserId, crownWinnerId, onScrollLock, onOpenPicker }: {
   moment: PhotoEntry;
   isVisible: boolean;
-  onReact?: (photoId: string, stickerId: StickerId) => void;
   currentUserId?: string;
   crownWinnerId?: string | null;
   onScrollLock?: (locked: boolean) => void;
+  onOpenPicker?: (photoId: string) => void;
 }) {
   const insets = useSafeAreaInsets();
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [swapped, setSwapped] = useState(false);
 
   const hasSecond = !!moment.second_image_path;
   const player = useAudioPlayer(!swapped ? moment.url : "");
   const status = useAudioPlayerStatus(player);
   const isOwn = moment.user_id === currentUserId;
-  const myReaction = moment.reactions.find((r) => r.user_id === currentUserId)?.sticker_id ?? null;
 
   useEffect(() => { if (!isVisible) player.pause(); }, [isVisible]);
 
@@ -742,7 +623,7 @@ function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId,
               <View style={styles.citationFooter}>
                 <View style={styles.citationAvatar}><CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} isCrown={crownWinnerId === moment.user_id} /></View>
                 <View style={{ flex: 1 }}><Text style={styles.citationUsername}>{moment.username}</Text><Text style={styles.citationTime}>{formatTime(moment.created_at)}</Text></View>
-                {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => setPickerOpen(true)}><ReactIcon /></TouchableOpacity>}
+                {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
               </View>
             </View>
           </View>
@@ -750,7 +631,6 @@ function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId,
       }
       return <PhotoImage url={secondUrl} isDrawing={secondIsDrawing} />;
     }
-    // Primary: audio
     return <AudioPlayerView player={player} status={status} onScrollLock={onScrollLock} />;
   };
 
@@ -770,10 +650,10 @@ function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId,
                   <View style={styles.usernameLine}><Text style={styles.username}>{moment.username}</Text><Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text></View>
                   {overlayNote && <ExpandableNote text={overlayNote} maxLines={3} />}
                 </View>
-                {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => setPickerOpen(true)}><ReactIcon /></TouchableOpacity>}
+                {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
               </View>
             )}
-            <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={isOwn ? undefined : onReact} photoId={moment.id} crownWinnerId={crownWinnerId} />
+            <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} photoId={moment.id} crownWinnerId={crownWinnerId} onOpenPicker={onOpenPicker} />
           </LinearGradient>
           {hasSecond && (
             <SecondCaptureThumbnail
@@ -784,22 +664,20 @@ function AudioMoment({ moment, isVisible, onReact, currentUserId, crownWinnerId,
           )}
         </View>
       </View>
-      {!isOwn && <StickerPicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={(sid) => { onReact?.(moment.id, sid); setPickerOpen(false); }} myReaction={myReaction} />}
     </View>
   );
 }
 
 // --- Moment vidéo ---
-function VideoMoment({ moment, isVisible, cachedUrl, onReact, currentUserId, crownWinnerId }: {
+function VideoMoment({ moment, isVisible, cachedUrl, currentUserId, crownWinnerId, onOpenPicker }: {
   moment: PhotoEntry;
   isVisible: boolean;
   cachedUrl: string;
-  onReact?: (photoId: string, stickerId: StickerId) => void;
   currentUserId?: string;
   crownWinnerId?: string | null;
+  onOpenPicker?: (photoId: string) => void;
 }) {
   const insets = useSafeAreaInsets();
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [swapped, setSwapped] = useState(false);
 
@@ -810,7 +688,6 @@ function VideoMoment({ moment, isVisible, cachedUrl, onReact, currentUserId, cro
   });
 
   const isOwn = moment.user_id === currentUserId;
-  const myReaction = moment.reactions.find((r) => r.user_id === currentUserId)?.sticker_id ?? null;
 
   useEffect(() => {
     if (!player) return;
@@ -839,7 +716,7 @@ function VideoMoment({ moment, isVisible, cachedUrl, onReact, currentUserId, cro
                 <View style={styles.citationFooter}>
                   <View style={styles.citationAvatar}><CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} isCrown={crownWinnerId === moment.user_id} /></View>
                   <View style={{ flex: 1 }}><Text style={styles.citationUsername}>{moment.username}</Text><Text style={styles.citationTime}>{formatTime(moment.created_at)}</Text></View>
-                  {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => setPickerOpen(true)}><ReactIcon /></TouchableOpacity>}
+                  {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
                 </View>
               </View>
             </View>
@@ -855,15 +732,14 @@ function VideoMoment({ moment, isVisible, cachedUrl, onReact, currentUserId, cro
                     <View style={styles.usernameLine}><Text style={styles.username}>{moment.username}</Text><Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text></View>
                     {secondNote && <ExpandableNote text={secondNote} maxLines={2} />}
                   </View>
-                  {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => setPickerOpen(true)}><ReactIcon /></TouchableOpacity>}
+                  {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
                 </View>
               )}
-              <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={isOwn ? undefined : onReact} photoId={moment.id} crownWinnerId={crownWinnerId} />
+              <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} photoId={moment.id} crownWinnerId={crownWinnerId} onOpenPicker={onOpenPicker} />
             </LinearGradient>
             <SecondCaptureThumbnail secondPath={moment.image_path} secondNote={moment.note} onPress={() => setSwapped(false)} />
           </View>
         </View>
-        {!isOwn && <StickerPicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={(sid) => { onReact?.(moment.id, sid); setPickerOpen(false); }} myReaction={myReaction} />}
       </View>
     );
   }
@@ -896,19 +772,18 @@ function VideoMoment({ moment, isVisible, cachedUrl, onReact, currentUserId, cro
                 {moment.note && <ExpandableNote text={moment.note} maxLines={3} />}
               </View>
               {!isOwn && (
-                <TouchableOpacity style={styles.reactBtnInline} onPress={() => setPickerOpen(true)}>
-                  <ReactIcon />
+                <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}>
+                  <PlusIcon />
                 </TouchableOpacity>
               )}
             </View>
-            <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} onReact={isOwn ? undefined : onReact} photoId={moment.id} crownWinnerId={crownWinnerId} />
+            <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} photoId={moment.id} crownWinnerId={crownWinnerId} onOpenPicker={onOpenPicker} />
           </LinearGradient>
           {hasSecond && (
             <SecondCaptureThumbnail secondPath={moment.second_image_path!} secondNote={moment.second_note} onPress={() => setSwapped(true)} />
           )}
         </View>
       </View>
-      {!isOwn && <StickerPicker visible={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={(sid) => { onReact?.(moment.id, sid); setPickerOpen(false); }} myReaction={myReaction} />}
     </View>
   );
 }
@@ -995,10 +870,9 @@ function CrownRevealPage({ winner, durationMs }: { winner: PhotoEntry; durationM
   );
 }
 
-export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDate, revealEndDate, crownWinnerId, crownDurationMs = 0, groupName, onScrollLock }: Props) {
+export default function PhotoFeed({ photos, currentUserId, nextUnlockDate, revealEndDate, crownWinnerId, crownDurationMs = 0, groupName, onScrollLock, onActiveIndexChange, onOpenPicker }: Props) {
   const insets = useSafeAreaInsets();
   const [visibleIndex, setVisibleIndex] = useState(0);
-  const [openPickerId, setOpenPickerId] = useState<string | null>(null);
   const [countdownText, setCountdownText] = useState("");
   const [revealTimeLeft, setRevealTimeLeft] = useState("");
   const [revealMsLeft, setRevealMsLeft] = useState(Infinity);
@@ -1058,8 +932,12 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
   }, [revealEndDate]);
 
   const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-    if (viewableItems.length > 0 && viewableItems[0].index != null) { setVisibleIndex(viewableItems[0].index); }
-  }, []);
+    if (viewableItems.length > 0 && viewableItems[0].index != null) {
+      const idx = viewableItems[0].index;
+      setVisibleIndex(idx);
+      onActiveIndexChange?.(idx);
+    }
+  }, [onActiveIndexChange]);
   const viewabilityConfig = useMemo(() => ({ itemVisiblePercentThreshold: 50 }), []);
 
   const items = useMemo<FeedItem[]>(() => {
@@ -1105,17 +983,14 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
     const fontSize = textLen <= 40 ? 32 : textLen <= 100 ? 26 : textLen <= 200 ? 21 : textLen <= 300 ? 17 : 15;
 
     if (isAudio) {
-      return <AudioMoment moment={moment} isVisible={index === visibleIndex} onReact={onReact} currentUserId={currentUserId} crownWinnerId={crownWinnerId} onScrollLock={(locked) => { flatListRef.current?.setNativeProps({ scrollEnabled: !locked }); onScrollLock?.(locked); }} />;
+      return <AudioMoment moment={moment} isVisible={index === visibleIndex} currentUserId={currentUserId} crownWinnerId={crownWinnerId} onScrollLock={(locked) => { flatListRef.current?.setNativeProps({ scrollEnabled: !locked }); onScrollLock?.(locked); }} onOpenPicker={onOpenPicker} />;
     }
     if (isVideo) {
-      return <VideoMoment moment={moment} isVisible={index === visibleIndex} onReact={onReact} currentUserId={currentUserId} crownWinnerId={crownWinnerId} cachedUrl={videoCache[moment.url] ?? moment.url} />;
+      return <VideoMoment moment={moment} isVisible={index === visibleIndex} currentUserId={currentUserId} crownWinnerId={crownWinnerId} cachedUrl={videoCache[moment.url] ?? moment.url} onOpenPicker={onOpenPicker} />;
     }
 
-    return <PhotoMomentPage moment={moment} currentUserId={currentUserId} crownWinnerId={crownWinnerId} onReact={onReact} isVisible={index === visibleIndex} />;
+    return <PhotoMomentPage moment={moment} currentUserId={currentUserId} crownWinnerId={crownWinnerId} onOpenPicker={onOpenPicker} isVisible={index === visibleIndex} />;
   };
-
-  const activePhoto = useMemo(() => photos.find(p => p.id === openPickerId), [photos, openPickerId]);
-  const myReaction = useMemo(() => activePhoto?.reactions.find(r => r.user_id === currentUserId)?.sticker_id, [activePhoto, currentUserId]);
 
   return (
     <View style={styles.list}>
@@ -1137,12 +1012,6 @@ export default function PhotoFeed({ photos, onReact, currentUserId, nextUnlockDa
         initialNumToRender={3}
         removeClippedSubviews={Platform.OS === "android"}
         style={styles.list}
-      />
-      <StickerPicker
-        visible={!!openPickerId}
-        onClose={() => setOpenPickerId(null)}
-        onSelect={(sid) => { if (openPickerId) onReact?.(openPickerId, sid); setOpenPickerId(null); }}
-        myReaction={myReaction}
       />
       {revealEndDate && revealTimeLeft !== "" && (
         <View style={[styles.revealCountdownBar, { top: insets.top + 8 }]} pointerEvents="none">
@@ -1192,16 +1061,9 @@ const styles = StyleSheet.create({
   reactionAvatarStack: { flexDirection: "row" },
   reactionAvatarWrap: { borderRadius: 10, overflow: "hidden", borderWidth: 1.5, borderColor: "rgba(0,0,0,0.3)" },
   reactionStickerWrap: { marginLeft: 2 },
+  reactionText: { color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 12 },
   reactionCount: { color: "rgba(255,255,255,0.7)", fontFamily: "Inter_700Bold", fontSize: 11, marginLeft: 2 },
-  reactBtnInline: { marginLeft: 12, width: 42, height: 42, borderRadius: 21, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
-  pickerBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
-  pickerSheet: { backgroundColor: "#1A1A1A", borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingBottom: 40, paddingTop: 12, paddingHorizontal: 20 },
-  pickerHandle: { width: 36, height: 4, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 2, alignSelf: "center", marginBottom: 20 },
-  pickerTitle: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 18, marginBottom: 20 },
-  pickerGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  pickerItem: { flex: 1, minWidth: "28%", height: 64, alignItems: "center", justifyContent: "center", borderRadius: 18, backgroundColor: "rgba(255,255,255,0.06)", borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" },
-  pickerItemActive: { backgroundColor: "rgba(255,255,255,0.18)", borderColor: "rgba(255,255,255,0.35)" },
-  pickerLabel: { color: "rgba(255,255,255,0.8)", fontFamily: "Inter_600SemiBold", fontSize: 14 },
+  reactBtnInline: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
   revealIntroEyebrow: { fontFamily: "Inter_400Regular", fontSize: 13, color: "rgba(255,255,255,0.4)", letterSpacing: 4, textTransform: "uppercase", marginBottom: 10 },
   revealIntroTitle: { fontFamily: "Inter_700Bold", fontSize: 58, color: "#FFF", letterSpacing: -1.5, lineHeight: 62 },
   revealIntroGroup: { fontFamily: "Inter_400Regular", fontSize: 18, color: "rgba(255,255,255,0.4)", marginTop: 10, textAlign: "center" },
@@ -1232,17 +1094,6 @@ const styles = StyleSheet.create({
   audioSeekThumb: { position: "absolute", width: 13, height: 13, borderRadius: 7, backgroundColor: "#FFF", marginLeft: -6, top: 14 - 5 },
   audioTimesRow: { flexDirection: "row", justifyContent: "space-between" },
   audioTimeText: { fontSize: 11, color: "rgba(255,255,255,0.5)", fontFamily: "Inter_400Regular" },
-  textStickerContainer: { justifyContent: "center", alignItems: "center" },
-  customStickerBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
-  customStickerPlus: { color: "#FFF", fontSize: 24, fontFamily: "Inter_700Bold" },
-  customModalContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  customModalClose: { position: "absolute", top: 60, right: 20, width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", zIndex: 10 },
-  customInputWrapper: { width: "100%", alignItems: "center", paddingHorizontal: 40, gap: 32 },
-  customPreview: { marginBottom: 10, transform: [{ scale: 1.2 }] },
-  customTextInput: { width: "100%", color: "#FFF", fontFamily: "Inter_800ExtraBold", textAlign: "center", padding: 20 },
-  customSendBtn: { backgroundColor: "#FFF", paddingHorizontal: 32, paddingVertical: 14, borderRadius: 100 },
-  customSendBtnDisabled: { opacity: 0.5 },
-  customSendText: { color: "#000", fontFamily: "Inter_700Bold", fontSize: 16 },
   // Second capture thumbnail (bottom-right of momentWrapper)
   secondThumb: { position: "absolute", bottom: 72, right: 14, width: 48, height: 85, borderRadius: 8, overflow: "hidden", borderWidth: 1.5, borderColor: "rgba(255,255,255,0.25)" },
   secondThumbBg: { flex: 1, backgroundColor: "#1A1A1A", justifyContent: "center", alignItems: "center" },

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { View, Text, StyleSheet, Dimensions, Animated, TouchableOpacity, Alert, TextInput, AppState } from "react-native";
+import { View, Text, StyleSheet, Dimensions, Animated, TouchableOpacity, Alert, TextInput, AppState, Modal, KeyboardAvoidingView, Platform, Pressable } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { BlurView } from "expo-blur";
 import { supabase } from "../../../lib/supabase";
@@ -15,21 +15,27 @@ import { mediaCache } from "../../../lib/media-cache";
 import Svg, { Path } from "react-native-svg";
 
 import { type PhotoEntry, type Reaction } from "../../../components/PhotoFeed";
-import { type StickerId } from "../../../components/stickers";
 import Loader from "../../../components/Loader";
 import { ProfileIcon, VaultIcon, MomentIcon } from "../../../components/icons";
+import { CloseIcon } from "../../../components/groups/GroupIcons";
 
 import ProfilePage from "../../../components/groups/ProfilePage";
 import CameraPage from "../../../components/groups/CameraPage";
 import VaultPage from "../../../components/groups/VaultPage";
 import GroupSettingsModal from "../../../components/groups/GroupSettingsModal";
 import BottomSheet from "../../../components/BottomSheet";
-import PhotoFeed from "../../../components/PhotoFeed";
+import PhotoFeed, { TextSticker } from "../../../components/PhotoFeed";
 import LiveReactions from "../../../components/reveal/LiveReactions";
 import { scheduleImmediateLocalNotification, scheduleFirstMomentReminder } from "../../../lib/notifications";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const isEmoji = (str: string) => {
+  const regexExp = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/gi;
+  return regexExp.test(str);
+};
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const NAVBAR_HEIGHT = 100;
+const STANDARD_EMOJIS = ["🤷", "🤦", "🙋", "🫶", "👌", "🤞"];
 
 type GroupInfo = { id: string; name: string; invite_code: string };
 
@@ -101,6 +107,13 @@ export default function MainPagerScreen() {
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
 
+  // Reactions
+  const [activeReactionPhotoId, setActiveReactionPhotoId] = useState<string | null>(null);
+  const [showCustomTextInput, setShowCustomTextInput] = useState(false);
+  const [customReactionText, setCustomReactionText] = useState("");
+  const emojiWheelAnim = useRef(new Animated.Value(0)).current;
+  const customInputRef = useRef<TextInput>(null);
+
   // DEV
   const [debugUnlocked, setDebugUnlocked] = useState(true);
 
@@ -130,6 +143,7 @@ export default function MainPagerScreen() {
     // Ensure the local media manifest is loaded before building PhotoEntries
     await mediaCache.load();
     try {
+      console.log(`[fetchAllData] Start. Active Group: ${activeGroupId}`);
       const { data: cfgRows } = await supabase
         .from("app_config")
         .select("key, value")
@@ -140,10 +154,11 @@ export default function MainPagerScreen() {
 
       const { revealDate: currentRevealDate, prevRevealDate } = getWeekBounds(cfg.reveal_day, cfg.reveal_hour);
       const currentRevealEndDate = new Date(currentRevealDate.getTime() + 16 * 60 * 60 * 1000);
-      const currentNextRevealDate = new Date(currentRevealDate.getTime() + 7 * 24 * 60 * 60 * 1000);
       const afterRevealWindow = new Date() >= currentRevealEndDate;
       const photoStart = afterRevealWindow ? currentRevealDate : prevRevealDate;
-      const photoEnd = afterRevealWindow ? currentNextRevealDate : currentRevealDate;
+      const photoEnd = afterRevealWindow ? new Date(currentRevealDate.getTime() + 7 * 24 * 60 * 60 * 1000) : currentRevealDate;
+
+      console.log(`[fetchAllData] Range: ${photoStart.toISOString()} to ${photoEnd.toISOString()} (afterRevealWindow: ${afterRevealWindow})`);
 
       const [groupsRes, profileRes] = await Promise.all([
         supabase.from("group_members").select("groups(id, name, invite_code, created_at)").eq("user_id", user.id),
@@ -185,22 +200,32 @@ export default function MainPagerScreen() {
           let crownWinnerId: string | null = null;
           let crownDurationMs = 0;
 
-          if (!afterRevealWindow && photosRes.data && photosRes.data.length > 0) {
+          if (photosRes.data && photosRes.data.length > 0) {
             const photoIds = photosRes.data.map((p: any) => p.id);
-            const reactionsRes = await supabase
+            console.log(`[fetchAllData] Group ${g.name}: Fetching reactions for ${photoIds.length} photos`);
+            
+            const { data: rawReactions, error: rErr } = await supabase
               .from("reactions")
-              .select("id, photo_id, user_id, emoji, profiles:user_id(username, avatar_url)")
+              .select("id, photo_id, user_id, emoji")
               .in("photo_id", photoIds);
 
+            if (rErr) {
+              console.error(`[fetchAllData] Error fetching reactions for group ${g.id}:`, rErr);
+            }
+
+            console.log(`[fetchAllData] Group ${g.name}: DB returned ${rawReactions?.length ?? 0} reactions`);
+
             const reactionsByPhoto: Record<string, Reaction[]> = {};
-            for (const r of reactionsRes.data ?? []) {
-              const stickerId = (r.emoji || "") as StickerId;
+            for (const r of rawReactions ?? []) {
               if (!reactionsByPhoto[r.photo_id]) reactionsByPhoto[r.photo_id] = [];
+              const member = membersData.find(m => m.user_id === r.user_id);
+
               reactionsByPhoto[r.photo_id].push({
-                id: r.id, user_id: r.user_id,
-                username: r.profiles?.username ?? "?",
-                avatar_url: r.profiles?.avatar_url ?? null,
-                sticker_id: stickerId,
+                id: r.id, 
+                user_id: r.user_id,
+                username: member?.username ?? "Anonyme",
+                avatar_url: member?.avatar_url ?? null,
+                sticker_id: r.emoji,
               });
             }
 
@@ -240,6 +265,7 @@ export default function MainPagerScreen() {
         })
       );
 
+      console.log("[fetchAllData] Updating state with fresh data");
       setGroupData(Object.fromEntries(dataEntries));
 
       // Background prefetch/download of all media for this week — fire & forget
@@ -261,9 +287,11 @@ export default function MainPagerScreen() {
       mediaCache.cleanup(activePaths);
 
       mediaCache.sync(allPhotosForSync);
-    } catch {}
+    } catch (err) {
+      console.error("[fetchAllData] Global error:", err);
+    }
     setDataLoaded(true);
-  }, [user]);
+  }, [user, activeGroupId]);
 
   const fetchAllDataRef = useRef(fetchAllData);
   fetchAllDataRef.current = fetchAllData;
@@ -280,9 +308,6 @@ export default function MainPagerScreen() {
   revealConfigRef.current = revealConfig;
 
   // ── Real-time + AppState refresh ──
-  // Un seul channel sans filtre — les filtres group_id=eq.X nécessitent
-  // REPLICA IDENTITY FULL côté Supabase, sans quoi les events ne sont jamais émis.
-  // RLS garantit qu'on ne reçoit que les events des groupes dont on est membre.
   useEffect(() => {
     if (!user) return;
     const channel = supabase
@@ -306,10 +331,13 @@ export default function MainPagerScreen() {
   // Polling toutes les 30s (filet de sécurité si Realtime non configuré)
   useEffect(() => {
     const interval = setInterval(() => {
-      if (AppState.currentState === "active") fetchAllDataRef.current();
+      if (AppState.currentState === "active" && !showReveal) {
+        console.log("[Polling] Tick (30s), refreshing data...");
+        fetchAllDataRef.current();
+      }
     }, 30_000);
     return () => clearInterval(interval);
-  }, []);
+  }, [showReveal]);
 
   // Persiste le groupe actif pour le prochain lancement de l'app
   useEffect(() => {
@@ -322,41 +350,178 @@ export default function MainPagerScreen() {
     setActiveGroupId(groupId);
   }, [activeGroupId]);
 
-  // ── Reactions ──
-  const handleReact = async (photoId: string, stickerId: StickerId) => {
-    if (!user) return;
-    const photo = photos.find((p) => p.id === photoId);
-    const existing = photo?.reactions.find((r) => r.user_id === user.id);
+  // ── Emoji Wheel & Custom Text ──
+  useEffect(() => {
+    if (activeReactionPhotoId) {
+      Animated.spring(emojiWheelAnim, { toValue: 1, useNativeDriver: true, tension: 50, friction: 7 }).start();
+    } else {
+      Animated.timing(emojiWheelAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start();
+    }
+  }, [activeReactionPhotoId]);
 
-    const updatePhotos = (updater: (p: PhotoEntry[]) => PhotoEntry[]) =>
-      setGroupData((prev) => ({
-        ...prev,
-        [activeGroupId]: { ...prev[activeGroupId], photos: updater(prev[activeGroupId]?.photos ?? []) },
-      }));
+  const handleEmojiReact = async (emoji: string) => {
+    if (!user || !activeReactionPhotoId) return;
+    const photoId = activeReactionPhotoId;
+    
+    // Find existing reaction to check for deletion
+    const activePhoto = photos.find(p => p.id === photoId);
+    const existing = activePhoto?.reactions.find(r => r.user_id === user.id);
+    const isDeletion = existing && existing.sticker_id === emoji;
+
+    setActiveReactionPhotoId(null);
+    setShowCustomTextInput(false);
+
+    if (isDeletion) {
+      console.log(`[handleEmojiReact] Deleting reaction ${existing.id} for emoji ${emoji}`);
+      
+      // Optimistic delete
+      setGroupData(prev => {
+        const next = { ...prev };
+        const g = next[activeGroupId];
+        if (!g) return prev;
+        const newPhotos = g.photos.map(p => {
+          if (p.id !== photoId) return p;
+          return { ...p, reactions: p.reactions.filter(r => r.user_id !== user.id) };
+        });
+        next[activeGroupId] = { ...g, photos: newPhotos };
+        return next;
+      });
+
+      try {
+        const { error } = await supabase.from("reactions").delete().eq("id", existing.id);
+        if (error) throw error;
+      } catch (e) {
+        console.error("[handleEmojiReact] Delete error:", e);
+        // Revert? fetchAllData()? For now just log.
+      }
+      return;
+    }
+
+    // Upsert Case (existing logic)
+    console.log(`[handleEmojiReact] Sending emoji ${emoji} for photo ${photoId}`);
+    // ... rest of logic stays same but I need to use 'photoId' local var
+    const reactionId = `temp-${Math.random()}`;
+    const reactionObj: Reaction = {
+      id: reactionId,
+      user_id: user.id,
+      username: username || "Moi",
+      avatar_url: avatarUrl,
+      sticker_id: emoji
+    };
+
+    setGroupData(prev => {
+      const next = { ...prev };
+      const g = next[activeGroupId];
+      if (!g) return prev;
+      const newPhotos = g.photos.map(p => {
+        if (p.id !== photoId) return p;
+        return { ...p, reactions: [...p.reactions.filter(r => r.user_id !== user.id), reactionObj] };
+      });
+      next[activeGroupId] = { ...g, photos: newPhotos };
+      return next;
+    });
 
     try {
-      if (existing && existing.sticker_id === stickerId) {
-        await supabase.from("reactions").delete().eq("id", existing.id);
-        updatePhotos((p) => p.map((e) => e.id === photoId ? { ...e, reactions: e.reactions.filter((r) => r.id !== existing.id) } : e));
-      } else {
-        const { data, error } = await supabase
-          .from("reactions")
-          .upsert({ photo_id: photoId, user_id: user.id, type: "emoji", emoji: stickerId }, { onConflict: "photo_id,user_id" })
-          .select("id")
-          .single();
-        if (error) throw error;
-        if (data) {
-          const newReaction: Reaction = { id: data.id, user_id: user.id, username, avatar_url: avatarUrl, sticker_id: stickerId };
-          updatePhotos((p) => p.map((e) => {
-            if (e.id !== photoId) return e;
-            return { ...e, reactions: [...e.reactions.filter((r) => r.user_id !== user.id), newReaction] };
-          }));
-        }
+      const { data, error } = await supabase
+        .from("reactions")
+        .upsert({ photo_id: photoId, user_id: user.id, type: "emoji", emoji }, { onConflict: "photo_id,user_id" })
+        .select("id")
+        .single();
+      if (error) throw error;
+      if (data) {
+        setGroupData(prev => {
+          const next = { ...prev };
+          const g = next[activeGroupId];
+          if (!g) return prev;
+          const newPhotos = g.photos.map(p => {
+            if (p.id !== photoId) return p;
+            return { ...p, reactions: p.reactions.map(r => r.id === reactionId ? { ...r, id: data.id } : r) };
+          });
+          next[activeGroupId] = { ...g, photos: newPhotos };
+          return next;
+        });
       }
     } catch (e) {
+      console.error("[handleEmojiReact] Error:", e);
       Alert.alert("Erreur", "Impossible d'enregistrer la réaction.");
     }
   };
+
+  const handleCustomTextSubmit = () => {
+    const trimmed = customReactionText.trim().toUpperCase();
+    if (trimmed) {
+      handleEmojiReact(trimmed);
+      setCustomReactionText("");
+    }
+  };
+
+  const openCustomTextInput = () => {
+    if (!activeReactionPhotoId) return;
+    const activePhoto = photos.find(p => p.id === activeReactionPhotoId);
+    const myReactionStr = activePhoto?.reactions.find(r => r.user_id === user?.id)?.sticker_id;
+    const isCustomText = myReactionStr && !isEmoji(myReactionStr);
+    
+    setCustomReactionText(isCustomText ? myReactionStr : "");
+    setShowCustomTextInput(true);
+  };
+
+  // Real-time reactions
+  useEffect(() => {
+    if (!user) return;
+    console.log(`[Realtime-Reactions] Initializing channel for group ${activeGroupId}. Current User: ${user.id}`);
+    const channel = supabase
+      .channel(`rt-reactions-${activeGroupId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "reactions" }, (payload) => {
+        console.log(`[Realtime-Reactions] Received ${payload.eventType} for reaction:`, payload.new || payload.old);
+        
+        const handlePayload = (nr: any, isDelete = false) => {
+          setGroupData(prev => {
+            const next = { ...prev };
+            let found = false;
+            for (const gid in next) {
+              const g = next[gid];
+              const targetPhotoId = isDelete ? (payload.old as any).photo_id : nr.photo_id;
+              if (!targetPhotoId) continue;
+
+              const pIdx = g.photos.findIndex(p => p.id === targetPhotoId);
+              if (pIdx !== -1) {
+                found = true;
+                const newPhotos = [...g.photos];
+                if (isDelete) {
+                  newPhotos[pIdx] = { ...newPhotos[pIdx], reactions: newPhotos[pIdx].reactions.filter(r => r.id !== payload.old.id) };
+                } else {
+                  if (g.photos[pIdx].reactions.some(r => r.id === nr.id && r.sticker_id === nr.emoji)) return prev;
+                  const member = g.members.find(m => m.user_id === nr.user_id);
+                  const reactionObj: Reaction = {
+                    id: nr.id, user_id: nr.user_id,
+                    username: member?.username ?? "Anonyme",
+                    avatar_url: member?.avatar_url,
+                    sticker_id: nr.emoji
+                  };
+                  newPhotos[pIdx] = { ...newPhotos[pIdx], reactions: [...newPhotos[pIdx].reactions.filter(r => r.user_id !== nr.user_id), reactionObj] };
+                }
+                next[gid] = { ...g, photos: newPhotos };
+                return next;
+              }
+            }
+            return prev;
+          });
+        };
+
+        if (payload.eventType === "DELETE") {
+          handlePayload(payload.old, true);
+        } else {
+          handlePayload(payload.new);
+        }
+      })
+      .subscribe((status) => {
+        console.log(`[Realtime-Reactions] Subscription status: ${status}`);
+      });
+    return () => { 
+      console.log(`[Realtime-Reactions] Cleaning up channel`);
+      supabase.removeChannel(channel); 
+    };
+  }, [user, activeGroupId]);
 
   // ── Group management ──
   const handleRenameGroup = async (newName: string) => {
@@ -386,7 +551,7 @@ export default function MainPagerScreen() {
         .eq("user_id", user.id)
         .select();
       if (leaveErr) throw new Error(leaveErr.message);
-      if (!deleted || deleted.length === 0) throw new Error("Aucune ligne supprimée — vérifie la politique RLS sur group_members.");
+      if (!deleted || deleted.length === 0) throw new Error("Aucune ligne supprimée.");
       const remaining = allGroups.filter((g) => g.id !== activeGroupId);
       if (remaining.length > 0) {
         setAllGroups(remaining);
@@ -669,7 +834,6 @@ export default function MainPagerScreen() {
           </TouchableOpacity>
           <PhotoFeed
             photos={photos}
-            onReact={handleReact}
             currentUserId={user?.id}
             nextUnlockDate={nextRevealDate}
             revealEndDate={revealEndDate}
@@ -677,6 +841,7 @@ export default function MainPagerScreen() {
             crownDurationMs={crownDurationMs}
             groupName={groupName}
             onScrollLock={lockScrollDirect}
+            onOpenPicker={setActiveReactionPhotoId}
           />
           {user?.id && username && (
             <LiveReactions
@@ -687,6 +852,114 @@ export default function MainPagerScreen() {
               isVisible={true}
             />
           )}
+
+          {/* Emoji Wheel (Vertical Popover) */}
+          {activeReactionPhotoId && (
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setActiveReactionPhotoId(null)}>
+              <Animated.View style={[styles.emojiWheel, { 
+                opacity: emojiWheelAnim,
+                transform: [{ scale: emojiWheelAnim }]
+              }]}>
+                {(() => {
+                  const activePhoto = photos.find(p => p.id === activeReactionPhotoId);
+                  const myReactionStr = activePhoto?.reactions.find(r => r.user_id === user?.id)?.sticker_id;
+
+                  return STANDARD_EMOJIS.map(emoji => {
+                    const isActive = myReactionStr === emoji;
+                    return (
+                      <TouchableOpacity 
+                        key={emoji} 
+                        onPress={() => handleEmojiReact(emoji)} 
+                        style={[styles.wheelBtn, isActive && styles.wheelBtnActive]}
+                      >
+                        <Text style={styles.wheelEmoji}>{emoji}</Text>
+                      </TouchableOpacity>
+                    );
+                  });
+                })()}
+                {(() => {
+                  const activePhoto = photos.find(p => p.id === activeReactionPhotoId);
+                  const myReactionStr = activePhoto?.reactions.find(r => r.user_id === user?.id)?.sticker_id;
+                  const isCustomText = myReactionStr && !STANDARD_EMOJIS.includes(myReactionStr);
+
+                  return (
+                    <TouchableOpacity 
+                      onPress={openCustomTextInput} 
+                      style={[styles.wheelBtn, isCustomText && styles.wheelBtnActive]}
+                    >
+                      <Svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2.5">
+                        <Path d="M12 19l7-7 3 3-7 7-3-3zM18 13l-1.5-1.5M14 17l-1.5-1.5M10 21l-1.5-1.5" />
+                        <Path d="M3 21h4.5l10.5-10.5-4.5-4.5L3 16.5V21z" strokeLinecap="round" strokeLinejoin="round" />
+                      </Svg>
+                    </TouchableOpacity>
+                  );
+                })()}
+              </Animated.View>
+            </Pressable>
+          )}
+
+          {/* Custom Text Input Modal */}
+          <Modal visible={showCustomTextInput} transparent animationType="fade" onRequestClose={() => setShowCustomTextInput(false)}>
+            <KeyboardAvoidingView behavior="padding" style={styles.customModalContainer}>
+               <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+               <TouchableOpacity style={styles.customModalClose} onPress={() => setShowCustomTextInput(false)}>
+                 <CloseIcon />
+               </TouchableOpacity>
+               <View style={styles.customInputWrapper}>
+                  {customReactionText.length > 0 && (
+                    <View style={styles.customPreviewSticker}>
+                      <TextSticker text={customReactionText} fontSize={32} />
+                    </View>
+                  )}
+                  <TextInput
+                    ref={customInputRef}
+                    style={[styles.customTextInput, { fontSize: customReactionText.length <= 6 ? 38 : 24 }]}
+                    placeholder="Ton message..."
+                    placeholderTextColor="rgba(255,255,255,0.3)"
+                    value={customReactionText}
+                    onChangeText={setCustomReactionText}
+                    maxLength={10}
+                    autoCapitalize="characters"
+                    autoFocus
+                    returnKeyType="done"
+                    onSubmitEditing={handleCustomTextSubmit}
+                  />
+
+                  <View style={styles.customModalActions}>
+                    <TouchableOpacity 
+                      style={[styles.customSendBtn, !customReactionText.trim() && styles.customSendBtnDisabled]} 
+                      onPress={handleCustomTextSubmit}
+                      disabled={!customReactionText.trim()}
+                    >
+                      <Text style={styles.customSendText}>
+                        {(() => {
+                          const activePhoto = photos.find(p => p.id === activeReactionPhotoId);
+                          const myReactionStr = activePhoto?.reactions.find(r => r.user_id === user?.id)?.sticker_id;
+                          return myReactionStr && !isEmoji(myReactionStr) ? "Modifier" : "Ajouter";
+                        })()}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {(() => {
+                      const activePhoto = photos.find(p => p.id === activeReactionPhotoId);
+                      const myReactionStr = activePhoto?.reactions.find(r => r.user_id === user?.id)?.sticker_id;
+                      const isCustomText = myReactionStr && !isEmoji(myReactionStr);
+                      
+                      if (!isCustomText) return null;
+                      
+                      return (
+                        <TouchableOpacity 
+                          style={styles.customDeleteBtn} 
+                          onPress={() => handleEmojiReact(myReactionStr)}
+                        >
+                          <Text style={styles.customDeleteText}>Supprimer message actuel</Text>
+                        </TouchableOpacity>
+                      );
+                    })()}
+                  </View>
+               </View>
+            </KeyboardAvoidingView>
+          </Modal>
         </View>
       )}
 
@@ -832,7 +1105,7 @@ const styles = StyleSheet.create({
   addGroupPrimaryText: { color: "#000", fontSize: 16, fontFamily: "Inter_700Bold" },
   addGroupSecondary: { backgroundColor: "rgba(255,255,255,0.08)", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)", borderRadius: 16, paddingVertical: 16, alignItems: "center", marginBottom: 12 },
   addGroupSecondaryText: { color: "#FFF", fontSize: 16, fontFamily: "Inter_600SemiBold" },
-  // Sheet inputs (create/join inside BottomSheet)
+  // Sheet inputs
   sheetInput: {
     backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 12,
     paddingHorizontal: 16, paddingVertical: 14, color: "#FFF",
@@ -843,4 +1116,49 @@ const styles = StyleSheet.create({
   sheetCodeInput: { fontSize: 22, textAlign: "center", letterSpacing: 3, fontFamily: "Inter_700Bold" },
   sheetCancelWrap: { alignItems: "center", paddingVertical: 8 },
   sheetCancelText: { color: "rgba(255,255,255,0.4)", fontFamily: "Inter_600SemiBold", fontSize: 15 },
+
+  // New Reactions UI
+  emojiWheel: {
+    position: "absolute",
+    right: 24, // Match the padding of the momentOverlay
+    bottom: NAVBAR_HEIGHT + 150, // Elevated to ensure it sits above the + button even with reactions
+    backgroundColor: "rgba(255,255,255,0.15)",
+    borderRadius: 30,
+    padding: 6,
+    gap: 8,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    elevation: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+  },
+  wheelBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  wheelBtnActive: {
+    backgroundColor: "rgba(255,255,255,0.35)",
+    borderColor: "#FFF065",
+    borderWidth: 2,
+  },
+  wheelEmoji: { fontSize: 24 },
+  
+  customModalContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  customModalClose: { position: "absolute", top: 60, right: 20, width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", zIndex: 10 },
+  customInputWrapper: { width: "100%", alignItems: "center", paddingHorizontal: 40, gap: 32 },
+  customPreviewSticker: { marginBottom: 10, transform: [{ scale: 1.2 }] },
+  customTextInput: { width: "100%", color: "#FFF", fontFamily: "Inter_800ExtraBold", textAlign: "center", padding: 20 },
+  customSendBtn: { backgroundColor: "#FFF", paddingHorizontal: 32, paddingVertical: 14, borderRadius: 100 },
+  customSendBtnDisabled: { opacity: 0.5 },
+  customSendText: { color: "#000", fontFamily: "Inter_700Bold", fontSize: 16 },
+  customModalActions: { alignItems: "center", gap: 16, width: "100%" },
+  customDeleteBtn: { paddingVertical: 8 },
+  customDeleteText: { color: "#FF3B30", fontFamily: "Inter_600SemiBold", fontSize: 15 },
 });
