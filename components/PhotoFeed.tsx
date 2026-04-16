@@ -170,7 +170,7 @@ function PhotoImage({ url, fallback_url, isDrawing }: { url: string; fallback_ur
       style={StyleSheet.absoluteFill}
       contentFit="cover"
       contentPosition={{ top: 0, left: "50%" }}
-      onError={() => { if (fallback_url && src !== fallback_url) setSrc(fallback_url); }}
+      onError={() => { if (fallback_url && !useFallback) setUseFallback(true); }}
     />
   );
 }
