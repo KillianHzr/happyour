@@ -143,7 +143,6 @@ export default function MainPagerScreen() {
     // Ensure the local media manifest is loaded before building PhotoEntries
     await mediaCache.load();
     try {
-      console.log(`[fetchAllData] Start. Active Group: ${activeGroupId}`);
       const { data: cfgRows } = await supabase
         .from("app_config")
         .select("key, value")
@@ -157,8 +156,6 @@ export default function MainPagerScreen() {
       const afterRevealWindow = new Date() >= currentRevealEndDate;
       const photoStart = afterRevealWindow ? currentRevealDate : prevRevealDate;
       const photoEnd = afterRevealWindow ? new Date(currentRevealDate.getTime() + 7 * 24 * 60 * 60 * 1000) : currentRevealDate;
-
-      console.log(`[fetchAllData] Range: ${photoStart.toISOString()} to ${photoEnd.toISOString()} (afterRevealWindow: ${afterRevealWindow})`);
 
       const [groupsRes, profileRes] = await Promise.all([
         supabase.from("group_members").select("groups(id, name, invite_code, created_at)").eq("user_id", user.id),
@@ -202,8 +199,6 @@ export default function MainPagerScreen() {
 
           if (photosRes.data && photosRes.data.length > 0) {
             const photoIds = photosRes.data.map((p: any) => p.id);
-            console.log(`[fetchAllData] Group ${g.name}: Fetching reactions for ${photoIds.length} photos`);
-            
             const { data: rawReactions, error: rErr } = await supabase
               .from("reactions")
               .select("id, photo_id, user_id, emoji")
@@ -212,8 +207,6 @@ export default function MainPagerScreen() {
             if (rErr) {
               console.error(`[fetchAllData] Error fetching reactions for group ${g.id}:`, rErr);
             }
-
-            console.log(`[fetchAllData] Group ${g.name}: DB returned ${rawReactions?.length ?? 0} reactions`);
 
             const reactionsByPhoto: Record<string, Reaction[]> = {};
             for (const r of rawReactions ?? []) {
@@ -265,7 +258,6 @@ export default function MainPagerScreen() {
         })
       );
 
-      console.log("[fetchAllData] Updating state with fresh data");
       setGroupData(Object.fromEntries(dataEntries));
 
       // Background prefetch/download of all media for this week — fire & forget
@@ -360,9 +352,14 @@ export default function MainPagerScreen() {
   }, [user?.id]);
 
   // Rafraîchit les données quand l'app revient au premier plan
+  // (skip le premier "active" qui fire au montage — fetchAllData est déjà appelé par son propre useEffect)
   useEffect(() => {
+    const isMounted = { skipped: false };
     const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") fetchAllDataRef.current();
+      if (state === "active") {
+        if (!isMounted.skipped) { isMounted.skipped = true; return; }
+        fetchAllDataRef.current();
+      }
     });
     return () => sub.remove();
   }, []);
@@ -371,7 +368,6 @@ export default function MainPagerScreen() {
   useEffect(() => {
     const interval = setInterval(() => {
       if (AppState.currentState === "active" && !showReveal) {
-        console.log("[Polling] Tick (30s), refreshing data...");
         fetchAllDataRef.current();
       }
     }, 30_000);
