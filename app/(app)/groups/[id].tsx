@@ -296,6 +296,45 @@ export default function MainPagerScreen() {
   const fetchAllDataRef = useRef(fetchAllData);
   fetchAllDataRef.current = fetchAllData;
 
+  // Re-fetch only the reactions of the active group — lightweight, used by realtime
+  const refreshReactions = useCallback(async () => {
+    if (!activeGroupId) return;
+    const gd = groupData[activeGroupId];
+    if (!gd || gd.photos.length === 0) return;
+    const photoIds = gd.photos.map((p) => p.id);
+    const { data: rawReactions } = await supabase
+      .from("reactions")
+      .select("id, photo_id, user_id, emoji")
+      .in("photo_id", photoIds);
+    if (!rawReactions) return;
+    const reactionsByPhoto: Record<string, Reaction[]> = {};
+    for (const r of rawReactions) {
+      if (!reactionsByPhoto[r.photo_id]) reactionsByPhoto[r.photo_id] = [];
+      const member = gd.members.find((m: any) => m.user_id === r.user_id);
+      reactionsByPhoto[r.photo_id].push({
+        id: r.id,
+        user_id: r.user_id,
+        username: member?.username ?? "Anonyme",
+        avatar_url: member?.avatar_url ?? null,
+        sticker_id: r.emoji,
+      });
+    }
+    setGroupData((prev) => {
+      const g = prev[activeGroupId];
+      if (!g) return prev;
+      return {
+        ...prev,
+        [activeGroupId]: {
+          ...g,
+          photos: g.photos.map((p) => ({ ...p, reactions: reactionsByPhoto[p.id] ?? [] })),
+        },
+      };
+    });
+  }, [activeGroupId, groupData]);
+
+  const refreshReactionsRef = useRef(refreshReactions);
+  refreshReactionsRef.current = refreshReactions;
+
   useEffect(() => { fetchAllData(); }, [fetchAllData]);
 
   useEffect(() => {
@@ -465,62 +504,62 @@ export default function MainPagerScreen() {
     setShowCustomTextInput(true);
   };
 
-  // Real-time reactions
+  // Real-time reactions — mise à jour granulaire directe du state, sans round-trip DB.
+  // Prérequis Supabase : table reactions dans supabase_realtime + REPLICA IDENTITY FULL
+  //   (ALTER TABLE reactions REPLICA IDENTITY FULL; dans le SQL Editor)
   useEffect(() => {
     if (!user) return;
-    console.log(`[Realtime-Reactions] Initializing channel for group ${activeGroupId}. Current User: ${user.id}`);
     const channel = supabase
       .channel(`rt-reactions-${activeGroupId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "reactions" }, (payload) => {
-        console.log(`[Realtime-Reactions] Received ${payload.eventType} for reaction:`, payload.new || payload.old);
-        
-        const handlePayload = (nr: any, isDelete = false) => {
-          setGroupData(prev => {
+        if (payload.eventType === "DELETE") {
+          const old = payload.old as any;
+          if (!old?.photo_id) return;
+          setGroupData((prev) => {
             const next = { ...prev };
-            let found = false;
             for (const gid in next) {
               const g = next[gid];
-              const targetPhotoId = isDelete ? (payload.old as any).photo_id : nr.photo_id;
-              if (!targetPhotoId) continue;
-
-              const pIdx = g.photos.findIndex(p => p.id === targetPhotoId);
-              if (pIdx !== -1) {
-                found = true;
-                const newPhotos = [...g.photos];
-                if (isDelete) {
-                  newPhotos[pIdx] = { ...newPhotos[pIdx], reactions: newPhotos[pIdx].reactions.filter(r => r.id !== payload.old.id) };
-                } else {
-                  if (g.photos[pIdx].reactions.some(r => r.id === nr.id && r.sticker_id === nr.emoji)) return prev;
-                  const member = g.members.find(m => m.user_id === nr.user_id);
-                  const reactionObj: Reaction = {
-                    id: nr.id, user_id: nr.user_id,
-                    username: member?.username ?? "Anonyme",
-                    avatar_url: member?.avatar_url,
-                    sticker_id: nr.emoji
-                  };
-                  newPhotos[pIdx] = { ...newPhotos[pIdx], reactions: [...newPhotos[pIdx].reactions.filter(r => r.user_id !== nr.user_id), reactionObj] };
-                }
-                next[gid] = { ...g, photos: newPhotos };
-                return next;
-              }
+              const pIdx = g.photos.findIndex((p) => p.id === old.photo_id);
+              if (pIdx === -1) continue;
+              const newPhotos = [...g.photos];
+              newPhotos[pIdx] = { ...newPhotos[pIdx], reactions: newPhotos[pIdx].reactions.filter((r) => r.id !== old.id) };
+              next[gid] = { ...g, photos: newPhotos };
+              return next;
             }
             return prev;
           });
-        };
-
-        if (payload.eventType === "DELETE") {
-          handlePayload(payload.old, true);
         } else {
-          handlePayload(payload.new);
+          const nr = payload.new as any;
+          if (!nr?.photo_id) return;
+          setGroupData((prev) => {
+            const next = { ...prev };
+            for (const gid in next) {
+              const g = next[gid];
+              const pIdx = g.photos.findIndex((p) => p.id === nr.photo_id);
+              if (pIdx === -1) continue;
+              const member = g.members.find((m: any) => m.user_id === nr.user_id);
+              const reactionObj: Reaction = {
+                id: nr.id,
+                user_id: nr.user_id,
+                username: member?.username ?? "Anonyme",
+                avatar_url: member?.avatar_url ?? null,
+                sticker_id: nr.emoji,
+              };
+              const newPhotos = [...g.photos];
+              // Remplace l'éventuelle réaction existante du même user (ou la temp optimiste)
+              newPhotos[pIdx] = {
+                ...newPhotos[pIdx],
+                reactions: [...newPhotos[pIdx].reactions.filter((r) => r.user_id !== nr.user_id), reactionObj],
+              };
+              next[gid] = { ...g, photos: newPhotos };
+              return next;
+            }
+            return prev;
+          });
         }
       })
-      .subscribe((status) => {
-        console.log(`[Realtime-Reactions] Subscription status: ${status}`);
-      });
-    return () => { 
-      console.log(`[Realtime-Reactions] Cleaning up channel`);
-      supabase.removeChannel(channel); 
-    };
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [user, activeGroupId]);
 
   // ── Group management ──
