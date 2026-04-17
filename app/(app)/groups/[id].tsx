@@ -128,13 +128,18 @@ export default function MainPagerScreen() {
   const crownDurationMs = activeData?.crownDurationMs ?? 0;
   const isAdmin = activeData?.isAdmin ?? false;
 
-  const { revealDate } = getWeekBounds(revealConfig.day, revealConfig.hour);
+  const { revealDate, prevRevealDate } = getWeekBounds(revealConfig.day, revealConfig.hour);
   const revealEndDate = new Date(revealDate.getTime() + 16 * 60 * 60 * 1000);
+  const prevRevealEndDate = new Date(prevRevealDate.getTime() + 16 * 60 * 60 * 1000);
   const nextRevealDate = new Date(revealDate.getTime() + 7 * 24 * 60 * 60 * 1000);
 
   const now = new Date();
-  const isAfterRevealWindow = now >= revealEndDate;
-  const unlocked = __DEV__ ? true : (now >= revealDate && now < revealEndDate);
+  const inCurrentRevealWindow = now >= revealDate && now < revealEndDate;
+  // Le lundi matin après un dimanche soir : on est dans la fenêtre du reveal précédent
+  const inPrevRevealWindow = now >= prevRevealDate && now < prevRevealEndDate;
+  const activeRevealEndDate = inPrevRevealWindow ? prevRevealEndDate : revealEndDate;
+  const isAfterRevealWindow = now >= activeRevealEndDate;
+  const unlocked = __DEV__ ? true : (inCurrentRevealWindow || inPrevRevealWindow);
   const lockedRevealDate = isAfterRevealWindow ? nextRevealDate : revealDate;
 
   // ── Fetch all groups data at once ──
@@ -810,7 +815,7 @@ export default function MainPagerScreen() {
             photoCount={photoCount}
             photos={photos}
             revealDate={lockedRevealDate}
-            revealEndDate={unlocked ? revealEndDate : undefined}
+            revealEndDate={unlocked ? activeRevealEndDate : undefined}
             unlocked={unlocked}
             onOpenReveal={() => setShowReveal(true)}
             onOpenSettings={() => setShowGroupSettings(true)}
@@ -871,7 +876,7 @@ export default function MainPagerScreen() {
             photos={photos}
             currentUserId={user?.id}
             nextUnlockDate={nextRevealDate}
-            revealEndDate={revealEndDate}
+            revealEndDate={activeRevealEndDate}
             crownWinnerId={crownWinnerId}
             crownDurationMs={crownDurationMs}
             groupName={groupName}
