@@ -115,7 +115,7 @@ export default function MainPagerScreen() {
   const customInputRef = useRef<TextInput>(null);
 
   // DEV
-  const [debugUnlocked, setDebugUnlocked] = useState(true);
+  const [debugUnlocked, setDebugUnlocked] = useState(false);
 
   // Derived from active group data
   const activeData = groupData[activeGroupId] ?? null;
@@ -139,7 +139,7 @@ export default function MainPagerScreen() {
   const inPrevRevealWindow = now >= prevRevealDate && now < prevRevealEndDate;
   const activeRevealEndDate = inPrevRevealWindow ? prevRevealEndDate : revealEndDate;
   const isAfterRevealWindow = now >= activeRevealEndDate;
-  const unlocked = __DEV__ ? true : (inCurrentRevealWindow || inPrevRevealWindow);
+  const unlocked = __DEV__ ? debugUnlocked : (inCurrentRevealWindow || inPrevRevealWindow);
   const lockedRevealDate = isAfterRevealWindow ? nextRevealDate : revealDate;
 
   // ── Fetch all groups data at once ──
