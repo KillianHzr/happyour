@@ -139,8 +139,8 @@ export default function MainPagerScreen() {
   const inPrevRevealWindow = now >= prevRevealDate && now < prevRevealEndDate;
   const activeRevealEndDate = inPrevRevealWindow ? prevRevealEndDate : revealEndDate;
   const isAfterRevealWindow = now >= activeRevealEndDate;
-  const unlocked = __DEV__ ? debugUnlocked : (inCurrentRevealWindow || inPrevRevealWindow);
-  const lockedRevealDate = isAfterRevealWindow ? nextRevealDate : revealDate;
+  const unlocked = inCurrentRevealWindow || inPrevRevealWindow || (__DEV__ && debugUnlocked);
+  const lockedRevealDate = now >= revealDate ? nextRevealDate : revealDate;
 
   // ── Fetch all groups data at once ──
   const fetchAllData = useCallback(async () => {
