@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import Svg, { Path } from "react-native-svg";
 import { useAudioRecorder, AudioModule, RecordingPresets, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import { addVolumeListener, showNativeVolumeUI, setVolume } from "react-native-volume-manager";
 import { setCaptureData } from "../../lib/capture-store";
 import { useUpload } from "../../lib/upload-context";
 import StandardCamera from "../StandardCamera";
@@ -165,6 +166,30 @@ export default function CameraPage({ groupId, userId, isActive, allGroups, onScr
     doWarmUp();
     return () => { warmUpCancelled.current = true; };
   }, [cameraMode, isActive]);
+
+  // ── Volume button shutter ──
+  const handleCaptureRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    // Active uniquement quand la caméra est visible (pas en preview) et en mode PHOTO ou VIDEO
+    const shouldListen = isActive && isCapturing && (cameraMode === "PHOTO" || cameraMode === "VIDEO");
+    if (!shouldListen) {
+      showNativeVolumeUI({ enabled: true });
+      return;
+    }
+    showNativeVolumeUI({ enabled: false });
+    // Initialise à 0.5 pour que les deux boutons (+ et -) déclenchent toujours un événement
+    setVolume(0.5, { showUI: false });
+    const sub = addVolumeListener(() => {
+      setVolume(0.5, { showUI: false }); // reset pour éviter de bloquer sur min/max
+      handleCaptureRef.current();
+    });
+    return () => {
+      sub.remove();
+      showNativeVolumeUI({ enabled: true });
+      setVolume(0.5, { showUI: false }); // restaure un niveau correct en quittant
+    };
+  }, [isActive, isCapturing, cameraMode]);
 
   // ── Slot helpers ──
 
@@ -342,6 +367,9 @@ export default function CameraPage({ groupId, userId, isActive, allGroups, onScr
       Alert.alert("Erreur", "Impossible de prendre la photo.");
     } finally { setCapturing(false); }
   };
+
+  // Toujours à jour pour le listener volume
+  handleCaptureRef.current = handleCapture;
 
   const openGroupPicker = () => {
     if (allGroups.length <= 1) { confirmUpload([groupId]); return; }
