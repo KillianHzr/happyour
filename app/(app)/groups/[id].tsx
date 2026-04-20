@@ -636,13 +636,18 @@ export default function MainPagerScreen() {
 
   const handleTransferAdmin = async (newAdminId: string) => {
     if (!user || !activeGroupId) return;
-    const [r1, r2] = await Promise.all([
-      supabase.from("group_members").update({ role: "admin" }).eq("group_id", activeGroupId).eq("user_id", newAdminId),
-      supabase.from("group_members").update({ role: "member" }).eq("group_id", activeGroupId).eq("user_id", user.id),
-    ]);
-    if (r1.error) throw new Error(r1.error.message);
-    if (r2.error) throw new Error(r2.error.message);
-    await fetchAllData();
+    try {
+      const [r1, r2] = await Promise.all([
+        supabase.from("group_members").update({ role: "admin" }).eq("group_id", activeGroupId).eq("user_id", newAdminId),
+        supabase.from("group_members").update({ role: "member" }).eq("group_id", activeGroupId).eq("user_id", user.id),
+      ]);
+      if (r1.error) throw new Error(r1.error.message);
+      if (r2.error) throw new Error(r2.error.message);
+      await fetchAllData();
+    } catch (e: any) {
+      Alert.alert("Erreur", e.message);
+      throw e;
+    }
   };
 
   const closeAddGroupModal = () => {
