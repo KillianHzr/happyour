@@ -24,6 +24,7 @@ import { r2Storage } from "../lib/r2";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const NAVBAR_HEIGHT = 100;
+const STANDARD_EMOJIS = ["🤷", "🤦", "🙋", "🫶", "👌", "🤞"];
 
 export const isEmoji = (str: string) => {
   const regexExp = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/gi;
@@ -424,7 +425,7 @@ function ReactionsRow({ reactions, currentUserId, photoId, crownWinnerId, onOpen
       {groups.map(({ id, text, users }) => {
         const iMine = users.some((r) => r.user_id === currentUserId);
         const isCrownReaction = crownWinnerId != null && users.some((r) => r.user_id === crownWinnerId);
-        const emojiDetected = isEmoji(text);
+        const emojiDetected = STANDARD_EMOJIS.includes(text);
 
         return (
           <TouchableOpacity
