@@ -29,6 +29,7 @@ export default function GroupSettingsModal({
   const [editedName, setEditedName] = useState(groupName);
   const [subView, setSubView] = useState<SubView>(null);
   const [loading, setLoading] = useState(false);
+  const [transferringId, setTransferringId] = useState<string | null>(null);
 
   useEffect(() => {
     setEditedName(groupName);
@@ -55,8 +56,8 @@ export default function GroupSettingsModal({
   };
 
   const handleTransfer = async (newAdminId: string) => {
-    setLoading(true);
-    try { await onTransferAdmin(newAdminId); setSubView(null); onClose(); } catch {} finally { setLoading(false); }
+    setTransferringId(newAdminId);
+    try { await onTransferAdmin(newAdminId); setSubView(null); onClose(); } catch {} finally { setTransferringId(null); }
   };
 
   const handleClose = () => {
@@ -157,7 +158,7 @@ export default function GroupSettingsModal({
                 key={m.user_id}
                 style={styles.memberRow}
                 onPress={() => handleTransfer(m.user_id)}
-                disabled={loading}
+                disabled={transferringId !== null}
               >
                 <View style={styles.memberAvatar}>
                   {m.avatar_url
@@ -165,7 +166,7 @@ export default function GroupSettingsModal({
                     : <Text style={styles.memberInitial}>{m.username[0]?.toUpperCase()}</Text>}
                 </View>
                 <Text style={styles.memberName}>{m.username}</Text>
-                {loading && <ActivityIndicator size="small" color="#FFF" />}
+                {transferringId === m.user_id && <ActivityIndicator size="small" color="#FFF" />}
               </TouchableOpacity>
             ))
           )}

@@ -40,7 +40,7 @@ export function TextSticker({ text, fontSize = 42 }: { text: string; fontSize?: 
 
   return (
     <View style={{ height, width, justifyContent: 'center', alignItems: 'center' }}>
-      <Svg height={height} width={width}>
+      <Svg height={height} width={width} overflow="visible">
         <SvgText
           fill="none"
           stroke="#FFF065"

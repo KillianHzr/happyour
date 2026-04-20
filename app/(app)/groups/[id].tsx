@@ -111,8 +111,18 @@ export default function MainPagerScreen() {
   const [activeReactionPhotoId, setActiveReactionPhotoId] = useState<string | null>(null);
   const [showCustomTextInput, setShowCustomTextInput] = useState(false);
   const [customReactionText, setCustomReactionText] = useState("");
+  const [customReactionHistory, setCustomReactionHistory] = useState<string[]>([]);
+  const emojiWarningAnim = useRef(new Animated.Value(0)).current;
+  const emojiWarningTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const emojiWarningVisible = useRef(false);
   const emojiWheelAnim = useRef(new Animated.Value(0)).current;
   const customInputRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem("custom_reaction_history").then(raw => {
+      if (raw) setCustomReactionHistory(JSON.parse(raw));
+    }).catch(() => {});
+  }, []);
 
   // DEV
   const [debugUnlocked, setDebugUnlocked] = useState(false);
@@ -396,6 +406,11 @@ export default function MainPagerScreen() {
     setActiveGroupId(groupId);
   }, [activeGroupId]);
 
+  // Cleanup emoji warning timer on unmount
+  useEffect(() => {
+    return () => { if (emojiWarningTimer.current) clearTimeout(emojiWarningTimer.current); emojiWarningAnim.setValue(0); };
+  }, []);
+
   // ── Emoji Wheel & Custom Text ──
   useEffect(() => {
     if (activeReactionPhotoId) {
@@ -497,6 +512,9 @@ export default function MainPagerScreen() {
     const trimmed = customReactionText.trim().toUpperCase();
     if (trimmed) {
       handleEmojiReact(trimmed);
+      const newHistory = [trimmed, ...customReactionHistory.filter(h => h !== trimmed)].slice(0, 3);
+      setCustomReactionHistory(newHistory);
+      AsyncStorage.setItem("custom_reaction_history", JSON.stringify(newHistory)).catch(() => {});
       setCustomReactionText("");
     }
   };
@@ -505,8 +523,8 @@ export default function MainPagerScreen() {
     if (!activeReactionPhotoId) return;
     const activePhoto = photos.find(p => p.id === activeReactionPhotoId);
     const myReactionStr = activePhoto?.reactions.find(r => r.user_id === user?.id)?.sticker_id;
-    const isCustomText = myReactionStr && !isEmoji(myReactionStr);
-    
+    const isCustomText = myReactionStr && !STANDARD_EMOJIS.includes(myReactionStr);
+
     setCustomReactionText(isCustomText ? myReactionStr : "");
     setShowCustomTextInput(true);
   };
@@ -637,11 +655,9 @@ export default function MainPagerScreen() {
   const handleTransferAdmin = async (newAdminId: string) => {
     if (!user || !activeGroupId) return;
     try {
-      const [r1, r2] = await Promise.all([
-        supabase.from("group_members").update({ role: "admin" }).eq("group_id", activeGroupId).eq("user_id", newAdminId),
-        supabase.from("group_members").update({ role: "member" }).eq("group_id", activeGroupId).eq("user_id", user.id),
-      ]);
+      const r1 = await supabase.from("group_members").update({ role: "admin" }).eq("group_id", activeGroupId).eq("user_id", newAdminId);
       if (r1.error) throw new Error(r1.error.message);
+      const r2 = await supabase.from("group_members").update({ role: "member" }).eq("group_id", activeGroupId).eq("user_id", user.id);
       if (r2.error) throw new Error(r2.error.message);
       await fetchAllData();
     } catch (e: any) {
@@ -964,19 +980,53 @@ export default function MainPagerScreen() {
                       <TextSticker text={customReactionText} fontSize={32} />
                     </View>
                   )}
-                  <TextInput
-                    ref={customInputRef}
-                    style={[styles.customTextInput, { fontSize: customReactionText.length <= 6 ? 38 : 24 }]}
-                    placeholder="Ton message..."
-                    placeholderTextColor="rgba(255,255,255,0.3)"
-                    value={customReactionText}
-                    onChangeText={setCustomReactionText}
-                    maxLength={10}
-                    autoCapitalize="characters"
-                    autoFocus
-                    returnKeyType="done"
-                    onSubmitEditing={handleCustomTextSubmit}
-                  />
+                  <View style={styles.customTextInputWrapper}>
+                    <TextInput
+                      ref={customInputRef}
+                      style={[styles.customTextInput, { fontSize: customReactionText.length <= 6 ? 38 : 24 }]}
+                      placeholder="Ton message..."
+                      placeholderTextColor="rgba(255,255,255,0.3)"
+                      value={customReactionText}
+                      onChangeText={(val) => {
+                        const emojiRegex = /[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FEFF}\u{200D}\u{20E3}]/gu;
+                        const hasEmoji = emojiRegex.test(val);
+                        const filtered = val.replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FEFF}\u{200D}\u{20E3}]/gu, "").slice(0, 10);
+                        setCustomReactionText(filtered);
+                        if (hasEmoji && !emojiWarningVisible.current) {
+                          emojiWarningVisible.current = true;
+                          Animated.spring(emojiWarningAnim, { toValue: 1, useNativeDriver: true, tension: 80, friction: 8 }).start();
+                        }
+                        if (hasEmoji) {
+                          if (emojiWarningTimer.current) clearTimeout(emojiWarningTimer.current);
+                          emojiWarningTimer.current = setTimeout(() => {
+                            Animated.timing(emojiWarningAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => { emojiWarningVisible.current = false; });
+                          }, 2000);
+                        }
+                      }}
+                      maxLength={10}
+                      autoCapitalize="characters"
+                      keyboardType="visible-password"
+                      autoFocus
+                      returnKeyType="done"
+                      onSubmitEditing={handleCustomTextSubmit}
+                    />
+                    <Animated.View style={[styles.emojiTooltip, {
+                      opacity: emojiWarningAnim,
+                      transform: [{ translateY: emojiWarningAnim.interpolate({ inputRange: [0, 1], outputRange: [4, 0] }) }],
+                    }]} pointerEvents="none">
+                      <Text style={styles.emojiTooltipIcon}>⛔</Text>
+                      <Text style={styles.emojiTooltipText}>Texte uniquement</Text>
+                    </Animated.View>
+                  </View>
+                  {customReactionHistory.length > 0 && (
+                    <View style={styles.historyRow}>
+                      {customReactionHistory.map((h) => (
+                        <TouchableOpacity key={h} onPress={() => setCustomReactionText(h)}>
+                          <TextSticker text={h} fontSize={22} />
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
 
                   <View style={styles.customModalActions}>
                     <TouchableOpacity 
@@ -1207,11 +1257,24 @@ const styles = StyleSheet.create({
   customModalClose: { position: "absolute", top: 60, right: 20, width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", zIndex: 10 },
   customInputWrapper: { width: "100%", alignItems: "center", paddingHorizontal: 40, gap: 32 },
   customPreviewSticker: { marginBottom: 10, transform: [{ scale: 1.2 }] },
-  customTextInput: { width: "100%", color: "#FFF", fontFamily: "Inter_800ExtraBold", textAlign: "center", padding: 20 },
+  customTextInput: { width: "100%", color: "#FFF", fontFamily: "Inter_800ExtraBold", textAlign: "center", padding: 20, height: 90 },
   customSendBtn: { backgroundColor: "#FFF", paddingHorizontal: 32, paddingVertical: 14, borderRadius: 100 },
   customSendBtnDisabled: { opacity: 0.5 },
   customSendText: { color: "#000", fontFamily: "Inter_700Bold", fontSize: 16 },
   customModalActions: { alignItems: "center", gap: 16, width: "100%" },
   customDeleteBtn: { paddingVertical: 8 },
   customDeleteText: { color: "#FF3B30", fontFamily: "Inter_600SemiBold", fontSize: 15 },
+  customTextInputWrapper: { width: "100%", position: "relative" },
+  emojiTooltip: {
+    position: "absolute", bottom: "100%", alignSelf: "center", marginBottom: 8,
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: "rgba(28,28,30,0.95)", borderRadius: 20,
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
+  },
+  emojiTooltipIcon: { fontSize: 13 },
+  emojiTooltipText: { color: "rgba(255,255,255,0.8)", fontFamily: "Inter_600SemiBold", fontSize: 13 },
+  historyRow: { flexDirection: "row", gap: 8, justifyContent: "center", flexWrap: "wrap" },
+  historyChip: { backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7 },
+  historyChipText: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 13 },
 });
