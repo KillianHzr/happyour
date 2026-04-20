@@ -52,7 +52,7 @@ export default function InviteScreen() {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const [inviteCode, setInviteCode] = useState("");
-  const [targetUsername, setTargetUsername] = useState("");
+  const [targetEmail, setTargetEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -85,18 +85,18 @@ export default function InviteScreen() {
     }
   };
 
-  const handleInviteByUsername = async () => {
-    if (!targetUsername.trim()) return;
+  const handleInviteByEmail = async () => {
+    if (!targetEmail.trim()) return;
     setLoading(true);
     try {
       const { data: targetProfile, error: profileErr } = await supabase
         .from("profiles")
         .select("id, username")
-        .eq("username", targetUsername.trim())
+        .eq("email", targetEmail.trim().toLowerCase())
         .single();
 
       if (profileErr || !targetProfile) {
-        Alert.alert("Utilisateur introuvable", `Aucun compte avec le pseudo "${targetUsername}".`);
+        Alert.alert("Utilisateur introuvable", `Aucun compte avec l'email "${targetEmail}".`);
         return;
       }
 
@@ -112,7 +112,7 @@ export default function InviteScreen() {
         }
       } else {
         Alert.alert("Succès", `${targetProfile.username} a été ajouté au groupe !`);
-        setTargetUsername("");
+        setTargetEmail("");
       }
     } catch (e: any) {
       Alert.alert("Erreur", e.message);
@@ -151,7 +151,28 @@ export default function InviteScreen() {
 
         <Text style={styles.title}>Inviter</Text>
         
-        {/* Section "Par pseudo" temporairement désactivée */}
+        {/* Section "Par email" temporairement désactivée */}
+        {/* Pour réactiver : retirer ce commentaire et décommenter le bloc ci-dessous
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Inviter par email</Text>
+          <Text style={styles.sectionDesc}>Entre l'email du compte HappyOur de ton ami.</Text>
+          <View style={styles.row}>
+            <TextInput
+              style={[theme.glassInput, styles.input]}
+              placeholder="Email"
+              placeholderTextColor={colors.secondary}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              value={targetEmail}
+              onChangeText={setTargetEmail}
+            />
+            <TouchableOpacity style={[theme.accentButton, styles.addBtn]} onPress={handleInviteByEmail} disabled={loading}>
+              {loading ? <Loader size={16} /> : <Text style={styles.addBtnText}>Ajouter</Text>}
+            </TouchableOpacity>
+          </View>
+        </View>
+        <View style={styles.divider} />
+        */}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Partager le code</Text>
