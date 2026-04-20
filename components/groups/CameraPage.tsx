@@ -143,7 +143,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock }:
   ).current;
 
   useEffect(() => {
-    onScrollLock(slot1 !== null || isPinching || isDrawingActive);
+    const locked = slot1 !== null || isPinching || isDrawingActive;
+    console.log(`[CAM] onScrollLock=${locked} | slot1=${!!slot1} isPinching=${isPinching} isDrawingActive=${isDrawingActive}`);
+    onScrollLock(locked);
   }, [slot1, isPinching, isDrawingActive]);
 
   useEffect(() => {
@@ -176,9 +178,15 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock }:
     return () => { warmUpCancelled.current = true; };
   }, [cameraMode, isActive]);
 
+  // ── Debug: log every render state ──
+  useEffect(() => {
+    console.log(`[CAM] render | slot1=${!!slot1} slot2=${!!slot2} capturingSecond=${capturingSecond} viewingSlot=${viewingSlot} isCapturing=${isCapturing} capturing=${capturing} isPinching=${isPinching} mode=${cameraMode} isActive=${isActive}`);
+  });
+
   // ── Slot helpers ──
 
   const saveToSlot = (data: SlotData) => {
+    console.log(`[CAM] saveToSlot | mode=${data.mode} isSecond=${capturingSecondRef.current}`);
     if (capturingSecondRef.current) {
       setSlot2(data);
       setCapturingSecond(false);
@@ -190,6 +198,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock }:
   };
 
   const resetAll = () => {
+    console.log("[CAM] resetAll");
     setSlot1(null);
     setSlot2(null);
     setViewingSlot(1);
@@ -200,6 +209,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock }:
   };
 
   const handleTrash = () => {
+    console.log(`[CAM] handleTrash | viewingSlot=${viewingSlot}`);
     if (viewingSlot === 2) {
       setSlot2(null);
       setViewingSlot(1);
@@ -297,6 +307,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock }:
   const stopAudioRecording = stopAudioRecordingDirect;
 
   const handleCapture = async () => {
+    console.log(`[CAM] handleCapture | mode=${cameraMode} slot1=${!!slot1} slot2=${!!slot2} capturingSecond=${capturingSecond} capturing=${capturing} isPinching=${isPinching} cameraRef=${!!cameraRef.current}`);
     if (cameraMode === "TEXTE") {
       if (!textModeContent.trim()) return;
       saveToSlot({ mode: "TEXTE", uri: null, audioUri: null, textContent: textModeContent.trim(), note: "" });
@@ -321,14 +332,19 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock }:
       if (isRecording) stopVideoRecording(); else startVideoRecording();
       return;
     }
-    if (!cameraRef.current || isRecording || capturing || isPinching) return;
+    if (!cameraRef.current) { console.warn("[CAM] handleCapture: cameraRef.current est null"); return; }
+    if (isRecording) { console.warn("[CAM] handleCapture: bloqué car isRecording"); return; }
+    if (capturing) { console.warn("[CAM] handleCapture: bloqué car déjà capturing"); return; }
+    if (isPinching) { console.warn("[CAM] handleCapture: bloqué car isPinching"); return; }
     setCapturing(true);
+    console.log("[CAM] takePictureAsync START");
     try {
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.9,
         skipProcessing: Platform.OS === "android",
         exif: Platform.OS === "android",
       });
+      console.log(`[CAM] takePictureAsync END | uri=${photo?.uri?.slice(0, 40)}`);
       if (photo?.uri) {
         const actions: any[] = [];
         if (Platform.OS === "android") {
@@ -342,8 +358,10 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock }:
         if (facing === "front") actions.push({ flip: FlipType.Horizontal });
         let finalUri = photo.uri;
         if (actions.length > 0) {
+          console.log(`[CAM] manipulateAsync START | actions=${JSON.stringify(actions)}`);
           const result = await manipulateAsync(photo.uri, actions, { compress: 0.92, format: SaveFormat.JPEG });
           finalUri = result.uri;
+          console.log("[CAM] manipulateAsync END");
         }
         saveToSlot({ mode: "PHOTO", uri: finalUri, audioUri: null, textContent: "", note: "" });
       }

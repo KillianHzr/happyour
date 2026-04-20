@@ -747,6 +747,7 @@ export default function MainPagerScreen() {
 
   // ── Pager ──
   const jumpTo = (page: number) => {
+    console.log(`[ID] jumpTo page=${page}`);
     scrollRef.current?.scrollTo({ x: page * SCREEN_WIDTH, animated: false });
     scrollX.setValue(page * SCREEN_WIDTH);
     setCurrentPage(page);
@@ -800,7 +801,7 @@ export default function MainPagerScreen() {
         bounces={false} overScrollMode="never"
         scrollEnabled={scrollEnabled}
         delaysContentTouches={false}
-        onMomentumScrollEnd={(e) => setCurrentPage(Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH))}
+        onMomentumScrollEnd={(e) => { const p = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH); console.log(`[ID] onMomentumScrollEnd page=${p}`); setCurrentPage(p); }}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })}
         scrollEventThrottle={16}
         contentOffset={{ x: SCREEN_WIDTH, y: 0 }}
@@ -825,7 +826,7 @@ export default function MainPagerScreen() {
             userId={user?.id ?? ""}
             isActive={currentPage === 1}
             allGroups={allGroups}
-            onScrollLock={setCameraScrollLocked}
+            onScrollLock={(v) => { console.log(`[ID] setCameraScrollLocked=${v}`); setCameraScrollLocked(v); }}
           />
         </Animated.View>
 

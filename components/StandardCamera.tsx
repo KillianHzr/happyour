@@ -140,20 +140,19 @@ const StandardCamera = forwardRef<CameraView, Props>(({
       onResponderTerminate={handleTouchEnd}
       onResponderTerminationRequest={() => !isPinching.current}
     >
-      {isActive && (
-        <CameraView
-          ref={ref}
-          style={StyleSheet.absoluteFill}
-          facing={facing}
-          flash={flash}
-          zoom={localZoom}
-          mode={mode}
-          mirror={mirror}
-          videoQuality="1080p"
-          enableTorch={false}
-          autofocus="off"
-        />
-      )}
+      {/* CameraView reste toujours monté pour éviter les crashes Android liés aux remontages répétés */}
+      <CameraView
+        ref={ref}
+        style={[StyleSheet.absoluteFill, !isActive && { opacity: 0 }]}
+        facing={facing}
+        flash={flash}
+        zoom={localZoom}
+        mode={mode}
+        mirror={mirror}
+        videoQuality="1080p"
+        enableTorch={false}
+        autofocus="off"
+      />
     </View>
   );
 });
