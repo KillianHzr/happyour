@@ -158,9 +158,15 @@ export default function MainPagerScreen() {
 
       const { revealDate: currentRevealDate, prevRevealDate } = getWeekBounds(cfg.reveal_day, cfg.reveal_hour);
       const currentRevealEndDate = new Date(currentRevealDate.getTime() + 16 * 60 * 60 * 1000);
-      const afterRevealWindow = new Date() >= currentRevealEndDate;
-      const photoStart = afterRevealWindow ? currentRevealDate : prevRevealDate;
-      const photoEnd = afterRevealWindow ? new Date(currentRevealDate.getTime() + 7 * 24 * 60 * 60 * 1000) : currentRevealDate;
+      const prevRevealEndDate = new Date(prevRevealDate.getTime() + 16 * 60 * 60 * 1000);
+      const now = new Date();
+      // Pendant la fenêtre du reveal (prevRevealDate → prevRevealDate+16h) : afficher la semaine écoulée
+      // Après la fenêtre : nouvelle semaine en cours (prevRevealDate → currentRevealDate)
+      const inRevealWindow = now >= prevRevealDate && now < prevRevealEndDate;
+      const afterRevealWindow = now >= prevRevealEndDate;
+      const weekBeforeReveal = new Date(prevRevealDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const photoStart = inRevealWindow ? weekBeforeReveal : prevRevealDate;
+      const photoEnd = inRevealWindow ? prevRevealDate : currentRevealDate;
 
       const [groupsRes, profileRes] = await Promise.all([
         supabase.from("group_members").select("groups(id, name, invite_code, created_at)").eq("user_id", user.id),
