@@ -21,6 +21,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Svg, Path, Circle, Text as SvgText } from "react-native-svg";
 import { r2Storage } from "../lib/r2";
+import CommentModal from "./CommentModal";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const NAVBAR_HEIGHT = 100;
@@ -117,6 +118,12 @@ type Props = {
 const PlusIcon = ({ size = 22, color = "rgba(255,255,255,0.9)" }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <Path d="M12 5v14M5 12h14" />
+  </Svg>
+);
+
+const CommentIcon = ({ size = 20, color = "rgba(255,255,255,0.9)" }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
   </Svg>
 );
 
@@ -265,11 +272,12 @@ function SecondCaptureThumbnail({ secondPath, secondNote, onPress }: {
   );
 }
 
-function PhotoMomentPage({ moment, currentUserId, crownWinnerId, onOpenPicker, isVisible }: {
+function PhotoMomentPage({ moment, currentUserId, crownWinnerId, onOpenPicker, onOpenComments, isVisible }: {
   moment: PhotoEntry;
   currentUserId?: string;
   crownWinnerId?: string | null;
   onOpenPicker?: (photoId: string) => void;
+  onOpenComments?: (photoId: string, ownerId: string) => void;
   isVisible?: boolean;
 }) {
   const insets = useSafeAreaInsets();
@@ -322,7 +330,12 @@ function PhotoMomentPage({ moment, currentUserId, crownWinnerId, onOpenPicker, i
             <View style={styles.citationFooter}>
               <View style={styles.citationAvatar}><CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} isCrown={crownWinnerId === moment.user_id} /></View>
               <View style={{ flex: 1 }}><Text style={styles.citationUsername}>{moment.username}</Text><Text style={styles.citationTime}>{formatTime(moment.created_at)}</Text></View>
-              {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
+                  <CommentIcon />
+                </TouchableOpacity>
+                {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
+              </View>
             </View>
           </View>
         </View>
@@ -354,7 +367,12 @@ function PhotoMomentPage({ moment, currentUserId, crownWinnerId, onOpenPicker, i
                   <View style={styles.usernameLine}><Text style={styles.username}>{moment.username}</Text><Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text></View>
                   {effectiveNote && <ExpandableNote text={effectiveNote} maxLines={2} />}
                 </View>
-                {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
+                    <CommentIcon />
+                  </TouchableOpacity>
+                  {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
+                </View>
               </View>
             )}
             <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} photoId={moment.id} crownWinnerId={crownWinnerId} onOpenPicker={isOwn ? undefined : onOpenPicker} />
@@ -543,7 +561,7 @@ function AudioPlayerView({ player, status, onScrollLock }: {
         const ratio = Math.max(0, Math.min(1, relX / seekWidthRef.current));
         dragRatioRef.current = ratio;
         fillRef.current?.setNativeProps({ style: { width: `${ratio * 100}%` } });
-        thumbRef.current?.setNativeProps({ style: { left: `${Math.min(ratio * 100, 100)}%` } });
+        thumbRef.current?.setNativeProps({ left: `${Math.min(ratio * 100, 100)}%` });
         const now = Date.now();
         if (now - lastSeekTimeRef.current > 100) { lastSeekTimeRef.current = now; playerRef.current.seekTo(ratio * durationRef.current); }
       },
@@ -590,13 +608,14 @@ function AudioPlayerView({ player, status, onScrollLock }: {
 }
 
 // --- Moment audio ---
-function AudioMoment({ moment, isVisible, currentUserId, crownWinnerId, onScrollLock, onOpenPicker }: {
+function AudioMoment({ moment, isVisible, currentUserId, crownWinnerId, onScrollLock, onOpenPicker, onOpenComments }: {
   moment: PhotoEntry;
   isVisible: boolean;
   currentUserId?: string;
   crownWinnerId?: string | null;
   onScrollLock?: (locked: boolean) => void;
   onOpenPicker?: (photoId: string) => void;
+  onOpenComments?: (photoId: string, ownerId: string) => void;
 }) {
   const insets = useSafeAreaInsets();
   const [swapped, setSwapped] = useState(false);
@@ -625,7 +644,12 @@ function AudioMoment({ moment, isVisible, currentUserId, crownWinnerId, onScroll
               <View style={styles.citationFooter}>
                 <View style={styles.citationAvatar}><CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} isCrown={crownWinnerId === moment.user_id} /></View>
                 <View style={{ flex: 1 }}><Text style={styles.citationUsername}>{moment.username}</Text><Text style={styles.citationTime}>{formatTime(moment.created_at)}</Text></View>
-                {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
+                    <CommentIcon />
+                  </TouchableOpacity>
+                  {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
+                </View>
               </View>
             </View>
           </View>
@@ -652,7 +676,12 @@ function AudioMoment({ moment, isVisible, currentUserId, crownWinnerId, onScroll
                   <View style={styles.usernameLine}><Text style={styles.username}>{moment.username}</Text><Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text></View>
                   {overlayNote && <ExpandableNote text={overlayNote} maxLines={3} />}
                 </View>
-                {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
+                    <CommentIcon />
+                  </TouchableOpacity>
+                  {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
+                </View>
               </View>
             )}
             <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} photoId={moment.id} crownWinnerId={crownWinnerId} onOpenPicker={onOpenPicker} />
@@ -671,13 +700,14 @@ function AudioMoment({ moment, isVisible, currentUserId, crownWinnerId, onScroll
 }
 
 // --- Moment vidéo ---
-function VideoMoment({ moment, isVisible, cachedUrl, currentUserId, crownWinnerId, onOpenPicker }: {
+function VideoMoment({ moment, isVisible, cachedUrl, currentUserId, crownWinnerId, onOpenPicker, onOpenComments }: {
   moment: PhotoEntry;
   isVisible: boolean;
   cachedUrl: string;
   currentUserId?: string;
   crownWinnerId?: string | null;
   onOpenPicker?: (photoId: string) => void;
+  onOpenComments?: (photoId: string, ownerId: string) => void;
 }) {
   const insets = useSafeAreaInsets();
   const [isPaused, setIsPaused] = useState(false);
@@ -718,7 +748,12 @@ function VideoMoment({ moment, isVisible, cachedUrl, currentUserId, crownWinnerI
                 <View style={styles.citationFooter}>
                   <View style={styles.citationAvatar}><CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} isCrown={crownWinnerId === moment.user_id} /></View>
                   <View style={{ flex: 1 }}><Text style={styles.citationUsername}>{moment.username}</Text><Text style={styles.citationTime}>{formatTime(moment.created_at)}</Text></View>
-                  {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
+                      <CommentIcon />
+                    </TouchableOpacity>
+                    {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
+                  </View>
                 </View>
               </View>
             </View>
@@ -734,7 +769,12 @@ function VideoMoment({ moment, isVisible, cachedUrl, currentUserId, crownWinnerI
                     <View style={styles.usernameLine}><Text style={styles.username}>{moment.username}</Text><Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text></View>
                     {secondNote && <ExpandableNote text={secondNote} maxLines={2} />}
                   </View>
-                  {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
+                      <CommentIcon />
+                    </TouchableOpacity>
+                    {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
+                  </View>
                 </View>
               )}
               <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} photoId={moment.id} crownWinnerId={crownWinnerId} onOpenPicker={onOpenPicker} />
@@ -773,11 +813,16 @@ function VideoMoment({ moment, isVisible, cachedUrl, currentUserId, crownWinnerI
                 </View>
                 {moment.note && <ExpandableNote text={moment.note} maxLines={3} />}
               </View>
-              {!isOwn && (
-                <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}>
-                  <PlusIcon />
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
+                  <CommentIcon />
                 </TouchableOpacity>
-              )}
+                {!isOwn && (
+                  <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}>
+                    <PlusIcon />
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
             <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} photoId={moment.id} crownWinnerId={crownWinnerId} onOpenPicker={onOpenPicker} />
           </LinearGradient>
@@ -880,6 +925,16 @@ export default function PhotoFeed({ photos, currentUserId, nextUnlockDate, revea
   const [revealMsLeft, setRevealMsLeft] = useState(Infinity);
   const flatListRef = useRef<FlatList>(null);
   const [videoCache, setVideoCache] = useState<Record<string, string>>({});
+  
+  const [commentModalVisible, setCommentModalVisible] = useState(false);
+  const [activePhotoId, setActivePhotoId] = useState<string | null>(null);
+  const [activePhotoOwnerId, setActivePhotoOwnerId] = useState<string | null>(null);
+
+  const openComments = (photoId: string, ownerId: string) => {
+    setActivePhotoId(photoId);
+    setActivePhotoOwnerId(ownerId);
+    setCommentModalVisible(true);
+  };
 
   useEffect(() => {
     // Videos that are already local (served from mediaCache) don't need downloading again.
@@ -985,13 +1040,13 @@ export default function PhotoFeed({ photos, currentUserId, nextUnlockDate, revea
     const fontSize = textLen <= 40 ? 32 : textLen <= 100 ? 26 : textLen <= 200 ? 21 : textLen <= 300 ? 17 : 15;
 
     if (isAudio) {
-      return <AudioMoment moment={moment} isVisible={index === visibleIndex} currentUserId={currentUserId} crownWinnerId={crownWinnerId} onScrollLock={(locked) => { flatListRef.current?.setNativeProps({ scrollEnabled: !locked }); onScrollLock?.(locked); }} onOpenPicker={onOpenPicker} />;
+      return <AudioMoment moment={moment} isVisible={index === visibleIndex} currentUserId={currentUserId} crownWinnerId={crownWinnerId} onScrollLock={(locked) => { flatListRef.current?.setNativeProps({ scrollEnabled: !locked }); onScrollLock?.(locked); }} onOpenPicker={onOpenPicker} onOpenComments={openComments} />;
     }
     if (isVideo) {
-      return <VideoMoment moment={moment} isVisible={index === visibleIndex} currentUserId={currentUserId} crownWinnerId={crownWinnerId} cachedUrl={videoCache[moment.url] ?? moment.url} onOpenPicker={onOpenPicker} />;
+      return <VideoMoment moment={moment} isVisible={index === visibleIndex} currentUserId={currentUserId} crownWinnerId={crownWinnerId} cachedUrl={videoCache[moment.url] ?? moment.url} onOpenPicker={onOpenPicker} onOpenComments={openComments} />;
     }
 
-    return <PhotoMomentPage moment={moment} currentUserId={currentUserId} crownWinnerId={crownWinnerId} onOpenPicker={onOpenPicker} isVisible={index === visibleIndex} />;
+    return <PhotoMomentPage moment={moment} currentUserId={currentUserId} crownWinnerId={crownWinnerId} onOpenPicker={onOpenPicker} onOpenComments={openComments} isVisible={index === visibleIndex} />;
   };
 
   return (
@@ -1027,9 +1082,19 @@ export default function PhotoFeed({ photos, currentUserId, nextUnlockDate, revea
           </View>
         </View>
       )}
+      
+      {activePhotoId && activePhotoOwnerId && (
+        <CommentModal
+          visible={commentModalVisible}
+          onClose={() => setCommentModalVisible(false)}
+          photoId={activePhotoId}
+          photoOwnerId={activePhotoOwnerId}
+        />
+      )}
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   list: { flex: 1, backgroundColor: "#000" },
