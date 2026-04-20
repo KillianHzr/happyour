@@ -13,6 +13,17 @@ import SplashScreen from "../components/SplashScreen";
 
 setupNotificationHandler();
 
+// Catch toutes les erreurs JS non catchées (handlers async, promises, etc.)
+const _ErrorUtils = (global as any).ErrorUtils;
+if (_ErrorUtils) {
+  const previousHandler = _ErrorUtils.getGlobalHandler();
+  _ErrorUtils.setGlobalHandler((error: any, isFatal: boolean) => {
+    console.error(`[GlobalError] ${isFatal ? "FATAL" : "non-fatal"}:`, error?.message ?? error);
+    console.error("[GlobalError] Stack:", error?.stack);
+    previousHandler?.(error, isFatal);
+  });
+}
+
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold });
   const [checksReady, setChecksReady] = useState(false);

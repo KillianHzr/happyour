@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, Component } from "react";
 import {
   View, Text, StyleSheet, Animated, Easing, TouchableOpacity,
   Alert, KeyboardAvoidingView, Platform, TextInput, Modal, Pressable, PanResponder,
@@ -39,7 +39,17 @@ type Props = {
   onScrollLock: (locked: boolean) => void;
 };
 
-export default function CameraPage({ groupId, userId, isActive, allGroups, onScrollLock }: Props) {
+class CameraErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean; error: string }> {
+  constructor(props: any) { super(props); this.state = { hasError: false, error: "" }; }
+  static getDerivedStateFromError(error: any) { return { hasError: true, error: error?.message ?? String(error) }; }
+  componentDidCatch(error: any, info: any) { console.error("[CameraPage] Render error:", error, info?.componentStack); }
+  render() {
+    if (this.state.hasError) return null;
+    return this.props.children;
+  }
+}
+
+function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock }: Props) {
   const insets = useSafeAreaInsets();
   const { startUpload } = useUpload();
 
@@ -103,7 +113,7 @@ export default function CameraPage({ groupId, userId, isActive, allGroups, onScr
   ).current;
 
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  const audioPreviewPlayer = useAudioPlayer(capturedAudioUri ?? "");
+  const audioPreviewPlayer = useAudioPlayer(capturedAudioUri || null);
   const audioPreviewStatus = useAudioPlayerStatus(audioPreviewPlayer);
   const audioPreviewSeekRef = useRef<any>(null);
   const audioPreviewSeekLayoutRef = useRef({ pageX: 0, width: 1 });
@@ -311,7 +321,7 @@ export default function CameraPage({ groupId, userId, isActive, allGroups, onScr
       if (isRecording) stopVideoRecording(); else startVideoRecording();
       return;
     }
-    if (!cameraRef.current || isRecording || capturing) return;
+    if (!cameraRef.current || isRecording || capturing || isPinching) return;
     setCapturing(true);
     try {
       const photo = await cameraRef.current.takePictureAsync({
@@ -408,7 +418,7 @@ export default function CameraPage({ groupId, userId, isActive, allGroups, onScr
 
   const renderSlotThumbnail = (slot: SlotData) => {
     if (slot.mode === "PHOTO" || slot.mode === "DESSIN") {
-      return <Image source={{ uri: slot.uri! }} style={StyleSheet.absoluteFillObject as any} contentFit="cover" />;
+      return <Image source={{ uri: slot.uri ?? "" }} style={StyleSheet.absoluteFillObject as any} contentFit="cover" />;
     }
     if (slot.mode === "AUDIO") {
       return (
@@ -605,6 +615,7 @@ export default function CameraPage({ groupId, userId, isActive, allGroups, onScr
                 onPress={handleCapture}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
+                disabled={isPinching}
                 activeOpacity={0.8}
               >
                 <View style={[styles.captureInner, (cameraMode === "VIDEO" || isRecording) && styles.captureInnerVideo, isRecording && styles.captureInnerRecording, cameraMode === "AUDIO" && styles.captureInnerAudio, isAudioRecording && styles.captureInnerAudioRecording]}>
@@ -671,10 +682,10 @@ export default function CameraPage({ groupId, userId, isActive, allGroups, onScr
             <View style={[styles.previewImageWrapper, previewSlot.mode === "DESSIN" && { backgroundColor: "#000" }]}>
               {previewSlot.mode === "DESSIN" ? (
                 <View style={styles.drawingPreviewCenter}>
-                  <Image source={{ uri: previewSlot.uri! }} style={styles.drawingPreviewImage} contentFit="fill" />
+                  <Image source={{ uri: previewSlot.uri ?? "" }} style={styles.drawingPreviewImage} contentFit="fill" />
                 </View>
               ) : (
-                <Image source={{ uri: previewSlot.uri! }} style={styles.previewImage} contentFit="cover" />
+                <Image source={{ uri: previewSlot.uri ?? "" }} style={styles.previewImage} contentFit="cover" />
               )}
               <View style={styles.previewTopBtns}>
                 <TouchableOpacity style={styles.topSquareBtn} onPress={resetAll}><CloseIcon /></TouchableOpacity>
@@ -839,6 +850,10 @@ function SlotBar({ isSlot1Preview, isSlot1WithSlot2, isSlot2Preview, slot1, slot
         <>
           <TouchableOpacity style={slotBarStyles.addBtn} onPress={onAddSecond}>
             <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <Path d="M12 5V19" stroke="black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <Path d="M5 12H19" stroke="black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </Svg>
+            <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
               <Path d="M20 9H11C9.89543 9 9 9.89543 9 11V20C9 21.1046 9.89543 22 11 22H20C21.1046 22 20 21.1046 22 20V11C22 9.89543 21.1046 9 20 9Z" stroke="black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               <Path d="M5 15H4C3.46957 15 2.96086 14.7893 2.58579 14.4142C2.21071 14.0391 2 13.5304 2 13V4C2 3.46957 2.21071 2.96086 2.58579 2.58579C2.96086 2.21071 3.46957 2 4 2H13C13.5304 2 14.0391 2.21071 14.4142 2.58579C14.7893 2.96086 15 3.46957 15 4V5" stroke="black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </Svg>
@@ -991,3 +1006,11 @@ const pickerStyles = StyleSheet.create({
   cancelWrap: { alignItems: "center", paddingVertical: 8 },
   cancelText: { color: "rgba(255,255,255,0.4)", fontFamily: "Inter_600SemiBold", fontSize: 15 },
 });
+
+export default function CameraPage(props: Props) {
+  return (
+    <CameraErrorBoundary>
+      <CameraPageInner {...props} />
+    </CameraErrorBoundary>
+  );
+}
