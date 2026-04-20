@@ -169,12 +169,45 @@ export async function cancelAllRecapNotifications() {
   try {
     const all = await Notifications.getAllScheduledNotificationsAsync();
     for (const n of all) {
-      if (n.identifier.startsWith("recap_") || n.identifier.startsWith("countdown_")) {
+      if (
+        n.identifier.startsWith("recap_") ||
+        n.identifier.startsWith("countdown_") ||
+        n.identifier.startsWith("reactions_")
+      ) {
         await Notifications.cancelScheduledNotificationAsync(n.identifier);
       }
     }
   } catch (e) {
     console.warn("cancelAllRecapNotifications error:", e);
+  }
+}
+
+export async function scheduleReactionsReminder(
+  groupId: string,
+  groupName: string,
+  revealDate: Date
+) {
+  if (!Notifications) return;
+  const now = new Date();
+  // Lendemain du reveal à 9h
+  const sendAt = new Date(revealDate);
+  sendAt.setDate(sendAt.getDate() + 1);
+  sendAt.setHours(9, 0, 0, 0);
+  const secondsUntil = Math.floor((sendAt.getTime() - now.getTime()) / 1000);
+  if (secondsUntil <= 0) return;
+  try {
+    await Notifications.scheduleNotificationAsync({
+      identifier: `reactions_${groupId}`,
+      content: {
+        title: groupName,
+        body: "Venez voir les réactions de vos potes 👀",
+        data: { type: "recap", groupId },
+        channelId: "default",
+      },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: secondsUntil },
+    });
+  } catch (e) {
+    console.warn("scheduleReactionsReminder error:", e);
   }
 }
 
@@ -226,6 +259,7 @@ export async function scheduleAllRecaps(userId: string) {
     if (groupName) {
       await scheduleRecapNotification(m.group_id, groupName, sunday);
       await scheduleCountdownNotification(m.group_id, groupName, sunday);
+      await scheduleReactionsReminder(m.group_id, groupName, sunday);
     }
   }
 }
