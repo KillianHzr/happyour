@@ -618,7 +618,9 @@ export default function MainPagerScreen() {
   const handleDeleteGroup = async () => {
     if (!activeGroupId) return;
     try {
-      await supabase.from("groups").delete().eq("id", activeGroupId);
+      const { error } = await supabase.from("groups").delete().eq("id", activeGroupId);
+      if (error) throw new Error(error.message);
+      setShowGroupSettings(false);
       const remaining = allGroups.filter((g) => g.id !== activeGroupId);
       if (remaining.length > 0) {
         setAllGroups(remaining);

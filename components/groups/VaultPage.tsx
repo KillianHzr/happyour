@@ -279,6 +279,7 @@ export default function VaultPage({
 
         {/* Stats / Reveal card */}
         {unlocked ? (
+          photoCount > 0 ? (
           <TouchableOpacity style={styles.revealCard} onPress={onOpenReveal} activeOpacity={0.82}>
             <Text style={styles.revealEmoji}>🎉</Text>
             <Text style={styles.revealTitle}>Voir le reveal !</Text>
@@ -290,6 +291,12 @@ export default function VaultPage({
               </View>
             )}
           </TouchableOpacity>
+          ) : (
+          <View style={[styles.revealCard, { opacity: 0.6 }]}>
+            <Text style={styles.revealEmoji}>😔</Text>
+            <Text style={styles.revealTitle}>Personne n'a partagé de moment</Text>
+          </View>
+          )
         ) : (
           <View style={[styles.statsCard, strokeWidth > 0 && { borderWidth: strokeWidth }]}>
             <View style={styles.statsRow}>
