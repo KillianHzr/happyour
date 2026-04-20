@@ -468,7 +468,7 @@ const styles = StyleSheet.create({
   // Reveal card
   revealCard: { backgroundColor: "#FFF", borderRadius: 16, paddingVertical: 32, alignItems: "center", marginBottom: 28, gap: 8 },
   revealEmoji: { fontSize: 42 },
-  revealTitle: { fontFamily: "Inter_700Bold", fontSize: 22, color: "#000" },
+  revealTitle: { fontFamily: "Inter_700Bold", fontSize: 22, color: "#000", textAlign: "center" },
   revealExpiry: { marginTop: 4, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, backgroundColor: "rgba(0,0,0,0.07)" },
   revealExpiryRed: { backgroundColor: "rgba(200,30,30,0.12)" },
   revealExpiryText: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: "rgba(0,0,0,0.45)" },
