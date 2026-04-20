@@ -37,6 +37,9 @@ export async function registerForPushNotifications(userId: string) {
       await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : {})
     ).data;
 
+    const deviceToken = await Notifications.getDevicePushTokenAsync();
+    console.log("APNs device token:", deviceToken.data);
+
     await supabase
       .from("profiles")
       .update({ expo_push_token: token })
