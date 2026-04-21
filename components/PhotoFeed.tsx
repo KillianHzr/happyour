@@ -13,6 +13,14 @@ import {
   Animated,
   ActivityIndicator,
 } from "react-native";
+import Reanimated, {
+  useSharedValue,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  interpolate,
+  Extrapolation,
+  type SharedValue,
+} from "react-native-reanimated";
 import { Image } from "expo-image";
 import * as FileSystem from "expo-file-system/legacy";
 import { useVideoPlayer, VideoView } from "expo-video";
@@ -341,7 +349,7 @@ function PhotoMomentPage({ moment, currentUserId, crownWinnerId, onOpenPicker, i
   };
 
   return (
-    <View style={[styles.fullscreenPage, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12 }]}>
+    <View style={[styles.fullscreenPage, { paddingTop: Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 12) / 2), paddingBottom: Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 12) / 2) }]}>
       <View style={styles.momentWrapper}>
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: swapFade }]}>
           {renderMainContent()}
@@ -641,7 +649,7 @@ function AudioMoment({ moment, isVisible, currentUserId, crownWinnerId, onScroll
   const overlayIsText = swapped && hasSecond ? moment.second_image_path === "text_mode" : false;
 
   return (
-    <View style={[styles.fullscreenPage, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12 }]}>
+    <View style={[styles.fullscreenPage, { paddingTop: Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 12) / 2), paddingBottom: Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 12) / 2) }]}>
       <View style={styles.momentWrapper}>
         {renderContent()}
         <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
@@ -710,7 +718,7 @@ function VideoMoment({ moment, isVisible, cachedUrl, currentUserId, crownWinnerI
     const textLen = secondNote?.length ?? 0;
     const fontSize = textLen <= 40 ? 32 : textLen <= 100 ? 26 : textLen <= 200 ? 21 : textLen <= 300 ? 17 : 15;
     return (
-      <View style={[styles.fullscreenPage, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12 }]}>
+      <View style={[styles.fullscreenPage, { paddingTop: Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 12) / 2), paddingBottom: Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 12) / 2) }]}>
         <View style={styles.momentWrapper}>
           {secondIsText ? (
             <View style={styles.textMomentBg}>
@@ -748,7 +756,7 @@ function VideoMoment({ moment, isVisible, cachedUrl, currentUserId, crownWinnerI
   }
 
   return (
-    <View style={[styles.fullscreenPage, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12 }]}>
+    <View style={[styles.fullscreenPage, { paddingTop: Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 12) / 2), paddingBottom: Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 12) / 2) }]}>
       <View style={styles.momentWrapper}>
         <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center" }]} pointerEvents="none">
           <ActivityIndicator size="large" color="rgba(255,255,255,0.5)" />
@@ -792,6 +800,7 @@ function VideoMoment({ moment, isVisible, cachedUrl, currentUserId, crownWinnerI
 }
 
 function RevealIntroPage({ groupName, isVisible }: { groupName?: string; isVisible: boolean }) {
+  const insets = useSafeAreaInsets();
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.9)).current;
   const hintOpacity = useRef(new Animated.Value(0)).current;
@@ -829,7 +838,7 @@ function RevealIntroPage({ groupName, isVisible }: { groupName?: string; isVisib
         <Text style={styles.revealIntroTitle}>Le Reveal</Text>
         {groupName ? <Text style={styles.revealIntroGroup}>{groupName}</Text> : null}
       </Animated.View>
-      <Animated.View style={[styles.revealIntroHint, { opacity: hintOpacity, transform: [{ translateY: hintY }] }]}>
+      <Animated.View style={[styles.revealIntroHint, { bottom: Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 24) / 2), opacity: hintOpacity, transform: [{ translateY: hintY }] }]}>
         <Svg width={24} height={24} viewBox="0 0 24 24">
           <Path d="M12 5v14M5 12l7 7 7-7" stroke="rgba(255,255,255,0.35)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </Svg>
@@ -854,7 +863,7 @@ function formatCrownDuration(ms: number): string {
 function CrownRevealPage({ winner, durationMs }: { winner: PhotoEntry; durationMs: number }) {
   const insets = useSafeAreaInsets();
   return (
-    <View style={[styles.fullscreenPage, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 24, backgroundColor: "#0A0A0A", alignItems: "center", justifyContent: "center" }]}>
+    <View style={[styles.fullscreenPage, { paddingTop: Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 24) / 2), paddingBottom: Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 24) / 2), backgroundColor: "#0A0A0A", alignItems: "center", justifyContent: "center" }]}>
       <View style={styles.crownRevealInner}>
         <Svg width={64} height={64} viewBox="0 0 24 24" style={{ marginBottom: 4 }}>
           <Path d="M2 19l2-9 4.5 4L12 5l3.5 9L20 10l2 9H2z" fill="#FFD700" stroke="#B8860B" strokeWidth="0.8" strokeLinejoin="round" />
@@ -873,8 +882,46 @@ function CrownRevealPage({ winner, durationMs }: { winner: PhotoEntry; durationM
   );
 }
 
+const AnimatedFlatList = Reanimated.createAnimatedComponent(FlatList) as typeof FlatList<FeedItem>;
+
+function AnimatedPageWrapper({ index, scrollY, children }: {
+  index: number;
+  scrollY: SharedValue<number>;
+  children: React.ReactNode;
+}) {
+  const animStyle = useAnimatedStyle(() => {
+    const inputRange = [(index - 1) * SCREEN_HEIGHT, index * SCREEN_HEIGHT, (index + 1) * SCREEN_HEIGHT];
+    
+    // Scale transition: 0.94 to 1
+    const scale = interpolate(scrollY.value, inputRange, [0.94, 1, 0.94], Extrapolation.CLAMP);
+    
+    // Opacity transition: more pronounced fade
+    const opacity = interpolate(scrollY.value, inputRange, [0.4, 1, 0.4], Extrapolation.CLAMP);
+    
+    // Slight vertical shift to make it feel like items are stacked
+    const translateY = interpolate(scrollY.value, inputRange, [SCREEN_HEIGHT * 0.05, 0, -SCREEN_HEIGHT * 0.05], Extrapolation.CLAMP);
+
+    return { 
+      transform: [
+        { scale },
+        { translateY }
+      ], 
+      opacity 
+    };
+  });
+  return (
+    <Reanimated.View style={[{ height: SCREEN_HEIGHT, width: SCREEN_WIDTH }, animStyle]}>
+      {children}
+    </Reanimated.View>
+  );
+}
+
 export default function PhotoFeed({ photos, currentUserId, nextUnlockDate, revealEndDate, crownWinnerId, crownDurationMs = 0, groupName, onScrollLock, onActiveIndexChange, onOpenPicker }: Props) {
   const insets = useSafeAreaInsets();
+  const scrollY = useSharedValue(0);
+  const onScroll = useAnimatedScrollHandler((event) => {
+    scrollY.value = event.contentOffset.y;
+  });
   const [visibleIndex, setVisibleIndex] = useState(0);
   const [countdownText, setCountdownText] = useState("");
   const [revealTimeLeft, setRevealTimeLeft] = useState("");
@@ -941,7 +988,11 @@ export default function PhotoFeed({ photos, currentUserId, nextUnlockDate, revea
       onActiveIndexChange?.(idx);
     }
   }, [onActiveIndexChange]);
-  const viewabilityConfig = useMemo(() => ({ itemVisiblePercentThreshold: 50 }), []);
+  
+  const viewabilityConfig = useMemo(() => ({ 
+    itemVisiblePercentThreshold: 80, // Higher threshold for cleaner transitions
+    minimumViewTime: 50 
+  }), []);
 
   const items = useMemo<FeedItem[]>(() => {
     if (photos.length === 0) return [];
@@ -962,58 +1013,59 @@ export default function PhotoFeed({ photos, currentUserId, nextUnlockDate, revea
   }, [photos, crownWinnerId]);
 
   const renderItem = ({ item, index }: { item: FeedItem; index: number }) => {
-    if (item.type === "intro") { return <RevealIntroPage groupName={groupName} isVisible={index === visibleIndex} />; }
-    if (item.type === "crown") {
+    let content: React.ReactNode = null;
+
+    if (item.type === "intro") {
+      content = <RevealIntroPage groupName={groupName} isVisible={index === visibleIndex} />;
+    } else if (item.type === "crown") {
       const winner = photos.find((p) => p.user_id === crownWinnerId);
       if (!winner) return null;
-      return <CrownRevealPage winner={winner} durationMs={crownDurationMs} />;
-    }
-    if (item.type === "separator") {
+      content = <CrownRevealPage winner={winner} durationMs={crownDurationMs} />;
+    } else if (item.type === "separator") {
       const [day, date] = item.label.split("\n");
-      return ( <View style={styles.fullscreenPage}><Text style={styles.separatorDay}>{day}</Text><Text style={styles.separatorDate}>{date}</Text></View> );
-    }
-    if (item.type === "end") {
-      return ( <View style={styles.fullscreenPage}><View style={styles.endLogoMark} /><Text style={styles.endTitle}>Reveal terminé.</Text><Text style={styles.endSubtitle}>Prochain rewind dans :</Text><Text style={styles.countdownText}>{countdownText}</Text></View> );
+      content = <View style={styles.fullscreenPage}><Text style={styles.separatorDay}>{day}</Text><Text style={styles.separatorDate}>{date}</Text></View>;
+    } else if (item.type === "end") {
+      content = <View style={styles.fullscreenPage}><View style={styles.endLogoMark} /><Text style={styles.endTitle}>Reveal terminé.</Text><Text style={styles.endSubtitle}>Prochain rewind dans :</Text><Text style={styles.countdownText}>{countdownText}</Text></View>;
+    } else {
+      const moment = item.data;
+      const isAudio = moment.image_path.endsWith(".m4a");
+      const isVideo = moment.image_path.endsWith(".mp4");
+
+      if (isAudio) {
+        content = <AudioMoment moment={moment} isVisible={index === visibleIndex} currentUserId={currentUserId} crownWinnerId={crownWinnerId} onScrollLock={(locked) => { flatListRef.current?.setNativeProps({ scrollEnabled: !locked }); onScrollLock?.(locked); }} onOpenPicker={onOpenPicker} />;
+      } else if (isVideo) {
+        content = <VideoMoment moment={moment} isVisible={index === visibleIndex} currentUserId={currentUserId} crownWinnerId={crownWinnerId} cachedUrl={videoCache[moment.url] ?? moment.url} onOpenPicker={onOpenPicker} />;
+      } else {
+        content = <PhotoMomentPage moment={moment} currentUserId={currentUserId} crownWinnerId={crownWinnerId} onOpenPicker={onOpenPicker} isVisible={index === visibleIndex} />;
+      }
     }
 
-    const moment = item.data;
-    const isTextOnly = moment.image_path === "text_mode";
-    const isAudio = moment.image_path.endsWith(".m4a");
-    const isVideo = moment.image_path.endsWith(".mp4");
-    const isDrawing = moment.image_path.includes("_draw");
-    const isOwn = moment.user_id === currentUserId;
-    const textLen = moment.note?.length ?? 0;
-    const fontSize = textLen <= 40 ? 32 : textLen <= 100 ? 26 : textLen <= 200 ? 21 : textLen <= 300 ? 17 : 15;
-
-    if (isAudio) {
-      return <AudioMoment moment={moment} isVisible={index === visibleIndex} currentUserId={currentUserId} crownWinnerId={crownWinnerId} onScrollLock={(locked) => { flatListRef.current?.setNativeProps({ scrollEnabled: !locked }); onScrollLock?.(locked); }} onOpenPicker={onOpenPicker} />;
-    }
-    if (isVideo) {
-      return <VideoMoment moment={moment} isVisible={index === visibleIndex} currentUserId={currentUserId} crownWinnerId={crownWinnerId} cachedUrl={videoCache[moment.url] ?? moment.url} onOpenPicker={onOpenPicker} />;
-    }
-
-    return <PhotoMomentPage moment={moment} currentUserId={currentUserId} crownWinnerId={crownWinnerId} onOpenPicker={onOpenPicker} isVisible={index === visibleIndex} />;
+    return <AnimatedPageWrapper index={index} scrollY={scrollY}>{content}</AnimatedPageWrapper>;
   };
 
   return (
     <View style={styles.list}>
-      <FlatList
+      <AnimatedFlatList
         ref={flatListRef}
         data={items}
         renderItem={renderItem}
         keyExtractor={(_, i) => i.toString()}
-        pagingEnabled
+        pagingEnabled={true}
         snapToInterval={SCREEN_HEIGHT}
         snapToAlignment="start"
         decelerationRate="fast"
+        disableIntervalMomentum={true}
         showsVerticalScrollIndicator={false}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         getItemLayout={(_, i) => ({ length: SCREEN_HEIGHT, offset: SCREEN_HEIGHT * i, index: i })}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewabilityConfig}
-        windowSize={21}
-        maxToRenderPerBatch={3}
-        initialNumToRender={3}
+        windowSize={5}
+        maxToRenderPerBatch={2}
+        initialNumToRender={2}
         removeClippedSubviews={Platform.OS === "android"}
+        overScrollMode="never"
         style={styles.list}
       />
       {revealEndDate && revealTimeLeft !== "" && (
@@ -1070,7 +1122,7 @@ const styles = StyleSheet.create({
   revealIntroEyebrow: { fontFamily: "Inter_400Regular", fontSize: 13, color: "rgba(255,255,255,0.4)", letterSpacing: 4, textTransform: "uppercase", marginBottom: 10 },
   revealIntroTitle: { fontFamily: "Inter_700Bold", fontSize: 58, color: "#FFF", letterSpacing: -1.5, lineHeight: 62 },
   revealIntroGroup: { fontFamily: "Inter_400Regular", fontSize: 18, color: "rgba(255,255,255,0.4)", marginTop: 10, textAlign: "center" },
-  revealIntroHint: { position: "absolute", bottom: NAVBAR_HEIGHT + 24, alignItems: "center", gap: 6 },
+  revealIntroHint: { position: "absolute", alignItems: "center", gap: 6 },
   revealIntroHintText: { fontFamily: "Inter_400Regular", fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: 2, textTransform: "uppercase" },
   crownRevealInner: { alignItems: "center", paddingHorizontal: 32 },
   crownRevealTitle: { fontFamily: "Inter_700Bold", fontSize: 13, color: "#FFD700", letterSpacing: 2, textTransform: "uppercase", marginBottom: 28, marginTop: 8 },

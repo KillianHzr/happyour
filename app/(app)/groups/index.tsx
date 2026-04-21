@@ -9,6 +9,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Loader from "../../../components/Loader";
 import Svg, { Path } from "react-native-svg";
 
+const LogoutIcon = () => (
+  <Svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FF3B30" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+    <Path d="M16 17l5-5-5-5" />
+    <Path d="M21 12H9" />
+  </Svg>
+);
+
 const PlusIcon = () => (
   <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
     <Path d="M12 5V19M5 12H19" stroke="#000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -22,7 +30,7 @@ const GroupIcon = () => (
 );
 
 export default function GroupsHomeScreen() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
 
@@ -58,33 +66,46 @@ export default function GroupsHomeScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.container, styles.center]}>
+      <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
         <Loader size={48} />
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, styles.centered, { paddingTop: insets.top + 40 }]}>
-      <View style={styles.logoMark} />
-      <Text style={styles.title}>Prêt pour votre premier cercle ?</Text>
-      <Text style={styles.subtitle}>
-        Créez un groupe pour vous et vos amis, ou rejoignez un cercle existant avec un code.
-      </Text>
+    <View style={[styles.container, { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 24 }]}>
+      <View style={styles.centered}>
+        <View style={styles.logoMark} />
+        <Text style={styles.title}>Prêt pour votre premier cercle ?</Text>
+        <Text style={styles.subtitle}>
+          Créez un groupe pour vous et vos amis, ou rejoignez un cercle existant avec un code.
+        </Text>
 
-      <View style={styles.actions}>
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => router.push("/(app)/groups/create")}>
-          <View style={styles.btnIcon}>
-            <PlusIcon />
-          </View>
-          <Text style={styles.primaryBtnText}>Créer un groupe</Text>
-        </TouchableOpacity>
+        <View style={styles.actions}>
+          <TouchableOpacity style={styles.primaryBtn} onPress={() => router.push("/(app)/groups/create")}>
+            <View style={styles.btnIcon}>
+              <PlusIcon />
+            </View>
+            <Text style={styles.primaryBtnText}>Créer un groupe</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.push("/(app)/groups/join")}>
-          <View style={[styles.btnIcon, styles.btnIconDark]}>
-            <GroupIcon />
+          <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.push("/(app)/groups/join")}>
+            <View style={[styles.btnIcon, styles.btnIconDark]}>
+              <GroupIcon />
+            </View>
+            <Text style={styles.secondaryBtnText}>Rejoindre</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={{ flex: 1 }} />
+
+      <View style={styles.logoutCard}>
+        <TouchableOpacity style={styles.logoutRow} onPress={() => logout().catch(() => {})}>
+          <View style={styles.logoutIconWrap}>
+            <LogoutIcon />
           </View>
-          <Text style={styles.secondaryBtnText}>Rejoindre</Text>
+          <Text style={styles.logoutLabel}>Se déconnecter</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -93,7 +114,6 @@ export default function GroupsHomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 24 },
-  center: { justifyContent: "center", alignItems: "center" },
   centered: { alignItems: "center" },
   logoMark: {
     width: 40, height: 40, borderWidth: 3, borderColor: "#FFF",
@@ -115,4 +135,8 @@ const styles = StyleSheet.create({
   btnIconDark: { backgroundColor: "rgba(255,255,255,0.1)" },
   primaryBtnText: { fontSize: 17, fontFamily: "Inter_700Bold", color: "#000" },
   secondaryBtnText: { fontSize: 17, fontFamily: "Inter_700Bold", color: "#FFF" },
+  logoutCard: { backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 20, overflow: "hidden" },
+  logoutRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 13, gap: 12 },
+  logoutIconWrap: { width: 36, height: 36, borderRadius: 10, backgroundColor: "rgba(255,59,48,0.12)", justifyContent: "center", alignItems: "center" },
+  logoutLabel: { fontSize: 16, color: "#FF3B30", fontFamily: "Inter_600SemiBold" },
 });

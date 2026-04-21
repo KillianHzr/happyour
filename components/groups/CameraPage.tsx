@@ -226,6 +226,16 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock }:
     setSlot1(prev => prev ? { ...prev, note: val } : prev);
   };
 
+  // Auto-save texte vers slot2 pendant la capture secondaire
+  useEffect(() => {
+    if (!capturingSecond || cameraMode !== "TEXTE") return;
+    if (textModeContent.trim()) {
+      setSlot2({ mode: "TEXTE", uri: null, audioUri: null, textContent: textModeContent.trim(), note: "" });
+    } else {
+      setSlot2(null);
+    }
+  }, [textModeContent, capturingSecond, cameraMode]);
+
   // ── Handlers ──
 
   const handleTouchStart = (e: any) => { startTouchY.current = e.nativeEvent.pageY; };
@@ -526,7 +536,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock }:
             )}
           </View>
         ) : (
-          <View style={[styles.cameraPageContainer, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 12, paddingHorizontal: 12 }]}>
+          <View style={[styles.cameraPageContainer, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: (capturingSecond && slot1) ? NAVBAR_HEIGHT + 92 : NAVBAR_HEIGHT + 12, paddingHorizontal: 12 }]}>
             <View style={styles.cameraInner}>
               <StandardCamera
                 ref={cameraRef}
@@ -570,7 +580,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock }:
             </View>
           )}
 
-          <View style={[styles.cameraFooter, { bottom: (cameraMode === "DESSIN" && isDrawingActive) ? insets.bottom + 16 : NAVBAR_HEIGHT + 24 }]}>
+          <View style={[styles.cameraFooter, { bottom: (cameraMode === "DESSIN" && isDrawingActive) ? insets.bottom + 16 : (capturingSecond && slot1 ? NAVBAR_HEIGHT + 104 : NAVBAR_HEIGHT + 24) }]}>
             {cameraMode === "DESSIN" && isDrawingActive ? (
               <View style={styles.drawingToolbar}>
                 <TouchableOpacity style={[styles.drawingUndoBtn, !canUndo && styles.drawingUndoBtnDisabled]} onPress={() => drawingRef.current?.undo()} disabled={!canUndo}>
@@ -606,16 +616,6 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock }:
               </View>
             ) : (
               <View style={{ alignItems: "center", gap: 6 }}>
-                {capturingSecond && slot1 && (
-                  <TouchableOpacity
-                    style={styles.backToSlot1Btn}
-                    onPress={() => { setCapturingSecond(false); capturingSecondRef.current = false; }}
-                    activeOpacity={0.8}
-                  >
-                    <View style={styles.backToSlot1Thumb}>{renderSlotThumbnail(slot1)}</View>
-                    <Text style={styles.backToSlot1Text}>← Capture 1</Text>
-                  </TouchableOpacity>
-                )}
                 <View style={styles.modeSlider}>
                   {(["PHOTO", "VIDEO", "AUDIO", "DESSIN", "TEXTE"] as CameraMode[]).map((m) => (
                     <TouchableOpacity key={m} onPress={() => { setCameraMode(m); if (m !== "DESSIN") setIsDrawingActive(false); }} disabled={isRecording || isAudioRecording}>
@@ -628,23 +628,27 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock }:
 
             <View style={styles.captureRow}>
               {cameraMode !== "TEXTE" && <View style={styles.sideControlPlaceholder} />}
-              <TouchableOpacity
-                style={[styles.captureBtn, (cameraMode === "VIDEO" || isRecording) && styles.captureBtnVideo, isRecording && styles.captureBtnRecording, cameraMode === "AUDIO" && styles.captureBtnAudio, isAudioRecording && styles.captureBtnAudioRecording]}
+              {!(capturingSecond && cameraMode === "TEXTE") && <TouchableOpacity
+                style={[styles.captureBtn, (cameraMode === "VIDEO" || isRecording) && styles.captureBtnVideo, isRecording && styles.captureBtnRecording, cameraMode === "AUDIO" && styles.captureBtnAudio, isAudioRecording && styles.captureBtnAudioRecording, (cameraMode === "TEXTE" && !!textModeContent.trim() || (cameraMode === "DESSIN" && isDrawingActive && canUndo)) && styles.captureBtnValid, (cameraMode === "TEXTE" && !textModeContent.trim() || (cameraMode === "DESSIN" && isDrawingActive && !canUndo)) && styles.captureBtnDimmed]}
                 onPress={handleCapture}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
-                disabled={isPinching}
+                disabled={isPinching || (cameraMode === "TEXTE" && !textModeContent.trim()) || (cameraMode === "DESSIN" && isDrawingActive && !canUndo)}
                 activeOpacity={0.8}
               >
-                <View style={[styles.captureInner, (cameraMode === "VIDEO" || isRecording) && styles.captureInnerVideo, isRecording && styles.captureInnerRecording, cameraMode === "AUDIO" && styles.captureInnerAudio, isAudioRecording && styles.captureInnerAudioRecording]}>
-                  {cameraMode === "TEXTE" && <SendIcon color="#000" />}
+                <View style={[styles.captureInner, (cameraMode === "VIDEO" || isRecording) && styles.captureInnerVideo, isRecording && styles.captureInnerRecording, cameraMode === "AUDIO" && styles.captureInnerAudio, isAudioRecording && styles.captureInnerAudioRecording, (cameraMode === "TEXTE" && !!textModeContent.trim() || (cameraMode === "DESSIN" && isDrawingActive && canUndo)) && styles.captureInnerValid, (cameraMode === "TEXTE" && !textModeContent.trim() || (cameraMode === "DESSIN" && isDrawingActive && !canUndo)) && styles.captureInnerDimmed]}>
+                  {cameraMode === "TEXTE" && (
+                    <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={textModeContent.trim() ? "#FFF" : "rgba(255,255,255,0.3)"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <Path d="M20 6L9 17l-5-5" />
+                    </Svg>
+                  )}
                   {cameraMode === "DESSIN" && !isDrawingActive && (
                     <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <Path d="M12 20h9" /><Path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
                     </Svg>
                   )}
                   {cameraMode === "DESSIN" && isDrawingActive && (
-                    <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <Path d="M20 6L9 17l-5-5" />
                     </Svg>
                   )}
@@ -656,7 +660,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock }:
                   )}
                   {isAudioRecording && <View style={{ width: 22, height: 22, borderRadius: 5, backgroundColor: "#000" }} />}
                 </View>
-              </TouchableOpacity>
+              </TouchableOpacity>}
               {cameraMode !== "TEXTE" && cameraMode !== "AUDIO" && cameraMode !== "DESSIN" && (
                 <TouchableOpacity style={styles.flipBtn} onPress={() => setFacing(prev => prev === "back" ? "front" : "back")} disabled={isRecording}>
                   <FlipIcon />
@@ -665,6 +669,30 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock }:
               {(cameraMode === "AUDIO" || cameraMode === "DESSIN") && <View style={styles.sideControlPlaceholder} />}
             </View>
           </View>
+          {/* ── Barre switch/envoyer pendant la 2e capture ── */}
+          {capturingSecond && slot1 && !(cameraMode === "DESSIN" && isDrawingActive) && (
+            <View style={[styles.capturingSecondBar, { bottom: NAVBAR_HEIGHT + 8 }]}>
+              <TouchableOpacity
+                style={styles.capturingSecondThumb}
+                onPress={() => { setCapturingSecond(false); capturingSecondRef.current = false; setViewingSlot(1); }}
+                activeOpacity={0.8}
+              >
+                {renderSlotThumbnail(slot1)}
+                <View style={[slotBarStyles.badge, { top: 6, right: 6 }]}><Text style={slotBarStyles.badgeText}>1</Text></View>
+                <View style={slotBarStyles.swapOverlay}>
+                  <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <Path d="M7 16V4m0 0L3 8m4-4l4 4" /><Path d="M17 8v12m0 0l4-4m-4 4l-4-4" />
+                  </Svg>
+                </View>
+              </TouchableOpacity>
+              {cameraMode === "TEXTE" && slot2 && (
+                <TouchableOpacity style={slotBarStyles.sendBtn} onPress={openGroupPicker}>
+                  <SendIcon color="#000" />
+                  <Text style={slotBarStyles.sendText}>Envoyer</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
         </View>
       )}
 
@@ -895,15 +923,21 @@ function SlotBar({ isSlot1Preview, isSlot1WithSlot2, isSlot2Preview, slot1, slot
         </>
       )}
       {isSlot2Preview && (
-        <TouchableOpacity style={[slotBarStyles.thumbBtn, { flex: 1 }]} onPress={onViewSlot1}>
-          {renderSlotThumbnail(slot1!)}
-          <View style={[slotBarStyles.badge, { right: 8 }]}><Text style={slotBarStyles.badgeText}>1</Text></View>
-          <View style={slotBarStyles.swapOverlay}>
-            <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <Path d="M7 16V4m0 0L3 8m4-4l4 4" /><Path d="M17 8v12m0 0l4-4m-4 4l-4-4" />
-            </Svg>
-          </View>
-        </TouchableOpacity>
+        <>
+          <TouchableOpacity style={slotBarStyles.thumbBtn} onPress={onViewSlot1}>
+            {renderSlotThumbnail(slot1!)}
+            <View style={[slotBarStyles.badge, { right: 8 }]}><Text style={slotBarStyles.badgeText}>1</Text></View>
+            <View style={slotBarStyles.swapOverlay}>
+              <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <Path d="M7 16V4m0 0L3 8m4-4l4 4" /><Path d="M17 8v12m0 0l4-4m-4 4l-4-4" />
+              </Svg>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity style={slotBarStyles.sendBtn} onPress={onSend}>
+            <SendIcon color="#000" />
+            <Text style={slotBarStyles.sendText}>Envoyer</Text>
+          </TouchableOpacity>
+        </>
       )}
     </View>
   );
@@ -972,6 +1006,10 @@ const styles = StyleSheet.create({
   captureBtnRecording: { borderColor: "#FF3B30" },
   captureBtnAudio: { borderColor: "rgba(255,255,255,0.4)" },
   captureBtnAudioRecording: { borderColor: "#FFF" },
+  captureBtnValid: { borderColor: "#34C759" },
+  captureInnerValid: { backgroundColor: "#34C759" },
+  captureBtnDimmed: { borderColor: "rgba(255,255,255,0.2)" },
+  captureInnerDimmed: { backgroundColor: "rgba(255,255,255,0.15)" },
   captureInner: { width: 66, height: 66, borderRadius: 33, backgroundColor: "#FFF", justifyContent: "center", alignItems: "center" },
   captureInnerVideo: { backgroundColor: "#FF3B30" },
   captureInnerRecording: { width: 30, height: 30, borderRadius: 6 },
@@ -1005,10 +1043,9 @@ const styles = StyleSheet.create({
   audioPreviewFill: { height: 3, backgroundColor: "#FFF", borderRadius: 2 },
   audioPreviewThumb: { position: "absolute", width: 13, height: 13, borderRadius: 7, backgroundColor: "#FFF", marginLeft: -6, top: 14 - 5 },
   audioPreviewTime: { fontSize: 11, color: "rgba(255,255,255,0.5)", fontFamily: "Inter_400Regular" },
-  // Back to slot 1 button (shown above mode slider during capturingSecond)
-  backToSlot1Btn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, marginBottom: 4 },
-  backToSlot1Thumb: { width: 32, height: 18, borderRadius: 4, overflow: "hidden" },
-  backToSlot1Text: { color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 13 },
+  // Barre full-width de switch/envoi pendant la 2e capture
+  capturingSecondBar: { position: "absolute", left: 12, right: 12, height: 72, flexDirection: "row", gap: 12 },
+  capturingSecondThumb: { flex: 1, borderRadius: 16, overflow: "hidden" },
 });
 
 const pickerStyles = StyleSheet.create({
