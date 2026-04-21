@@ -166,7 +166,7 @@ function PhotoImage({ url, fallback_url, isDrawing }: { url: string; fallback_ur
       <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center" }]}>
         <Image
           source={{ uri: src }}
-          style={{ width: "100%", aspectRatio: 3 / 4, borderRadius: 24, backgroundColor: "#FFF" }}
+          style={{ width: "100%", aspectRatio: 3 / 4, borderRadius: 24 }}
           contentFit="fill"
           onError={() => { if (fallback_url) setUseFallback(true); }}
         />
@@ -1092,7 +1092,7 @@ const styles = StyleSheet.create({
   revealCountdownText: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: "rgba(255,255,255,0.85)", letterSpacing: 0.5 },
   revealCountdownTextRed: { color: "#FFF" },
   fullscreenPage: { width: SCREEN_WIDTH, height: SCREEN_HEIGHT, justifyContent: "center", alignItems: "center", backgroundColor: "#000", paddingHorizontal: 12 },
-  momentWrapper: { flex: 1, width: '100%', borderRadius: 32, overflow: "hidden", backgroundColor: "#1A1A1A" },
+  momentWrapper: { flex: 1, width: '100%', borderRadius: 32, overflow: "hidden", backgroundColor: "transparent" },
   separatorDay: { fontFamily: "Inter_700Bold", fontSize: 48, color: "#FFF", textAlign: "center", letterSpacing: -2 },
   separatorDate: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginTop: 8 },
   textMomentBg: { flex: 1, width: "100%", justifyContent: "center", alignItems: "center", padding: 32, backgroundColor: "#050505" },
