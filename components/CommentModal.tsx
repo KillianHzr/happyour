@@ -43,6 +43,7 @@ interface Comment {
 interface CommentModalProps {
   visible: boolean;
   onClose: () => void;
+  onSeen?: (photoId: string) => void;
   photoId: string;
   photoOwnerId: string;
 }
@@ -59,7 +60,13 @@ const SendIcon = ({ disabled }: { disabled: boolean }) => (
   </Svg>
 );
 
-export default function CommentModal({ visible, onClose, photoId, photoOwnerId }: CommentModalProps) {
+const TrashIcon = () => (
+  <Svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF3B30" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" />
+  </Svg>
+);
+
+export default function CommentModal({ visible, onClose, onSeen, photoId, photoOwnerId }: CommentModalProps) {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   
@@ -75,6 +82,26 @@ export default function CommentModal({ visible, onClose, photoId, photoOwnerId }
   const animGenRef = useRef(0);
 
   const isOwner = user?.id === photoOwnerId;
+
+  const markAsSeen = useCallback(async () => {
+    if (!user || !photoId) return;
+    console.log(`[CommentModal] Attempting to mark photo ${photoId} as seen for user ${user.id}`);
+    try {
+      const { error } = await supabase
+        .from("comment_views")
+        .upsert({
+          user_id: user.id,
+          photo_id: photoId,
+          last_viewed_at: new Date().toISOString()
+        }, { onConflict: 'user_id,photo_id' });
+      
+      if (error) throw error;
+      console.log(`[CommentModal] Successfully updated comment_views for photo ${photoId}, calling onSeen`);
+      onSeen?.(photoId);
+    } catch (e) {
+      console.error("[CommentModal] Error marking as seen:", e);
+    }
+  }, [user?.id, photoId, onSeen]);
 
   const animateIn = useCallback(() => {
     setMounted(true);
@@ -125,10 +152,14 @@ export default function CommentModal({ visible, onClose, photoId, photoOwnerId }
     if (visible) {
       animateIn();
       fetchComments();
+      markAsSeen();
     } else if (mounted) {
       animateOut();
     }
-  }, [visible, fetchComments, animateIn, animateOut]);
+    // We only want to trigger these actions when the 'visible' prop changes.
+    // Including fetchComments or markAsSeen here causes an infinite loop 
+    // because they are re-created when the parent state updates.
+  }, [visible]);
 
   const handleClose = () => {
     animateOut(onClose);
@@ -210,23 +241,57 @@ export default function CommentModal({ visible, onClose, photoId, photoOwnerId }
     }
   };
 
-  const renderComment = ({ item }: { item: Comment }) => (
-    <View style={styles.commentRow}>
-      <View style={styles.avatarContainer}>
-        {item.profiles.avatar_url ? (
-          <Image source={{ uri: item.profiles.avatar_url }} style={styles.avatar} />
-        ) : (
-          <View style={[styles.avatar, styles.avatarPlaceholder]}>
-            <Text style={styles.avatarInitial}>{item.profiles.username[0]?.toUpperCase()}</Text>
+  const handleDeleteComment = async (commentId: string) => {
+    if (!user) return;
+    try {
+      const { error } = await supabase
+        .from("comments")
+        .delete()
+        .eq("id", commentId)
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+      
+      setComments(prev => prev.filter(c => c.id !== commentId));
+      if (userComment?.id === commentId) {
+        setUserComment(null);
+      }
+    } catch (error) {
+      console.error("Error deleting comment:", error);
+    }
+  };
+
+  const renderComment = ({ item }: { item: Comment }) => {
+    const isMyComment = item.user_id === user?.id;
+    
+    return (
+      <View style={styles.commentRow}>
+        <View style={styles.avatarContainer}>
+          {item.profiles.avatar_url ? (
+            <Image source={{ uri: item.profiles.avatar_url }} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatar, styles.avatarPlaceholder]}>
+              <Text style={styles.avatarInitial}>{item.profiles.username[0]?.toUpperCase()}</Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.commentContent}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.username}>{item.profiles.username}</Text>
+            <Text style={styles.content}>{item.content}</Text>
           </View>
-        )}
+          {isMyComment && (
+            <TouchableOpacity 
+              onPress={() => handleDeleteComment(item.id)}
+              style={styles.deleteBtn}
+            >
+              <TrashIcon />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
-      <View style={styles.commentContent}>
-        <Text style={styles.username}>{item.profiles.username}</Text>
-        <Text style={styles.content}>{item.content}</Text>
-      </View>
-    </View>
-  );
+    );
+  };
 
   if (!mounted) return null;
 
@@ -429,11 +494,21 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 16,
     borderTopLeftRadius: 2,
+    flexDirection: "row",
+    alignItems: "center",
   },
   username: {
     fontFamily: "Inter_700Bold",
     fontSize: 13,
     color: "rgba(255,255,255,0.6)",
+  },
+  usernameRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  deleteBtn: {
+    padding: 4,
   },
   content: {
     fontFamily: "Inter_400Regular",

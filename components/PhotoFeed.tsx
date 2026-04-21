@@ -93,6 +93,7 @@ export type PhotoEntry = {
   second_note?: string | null;
   user_id: string;
   reactions: Reaction[];
+  hasNewComments?: boolean;
 };
 
 type FeedItem =
@@ -113,6 +114,7 @@ type Props = {
   onScrollLock?: (locked: boolean) => void;
   onActiveIndexChange?: (index: number) => void;
   onOpenPicker?: (photoId: string) => void;
+  onOpenComments?: (photoId: string, ownerId: string) => void;
 };
 
 const PlusIcon = ({ size = 22, color = "rgba(255,255,255,0.9)" }) => (
@@ -121,10 +123,25 @@ const PlusIcon = ({ size = 22, color = "rgba(255,255,255,0.9)" }) => (
   </Svg>
 );
 
-const CommentIcon = ({ size = 20, color = "rgba(255,255,255,0.9)" }) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <Path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-  </Svg>
+const CommentIcon = ({ size = 20, color = "rgba(255,255,255,0.9)", hasBadge = false }) => (
+  <View>
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+    </Svg>
+    {hasBadge && (
+      <View style={{
+        position: 'absolute',
+        top: -1,
+        right: -1,
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: '#FF3B30',
+        borderWidth: 1.5,
+        borderColor: '#000'
+      }} />
+    )}
+  </View>
 );
 
 function ExpandableNote({ text, maxLines }: { text: string; maxLines: number }) {
@@ -332,7 +349,7 @@ function PhotoMomentPage({ moment, currentUserId, crownWinnerId, onOpenPicker, o
               <View style={{ flex: 1 }}><Text style={styles.citationUsername}>{moment.username}</Text><Text style={styles.citationTime}>{formatTime(moment.created_at)}</Text></View>
               <View style={{ flexDirection: "row", gap: 8 }}>
                 <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
-                  <CommentIcon />
+                  <CommentIcon hasBadge={moment.hasNewComments} />
                 </TouchableOpacity>
                 {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
               </View>
@@ -369,7 +386,7 @@ function PhotoMomentPage({ moment, currentUserId, crownWinnerId, onOpenPicker, o
                 </View>
                 <View style={{ flexDirection: "row", gap: 8 }}>
                   <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
-                    <CommentIcon />
+                    <CommentIcon hasBadge={moment.hasNewComments} />
                   </TouchableOpacity>
                   {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
                 </View>
@@ -646,7 +663,7 @@ function AudioMoment({ moment, isVisible, currentUserId, crownWinnerId, onScroll
                 <View style={{ flex: 1 }}><Text style={styles.citationUsername}>{moment.username}</Text><Text style={styles.citationTime}>{formatTime(moment.created_at)}</Text></View>
                 <View style={{ flexDirection: "row", gap: 8 }}>
                   <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
-                    <CommentIcon />
+                    <CommentIcon hasBadge={moment.hasNewComments} />
                   </TouchableOpacity>
                   {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
                 </View>
@@ -678,7 +695,7 @@ function AudioMoment({ moment, isVisible, currentUserId, crownWinnerId, onScroll
                 </View>
                 <View style={{ flexDirection: "row", gap: 8 }}>
                   <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
-                    <CommentIcon />
+                    <CommentIcon hasBadge={moment.hasNewComments} />
                   </TouchableOpacity>
                   {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
                 </View>
@@ -750,7 +767,7 @@ function VideoMoment({ moment, isVisible, cachedUrl, currentUserId, crownWinnerI
                   <View style={{ flex: 1 }}><Text style={styles.citationUsername}>{moment.username}</Text><Text style={styles.citationTime}>{formatTime(moment.created_at)}</Text></View>
                   <View style={{ flexDirection: "row", gap: 8 }}>
                     <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
-                      <CommentIcon />
+                      <CommentIcon hasBadge={moment.hasNewComments} />
                     </TouchableOpacity>
                     {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
                   </View>
@@ -771,7 +788,7 @@ function VideoMoment({ moment, isVisible, cachedUrl, currentUserId, crownWinnerI
                   </View>
                   <View style={{ flexDirection: "row", gap: 8 }}>
                     <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
-                      <CommentIcon />
+                      <CommentIcon hasBadge={moment.hasNewComments} />
                     </TouchableOpacity>
                     {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
                   </View>
@@ -815,7 +832,7 @@ function VideoMoment({ moment, isVisible, cachedUrl, currentUserId, crownWinnerI
               </View>
               <View style={{ flexDirection: "row", gap: 8 }}>
                 <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
-                  <CommentIcon />
+                  <CommentIcon hasBadge={moment.hasNewComments} />
                 </TouchableOpacity>
                 {!isOwn && (
                   <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}>
@@ -917,7 +934,7 @@ function CrownRevealPage({ winner, durationMs }: { winner: PhotoEntry; durationM
   );
 }
 
-export default function PhotoFeed({ photos, currentUserId, nextUnlockDate, revealEndDate, crownWinnerId, crownDurationMs = 0, groupName, onScrollLock, onActiveIndexChange, onOpenPicker }: Props) {
+export default function PhotoFeed({ photos, currentUserId, nextUnlockDate, revealEndDate, crownWinnerId, crownDurationMs = 0, groupName, onScrollLock, onActiveIndexChange, onOpenPicker, onOpenComments }: Props) {
   const insets = useSafeAreaInsets();
   const [visibleIndex, setVisibleIndex] = useState(0);
   const [countdownText, setCountdownText] = useState("");
@@ -1087,6 +1104,7 @@ export default function PhotoFeed({ photos, currentUserId, nextUnlockDate, revea
         <CommentModal
           visible={commentModalVisible}
           onClose={() => setCommentModalVisible(false)}
+          onSeen={onOpenComments}
           photoId={activePhotoId}
           photoOwnerId={activePhotoOwnerId}
         />
