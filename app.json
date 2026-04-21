@@ -28,6 +28,8 @@
         "foregroundImage": "./assets/adaptive-icon.png"
       },
       "predictiveBackGestureEnabled": false,
+      "softwareKeyboardLayoutMode": "pan", 
+
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",

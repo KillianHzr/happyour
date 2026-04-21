@@ -55,7 +55,7 @@ const CloseIcon = () => (
 );
 
 const SendIcon = ({ disabled }: { disabled: boolean }) => (
-  <Svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={disabled ? "rgba(255,255,255,0.3)" : "#FFF"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+  <Svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={disabled ? "rgba(255,255,255,0.3)" : "#000"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <Path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
   </Svg>
 );
@@ -302,97 +302,103 @@ export default function CommentModal({ visible, onClose, onSeen, photoId, photoO
       animationType="none"
       onRequestClose={handleClose}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.root}
-      >
-        <View style={styles.modalOverlay}>
-          <Animated.View 
-            style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: overlayOpacity }]} 
-          >
-            <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
-          </Animated.View>
+      <View style={styles.root}>
+        {/* Backdrop stays outside KeyboardAvoidingView to remain full-screen and static */}
+        <Animated.View 
+          style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: overlayOpacity }]} 
+        >
+          <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
+        </Animated.View>
 
+        <View style={styles.modalOverlay}>
           <Animated.View 
             style={[
               styles.modalContainer, 
               { 
                 transform: [{ translateY }],
-                paddingBottom: insets.bottom
               }
             ]}
           >
-            <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+            {/* Background filler that extends downwards to stay behind the keyboard */}
+            <View style={styles.modalBackgroundFiller}>
+              <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+            </View>
             
-            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-              <View style={{ flex: 1 }}>
-                {/* Draggable Header Area (Top Half behavior) */}
-                <View style={styles.dragArea} {...panResponder.panHandlers}>
-                  <View style={styles.dragHandle} />
-                  <View style={styles.header}>
-                    <Text style={styles.headerTitle}>Commentaires</Text>
-                    <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
-                      <CloseIcon />
-                    </TouchableOpacity>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : "height"}
+              style={{ flex: 1 }}
+              keyboardVerticalOffset={Platform.select({ ios: 160, android: 160 })}
+            >
+              <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                <View style={{ flex: 1 }}>
+                  {/* Draggable Header Area (Top Half behavior) */}
+                  <View style={styles.dragArea} {...panResponder.panHandlers}>
+                    <View style={styles.dragHandle} />
+                    <View style={styles.header}>
+                      <Text style={styles.headerTitle}>Commentaires</Text>
+                      <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
+                        <CloseIcon />
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                </View>
 
-                {loading ? (
-                  <View style={styles.loaderContainer}>
-                    <ActivityIndicator size="large" color="#FFF" />
-                  </View>
-                ) : (
-                  <FlatList
-                    data={comments}
-                    keyExtractor={(item) => item.id}
-                    renderItem={renderComment}
-                    contentContainerStyle={styles.listContent}
-                    showsVerticalScrollIndicator={false}
-                    ListEmptyComponent={
-                      <View style={styles.emptyContainer}>
-                        <Text style={styles.emptyText}>Aucun commentaire pour le moment.</Text>
-                      </View>
-                    }
-                  />
-                )}
-              </View>
-            </TouchableWithoutFeedback>
-
-            {!isOwner && (
-              <View style={styles.inputArea}>
-                {userComment ? (
-                  <View style={styles.alreadySharedContainer}>
-                    <Text style={styles.alreadySharedText}>Vous avez déjà partagé votre avis</Text>
-                  </View>
-                ) : (
-                  <View style={styles.inputContainer}>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Ajouter un commentaire..."
-                      placeholderTextColor="rgba(255,255,255,0.4)"
-                      value={content}
-                      onChangeText={setContent}
-                      multiline
-                      maxLength={200}
+                  {loading ? (
+                    <View style={styles.loaderContainer}>
+                      <ActivityIndicator size="large" color="#FFF" />
+                    </View>
+                  ) : (
+                    <FlatList
+                      data={comments}
+                      keyExtractor={(item) => item.id}
+                      renderItem={renderComment}
+                      contentContainerStyle={styles.listContent}
+                      showsVerticalScrollIndicator={false}
+                      ListEmptyComponent={
+                        <View style={styles.emptyContainer}>
+                          <Text style={styles.emptyText}>Aucun commentaire pour le moment.</Text>
+                        </View>
+                      }
                     />
-                    <TouchableOpacity
-                      onPress={handleSubmit}
-                      disabled={!content.trim() || submitting}
-                      style={[styles.sendBtn, !content.trim() && styles.sendBtnDisabled]}
-                    >
-                      {submitting ? (
-                        <ActivityIndicator size="small" color="#FFF" />
-                      ) : (
-                        <SendIcon disabled={!content.trim()} />
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-            )}
+                  )}
+                </View>
+              </TouchableWithoutFeedback>
+
+              {!isOwner && (
+                <View style={[styles.inputArea, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+                  {userComment ? (
+                    <View style={styles.alreadySharedContainer}>
+                      <Text style={styles.alreadySharedText}>Vous avez déjà partagé votre avis</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.inputContainer}>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Ajouter un commentaire..."
+                        placeholderTextColor="rgba(255,255,255,0.4)"
+                        value={content}
+                        onChangeText={setContent}
+                        multiline
+                        maxLength={200}
+                      />
+                      <TouchableOpacity
+                        onPress={handleSubmit}
+                        disabled={!content.trim() || submitting}
+                        style={[styles.sendBtn, !content.trim() && styles.sendBtnDisabled]}
+                      >
+                        {submitting ? (
+                          <ActivityIndicator size="small" color="#FFF" />
+                        ) : (
+                          <SendIcon disabled={!content.trim()} />
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              )}
+            </KeyboardAvoidingView>
           </Animated.View>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
@@ -410,10 +416,17 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     height: MODAL_HEIGHT,
+  },
+  modalBackgroundFiller: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: -SCREEN_HEIGHT,
+    backgroundColor: "rgba(25,25,25,0.75)",
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
     overflow: "hidden",
-    backgroundColor: "rgba(25,25,25,0.75)",
   },
   dragArea: {
     width: "100%",
