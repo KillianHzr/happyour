@@ -139,8 +139,8 @@ export default function MainPagerScreen() {
   const isAdmin = activeData?.isAdmin ?? false;
 
   const { revealDate, prevRevealDate } = getWeekBounds(revealConfig.day, revealConfig.hour);
-  const revealEndDate = new Date(revealDate.getTime() + 16 * 60 * 60 * 1000);
-  const prevRevealEndDate = new Date(prevRevealDate.getTime() + 16 * 60 * 60 * 1000);
+  const revealEndDate = new Date(revealDate.getTime() + 24 * 60 * 60 * 1000);
+  const prevRevealEndDate = new Date(prevRevealDate.getTime() + 24 * 60 * 60 * 1000);
   const nextRevealDate = new Date(revealDate.getTime() + 7 * 24 * 60 * 60 * 1000);
 
   const now = new Date();
@@ -167,10 +167,10 @@ export default function MainPagerScreen() {
       setRevealConfig({ day: cfg.reveal_day, hour: cfg.reveal_hour });
 
       const { revealDate: currentRevealDate, prevRevealDate } = getWeekBounds(cfg.reveal_day, cfg.reveal_hour);
-      const currentRevealEndDate = new Date(currentRevealDate.getTime() + 16 * 60 * 60 * 1000);
-      const prevRevealEndDate = new Date(prevRevealDate.getTime() + 16 * 60 * 60 * 1000);
+      const currentRevealEndDate = new Date(currentRevealDate.getTime() + 24 * 60 * 60 * 1000);
+      const prevRevealEndDate = new Date(prevRevealDate.getTime() + 24 * 60 * 60 * 1000);
       const now = new Date();
-      // Pendant la fenêtre du reveal (prevRevealDate → prevRevealDate+16h) : afficher la semaine écoulée
+      // Pendant la fenêtre du reveal (prevRevealDate → prevRevealDate+24h) : afficher la semaine écoulée
       // Après la fenêtre : nouvelle semaine en cours (prevRevealDate → currentRevealDate)
       const inRevealWindow = now >= prevRevealDate && now < prevRevealEndDate;
       const afterRevealWindow = now >= prevRevealEndDate;
