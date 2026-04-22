@@ -101,6 +101,7 @@ export type PhotoEntry = {
   second_note?: string | null;
   user_id: string;
   reactions: Reaction[];
+  groupName?: string | null;
 };
 
 type FeedItem =
@@ -118,6 +119,10 @@ type Props = {
   crownWinnerId?: string | null;
   crownDurationMs?: number;
   groupName?: string;
+  introTitle?: string;
+  introSubtitle?: string;
+  hideIntro?: boolean;
+  hideEnd?: boolean;
   onScrollLock?: (locked: boolean) => void;
   onActiveIndexChange?: (index: number) => void;
   onOpenPicker?: (photoId: string) => void;
@@ -355,6 +360,11 @@ function PhotoMomentPage({ moment, currentUserId, crownWinnerId, onOpenPicker, i
           {renderMainContent()}
         </Animated.View>
         <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+          {moment.groupName && (
+            <View style={styles.groupTag} pointerEvents="none">
+              <Text style={styles.groupTagText}>{moment.groupName}</Text>
+            </View>
+          )}
           <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.momentOverlay}>
             {!isTextOnly && (
               <View style={styles.authorInfo}>
@@ -653,6 +663,7 @@ function AudioMoment({ moment, isVisible, currentUserId, crownWinnerId, onScroll
       <View style={styles.momentWrapper}>
         {renderContent()}
         <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+          {moment.groupName && <View style={styles.groupTag} pointerEvents="none"><Text style={styles.groupTagText}>{moment.groupName}</Text></View>}
           <LinearGradient colors={["transparent", "rgba(0,0,0,0.92)"]} style={styles.momentOverlay}>
             {!overlayIsText && (
               <View style={styles.authorInfo}>
@@ -772,6 +783,7 @@ function VideoMoment({ moment, isVisible, cachedUrl, currentUserId, crownWinnerI
           )}
         </Pressable>
         <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+          {moment.groupName && <View style={styles.groupTag} pointerEvents="none"><Text style={styles.groupTagText}>{moment.groupName}</Text></View>}
           <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.momentOverlay}>
             <View style={styles.authorInfo}>
               <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={crownWinnerId === moment.user_id} />
@@ -799,7 +811,7 @@ function VideoMoment({ moment, isVisible, cachedUrl, currentUserId, crownWinnerI
   );
 }
 
-function RevealIntroPage({ groupName, isVisible }: { groupName?: string; isVisible: boolean }) {
+function RevealIntroPage({ groupName, isVisible, customTitle, customSubtitle }: { groupName?: string; isVisible: boolean; customTitle?: string; customSubtitle?: string }) {
   const insets = useSafeAreaInsets();
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.9)).current;
@@ -834,9 +846,11 @@ function RevealIntroPage({ groupName, isVisible }: { groupName?: string; isVisib
   return (
     <View style={styles.fullscreenPage}>
       <Animated.View style={{ alignItems: "center", opacity, transform: [{ scale }] }}>
-        <Text style={styles.revealIntroEyebrow}>cette semaine</Text>
-        <Text style={styles.revealIntroTitle}>Le Reveal</Text>
-        {groupName ? <Text style={styles.revealIntroGroup}>{groupName}</Text> : null}
+        {!customTitle && <Text style={styles.revealIntroEyebrow}>cette semaine</Text>}
+        <Text style={styles.revealIntroTitle}>{customTitle ?? "Le Reveal"}</Text>
+        {customSubtitle
+          ? <Text style={styles.revealIntroGroup}>{customSubtitle}</Text>
+          : groupName ? <Text style={styles.revealIntroGroup}>{groupName}</Text> : null}
       </Animated.View>
       <Animated.View style={[styles.revealIntroHint, { bottom: Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 24) / 2), opacity: hintOpacity, transform: [{ translateY: hintY }] }]}>
         <Svg width={24} height={24} viewBox="0 0 24 24">
@@ -916,7 +930,7 @@ function AnimatedPageWrapper({ index, scrollY, children }: {
   );
 }
 
-export default function PhotoFeed({ photos, currentUserId, nextUnlockDate, revealEndDate, crownWinnerId, crownDurationMs = 0, groupName, onScrollLock, onActiveIndexChange, onOpenPicker }: Props) {
+export default function PhotoFeed({ photos, currentUserId, nextUnlockDate, revealEndDate, crownWinnerId, crownDurationMs = 0, groupName, introTitle, introSubtitle, hideIntro = false, hideEnd = false, onScrollLock, onActiveIndexChange, onOpenPicker }: Props) {
   const insets = useSafeAreaInsets();
   const scrollY = useSharedValue(0);
   const onScroll = useAnimatedScrollHandler((event) => {
@@ -997,18 +1011,18 @@ export default function PhotoFeed({ photos, currentUserId, nextUnlockDate, revea
   const items = useMemo<FeedItem[]>(() => {
     if (photos.length === 0) return [];
     const result: FeedItem[] = [];
-    result.push({ type: "intro" });
-    if (crownWinnerId) result.push({ type: "crown" });
+    if (!hideIntro) result.push({ type: "intro" });
+    if (crownWinnerId && !hideIntro) result.push({ type: "crown" });
     let lastDate = "";
     for (const photo of photos) {
       const d = photo.created_at.slice(0, 10);
-      if (d !== lastDate) {
+      if (d !== lastDate && !hideIntro) {
         result.push({ type: "separator", ...formatDayLabel(photo.created_at) });
         lastDate = d;
       }
       result.push({ type: "moment", data: photo });
     }
-    result.push({ type: "end" });
+    if (!hideEnd) result.push({ type: "end" });
     return result;
   }, [photos, crownWinnerId]);
 
@@ -1016,7 +1030,7 @@ export default function PhotoFeed({ photos, currentUserId, nextUnlockDate, revea
     let content: React.ReactNode = null;
 
     if (item.type === "intro") {
-      content = <RevealIntroPage groupName={groupName} isVisible={index === visibleIndex} />;
+      content = <RevealIntroPage groupName={groupName} isVisible={index === visibleIndex} customTitle={introTitle} customSubtitle={introSubtitle} />;
     } else if (item.type === "crown") {
       const winner = photos.find((p) => p.user_id === crownWinnerId);
       if (!winner) return null;
@@ -1093,6 +1107,8 @@ const styles = StyleSheet.create({
   revealCountdownTextRed: { color: "#FFF" },
   fullscreenPage: { width: SCREEN_WIDTH, height: SCREEN_HEIGHT, justifyContent: "center", alignItems: "center", backgroundColor: "#000", paddingHorizontal: 12 },
   momentWrapper: { flex: 1, width: '100%', borderRadius: 32, overflow: "hidden", backgroundColor: "transparent" },
+  groupTag: { position: "absolute", top: 14, left: 14, zIndex: 5, backgroundColor: "rgba(0,0,0,0.58)", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: "rgba(255,255,255,0.18)" },
+  groupTagText: { color: "#FFF", fontSize: 12, fontFamily: "Inter_600SemiBold" },
   separatorDay: { fontFamily: "Inter_700Bold", fontSize: 48, color: "#FFF", textAlign: "center", letterSpacing: -2 },
   separatorDate: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginTop: 8 },
   textMomentBg: { flex: 1, width: "100%", justifyContent: "center", alignItems: "center", padding: 32, backgroundColor: "#050505" },
@@ -1120,7 +1136,7 @@ const styles = StyleSheet.create({
   reactionCount: { color: "rgba(255,255,255,0.7)", fontFamily: "Inter_700Bold", fontSize: 11, marginLeft: 2 },
   reactBtnInline: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
   revealIntroEyebrow: { fontFamily: "Inter_400Regular", fontSize: 13, color: "rgba(255,255,255,0.4)", letterSpacing: 4, textTransform: "uppercase", marginBottom: 10 },
-  revealIntroTitle: { fontFamily: "Inter_700Bold", fontSize: 58, color: "#FFF", letterSpacing: -1.5, lineHeight: 62 },
+  revealIntroTitle: { fontFamily: "Inter_700Bold", fontSize: 58, color: "#FFF", letterSpacing: -1.5, lineHeight: 62, textAlign: "center" },
   revealIntroGroup: { fontFamily: "Inter_400Regular", fontSize: 18, color: "rgba(255,255,255,0.4)", marginTop: 10, textAlign: "center" },
   revealIntroHint: { position: "absolute", alignItems: "center", gap: 6 },
   revealIntroHintText: { fontFamily: "Inter_400Regular", fontSize: 11, color: "rgba(255,255,255,0.3)", letterSpacing: 2, textTransform: "uppercase" },

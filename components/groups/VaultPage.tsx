@@ -456,22 +456,22 @@ const styles = StyleSheet.create({
   leaveBtnText: { color: "#FF3B30", fontFamily: "Inter_600SemiBold", fontSize: 13 },
 
   // Stats card
-  statsCard: { backgroundColor: "#FFF", borderRadius: 16, padding: 20, marginBottom: 28, borderColor: "rgba(255,255,255,0.9)" },
+  statsCard: { backgroundColor: "#2C2C2E", borderRadius: 16, padding: 20, marginBottom: 28, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
   statsRow: { flexDirection: "row", alignItems: "center" },
   statBlock: { flex: 1, alignItems: "center" },
-  statNumber: { fontFamily: "Inter_700Bold", fontSize: 42, color: "#000", letterSpacing: -2 },
-  statLabelText: { fontFamily: "Inter_600SemiBold", fontSize: 10, color: "rgba(0,0,0,0.45)", textTransform: "uppercase", letterSpacing: 1, marginTop: -2 },
-  statSeparator: { width: 1, height: 44, backgroundColor: "rgba(0,0,0,0.1)" },
-  statHint: { fontFamily: "Inter_400Regular", fontSize: 11, color: "rgba(0,0,0,0.5)", marginBottom: 3 },
-  statCountdown: { fontFamily: "Inter_700Bold", fontSize: 19, color: "#000", letterSpacing: 0.5 },
+  statNumber: { fontFamily: "Inter_700Bold", fontSize: 42, color: "#FFF", letterSpacing: -2 },
+  statLabelText: { fontFamily: "Inter_600SemiBold", fontSize: 10, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: 1, marginTop: -2 },
+  statSeparator: { width: 1, height: 44, backgroundColor: "rgba(255,255,255,0.12)" },
+  statHint: { fontFamily: "Inter_400Regular", fontSize: 11, color: "rgba(255,255,255,0.45)", marginBottom: 3 },
+  statCountdown: { fontFamily: "Inter_700Bold", fontSize: 19, color: "#FFF", letterSpacing: 0.5 },
 
   // Reveal card
-  revealCard: { backgroundColor: "#FFF", borderRadius: 16, paddingVertical: 32, alignItems: "center", marginBottom: 28, gap: 8 },
+  revealCard: { backgroundColor: "#2C2C2E", borderRadius: 16, paddingVertical: 32, alignItems: "center", marginBottom: 28, gap: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
   revealEmoji: { fontSize: 42 },
-  revealTitle: { fontFamily: "Inter_700Bold", fontSize: 22, color: "#000", textAlign: "center" },
-  revealExpiry: { marginTop: 4, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, backgroundColor: "rgba(0,0,0,0.07)" },
-  revealExpiryRed: { backgroundColor: "rgba(200,30,30,0.12)" },
-  revealExpiryText: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: "rgba(0,0,0,0.45)" },
+  revealTitle: { fontFamily: "Inter_700Bold", fontSize: 22, color: "#FFF", textAlign: "center" },
+  revealExpiry: { marginTop: 4, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.1)" },
+  revealExpiryRed: { backgroundColor: "rgba(200,30,30,0.2)" },
+  revealExpiryText: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: "rgba(255,255,255,0.55)" },
   revealExpiryTextRed: { color: "#C81E1E" },
 
   // Participants

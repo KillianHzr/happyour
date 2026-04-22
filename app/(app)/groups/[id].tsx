@@ -90,6 +90,7 @@ export default function MainPagerScreen() {
   const [username, setUsername] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [email, setEmail] = useState("");
+  const [streakDays, setStreakDays] = useState(0);
 
   // Pager
   const [currentPage, setCurrentPage] = useState(1);
@@ -814,8 +815,12 @@ export default function MainPagerScreen() {
             username={username}
             avatarUrl={avatarUrl}
             email={email}
+            allGroups={allGroups}
+            revealConfig={revealConfig}
             onAvatarUpdate={setAvatarUrl}
             onUsernameUpdate={setUsername}
+            onStreakUpdate={setStreakDays}
+            isActive={currentPage === 0}
           />
         </View>
 
@@ -876,7 +881,17 @@ export default function MainPagerScreen() {
           <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
           <View style={styles.tabBarContent}>
             <TouchableOpacity style={styles.tab} onPress={() => jumpTo(0)}>
-              <ProfileIcon color={currentPage === 0 ? "#FFF" : "rgba(255,255,255,0.4)"} size={24} />
+              <View style={{ position: "relative" }}>
+                <ProfileIcon color={currentPage === 0 ? "#FFF" : "rgba(255,255,255,0.4)"} size={24} />
+                {streakDays > 0 && (
+                  <View style={styles.streakBadge}>
+                    <Svg width="10" height="13" viewBox="0 0 16 21" fill="none">
+                      <Path d="M8 1C8.66667 3.66667 10 5.83333 12 7.5C14 9.16667 15 11 15 13C15 14.8565 14.2625 16.637 12.9497 17.9497C11.637 19.2625 9.85652 20 8 20C6.14348 20 4.36301 19.2625 3.05025 17.9497C1.7375 16.637 1 14.8565 1 13C1 11.9181 1.35089 10.8655 2 10C2 10.663 2.26339 11.2989 2.73223 11.7678C3.20107 12.2366 3.83696 12.5 4.5 12.5C5.16304 12.5 5.79893 12.2366 6.26777 11.7678C6.73661 11.2989 7 10.663 7 10C7 8 5.5 7 5.5 5C5.5 3.66667 6.33333 2.33333 8 1Z" fill="#FFA600" stroke="#FFA600" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </Svg>
+                    <Text style={styles.streakBadgeText}>{streakDays}</Text>
+                  </View>
+                )}
+              </View>
               <Text style={[styles.tabLabel, currentPage === 0 && styles.tabLabelActive]}>Profil</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.tab} onPress={() => jumpTo(1)}>
@@ -1179,11 +1194,13 @@ const styles = StyleSheet.create({
   page: { width: SCREEN_WIDTH, height: "100%", backgroundColor: "#000" },
 
   // Navbar
-  tabBarContainer: { position: "absolute", bottom: 0, left: 0, right: 0, height: NAVBAR_HEIGHT, overflow: "hidden", zIndex: 100, backgroundColor: "rgba(10,10,10,0.92)" },
+  tabBarContainer: { position: "absolute", bottom: 0, left: 0, right: 0, height: NAVBAR_HEIGHT, overflow: "hidden", zIndex: 100, backgroundColor: "rgba(10,10,10,1)" },
   tabBarContent: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-evenly", paddingTop: 12 },
   tab: { alignItems: "center", justifyContent: "center", gap: 4, flex: 1 },
   tabLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold", color: "rgba(255,255,255,0.4)" },
   tabLabelActive: { color: "#FFF" },
+  streakBadge: { position: "absolute", top: -5, right: -8, width: 16, height: 16, borderRadius: 8, justifyContent: "center", alignItems: "center" },
+  streakBadgeText: { position: "absolute", fontSize: 8, fontFamily: "Inter_700Bold", color: "#FFF", textAlign: "center", bottom: 1 },
 
   // Reveal overlay
   revealOverlay: { zIndex: 200, backgroundColor: "#000" },
