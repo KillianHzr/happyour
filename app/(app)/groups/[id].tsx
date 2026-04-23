@@ -158,14 +158,17 @@ export default function MainPagerScreen() {
   // ── Fetch all groups data at once ──
   const fetchAllData = useCallback(async () => {
     if (!user) return;
+    console.log("[DB FETCH] fetchAllData: Starting full sync...");
     // Ensure the local media manifest is loaded before building PhotoEntries
     await mediaCache.load();
     try {
-      const { data: cfgRows } = await supabase
-        .from("app_config")
-        .select("key, value")
-        .in("key", ["reveal_day", "reveal_hour"]);
-      const cfgMap = Object.fromEntries((cfgRows ?? []).map((r: any) => [r.key, Number(r.value)]));
+      console.log("[DB FETCH] fetchAllData: Querying app_config and profiles");
+      const [cfgRows, profileRes] = await Promise.all([
+        supabase.from("app_config").select("key, value").in("key", ["reveal_day", "reveal_hour"]),
+        supabase.from("profiles").select("username, avatar_url, email").eq("id", user.id).single(),
+      ]);
+      
+      const cfgMap = Object.fromEntries((cfgRows.data ?? []).map((r: any) => [r.key, Number(r.value)]));
       const cfg = { reveal_day: cfgMap["reveal_day"] ?? 0, reveal_hour: cfgMap["reveal_hour"] ?? 20 };
       setRevealConfig({ day: cfg.reveal_day, hour: cfg.reveal_hour });
 
@@ -176,17 +179,14 @@ export default function MainPagerScreen() {
       // Pendant la fenêtre du reveal (prevRevealDate → prevRevealDate+24h) : afficher la semaine écoulée
       // Après la fenêtre : nouvelle semaine en cours (prevRevealDate → currentRevealDate)
       const inRevealWindow = now >= prevRevealDate && now < prevRevealEndDate;
-      const afterRevealWindow = now >= prevRevealEndDate;
       const weekBeforeReveal = new Date(prevRevealDate.getTime() - 7 * 24 * 60 * 60 * 1000);
       const photoStart = inRevealWindow ? weekBeforeReveal : prevRevealDate;
       const photoEnd = inRevealWindow ? prevRevealDate : currentRevealDate;
 
-      const [groupsRes, profileRes] = await Promise.all([
-        supabase.from("group_members").select("groups(id, name, invite_code, created_at)").eq("user_id", user.id),
-        supabase.from("profiles").select("username, avatar_url, email").eq("id", user.id).single(),
-      ]);
+      console.log("[DB FETCH] fetchAllData: Querying group_members for user", user.id);
+      const { data: groupsData } = await supabase.from("group_members").select("groups(id, name, invite_code, created_at)").eq("user_id", user.id);
 
-      const groups: GroupInfo[] = (groupsRes.data ?? [])
+      const groups: GroupInfo[] = (groupsData ?? [])
         .map((g: any) => g.groups)
         .filter(Boolean)
         .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
@@ -198,8 +198,10 @@ export default function MainPagerScreen() {
         setEmail(profileRes.data.email || user.email || "");
       }
 
+      console.log(`[DB FETCH] fetchAllData: Processing ${groups.length} groups...`);
       const dataEntries = await Promise.all(
         groups.map(async (g) => {
+          console.log(`[DB FETCH] group[${g.name}]: Querying members and photos...`);
           const [membersRes, photosRes] = await Promise.all([
             supabase.from("group_members").select("user_id, role, profiles:user_id(username, avatar_url)").eq("group_id", g.id),
             supabase.from("photos")
@@ -217,26 +219,28 @@ export default function MainPagerScreen() {
           const isAdminForGroup = me?.role === "admin" ?? false;
           const photoCount = photosRes.data?.length ?? 0;
 
-          let groupPhotos: PhotoEntry[] = [];
-          let crownWinnerId: string | null = null;
-          let crownDurationMs = 0;
+          const photoIds = (photosRes.data ?? []).map((p: any) => p.id);
+          
+          if (photoIds.length > 0) {
+            console.log(`[DB FETCH] group[${g.name}]: Querying reactions, views, and latest comments for ${photoIds.length} photos`);
+            const [reactionsRes, viewsRes, latestCommentsRes] = await Promise.all([
+              supabase.from("reactions").select("id, photo_id, user_id, emoji").in("photo_id", photoIds),
+              supabase.from("comment_views").select("photo_id, last_viewed_at").eq("user_id", user.id).in("photo_id", photoIds),
+              supabase.from("comments").select("photo_id, created_at").in("photo_id", photoIds).order("created_at", { ascending: false })
+            ]);
 
-          if (photosRes.data && photosRes.data.length > 0) {
-            const photoIds = photosRes.data.map((p: any) => p.id);
-            const { data: rawReactions, error: rErr } = await supabase
-              .from("reactions")
-              .select("id, photo_id, user_id, emoji")
-              .in("photo_id", photoIds);
-
-            if (rErr) {
-              console.error(`[fetchAllData] Error fetching reactions for group ${g.id}:`, rErr);
+            const viewsMap = Object.fromEntries((viewsRes.data ?? []).map((v: any) => [v.photo_id, v.last_viewed_at]));
+            const latestCommentsMap: Record<string, string> = {};
+            for (const c of latestCommentsRes.data ?? []) {
+              if (!latestCommentsMap[c.photo_id]) {
+                latestCommentsMap[c.photo_id] = c.created_at;
+              }
             }
 
             const reactionsByPhoto: Record<string, Reaction[]> = {};
-            for (const r of rawReactions ?? []) {
+            for (const r of reactionsRes.data ?? []) {
               if (!reactionsByPhoto[r.photo_id]) reactionsByPhoto[r.photo_id] = [];
               const member = membersData.find(m => m.user_id === r.user_id);
-
               reactionsByPhoto[r.photo_id].push({
                 id: r.id, 
                 user_id: r.user_id,
@@ -246,9 +250,13 @@ export default function MainPagerScreen() {
               });
             }
 
-            groupPhotos = photosRes.data.map((p: any) => {
+            const groupPhotos = photosRes.data!.map((p: any) => {
               const r2Url = p.image_path === "text_mode" ? "" : r2Storage.getPublicUrl(p.image_path);
               const url = mediaCache.getLocalUri(p.image_path) ?? r2Url;
+              const lastViewedAt = viewsMap[p.id];
+              const latestCommentAt = latestCommentsMap[p.id];
+              const hasNewComments = latestCommentAt && (!lastViewedAt || new Date(latestCommentAt) > new Date(lastViewedAt));
+
               return {
                 id: p.id,
                 url,
@@ -262,52 +270,43 @@ export default function MainPagerScreen() {
                 second_note: p.second_note ?? null,
                 user_id: p.user_id,
                 reactions: reactionsByPhoto[p.id] ?? [],
+                hasNewComments: !!hasNewComments,
               };
             });
+
             const crown = computeCrownWinner(groupPhotos, prevRevealDate, currentRevealDate);
-            crownWinnerId = crown?.winnerId ?? null;
-            crownDurationMs = crown?.durationMs ?? 0;
+            return [g.id, {
+              name: g.name,
+              inviteCode: g.invite_code,
+              members: membersData,
+              photoCount,
+              photos: groupPhotos,
+              crownWinnerId: crown?.winnerId ?? null,
+              crownDurationMs: crown?.durationMs ?? 0,
+              isAdmin: isAdminForGroup,
+            }] as [string, GroupData];
           }
 
           return [g.id, {
             name: g.name,
             inviteCode: g.invite_code,
             members: membersData,
-            photoCount,
-            photos: groupPhotos,
-            crownWinnerId,
-            crownDurationMs,
+            photoCount: 0,
+            photos: [],
+            crownWinnerId: null,
+            crownDurationMs: 0,
             isAdmin: isAdminForGroup,
           }] as [string, GroupData];
         })
       );
 
       setGroupData(Object.fromEntries(dataEntries));
-
-      // Background prefetch/download of all media for this week — fire & forget
-      const allPhotosForSync = dataEntries.flatMap(([, gd]) =>
-        gd.photos.map((p) => ({
-          image_path: p.image_path,
-          second_image_path: p.second_image_path,
-          url: p.image_path === "text_mode" ? "" : r2Storage.getPublicUrl(p.image_path),
-          second_url: p.second_image_path && p.second_image_path !== "text_mode"
-            ? r2Storage.getPublicUrl(p.second_image_path)
-            : undefined,
-        }))
-      );
-      // Purge media from previous weeks (stale entries not in current week's set)
-      const activePaths = allPhotosForSync.flatMap((p) => [
-        p.image_path,
-        ...(p.second_image_path ? [p.second_image_path] : []),
-      ]);
-      mediaCache.cleanup(activePaths);
-
-      mediaCache.sync(allPhotosForSync);
+      console.log("[DB FETCH] fetchAllData: Finished syncing all groups.");
     } catch (err) {
-      console.error("[fetchAllData] Global error:", err);
+      console.error("[DB FETCH] fetchAllData Error:", err);
     }
     setDataLoaded(true);
-  }, [user, activeGroupId]);
+  }, [user]);
 
   const fetchAllDataRef = useRef(fetchAllData);
   fetchAllDataRef.current = fetchAllData;
@@ -318,6 +317,7 @@ export default function MainPagerScreen() {
     const gd = groupData[activeGroupId];
     if (!gd || gd.photos.length === 0) return;
     const photoIds = gd.photos.map((p) => p.id);
+    console.log(`[DB FETCH] refreshReactions: Querying reactions for ${photoIds.length} photos in active group`);
     const { data: rawReactions } = await supabase
       .from("reactions")
       .select("id, photo_id, user_id, emoji")
@@ -368,30 +368,37 @@ export default function MainPagerScreen() {
     const channel = supabase
       .channel(`user-rt-${user.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "photos" },
-        () => fetchAllDataRef.current())
+        () => {
+          console.log("[REALTIME] New photo detected, triggering full sync");
+          fetchAllDataRef.current();
+        })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "group_members" },
-        () => fetchAllDataRef.current())
+        () => {
+          console.log("[REALTIME] New group member detected, triggering full sync");
+          fetchAllDataRef.current();
+        })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [user?.id]);
 
   // Rafraîchit les données quand l'app revient au premier plan
-  // (skip le premier "active" qui fire au montage — fetchAllData est déjà appelé par son propre useEffect)
   useEffect(() => {
     const isMounted = { skipped: false };
     const sub = AppState.addEventListener("change", (state) => {
       if (state === "active") {
         if (!isMounted.skipped) { isMounted.skipped = true; return; }
+        console.log("[APPSTATE] App became active, triggering full sync");
         fetchAllDataRef.current();
       }
     });
     return () => sub.remove();
   }, []);
 
-  // Polling toutes les 30s (filet de sécurité si Realtime non configuré)
+  // Polling toutes les 30s
   useEffect(() => {
     const interval = setInterval(() => {
       if (AppState.currentState === "active" && !showReveal) {
+        console.log("[POLLING] 30s interval reached, triggering full sync");
         fetchAllDataRef.current();
       }
     }, 30_000);
@@ -427,7 +434,6 @@ export default function MainPagerScreen() {
     if (!user || !activeReactionPhotoId) return;
     const photoId = activeReactionPhotoId;
     
-    // Find existing reaction to check for deletion
     const activePhoto = photos.find(p => p.id === photoId);
     const existing = activePhoto?.reactions.find(r => r.user_id === user.id);
     const isDeletion = existing && existing.sticker_id === emoji;
@@ -436,9 +442,8 @@ export default function MainPagerScreen() {
     setShowCustomTextInput(false);
 
     if (isDeletion) {
-      console.log(`[handleEmojiReact] Deleting reaction ${existing.id} for emoji ${emoji}`);
+      console.log(`[DB WRITE] handleEmojiReact: Deleting reaction ${existing.id}`);
       
-      // Optimistic delete
       setGroupData(prev => {
         const next = { ...prev };
         const g = next[activeGroupId];
@@ -455,15 +460,12 @@ export default function MainPagerScreen() {
         const { error } = await supabase.from("reactions").delete().eq("id", existing.id);
         if (error) throw error;
       } catch (e) {
-        console.error("[handleEmojiReact] Delete error:", e);
-        // Revert? fetchAllData()? For now just log.
+        console.error("[DB WRITE] Reaction delete error:", e);
       }
       return;
     }
 
-    // Upsert Case (existing logic)
-    console.log(`[handleEmojiReact] Sending emoji ${emoji} for photo ${photoId}`);
-    // ... rest of logic stays same but I need to use 'photoId' local var
+    console.log(`[DB WRITE] handleEmojiReact: Upserting reaction for photo ${photoId}`);
     const reactionId = `temp-${Math.random()}`;
     const reactionObj: Reaction = {
       id: reactionId,
@@ -506,7 +508,7 @@ export default function MainPagerScreen() {
         });
       }
     } catch (e) {
-      console.error("[handleEmojiReact] Error:", e);
+      console.error("[DB WRITE] Reaction upsert error:", e);
       Alert.alert("Erreur", "Impossible d'enregistrer la réaction.");
     }
   };
@@ -532,14 +534,13 @@ export default function MainPagerScreen() {
     setShowCustomTextInput(true);
   };
 
-  // Real-time reactions — mise à jour granulaire directe du state, sans round-trip DB.
-  // Prérequis Supabase : table reactions dans supabase_realtime + REPLICA IDENTITY FULL
-  //   (ALTER TABLE reactions REPLICA IDENTITY FULL; dans le SQL Editor)
+  // Real-time reactions
   useEffect(() => {
     if (!user) return;
     const channel = supabase
       .channel(`rt-reactions-${activeGroupId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "reactions" }, (payload) => {
+        console.log(`[REALTIME] Reaction update: ${payload.eventType}`);
         if (payload.eventType === "DELETE") {
           const old = payload.old as any;
           if (!old?.photo_id) return;
@@ -574,7 +575,6 @@ export default function MainPagerScreen() {
                 sticker_id: nr.emoji,
               };
               const newPhotos = [...g.photos];
-              // Remplace l'éventuelle réaction existante du même user (ou la temp optimiste)
               newPhotos[pIdx] = {
                 ...newPhotos[pIdx],
                 reactions: [...newPhotos[pIdx].reactions.filter((r) => r.user_id !== nr.user_id), reactionObj],
@@ -593,6 +593,7 @@ export default function MainPagerScreen() {
   // ── Group management ──
   const handleRenameGroup = async (newName: string) => {
     if (!activeGroupId || !newName.trim()) return;
+    console.log(`[DB WRITE] handleRenameGroup: Updating group ${activeGroupId}`);
     await supabase.from("groups").update({ name: newName.trim() }).eq("id", activeGroupId);
     setGroupData((prev) => ({ ...prev, [activeGroupId]: { ...prev[activeGroupId], name: newName.trim() } }));
     setAllGroups((prev) => prev.map((g) => g.id === activeGroupId ? { ...g, name: newName.trim() } : g));
@@ -601,15 +602,15 @@ export default function MainPagerScreen() {
   const handleLeaveGroup = async () => {
     if (!user || !activeGroupId) return;
     setIsLeaving(true);
+    console.log(`[DB WRITE] handleLeaveGroup: User ${user.id} leaving group ${activeGroupId}`);
     try {
       const others = members.filter((m: any) => m.user_id !== user.id);
       if (isAdmin && others.length > 0) {
-        const { error: transferErr } = await supabase
+        await supabase
           .from("group_members")
           .update({ role: "admin" })
           .eq("group_id", activeGroupId)
           .eq("user_id", others[0].user_id);
-        if (transferErr) throw new Error(transferErr.message);
       }
       const { data: deleted, error: leaveErr } = await supabase
         .from("group_members")
@@ -638,6 +639,7 @@ export default function MainPagerScreen() {
 
   const handleDeleteGroup = async () => {
     if (!activeGroupId) return;
+    console.log(`[DB WRITE] handleDeleteGroup: Deleting group ${activeGroupId}`);
     try {
       const { error } = await supabase.from("groups").delete().eq("id", activeGroupId);
       if (error) throw new Error(error.message);
@@ -657,10 +659,13 @@ export default function MainPagerScreen() {
 
   const handleTransferAdmin = async (newAdminId: string) => {
     if (!user || !activeGroupId) return;
+    console.log(`[DB WRITE] handleTransferAdmin: Transferring to ${newAdminId}`);
     try {
-      const r1 = await supabase.from("group_members").update({ role: "admin" }).eq("group_id", activeGroupId).eq("user_id", newAdminId);
+      const [r1, r2] = await Promise.all([
+        supabase.from("group_members").update({ role: "admin" }).eq("group_id", activeGroupId).eq("user_id", newAdminId),
+        supabase.from("group_members").update({ role: "member" }).eq("group_id", activeGroupId).eq("user_id", user.id),
+      ]);
       if (r1.error) throw new Error(r1.error.message);
-      const r2 = await supabase.from("group_members").update({ role: "member" }).eq("group_id", activeGroupId).eq("user_id", user.id);
       if (r2.error) throw new Error(r2.error.message);
       await fetchAllData();
     } catch (e: any) {
@@ -679,15 +684,8 @@ export default function MainPagerScreen() {
   const handleCreateGroup = async () => {
     if (!newGroupName.trim() || !user) return;
     setAddGroupLoading(true);
+    console.log(`[DB WRITE] handleCreateGroup: Creating group "${newGroupName}"`);
     try {
-      const { count } = await supabase
-        .from("group_members")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id);
-      if ((count ?? 0) >= 3) {
-        showToast("Limite atteinte", "Tu peux appartenir à 3 groupes maximum.", "info");
-        return;
-      }
       const { data: group, error } = await supabase
         .from("groups")
         .insert({ name: newGroupName.trim(), created_by: user.id })
@@ -708,15 +706,8 @@ export default function MainPagerScreen() {
   const handleJoinGroup = async () => {
     if (!joinCode.trim() || !user) return;
     setAddGroupLoading(true);
+    console.log(`[DB FETCH] handleJoinGroup: Finding group with code ${joinCode}`);
     try {
-      const { count } = await supabase
-        .from("group_members")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user.id);
-      if ((count ?? 0) >= 3) {
-        showToast("Limite atteinte", "Tu peux appartenir à 3 groupes maximum.", "info");
-        return;
-      }
       const cleanCode = joinCode.trim().toUpperCase();
       const { data: group, error: groupErr } = await supabase
         .from("groups")
@@ -725,19 +716,14 @@ export default function MainPagerScreen() {
         .maybeSingle();
       if (groupErr) throw groupErr;
       if (!group) { showToast("Erreur", "Code invalide ou groupe introuvable."); return; }
+      
+      console.log(`[DB WRITE] handleJoinGroup: Joining group ${group.id}`);
       const { error: joinErr } = await supabase
         .from("group_members")
         .insert({ group_id: group.id, user_id: user.id });
-      if (joinErr) {
-        if (joinErr.message.includes("unique")) {
-          showToast("Info", "Tu fais déjà partie de ce groupe.", "info");
-        } else {
-          throw joinErr;
-        }
-      } else {
-        showToast("Succès", `Tu as rejoint "${group.name}" !`, "success");
-        scheduleFirstMomentReminder(group.id, group.name);
-      }
+      if (joinErr) throw joinErr;
+      
+      showToast("Succès", `Tu as rejoint "${group.name}" !`, "success");
       closeAddGroupModal();
       await fetchAllData();
       setActiveGroupId(group.id);
@@ -787,6 +773,67 @@ export default function MainPagerScreen() {
     pagerTouchRef.current = null;
     scrollRef.current?.setNativeProps({ scrollEnabled });
   };
+
+  const handleCommentSeen = useCallback(async (photoId: string) => {
+    if (!user || !activeGroupId) return;
+    
+    console.log(`[handleCommentSeen] Optimistic update for photo ${photoId}`);
+    
+    // 1. Optimistic local update (immediate feedback)
+    setGroupData(prev => {
+      const next = { ...prev };
+      const g = next[activeGroupId];
+      if (!g) return prev;
+      const pIdx = g.photos.findIndex(p => p.id === photoId);
+      if (pIdx !== -1 && g.photos[pIdx].hasNewComments) {
+        const newPhotos = [...g.photos];
+        newPhotos[pIdx] = { ...newPhotos[pIdx], hasNewComments: false };
+        next[activeGroupId] = { ...g, photos: newPhotos };
+        return next;
+      }
+      return prev;
+    });
+
+    // 2. Global Sync: Fetch all view statuses and latest comment times for this group
+    try {
+      const currentPhotos = groupData[activeGroupId]?.photos || [];
+      const photoIds = currentPhotos.map(p => p.id);
+      if (photoIds.length === 0) return;
+
+      console.log(`[DB FETCH] handleCommentSeen: Global Syncing metadata for ${photoIds.length} photos`);
+      const [viewsRes, latestCommentsRes] = await Promise.all([
+        supabase.from("comment_views").select("photo_id, last_viewed_at").eq("user_id", user.id).in("photo_id", photoIds),
+        supabase.from("comments").select("photo_id, created_at").in("photo_id", photoIds).order("created_at", { ascending: false })
+      ]);
+
+      const viewsMap = Object.fromEntries((viewsRes.data ?? []).map((v: any) => [v.photo_id, v.last_viewed_at]));
+      const latestCommentsMap: Record<string, string> = {};
+      for (const c of latestCommentsRes.data ?? []) {
+        if (!latestCommentsMap[c.photo_id]) {
+          latestCommentsMap[c.photo_id] = c.created_at;
+        }
+      }
+
+      setGroupData(prev => {
+        const g = prev[activeGroupId];
+        if (!g) return prev;
+        return {
+          ...prev,
+          [activeGroupId]: {
+            ...g,
+            photos: g.photos.map(p => {
+              const lastViewedAt = viewsMap[p.id];
+              const latestCommentAt = latestCommentsMap[p.id];
+              const hasNew = latestCommentAt && (!lastViewedAt || new Date(latestCommentAt) > new Date(lastViewedAt));
+              return { ...p, hasNewComments: !!hasNew };
+            })
+          }
+        };
+      });
+    } catch (e) {
+      console.error("[DB FETCH] handleCommentSeen Sync Error:", e);
+    }
+  }, [user, activeGroupId, groupData]);
 
   if (!dataLoaded) return <View style={styles.loaderWrap}><Loader size={48} /></View>;
 
@@ -932,6 +979,7 @@ export default function MainPagerScreen() {
             groupName={groupName}
             onScrollLock={lockScrollDirect}
             onOpenPicker={setActiveReactionPhotoId}
+            onOpenComments={handleCommentSeen}
           />
           {user?.id && username && (
             <LiveReactions
@@ -1155,7 +1203,7 @@ export default function MainPagerScreen() {
             >
               <Text style={styles.addGroupPrimaryText}>{addGroupLoading ? "Création..." : "Créer"}</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => { setAddGroupView(null); setNewGroupName(""); }} style={styles.sheetCancelWrap}>
+            <TouchableOpacity onPress={() => { setAddGroupView(null); setNewGroupName(""); }} style={styles.sheetCancelText}>
               <Text style={styles.sheetCancelText}>Retour</Text>
             </TouchableOpacity>
           </>
@@ -1247,34 +1295,34 @@ const styles = StyleSheet.create({
   emojiWheel: {
     position: "absolute",
     right: 24, // Match the padding of the momentOverlay
-    bottom: NAVBAR_HEIGHT + 150, // Elevated to ensure it sits above the + button even with reactions
-    backgroundColor: "rgba(255,255,255,0.15)",
-    borderRadius: 30,
-    padding: 6,
-    gap: 8,
+    bottom: NAVBAR_HEIGHT + 180, // Elevated further to ensure it sits above the + button
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderRadius: 35,
+    padding: 8,
+    gap: 10,
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
-    elevation: 10,
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.25)",
+    elevation: 12,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
   },
   wheelBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.12)",
   },
   wheelBtnActive: {
-    backgroundColor: "rgba(255,255,255,0.35)",
+    backgroundColor: "rgba(255,255,255,0.4)",
     borderColor: "#FFF065",
-    borderWidth: 2,
+    borderWidth: 2.5,
   },
-  wheelEmoji: { fontSize: 24 },
+  wheelEmoji: { fontSize: 28 },
   
   customModalContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   customModalClose: { position: "absolute", top: 60, right: 20, width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", zIndex: 10 },
