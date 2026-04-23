@@ -71,6 +71,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const warmUpCancelled = useRef(false);
   const warmUpPromise = useRef<Promise<any> | null>(null);
   const lastVolumeButtonTrigger = useRef(0);
+  const lastVolumeRef = useRef(0);
 
   // Double-capture slots
   const [slot1, setSlot1] = useState<SlotData | null>(null);
@@ -392,38 +393,75 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     setShowGroupPicker(true);
   };
 
+  // ── Volume button capture ──
+  const handleCaptureRef = useRef(handleCapture);
+  handleCaptureRef.current = handleCapture;
+  const isCapturingRef = useRef(isCapturing);
+  isCapturingRef.current = isCapturing;
+  const capturingRef = useRef(capturing);
+  capturingRef.current = capturing;
+  const cameraModeRef = useRef(cameraMode);
+  cameraModeRef.current = cameraMode;
+
   useEffect(() => {
     if (!isActive) return;
 
-    /* The volumeListener is only notified if the volume has actually changed,
-       so this is a hack to make sure the hardware volume up button will always
-       work for taking a photo. 
-    */
+    if (Platform.OS === "ios") {
+      // iOS specific configuration for hardware button interception
+      VolumeManager.enable(true, true).catch(() => {});
+      VolumeManager.setActive(true, true).catch(() => {});
+      VolumeManager.setCategory("ambient", true).catch(() => {});
+      VolumeManager.enableInSilenceMode(true).catch(() => {});
+    }
+
     const handleVolume = async (newVolume?: any) => {
       try {
-        const { volume } = newVolume ?? (await VolumeManager.getVolume());
-        if (volume === 1) {
-          // Set it slightly below 1 so that a "Volume Up" press always triggers a change
-          await VolumeManager.setVolume(0.94 - Math.random() / 100);
+        const result = newVolume ?? (await VolumeManager.getVolume());
+        const volume = result?.volume ?? 0;
+        
+        // Use a small epsilon for float comparison
+        const isUp = volume > (lastVolumeRef.current + 0.001);
+        
+        if (volume >= 0.98) {
+          // On iOS, resetting needs to be very explicit
+          const resetVol = 0.94 - (Math.random() * 0.05);
+          await VolumeManager.setVolume(resetVol, { showUI: false }).catch(() => {});
+          lastVolumeRef.current = resetVol;
+        } else {
+          lastVolumeRef.current = volume;
         }
+        
+        return isUp;
       } catch (e) {
-        console.error("[CameraPage] Volume hack error:", e);
+        return false;
       }
     };
 
-    handleVolume();
-    const volumeListener = VolumeManager.addVolumeListener((result) => {
-      handleVolume(result);
+    // Initial sync
+    VolumeManager.getVolume().then(res => {
+      if (res && typeof res.volume === 'number') {
+        lastVolumeRef.current = res.volume;
+        // If already at max, reset immediately so the first press works
+        if (res.volume >= 0.98) {
+          VolumeManager.setVolume(0.94).catch(() => {});
+          lastVolumeRef.current = 0.94;
+        }
+      }
+    }).catch(() => {});
 
-      // Debounce to avoid double triggers (especially from the hack itself)
+    const volumeListener = VolumeManager.addVolumeListener(async (result) => {
+      // Process volume change
+      const wasVolumeUp = await handleVolume(result);
+
+      if (!wasVolumeUp) return;
+
       const now = Date.now();
       if (now - lastVolumeButtonTrigger.current < 500) return;
 
-      if (isActive && isCapturing && !capturing) {
-        // Adapt to PHOTO or VIDEO modes as per requirement
-        if (cameraMode === "PHOTO" || cameraMode === "VIDEO") {
+      if (isActive && isCapturingRef.current && !capturingRef.current) {
+        if (cameraModeRef.current === "PHOTO" || cameraModeRef.current === "VIDEO") {
           lastVolumeButtonTrigger.current = now;
-          handleCapture();
+          handleCaptureRef.current();
         }
       }
     });
@@ -433,8 +471,12 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     return () => {
       volumeListener.remove();
       VolumeManager.showNativeVolumeUI({ enabled: true });
+      if (Platform.OS === "ios") {
+        VolumeManager.setActive(false, true).catch(() => {});
+        VolumeManager.enable(false, true).catch(() => {});
+      }
     };
-  }, [isActive, isCapturing, capturing, cameraMode, handleCapture]);
+  }, [isActive]);
 
   const toggleGroup = (id: string) => {
     setSelectedGroupIds(prev => prev.includes(id) ? prev.filter(g => g !== id) : [...prev, id]);
