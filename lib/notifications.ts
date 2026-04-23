@@ -111,12 +111,14 @@ export async function sendPushToTokens(
         console.error("[Push] Erreurs API Expo:", result.errors);
       }
     } else if (result.data) {
-      // Log du statut de chaque ticket
       result.data.forEach((ticket: any, index: number) => {
         if (ticket.status === "error") {
-          console.error(`[Push] Erreur pour le token ${tokens[index]}:`, ticket.message);
+          console.error(`[Push] Erreur token ${tokens[index]}: ${ticket.message} | details: ${JSON.stringify(ticket.details)}`);
+          if (ticket.details?.error === "DeviceNotRegistered") {
+            supabase.from("profiles").update({ expo_push_token: null }).eq("expo_push_token", tokens[index]).then();
+          }
         } else {
-          console.log(`[Push] Ticket de succès créé: ${ticket.id}`);
+          console.log(`[Push] Ticket OK: ${ticket.id}`);
         }
       });
     }
@@ -175,7 +177,8 @@ export async function cancelAllRecapNotifications() {
       if (
         n.identifier.startsWith("recap_") ||
         n.identifier.startsWith("countdown_") ||
-        n.identifier.startsWith("reactions_")
+        n.identifier.startsWith("reactions_") ||
+        n.identifier.startsWith("post_reminder_")
       ) {
         await Notifications.cancelScheduledNotificationAsync(n.identifier);
       }
@@ -240,6 +243,39 @@ export async function scheduleCountdownNotification(
   }
 }
 
+export async function schedulePostReminderNotification(
+  groupId: string,
+  groupName: string,
+  revealDate: Date
+) {
+  if (!Notifications) return;
+  const now = new Date();
+  const sendAt = new Date(revealDate.getTime() - 3 * 24 * 60 * 60 * 1000);
+  sendAt.setHours(11, 0, 0, 0);
+  const secondsUntil = Math.floor((sendAt.getTime() - now.getTime()) / 1000);
+  if (secondsUntil <= 0) return;
+  try {
+    await Notifications.scheduleNotificationAsync({
+      identifier: `post_reminder_${groupId}`,
+      content: {
+        title: groupName,
+        body: "Poste un moment pour déverrouiller le reveal de fin de semaine !",
+        data: { type: "new_photo", groupId },
+        channelId: "default",
+      },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: secondsUntil },
+    });
+  } catch (e) {
+    console.warn("schedulePostReminderNotification error:", e);
+  }
+}
+
+export async function cancelPostReminderNotification(groupId: string) {
+  try {
+    await Notifications.cancelScheduledNotificationAsync(`post_reminder_${groupId}`);
+  } catch (_) {}
+}
+
 export async function scheduleAllRecaps(userId: string) {
   if (!Notifications) return;
   await cancelAllRecapNotifications();
@@ -263,6 +299,7 @@ export async function scheduleAllRecaps(userId: string) {
       await scheduleRecapNotification(m.group_id, groupName, sunday);
       await scheduleCountdownNotification(m.group_id, groupName, sunday);
       await scheduleReactionsReminder(m.group_id, groupName, sunday);
+      await schedulePostReminderNotification(m.group_id, groupName, sunday);
     }
   }
 }

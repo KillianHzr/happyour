@@ -28,6 +28,7 @@ type Props = {
   revealDate: Date;
   revealEndDate?: Date;
   unlocked: boolean;
+  currentUserPostedThisWeek: boolean;
   onOpenReveal: () => void;
   onOpenSettings: () => void;
   onLeaveGroup: () => void;
@@ -78,6 +79,18 @@ function useCountdown(targetDate: Date): { text: string; msLeft: number } {
 
 const APP_LINK = "app-gobelins-m2.expo.dev";
 
+const DAY_FR = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
+function formatRevealDeadline(date: Date): string {
+  return `${DAY_FR[date.getDay()]} à ${date.getHours()}h`;
+}
+
+const LockIcon = () => (
+  <Svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+    <Path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    <Path d="M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
+
 const GearIcon = () => (
   <Svg width="20" height="20" viewBox="0 0 24 24" fill="none">
     <Path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="#FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -94,7 +107,7 @@ const CrownIcon = () => (
 export default function VaultPage({
   allGroups, activeGroupId, onSwitchGroup, onAddGroup,
   groupName, inviteCode, isAdmin, currentUserId, members, photoCount, photos, revealDate, revealEndDate,
-  unlocked, onOpenReveal, onOpenSettings, onLeaveGroup, onRemoveMember,
+  unlocked, currentUserPostedThisWeek, onOpenReveal, onOpenSettings, onLeaveGroup, onRemoveMember,
   groupId, onRefresh, refreshing, onSimulateReveal, onDebugNotifReveal, onDebugNotifPhoto, onDebugNotifInvite,
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -280,37 +293,75 @@ export default function VaultPage({
         {/* Stats / Reveal card */}
         {unlocked ? (
           photoCount > 0 ? (
-          <TouchableOpacity style={styles.revealCard} onPress={onOpenReveal} activeOpacity={0.82}>
-            <Text style={styles.revealEmoji}>🎉</Text>
-            <Text style={styles.revealTitle}>Voir le reveal !</Text>
-            {revealEndDate && revealEndMsLeft > 0 && (
-              <View style={[styles.revealExpiry, revealExpiringSoon && styles.revealExpiryRed]}>
-                <Text style={[styles.revealExpiryText, revealExpiringSoon && styles.revealExpiryTextRed]}>
-                  Expire dans {revealEndLeft}
+            currentUserPostedThisWeek ? (
+              <TouchableOpacity style={styles.revealCard} onPress={onOpenReveal} activeOpacity={0.82}>
+                <Text style={styles.revealEmoji}>🎉</Text>
+                <Text style={styles.revealTitle}>Voir le reveal !</Text>
+                {revealEndDate && revealEndMsLeft > 0 && (
+                  <View style={[styles.revealExpiry, revealExpiringSoon && styles.revealExpiryRed]}>
+                    <Text style={[styles.revealExpiryText, revealExpiringSoon && styles.revealExpiryTextRed]}>
+                      Expire dans {revealEndLeft}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.revealLockedCard}>
+                <LockIcon />
+                <Text style={styles.revealLockedTitle}>Reveal verrouillé</Text>
+                <Text style={styles.revealLockedHint}>Tu n'as pas partagé de moment cette semaine</Text>
+              </View>
+            )
+          ) : (
+            <View style={[styles.revealCard, { opacity: 0.6 }]}>
+              <Text style={styles.revealEmoji}>😔</Text>
+              <Text style={styles.revealTitle}>Personne n'a partagé de moment</Text>
+            </View>
+          )
+        ) : (
+          <>
+            <View style={[styles.statsCard, strokeWidth > 0 && { borderWidth: strokeWidth }, !currentUserPostedThisWeek && { overflow: "hidden", borderColor: "rgba(255,166,0,0.35)" }]}>
+              {!currentUserPostedThisWeek && (
+                <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                  <Svg style={StyleSheet.absoluteFill}>
+                    {Array.from({ length: 30 }).map((_, i) => (
+                      <Path key={i} d={`M${i * 22} 0 L${i * 22 - 200} 200`} stroke="rgba(255,166,0,0.09)" strokeWidth="11" />
+                    ))}
+                  </Svg>
+                  <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(255,166,0,0.06)" }]} />
+                </View>
+              )}
+              <View style={styles.statsRow}>
+                <View style={styles.statBlock}>
+                  {currentUserPostedThisWeek ? (
+                    <>
+                      <Text style={styles.statNumber}>{photoCount}</Text>
+                      <Text style={styles.statLabelText}>TOTAL</Text>
+                    </>
+                  ) : (
+                    <View style={styles.statLockWrap}>
+                      <Svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                        <Path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="#FFA600" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                        <Path d="M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z" stroke="#FFA600" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                      </Svg>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.statSeparator} />
+                <View style={[styles.statBlock, { flex: 2, alignItems: "flex-start", paddingLeft: 16 }]}>
+                  <Text style={styles.statHint}>Déverrouillage dans</Text>
+                  <Text style={styles.statCountdown}>{timeLeft}</Text>
+                </View>
+              </View>
+            </View>
+            {!currentUserPostedThisWeek && (
+              <View style={styles.postReminderBanner}>
+                <Text style={styles.postReminderText}>
+                  {"Poste au moins un moment avant\n"}<Text style={styles.postReminderBold}>{formatRevealDeadline(revealDate)}</Text> pour accéder au reveal.
                 </Text>
               </View>
             )}
-          </TouchableOpacity>
-          ) : (
-          <View style={[styles.revealCard, { opacity: 0.6 }]}>
-            <Text style={styles.revealEmoji}>😔</Text>
-            <Text style={styles.revealTitle}>Personne n'a partagé de moment</Text>
-          </View>
-          )
-        ) : (
-          <View style={[styles.statsCard, strokeWidth > 0 && { borderWidth: strokeWidth }]}>
-            <View style={styles.statsRow}>
-              <View style={styles.statBlock}>
-                <Text style={styles.statNumber}>{photoCount}</Text>
-                <Text style={styles.statLabelText}>TOTAL</Text>
-              </View>
-              <View style={styles.statSeparator} />
-              <View style={[styles.statBlock, { flex: 2, alignItems: "flex-start", paddingLeft: 16 }]}>
-                <Text style={styles.statHint}>Déverrouillage dans</Text>
-                <Text style={styles.statCountdown}>{timeLeft}</Text>
-              </View>
-            </View>
-          </View>
+          </>
         )}
 
         {/* Participants */}
@@ -462,6 +513,7 @@ const styles = StyleSheet.create({
   statNumber: { fontFamily: "Inter_700Bold", fontSize: 42, color: "#FFF", letterSpacing: -2 },
   statLabelText: { fontFamily: "Inter_600SemiBold", fontSize: 10, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: 1, marginTop: -2 },
   statSeparator: { width: 1, height: 44, backgroundColor: "rgba(255,255,255,0.12)" },
+  statLockWrap: { height: 56, justifyContent: "center", alignItems: "center" },
   statHint: { fontFamily: "Inter_400Regular", fontSize: 11, color: "rgba(255,255,255,0.45)", marginBottom: 3 },
   statCountdown: { fontFamily: "Inter_700Bold", fontSize: 19, color: "#FFF", letterSpacing: 0.5 },
 
@@ -473,6 +525,23 @@ const styles = StyleSheet.create({
   revealExpiryRed: { backgroundColor: "rgba(200,30,30,0.2)" },
   revealExpiryText: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: "rgba(255,255,255,0.55)" },
   revealExpiryTextRed: { color: "#C81E1E" },
+
+  // Post reminder banner
+  postReminderBanner: {
+    alignItems: "center",
+    paddingHorizontal: 14, paddingVertical: 10,
+    marginTop: -20, marginBottom: 28,
+  },
+  postReminderText: { fontFamily: "Inter_400Regular", fontSize: 13, color: "#FFA600", lineHeight: 18, textAlign: "center" },
+  postReminderBold: { fontFamily: "Inter_700Bold", color: "#FFA600" },
+
+  // Reveal locked card
+  revealLockedCard: {
+    backgroundColor: "#2C2C2E", borderRadius: 16, paddingVertical: 32, alignItems: "center",
+    marginBottom: 28, gap: 10, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
+  },
+  revealLockedTitle: { fontFamily: "Inter_700Bold", fontSize: 20, color: "rgba(255,255,255,0.55)", textAlign: "center" },
+  revealLockedHint: { fontFamily: "Inter_400Regular", fontSize: 13, color: "rgba(255,255,255,0.35)", textAlign: "center", paddingHorizontal: 24 },
 
   // Participants
   sectionTitle: { fontFamily: "Inter_700Bold", fontSize: 16, color: "#FFF", marginBottom: 14, marginTop: 4 },

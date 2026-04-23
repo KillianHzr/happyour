@@ -153,6 +153,7 @@ export default function MainPagerScreen() {
   const isAfterRevealWindow = now >= activeRevealEndDate;
   const unlocked = inCurrentRevealWindow || inPrevRevealWindow || (__DEV__ && debugUnlocked);
   const lockedRevealDate = now >= revealDate ? nextRevealDate : revealDate;
+  const currentUserPostedThisWeek = photos.some(p => p.user_id === user?.id);
 
   // ── Fetch all groups data at once ──
   const fetchAllData = useCallback(async () => {
@@ -855,7 +856,8 @@ export default function MainPagerScreen() {
             revealDate={lockedRevealDate}
             revealEndDate={unlocked ? activeRevealEndDate : undefined}
             unlocked={unlocked}
-            onOpenReveal={() => setShowReveal(true)}
+            currentUserPostedThisWeek={currentUserPostedThisWeek}
+            onOpenReveal={() => { if (currentUserPostedThisWeek) setShowReveal(true); }}
             onOpenSettings={() => setShowGroupSettings(true)}
             onLeaveGroup={() => setShowLeaveConfirm(true)}
             onRemoveMember={async (memberId) => {

@@ -4,6 +4,7 @@ import {
   Alert, KeyboardAvoidingView, Platform, TextInput, Modal, Pressable, PanResponder,
 } from "react-native";
 import { Image } from "expo-image";
+import { useVideoPlayer, VideoView } from "expo-video";
 import { BlurView } from "expo-blur";
 import { CameraView, type CameraType, type FlashMode } from "expo-camera";
 import { manipulateAsync, FlipType, SaveFormat } from "expo-image-manipulator";
@@ -104,6 +105,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const isSlot1WithSlot2 = slot1 !== null && !capturingSecond && viewingSlot === 1 && hasSlot2;
   const isSlot2Preview = slot1 !== null && !capturingSecond && viewingSlot === 2;
   const showBottomSlotBar = isSlot1Preview || isSlot1WithSlot2 || isSlot2Preview;
+  const videoPreviewPlayer = useVideoPlayer(previewSlot?.mode === "VIDEO" ? (previewSlot.uri ?? null) : null, p => { p.loop = true; p.play(); });
 
   const audioWaveAnims = useRef(
     [350, 500, 280, 420, 320, 480, 360].map((duration, i) => ({
@@ -262,7 +264,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     }, 1000);
     try {
       const video = await cameraRef.current.recordAsync({ maxDuration: 15 });
-      if (video?.uri) { setCaptureData(null, video.uri, "video"); router.push(`/(app)/groups/${groupId}/preview`); }
+      if (video?.uri) { saveToSlot({ mode: "VIDEO", uri: video.uri, audioUri: null, textContent: "", note: "" }); }
     } catch (e: any) { console.error("Erreur recordAsync:", e); }
     finally {
       setIsRecording(false);
@@ -409,6 +411,11 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         fileUri = slot1.audioUri;
         contentType = "audio/m4a";
         dbNote = slot1.note.trim() || null;
+      } else if (slot1.mode === "VIDEO" && slot1.uri) {
+        fileName = `${gId}/${userId}_${ts + i}.mp4`;
+        fileUri = slot1.uri;
+        contentType = "video/mp4";
+        dbNote = slot1.note.trim() || null;
       } else if ((slot1.mode === "PHOTO" || slot1.mode === "DESSIN") && slot1.uri) {
         const suffix = slot1.mode === "DESSIN" ? "_draw" : "";
         fileName = `${gId}/${userId}_${ts + i}${suffix}.jpg`;
@@ -426,6 +433,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
           secondFile = { fileName: null, fileUri: null, contentType: null, note: slot2.textContent };
         } else if (slot2.mode === "AUDIO" && slot2.audioUri) {
           secondFile = { fileName: `${gId}/${userId}_${ts + i + 1000}.m4a`, fileUri: slot2.audioUri, contentType: "audio/m4a" };
+        } else if (slot2.mode === "VIDEO" && slot2.uri) {
+          secondFile = { fileName: `${gId}/${userId}_${ts + i + 1000}.mp4`, fileUri: slot2.uri, contentType: "video/mp4" };
         } else if ((slot2.mode === "PHOTO" || slot2.mode === "DESSIN") && slot2.uri) {
           const suffix2 = slot2.mode === "DESSIN" ? "_draw" : "";
           secondFile = { fileName: `${gId}/${userId}_${ts + i + 1000}${suffix2}.jpg`, fileUri: slot2.uri, contentType: "image/jpeg" };
@@ -449,6 +458,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const renderSlotThumbnail = (slot: SlotData) => {
     if (slot.mode === "PHOTO" || slot.mode === "DESSIN") {
       return <Image source={{ uri: slot.uri ?? "" }} style={StyleSheet.absoluteFillObject as any} contentFit="cover" />;
+    }
+    if (slot.mode === "VIDEO" && slot.uri) {
+      return <VideoSlotThumbnail uri={slot.uri} borderRadius={16} />;
     }
     if (slot.mode === "AUDIO") {
       return (
@@ -732,6 +744,10 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 <View style={styles.drawingPreviewCenter}>
                   <Image source={{ uri: previewSlot.uri ?? "" }} style={styles.drawingPreviewImage} contentFit="fill" />
                 </View>
+              ) : previewSlot.mode === "VIDEO" ? (
+                <View style={[StyleSheet.absoluteFillObject, { overflow: "hidden" }]} pointerEvents="none">
+                  <VideoView player={videoPreviewPlayer} style={StyleSheet.absoluteFillObject} contentFit="cover" nativeControls={false} />
+                </View>
               ) : (
                 <Image source={{ uri: previewSlot.uri ?? "" }} style={styles.previewImage} contentFit="cover" />
               )}
@@ -875,6 +891,15 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         </Pressable>
       </Modal>
     </>
+  );
+}
+
+function VideoSlotThumbnail({ uri, borderRadius = 0 }: { uri: string; borderRadius?: number }) {
+  const player = useVideoPlayer(uri, p => { p.pause(); });
+  return (
+    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+      <VideoView player={player} style={{ flex: 1, borderRadius }} contentFit="cover" nativeControls={false} />
+    </View>
   );
 }
 
