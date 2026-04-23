@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Modal, KeyboardAvoidingView, Platform, TextInput,
-  ActivityIndicator, Alert, RefreshControl,
+  ActivityIndicator, Alert, RefreshControl, Animated,
 } from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -85,6 +85,7 @@ type Props = {
   onUsernameUpdate: (name: string) => void;
   onStreakUpdate: (days: number) => void;
   isActive?: boolean;
+  refreshKey?: number;
 };
 
 // ─── SVG Icons ───────────────────────────────────────────────────────────────
@@ -124,7 +125,7 @@ const BackArrow = () => (
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function ProfilePage({
   userId, username, avatarUrl, email, allGroups, revealConfig,
-  onAvatarUpdate, onUsernameUpdate, onStreakUpdate, isActive = false,
+  onAvatarUpdate, onUsernameUpdate, onStreakUpdate, isActive = false, refreshKey,
 }: Props) {
   const insets = useSafeAreaInsets();
   const { logout } = useAuth();
@@ -158,6 +159,10 @@ export default function ProfilePage({
   const [randomPhoto, setRandomPhoto] = useState<PhotoEntry | null>(null);
   const [showRandomReveal, setShowRandomReveal] = useState(false);
   const [loadingRandom, setLoadingRandom] = useState(false);
+  const [randomBusy, setRandomBusy] = useState(false);
+  const randomFadeAnim = useRef(new Animated.Value(1)).current;
+  const randomSlideAnim = useRef(new Animated.Value(0)).current;
+  const shuffleBtnOpacity = useRef(new Animated.Value(1)).current;
 
   // ── Load all user photo timestamps ──
   const loadData = useCallback(async (isRefresh = false) => {
@@ -218,6 +223,15 @@ export default function ProfilePage({
     if (isActive && !prevActive.current) loadData();
     prevActive.current = isActive;
   }, [isActive]);
+
+  // Refetch when a capture is sent
+  const prevRefreshKey = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (refreshKey !== undefined && refreshKey !== prevRefreshKey.current) {
+      loadData();
+    }
+    prevRefreshKey.current = refreshKey;
+  }, [refreshKey]);
 
   // ── Photos per week (for calendar dots) ──
   const photoCountByWeek = useCallback((monday: Date): number => {
@@ -287,21 +301,25 @@ export default function ProfilePage({
     setLoadingWeek(false);
   }, [userId, allGroups, revealConfig, username, avatarUrl]);
 
-  // ── Open random moment ──
-  const openRandom = useCallback(async () => {
+  // ── Fetch a random viewable photo (excludes current one if possible) ──
+  const fetchRandomPhoto = useCallback(async (excludeId?: string): Promise<PhotoEntry | null> => {
     const viewable = photoTimestamps.filter(p => {
       const monday = getMondayOf(new Date(p.created_at));
       return isWeekViewable(monday, revealConfig.day, revealConfig.hour);
     });
-    if (viewable.length === 0) return;
-    setLoadingRandom(true);
-    const idx = Math.floor(Math.random() * viewable.length);
-    const picked = viewable[idx];
+    if (viewable.length === 0) return null;
+
+    const pool = viewable.length > 1 && excludeId
+      ? viewable.filter(p => p.id !== excludeId)
+      : viewable;
+    const picked = pool[Math.floor(Math.random() * pool.length)];
 
     const { data: p } = await supabase
       .from("photos")
       .select("id, image_path, second_image_path, note, second_note, created_at, group_id")
       .eq("id", picked.id).single();
+
+    if (!p) return null;
 
     const { data: reactionsData } = await supabase
       .from("reactions").select("id, photo_id, user_id, emoji").eq("photo_id", picked.id);
@@ -321,9 +339,7 @@ export default function ProfilePage({
     const groupsById: Record<string, string> = {};
     allGroups.forEach(g => { groupsById[g.id] = g.name; });
 
-    if (!p) { setLoadingRandom(false); return; }
-
-    const photo: PhotoEntry = {
+    return {
       id: p.id,
       url: mediaCache.getLocalUri(p.image_path) ?? (p.image_path === "text_mode" ? "" : r2Storage.getPublicUrl(p.image_path)),
       fallback_url: p.image_path === "text_mode" ? undefined : (supabase.storage.from("moments").getPublicUrl(p.image_path).data?.publicUrl),
@@ -338,11 +354,46 @@ export default function ProfilePage({
       reactions,
       groupName: allGroups.length > 1 ? (groupsById[p.group_id] ?? null) : null,
     };
+  }, [photoTimestamps, allGroups, username, avatarUrl, userId, revealConfig]);
 
+  // ── Open random moment (first open) ──
+  const openRandom = useCallback(async () => {
+    setRandomBusy(true);
+    setLoadingRandom(true);
+    randomFadeAnim.setValue(1);
+    randomSlideAnim.setValue(0);
+    shuffleBtnOpacity.setValue(1);
+    const photo = await fetchRandomPhoto();
+    if (!photo) { setLoadingRandom(false); setRandomBusy(false); return; }
     setRandomPhoto(photo);
     setShowRandomReveal(true);
     setLoadingRandom(false);
-  }, [photoTimestamps, allGroups, username, avatarUrl, userId]);
+    setRandomBusy(false);
+  }, [fetchRandomPhoto]);
+
+  // ── Switch to another random moment with animation ──
+  const handleAnotherMoment = useCallback(() => {
+    setRandomBusy(true);
+    const currentId = randomPhoto?.id;
+    Animated.parallel([
+      Animated.timing(shuffleBtnOpacity, { toValue: 0, duration: 120, useNativeDriver: true }),
+      Animated.timing(randomFadeAnim, { toValue: 0, duration: 180, useNativeDriver: true }),
+      Animated.timing(randomSlideAnim, { toValue: -24, duration: 180, useNativeDriver: true }),
+    ]).start(async () => {
+      setLoadingRandom(true);
+      const photo = await fetchRandomPhoto(currentId);
+      if (photo) setRandomPhoto(photo);
+      setLoadingRandom(false);
+      requestAnimationFrame(() => {
+        randomSlideAnim.setValue(28);
+        Animated.parallel([
+          Animated.timing(randomFadeAnim, { toValue: 1, duration: 220, useNativeDriver: true }),
+          Animated.timing(randomSlideAnim, { toValue: 0, duration: 220, useNativeDriver: true }),
+          Animated.timing(shuffleBtnOpacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+        ]).start(() => setRandomBusy(false));
+      });
+    });
+  }, [fetchRandomPhoto, randomPhoto?.id]);
 
   // ── Avatar update ──
   const updateAvatar = async () => {
@@ -525,7 +576,7 @@ export default function ProfilePage({
 
         {/* ── Random moment button ── */}
         {photoTimestamps.length > 0 && (
-          <TouchableOpacity style={styles.randomBtn} onPress={openRandom} disabled={loadingRandom} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.randomBtn} onPress={openRandom} disabled={randomBusy} activeOpacity={0.8}>
             {loadingRandom
               ? <ActivityIndicator color="#FFF" size="small" />
               : <><RandomIcon /><Text style={styles.randomBtnText}>Moment aléatoire</Text></>}
@@ -611,8 +662,9 @@ export default function ProfilePage({
           >
             <BackArrow />
           </TouchableOpacity>
-          {randomPhoto && (
-            <>
+
+          <Animated.View style={{ flex: 1, opacity: randomFadeAnim, transform: [{ translateY: randomSlideAnim }] }}>
+            {randomPhoto && (
               <PhotoFeed
                 photos={[randomPhoto]}
                 currentUserId={userId}
@@ -624,15 +676,22 @@ export default function ProfilePage({
                 hideIntro={true}
                 hideEnd={true}
               />
-              {/* Shuffle another */}
-              <TouchableOpacity
-                style={[styles.shuffleBtn, { bottom: insets.bottom + 20 }]}
-                onPress={() => { setShowRandomReveal(false); setTimeout(openRandom, 200); }}
-              >
+            )}
+          </Animated.View>
+
+          {loadingRandom && (
+            <View style={styles.randomLoadingOverlay}>
+              <ActivityIndicator size="large" color="rgba(255,255,255,0.55)" />
+            </View>
+          )}
+
+          {randomPhoto && (
+            <Animated.View style={{ opacity: shuffleBtnOpacity, position: "absolute", alignSelf: "center", bottom: insets.bottom + 20, zIndex: 10 }}>
+              <TouchableOpacity style={styles.shuffleBtn} onPress={handleAnotherMoment} disabled={randomBusy}>
                 <RandomIcon />
                 <Text style={styles.shuffleBtnText}>Autre moment</Text>
               </TouchableOpacity>
-            </>
+            </Animated.View>
           )}
         </View>
       </Modal>
@@ -790,14 +849,16 @@ const styles = StyleSheet.create({
   weekLabelPillText: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: "rgba(255,255,255,0.85)" },
 
   shuffleBtn: {
-    position: "absolute", alignSelf: "center",
     flexDirection: "row", alignItems: "center", gap: 10,
     backgroundColor: "rgba(0,0,0,0.7)", borderRadius: 30,
     paddingHorizontal: 20, paddingVertical: 12,
     borderWidth: 1, borderColor: "rgba(255,255,255,0.2)",
-    zIndex: 10,
   },
   shuffleBtnText: { fontFamily: "Inter_700Bold", fontSize: 15, color: "#FFF" },
+  randomLoadingOverlay: {
+    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+    justifyContent: "center", alignItems: "center",
+  },
 
   // Edit username sheet
   editSheet: { backgroundColor: "#161616", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 44 },

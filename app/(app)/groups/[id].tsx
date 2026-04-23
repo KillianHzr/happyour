@@ -91,6 +91,7 @@ export default function MainPagerScreen() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [streakDays, setStreakDays] = useState(0);
+  const [profileRefreshKey, setProfileRefreshKey] = useState(0);
 
   // Pager
   const [currentPage, setCurrentPage] = useState(1);
@@ -821,6 +822,7 @@ export default function MainPagerScreen() {
             onUsernameUpdate={setUsername}
             onStreakUpdate={setStreakDays}
             isActive={currentPage === 0}
+            refreshKey={profileRefreshKey}
           />
         </View>
 
@@ -832,6 +834,7 @@ export default function MainPagerScreen() {
             isActive={currentPage === 1}
             allGroups={allGroups}
             onScrollLock={(v) => { console.log(`[ID] setCameraScrollLocked=${v}`); setCameraScrollLocked(v); }}
+            onCaptureSent={() => setProfileRefreshKey(k => k + 1)}
           />
         </Animated.View>
 

@@ -37,6 +37,7 @@ type Props = {
   isActive: boolean;
   allGroups: GroupInfo[];
   onScrollLock: (locked: boolean) => void;
+  onCaptureSent?: () => void;
 };
 
 class CameraErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean; error: string }> {
@@ -49,7 +50,7 @@ class CameraErrorBoundary extends Component<{ children: React.ReactNode }, { has
   }
 }
 
-function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock }: Props) {
+function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, onCaptureSent }: Props) {
   const insets = useSafeAreaInsets();
   const { startUpload } = useUpload();
 
@@ -433,6 +434,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock }:
 
       startUpload(fileName, fileUri, contentType, dbData, secondFile);
     });
+    onCaptureSent?.();
     resetAll();
   };
 

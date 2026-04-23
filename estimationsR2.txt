@@ -7,16 +7,104 @@ ESTIMATION BÊTA R2 - 26/03/2026
 ---
 
 - Stockage : 4 000 × 2,5 Mo = 10 Go
-  (Limite Free Tier : 10 Go) -> 0,00 $
+  (Limite Free Tier : 10 Go) -> 0,00 €
 
 - Opérations A (Uploads) : 4 000
-  (Limite Free Tier : 1 000 000) -> 0,00 $
+  (Limite Free Tier : 1 000 000) -> 0,00 €
 
 - Opérations B (Vues) : 4 000 fichiers × 10 vues/pers = 40 000
-  (Limite Free Tier : 10 000 000) -> 0,00 $
+  (Limite Free Tier : 10 000 000) -> 0,00 €
 
-- Egress (Transfert) : Gratuit illimité -> 0,00 $
+- Egress (Transfert) : Gratuit illimité -> 0,00 €
 
 ---
 
-TOTAL ESTIMÉ : 0,00 $ / MOIS
+TOTAL ESTIMÉ : 0,00 € / MOIS
+
+============================================================
+CONTEXTE DES ESTIMATIONS LONG TERME
+============================================================
+Ces projections simulent l'évolution des coûts de stockage R2 sur 10 ans. 
+Le modèle économique repose sur une distinction entre :
+- Utilisateurs Premium (5.67%) : Leurs moments sont conservés indéfiniment.
+- Utilisateurs Gratuits (94.33%) : 98% de leurs moments sont supprimés automatiquement (via des règles de cycle de vie R2), ne conservant que 2% de leur historique.
+Cela permet de stabiliser la croissance des coûts tout en offrant un service de stockage durable aux abonnés.
+
+============================================================
+PROJECTIONS À LONG TERME (Avec rétention Premium/Gratuit)
+============================================================
+Paramètres :
+- 2.5 moments/jour/utilisateur (~75/mois)
+- Poids : 2.5 Mo/moment
+- Sauvegarde : 100% pour les abonnés (5.67%) et 2% pour les gratuits
+- Volume conservé : ~7.55% du volume total uploadé
+- Vues estimées : 10 vues par moment publié
+- Taux de change : 1 $ = 0,85 €
+
+--- 1. 10 000 Utilisateurs ---
+Opérations mensuelles : Uploads 750k (Gratuit) | Vues 7.5M (Gratuit) -> 0 €/mois
+Stockage net ajouté : ~138 Go / mois
+
+• Année 1 :
+  - Coût mensuel fin A1 : ~20 €
+  - Coût total Année 1 : ~136 €
+• Année 2 :
+  - Coût mensuel fin A2 : ~42 €
+  - Coût total Année 2 : ~391 €
+• Année 5 :
+  - Coût mensuel fin A5 : ~105 €
+  - Coût total Année 5 : ~1 147 €
+• Année 10 :
+  - Coût mensuel fin A10 : ~212 €
+  - Coût total Année 10 : ~2 423 €
+
+--- 2. 100 000 Utilisateurs ---
+Opérations mensuelles : Uploads 7.5M | Vues 75M -> ~45 €/mois
+Stockage net ajouté : ~1 384 Go / mois
+
+• Année 1 :
+  - Coût mensuel fin A1 : ~257 € (dont 45€ ops)
+  - Coût total Année 1 : ~1 913 €
+• Année 2 :
+  - Coût mensuel fin A2 : ~468 €
+  - Coût total Année 2 : ~4 453 €
+• Année 5 :
+  - Coût mensuel fin A5 : ~1 103 €
+  - Coût total Année 5 : ~12 077 €
+• Année 10 :
+  - Coût mensuel fin A10 : ~2 162 €
+  - Coût total Année 10 : ~24 783 €
+
+--- 3. 1 000 000 Utilisateurs ---
+Opérations mensuelles : Uploads 75M | Vues 750M -> ~509 €/mois
+Stockage net ajouté : ~13 836 Go (13.8 To) / mois
+
+• Année 1 :
+  - Coût mensuel fin A1 : ~2 626 €
+  - Coût total Année 1 : ~19 873 €
+• Année 2 :
+  - Coût mensuel fin A2 : ~4 742 €
+  - Coût total Année 2 : ~45 276 €
+• Année 5 :
+  - Coût mensuel fin A5 : ~11 092 €
+  - Coût total Année 5 : ~121 518 €
+• Année 10 :
+  - Coût mensuel fin A10 : ~21 674 €
+  - Coût total Année 10 : ~248 588 €
+
+--- 4. 10 000 000 Utilisateurs ---
+Opérations mensuelles : Uploads 750M | Vues 7.5Md -> ~5 157 €/mois
+Stockage net ajouté : ~138 360 Go (138 To) / mois
+
+• Année 1 :
+  - Coût mensuel fin A1 : ~26 325 €
+  - Coût total Année 1 : ~199 481 €
+• Année 2 :
+  - Coût mensuel fin A2 : ~47 495 €
+  - Coût total Année 2 : ~453 512 €
+• Année 5 :
+  - Coût mensuel fin A5 : ~111 002 €
+  - Coût total Année 5 : ~1 215 928 €
+• Année 10 :
+  - Coût mensuel fin A10 : ~216 848 €
+  - Coût total Année 10 : ~2 486 627 €
