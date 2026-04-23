@@ -81,7 +81,7 @@ const APP_LINK = "app-gobelins-m2.expo.dev";
 
 const DAY_FR = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
 function formatRevealDeadline(date: Date): string {
-  return `${DAY_FR[date.getDay()]} à ${date.getHours()}h`;
+  return DAY_FR[date.getDay()];
 }
 
 const LockIcon = () => (
@@ -349,18 +349,19 @@ export default function VaultPage({
                 </View>
                 <View style={styles.statSeparator} />
                 <View style={[styles.statBlock, { flex: 2, alignItems: "flex-start", paddingLeft: 16 }]}>
-                  <Text style={styles.statHint}>Déverrouillage dans</Text>
-                  <Text style={styles.statCountdown}>{timeLeft}</Text>
+                  {currentUserPostedThisWeek ? (
+                    <>
+                      <Text style={styles.statHint}>Déverrouillage dans</Text>
+                      <Text style={styles.statCountdown}>{timeLeft}</Text>
+                    </>
+                  ) : (
+                    <Text style={styles.postReminderText}>
+                      {"Poste au moins un moment pour accéder\nau reveal du "}<Text style={styles.postReminderBold}>{formatRevealDeadline(revealDate)}</Text>
+                    </Text>
+                  )}
                 </View>
               </View>
             </View>
-            {!currentUserPostedThisWeek && (
-              <View style={styles.postReminderBanner}>
-                <Text style={styles.postReminderText}>
-                  {"Poste au moins un moment avant\n"}<Text style={styles.postReminderBold}>{formatRevealDeadline(revealDate)}</Text> pour accéder au reveal.
-                </Text>
-              </View>
-            )}
           </>
         )}
 
@@ -526,12 +527,7 @@ const styles = StyleSheet.create({
   revealExpiryText: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: "rgba(255,255,255,0.55)" },
   revealExpiryTextRed: { color: "#C81E1E" },
 
-  // Post reminder banner
-  postReminderBanner: {
-    alignItems: "center",
-    paddingHorizontal: 14, paddingVertical: 10,
-    marginTop: -20, marginBottom: 28,
-  },
+  // Post reminder (inside statsCard)
   postReminderText: { fontFamily: "Inter_400Regular", fontSize: 13, color: "#FFA600", lineHeight: 18, textAlign: "center" },
   postReminderBold: { fontFamily: "Inter_700Bold", color: "#FFA600" },
 
