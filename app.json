@@ -28,8 +28,7 @@
         "foregroundImage": "./assets/adaptive-icon.png"
       },
       "predictiveBackGestureEnabled": false,
-      "softwareKeyboardLayoutMode": "pan", 
-
+      "softwareKeyboardLayoutMode": "pan",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
@@ -83,9 +82,8 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "1801b2bf-2427-4736-83a4-346c09d0d9a6"
+        "projectId": "65222b8e-774d-4367-b67b-4f7c9799cac1"
       }
-    },
-    "owner": "mozuto"
+    }
   }
 }

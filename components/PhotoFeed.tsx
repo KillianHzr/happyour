@@ -273,8 +273,8 @@ function SecondCaptureThumbnail({ secondPath, secondNote, onPress }: {
 
   // Drawing uses 3:4 ratio (same as in the reveal), others use 9:16 portrait
   const thumbStyle = isDrawing
-    ? [styles.secondThumb, { width: 48, height: 64 }]
-    : styles.secondThumb;
+    ? [styles.secondThumb, { width: 83, height: 110 }]
+    : [styles.secondThumb, { width: 90, height: 160 }];
 
   return (
     <TouchableOpacity onPress={onPress} style={thumbStyle} activeOpacity={0.8}>
@@ -1180,11 +1180,11 @@ const styles = StyleSheet.create({
   audioTimesRow: { flexDirection: "row", justifyContent: "space-between" },
   audioTimeText: { fontSize: 11, color: "rgba(255,255,255,0.5)", fontFamily: "Inter_400Regular" },
   // Second capture thumbnail (bottom-right of momentWrapper)
-  secondThumb: { position: "absolute", bottom: 72, right: 14, width: 48, height: 85, borderRadius: 8, overflow: "hidden", borderWidth: 1.5, borderColor: "rgba(255,255,255,0.25)" },
+  secondThumb: { position: "absolute", bottom: 140, right: 16, width: 62, height: 110, borderRadius: 12, overflow: "hidden", borderWidth: 2, borderColor: "rgba(255,255,255,0.3)" },
   secondThumbBg: { flex: 1, backgroundColor: "#1A1A1A", justifyContent: "center", alignItems: "center" },
-  secondThumbText: { color: "rgba(255,255,255,0.85)", fontFamily: "Inter_600SemiBold", fontSize: 7.5, textAlign: "center", lineHeight: 11 },
+  secondThumbText: { color: "rgba(255,255,255,0.85)", fontFamily: "Inter_600SemiBold", fontSize: 9, textAlign: "center", lineHeight: 13 },
   secondThumbImage: { width: "100%", height: "100%" },
-  secondThumbOverlay: { position: "absolute", bottom: 4, right: 4, width: 14, height: 14, borderRadius: 3, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center" },
-  secondThumbPlayBadge: { width: 18, height: 18, borderRadius: 9, backgroundColor: "rgba(255,255,255,0.2)", justifyContent: "center", alignItems: "center", paddingLeft: 1 },
-  secondThumbPlayCircle: { width: 22, height: 22, borderRadius: 11, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", paddingLeft: 2 },
+  secondThumbOverlay: { position: "absolute", bottom: 6, right: 6, width: 26, height: 26, borderRadius: 4, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center" },
+  secondThumbPlayBadge: { width: 22, height: 22, borderRadius: 11, backgroundColor: "rgba(255,255,255,0.2)", justifyContent: "center", alignItems: "center", paddingLeft: 1 },
+  secondThumbPlayCircle: { width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", paddingLeft: 2 },
 });

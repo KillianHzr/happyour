@@ -167,7 +167,10 @@ export default function CommentModal({ visible, onClose, onSeen, photoId, photoO
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => {
+        Keyboard.dismiss();
+        return true;
+      },
       onMoveShouldSetPanResponder: (_, { dy, dx }) => dy > 2 && Math.abs(dy) > Math.abs(dx),
       onPanResponderMove: (_, { dy }) => {
         if (dy > 0) translateY.setValue(dy);
@@ -311,25 +314,23 @@ export default function CommentModal({ visible, onClose, onSeen, photoId, photoO
         </Animated.View>
 
         <View style={styles.modalOverlay}>
-          <Animated.View 
-            style={[
-              styles.modalContainer, 
-              { 
-                transform: [{ translateY }],
-              }
-            ]}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "padding"}
+            style={{ width: "100%" }} 
           >
-            {/* Background filler that extends downwards to stay behind the keyboard */}
-            <View style={styles.modalBackgroundFiller}>
-              <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
-            </View>
-            
-            <KeyboardAvoidingView
-              behavior={Platform.OS === "ios" ? "padding" : "height"}
-              style={{ flex: 1 }}
-              keyboardVerticalOffset={Platform.select({ ios: 160, android: 160 })}
+            <Animated.View 
+              style={[
+                styles.modalContainer, 
+                { 
+                  transform: [{ translateY }],
+                }
+              ]}
             >
-              <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+              {/* Background filler that extends downwards to stay behind the keyboard */}
+              <View style={styles.modalBackgroundFiller}>
+                <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+              </View>
+              
                 <View style={{ flex: 1 }}>
                   {/* Draggable Header Area (Top Half behavior) */}
                   <View style={styles.dragArea} {...panResponder.panHandlers}>
@@ -352,16 +353,20 @@ export default function CommentModal({ visible, onClose, onSeen, photoId, photoO
                       keyExtractor={(item) => item.id}
                       renderItem={renderComment}
                       contentContainerStyle={styles.listContent}
-                      showsVerticalScrollIndicator={false}
+                      showsVerticalScrollIndicator={true}
+                      keyboardShouldPersistTaps="handled"
+                      keyboardDismissMode="on-drag"
+                      style={{ flex: 1 }}
                       ListEmptyComponent={
-                        <View style={styles.emptyContainer}>
-                          <Text style={styles.emptyText}>Aucun commentaire pour le moment.</Text>
-                        </View>
+                        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                          <View style={styles.emptyContainer}>
+                            <Text style={styles.emptyText}>Aucun commentaire pour le moment.</Text>
+                          </View>
+                        </TouchableWithoutFeedback>
                       }
                     />
                   )}
                 </View>
-              </TouchableWithoutFeedback>
 
               {!isOwner && (
                 <View style={[styles.inputArea, { paddingBottom: Math.max(insets.bottom, 20) }]}>
@@ -395,8 +400,8 @@ export default function CommentModal({ visible, onClose, onSeen, photoId, photoO
                   )}
                 </View>
               )}
-            </KeyboardAvoidingView>
-          </Animated.View>
+            </Animated.View>
+          </KeyboardAvoidingView>
         </View>
       </View>
     </Modal>
