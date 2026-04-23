@@ -17,6 +17,7 @@ import { useUpload } from "../../lib/upload-context";
 import StandardCamera from "../StandardCamera";
 import DrawingCanvas, { type DrawingCanvasRef } from "../DrawingCanvas";
 import { SendIcon, FeatherIcon, FlipIcon, CloseIcon, FlashIcon } from "./GroupIcons";
+import { VolumeManager } from "react-native-volume-manager";
 
 const NAVBAR_HEIGHT = 100;
 
@@ -69,6 +70,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const isWarmingUp = useRef(false);
   const warmUpCancelled = useRef(false);
   const warmUpPromise = useRef<Promise<any> | null>(null);
+  const lastVolumeButtonTrigger = useRef(0);
 
   // Double-capture slots
   const [slot1, setSlot1] = useState<SlotData | null>(null);
@@ -389,6 +391,50 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     setSelectedGroupIds([groupId]);
     setShowGroupPicker(true);
   };
+
+  useEffect(() => {
+    if (!isActive) return;
+
+    /* The volumeListener is only notified if the volume has actually changed,
+       so this is a hack to make sure the hardware volume up button will always
+       work for taking a photo. 
+    */
+    const handleVolume = async (newVolume?: any) => {
+      try {
+        const { volume } = newVolume ?? (await VolumeManager.getVolume());
+        if (volume === 1) {
+          // Set it slightly below 1 so that a "Volume Up" press always triggers a change
+          await VolumeManager.setVolume(0.94 - Math.random() / 100);
+        }
+      } catch (e) {
+        console.error("[CameraPage] Volume hack error:", e);
+      }
+    };
+
+    handleVolume();
+    const volumeListener = VolumeManager.addVolumeListener((result) => {
+      handleVolume(result);
+
+      // Debounce to avoid double triggers (especially from the hack itself)
+      const now = Date.now();
+      if (now - lastVolumeButtonTrigger.current < 500) return;
+
+      if (isActive && isCapturing && !capturing) {
+        // Adapt to PHOTO or VIDEO modes as per requirement
+        if (cameraMode === "PHOTO" || cameraMode === "VIDEO") {
+          lastVolumeButtonTrigger.current = now;
+          handleCapture();
+        }
+      }
+    });
+
+    VolumeManager.showNativeVolumeUI({ enabled: false });
+
+    return () => {
+      volumeListener.remove();
+      VolumeManager.showNativeVolumeUI({ enabled: true });
+    };
+  }, [isActive, isCapturing, capturing, cameraMode, handleCapture]);
 
   const toggleGroup = (id: string) => {
     setSelectedGroupIds(prev => prev.includes(id) ? prev.filter(g => g !== id) : [...prev, id]);
