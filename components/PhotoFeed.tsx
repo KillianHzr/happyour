@@ -382,16 +382,6 @@ function PhotoMomentPage({ moment, currentUserId, crownWinnerId, onOpenPicker, o
         <View style={styles.textMomentBg}>
           <View style={styles.quoteContainer}>
             <Text style={[styles.textMomentContent, { fontSize, lineHeight: Math.round(fontSize * 1.4) }]}>{effectiveNote}</Text>
-            <View style={styles.citationFooter}>
-              <View style={styles.citationAvatar}><CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} isCrown={crownWinnerId === moment.user_id} /></View>
-              <View style={{ flex: 1 }}><Text style={styles.citationUsername}>{moment.username}</Text><Text style={styles.citationTime}>{formatTime(moment.created_at)}</Text></View>
-              <View style={{ flexDirection: "row", gap: 8 }}>
-                <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
-                  <CommentIcon hasBadge={moment.hasNewComments} />
-                </TouchableOpacity>
-                {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
-              </View>
-            </View>
           </View>
         </View>
       );
@@ -443,21 +433,19 @@ function PhotoMomentPage({ moment, currentUserId, crownWinnerId, onOpenPicker, o
             )}
             <Reanimated.View style={[styles.momentOverlay, animatedUiStyle]} pointerEvents="box-none">
               <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
-              {!isTextOnly && (
-                <View style={styles.authorInfo}>
-                  <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={crownWinnerId === moment.user_id} />
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.usernameLine}><Text style={styles.username}>{moment.username}</Text><Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text></View>
-                    {effectiveNote && <ExpandableNote text={effectiveNote} maxLines={2} />}
-                  </View>
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
-                      <CommentIcon hasBadge={moment.hasNewComments} />
-                    </TouchableOpacity>
-                    {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
-                  </View>
+              <View style={styles.authorInfo}>
+                <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={crownWinnerId === moment.user_id} />
+                <View style={{ flex: 1 }}>
+                  <View style={styles.usernameLine}><Text style={styles.username}>{moment.username}</Text><Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text></View>
+                  {!isTextOnly && effectiveNote && <ExpandableNote text={effectiveNote} maxLines={2} />}
                 </View>
-              )}
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
+                    <CommentIcon hasBadge={moment.hasNewComments} />
+                  </TouchableOpacity>
+                  {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
+                </View>
+              </View>
               <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} photoId={moment.id} crownWinnerId={crownWinnerId} onOpenPicker={isOwn ? undefined : onOpenPicker} />
             </Reanimated.View>
             {thumbnailPath && (
@@ -748,16 +736,6 @@ function AudioMoment({ moment, isVisible, currentUserId, crownWinnerId, onScroll
           <View style={styles.textMomentBg}>
             <View style={styles.quoteContainer}>
               <Text style={[styles.textMomentContent, { fontSize, lineHeight: Math.round(fontSize * 1.4) }]}>{secondNote}</Text>
-              <View style={styles.citationFooter}>
-                <View style={styles.citationAvatar}><CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} isCrown={crownWinnerId === moment.user_id} /></View>
-                <View style={{ flex: 1 }}><Text style={styles.citationUsername}>{moment.username}</Text><Text style={styles.citationTime}>{formatTime(moment.created_at)}</Text></View>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
-                    <CommentIcon hasBadge={moment.hasNewComments} />
-                  </TouchableOpacity>
-                  {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
-                </View>
-              </View>
             </View>
           </View>
         );
@@ -768,7 +746,6 @@ function AudioMoment({ moment, isVisible, currentUserId, crownWinnerId, onScroll
   };
 
   const overlayNote = swapped && hasSecond ? moment.second_note : moment.note;
-  const overlayIsText = swapped && hasSecond ? moment.second_image_path === "text_mode" : false;
 
   return (
     <View style={[styles.fullscreenPage, { paddingTop: Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 12) / 2), paddingBottom: Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 12) / 2) }]}>
@@ -787,21 +764,19 @@ function AudioMoment({ moment, isVisible, currentUserId, crownWinnerId, onScroll
             )}
             <Reanimated.View style={[styles.momentOverlay, animatedUiStyle]} pointerEvents="box-none">
               <LinearGradient colors={["transparent", "rgba(0,0,0,0.92)"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
-              {!overlayIsText && (
-                <View style={styles.authorInfo}>
-                  <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={crownWinnerId === moment.user_id} />
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.usernameLine}><Text style={styles.username}>{moment.username}</Text><Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text></View>
-                    {overlayNote && <ExpandableNote text={overlayNote} maxLines={3} />}
-                  </View>
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
-                      <CommentIcon hasBadge={moment.hasNewComments} />
-                    </TouchableOpacity>
-                    {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
-                  </View>
+              <View style={styles.authorInfo}>
+                <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={crownWinnerId === moment.user_id} />
+                <View style={{ flex: 1 }}>
+                  <View style={styles.usernameLine}><Text style={styles.username}>{moment.username}</Text><Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text></View>
+                  {overlayNote && <ExpandableNote text={overlayNote} maxLines={3} />}
                 </View>
-              )}
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
+                    <CommentIcon hasBadge={moment.hasNewComments} />
+                  </TouchableOpacity>
+                  {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
+                </View>
+              </View>
               <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} photoId={moment.id} crownWinnerId={crownWinnerId} onOpenPicker={onOpenPicker} />
             </Reanimated.View>
             {hasSecond && (
@@ -892,16 +867,6 @@ function VideoMoment({ moment, isVisible, cachedUrl, currentUserId, crownWinnerI
               <View style={styles.textMomentBg}>
                 <View style={styles.quoteContainer}>
                   <Text style={[styles.textMomentContent, { fontSize, lineHeight: Math.round(fontSize * 1.4) }]}>{secondNote}</Text>
-                  <View style={styles.citationFooter}>
-                    <View style={styles.citationAvatar}><CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} isCrown={crownWinnerId === moment.user_id} /></View>
-                    <View style={{ flex: 1 }}><Text style={styles.citationUsername}>{moment.username}</Text><Text style={styles.citationTime}>{formatTime(moment.created_at)}</Text></View>
-                    <View style={{ flexDirection: "row", gap: 8 }}>
-                      <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
-                        <CommentIcon hasBadge={moment.hasNewComments} />
-                      </TouchableOpacity>
-                      {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
-                    </View>
-                  </View>
                 </View>
               </View>
             ) : (
@@ -910,21 +875,19 @@ function VideoMoment({ moment, isVisible, cachedUrl, currentUserId, crownWinnerI
             <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
               <Reanimated.View style={[styles.momentOverlay, animatedUiStyle]} pointerEvents="box-none">
                 <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
-                {!secondIsText && (
-                  <View style={styles.authorInfo}>
-                    <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={crownWinnerId === moment.user_id} />
-                    <View style={{ flex: 1 }}>
-                      <View style={styles.usernameLine}><Text style={styles.username}>{moment.username}</Text><Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text></View>
-                      {secondNote && <ExpandableNote text={secondNote} maxLines={2} />}
-                    </View>
-                    <View style={{ flexDirection: "row", gap: 8 }}>
-                      <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
-                        <CommentIcon hasBadge={moment.hasNewComments} />
-                      </TouchableOpacity>
-                      {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
-                    </View>
+                <View style={styles.authorInfo}>
+                  <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={crownWinnerId === moment.user_id} />
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.usernameLine}><Text style={styles.username}>{moment.username}</Text><Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text></View>
+                    {!secondIsText && secondNote && <ExpandableNote text={secondNote} maxLines={2} />}
                   </View>
-                )}
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
+                      <CommentIcon hasBadge={moment.hasNewComments} />
+                    </TouchableOpacity>
+                    {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
+                  </View>
+                </View>
                 <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} photoId={moment.id} crownWinnerId={crownWinnerId} onOpenPicker={onOpenPicker} />
               </Reanimated.View>
               <Reanimated.View style={[StyleSheet.absoluteFill, animatedUiStyle]} pointerEvents="box-none">
@@ -1323,10 +1286,6 @@ const styles = StyleSheet.create({
   textMomentBg: { flex: 1, width: "100%", justifyContent: "center", alignItems: "center", padding: 32, backgroundColor: "#050505" },
   quoteContainer: { width: "100%", alignItems: "center", gap: 32 },
   textMomentContent: { fontFamily: "Inter_700Bold", color: "#FFF", textAlign: "center", letterSpacing: -0.5 },
-  citationFooter: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 20 },
-  citationAvatar: { borderRadius: 16 },
-  citationUsername: { color: "rgba(255,255,255,0.5)", fontFamily: "Inter_600SemiBold", fontSize: 15 },
-  citationTime: { color: "rgba(255,255,255,0.6)", fontFamily: "Inter_600SemiBold", fontSize: 13, marginTop: 3 },
   momentTime: { color: "rgba(255,255,255,0.55)", fontFamily: "Inter_600SemiBold", fontSize: 12 },
   momentOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 24, paddingBottom: 32, paddingTop: 80, gap: 14 },
   authorInfo: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
