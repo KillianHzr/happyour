@@ -17,6 +17,7 @@ import { useUpload } from "../../lib/upload-context";
 import StandardCamera from "../StandardCamera";
 import DrawingCanvas, { type DrawingCanvasRef } from "../DrawingCanvas";
 import { SendIcon, FeatherIcon, FlipIcon, CloseIcon, FlashIcon } from "./GroupIcons";
+import { VolumeManager } from "react-native-volume-manager";
 
 const NAVBAR_HEIGHT = 100;
 
@@ -69,6 +70,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const isWarmingUp = useRef(false);
   const warmUpCancelled = useRef(false);
   const warmUpPromise = useRef<Promise<any> | null>(null);
+  const lastVolumeButtonTrigger = useRef(0);
+  const lastVolumeRef = useRef(0);
 
   // Double-capture slots
   const [slot1, setSlot1] = useState<SlotData | null>(null);
@@ -389,6 +392,91 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     setSelectedGroupIds([groupId]);
     setShowGroupPicker(true);
   };
+
+  // ── Volume button capture ──
+  const handleCaptureRef = useRef(handleCapture);
+  handleCaptureRef.current = handleCapture;
+  const isCapturingRef = useRef(isCapturing);
+  isCapturingRef.current = isCapturing;
+  const capturingRef = useRef(capturing);
+  capturingRef.current = capturing;
+  const cameraModeRef = useRef(cameraMode);
+  cameraModeRef.current = cameraMode;
+
+  useEffect(() => {
+    if (!isActive) return;
+
+    if (Platform.OS === "ios") {
+      // iOS specific configuration for hardware button interception
+      VolumeManager.enable(true, true).catch(() => {});
+      VolumeManager.setActive(true, true).catch(() => {});
+      VolumeManager.setCategory("ambient", true).catch(() => {});
+      VolumeManager.enableInSilenceMode(true).catch(() => {});
+    }
+
+    const handleVolume = async (newVolume?: any) => {
+      try {
+        const result = newVolume ?? (await VolumeManager.getVolume());
+        const volume = result?.volume ?? 0;
+        
+        // Use a small epsilon for float comparison
+        const isUp = volume > (lastVolumeRef.current + 0.001);
+        
+        if (volume >= 0.98) {
+          // On iOS, resetting needs to be very explicit
+          const resetVol = 0.94 - (Math.random() * 0.05);
+          await VolumeManager.setVolume(resetVol, { showUI: false }).catch(() => {});
+          lastVolumeRef.current = resetVol;
+        } else {
+          lastVolumeRef.current = volume;
+        }
+        
+        return isUp;
+      } catch (e) {
+        return false;
+      }
+    };
+
+    // Initial sync
+    VolumeManager.getVolume().then(res => {
+      if (res && typeof res.volume === 'number') {
+        lastVolumeRef.current = res.volume;
+        // If already at max, reset immediately so the first press works
+        if (res.volume >= 0.98) {
+          VolumeManager.setVolume(0.94).catch(() => {});
+          lastVolumeRef.current = 0.94;
+        }
+      }
+    }).catch(() => {});
+
+    const volumeListener = VolumeManager.addVolumeListener(async (result) => {
+      // Process volume change
+      const wasVolumeUp = await handleVolume(result);
+
+      if (!wasVolumeUp) return;
+
+      const now = Date.now();
+      if (now - lastVolumeButtonTrigger.current < 500) return;
+
+      if (isActive && isCapturingRef.current && !capturingRef.current) {
+        if (cameraModeRef.current === "PHOTO" || cameraModeRef.current === "VIDEO") {
+          lastVolumeButtonTrigger.current = now;
+          handleCaptureRef.current();
+        }
+      }
+    });
+
+    VolumeManager.showNativeVolumeUI({ enabled: false });
+
+    return () => {
+      volumeListener.remove();
+      VolumeManager.showNativeVolumeUI({ enabled: true });
+      if (Platform.OS === "ios") {
+        VolumeManager.setActive(false, true).catch(() => {});
+        VolumeManager.enable(false, true).catch(() => {});
+      }
+    };
+  }, [isActive]);
 
   const toggleGroup = (id: string) => {
     setSelectedGroupIds(prev => prev.includes(id) ? prev.filter(g => g !== id) : [...prev, id]);
