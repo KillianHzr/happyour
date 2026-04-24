@@ -43,7 +43,7 @@ export default function CreateGroupScreen() {
         .from("group_members")
         .insert({ group_id: group.id, user_id: user.id, role: "admin" });
 
-      router.replace(`/(app)/groups/${group.id}`);
+      router.replace(`/(app)/groups/${group.id}?onboarding=true`);
     } catch (e: any) {
       showToast("Erreur", translateError(e.message));
     } finally {

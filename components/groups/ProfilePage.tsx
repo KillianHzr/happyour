@@ -17,6 +17,8 @@ import { useAuth } from "../../lib/auth-context";
 import { useToast } from "../../lib/toast-context";
 import PhotoFeed from "../PhotoFeed";
 import type { PhotoEntry, Reaction } from "../PhotoFeed";
+import MotivationalNotificationsModal from "../MotivationalNotificationsModal";
+import DeleteAccountModal from "../DeleteAccountModal";
 
 const MONTH_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 
@@ -144,6 +146,10 @@ export default function ProfilePage({
   const [loadingData, setLoadingData] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  const [dailyNotifs, setDailyNotifs] = useState(3);
+  const [showNotifModal, setShowNotifModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+
   // ── Calendar ──
   const now = new Date();
   const [calYear, setCalYear] = useState(now.getFullYear());
@@ -168,14 +174,27 @@ export default function ProfilePage({
   const loadData = useCallback(async (isRefresh = false) => {
     if (!userId || allGroups.length === 0) { setLoadingData(false); return; }
     if (isRefresh) setRefreshing(true); else setLoadingData(true);
-    const { data } = await supabase
-      .from("photos")
-      .select("id, created_at, group_id")
-      .eq("user_id", userId)
-      .in("group_id", allGroups.map(g => g.id))
-      .order("created_at", { ascending: true });
-    const timestamps = data ?? [];
+
+    const [photosRes, profileRes] = await Promise.all([
+      supabase
+        .from("photos")
+        .select("id, created_at, group_id")
+        .eq("user_id", userId)
+        .in("group_id", allGroups.map(g => g.id))
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("profiles")
+        .select("daily_notifications_count")
+        .eq("id", userId)
+        .single()
+    ]);
+
+    const timestamps = photosRes.data ?? [];
     setPhotoTimestamps(timestamps);
+
+    if (profileRes.data) {
+      setDailyNotifs(profileRes.data.daily_notifications_count ?? 3);
+    }
 
     // ── Daily streak ──
     function dayKey(d: Date): string { return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; }
@@ -599,6 +618,21 @@ export default function ProfilePage({
                 <Text style={styles.settingsSubValue}>{email}</Text>
               </View>
             </View>
+
+            <View style={styles.settingsDivider} />
+
+            <TouchableOpacity style={styles.settingsRow} onPress={() => setShowNotifModal(true)}>
+              <View style={[styles.settingsIconWrap, { backgroundColor: "rgba(255,255,255,0.08)" }]}>
+                <Svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <Path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0" />
+                </Svg>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.settingsLabel}>Motivation</Text>
+                <Text style={styles.settingsSubValue}>{dailyNotifs} notification{dailyNotifs > 1 ? "s" : ""} / jour</Text>
+              </View>
+              <ChevronRight color="rgba(255,255,255,0.3)" />
+            </TouchableOpacity>
           </View>
 
           <Text style={[styles.settingsSectionLabel, { marginTop: 28 }]}>Session</Text>
@@ -612,6 +646,17 @@ export default function ProfilePage({
                 </Svg>
               </View>
               <Text style={[styles.settingsLabel, { color: "#FF3B30" }]}>Se déconnecter</Text>
+            </TouchableOpacity>
+
+            <View style={styles.settingsDivider} />
+
+            <TouchableOpacity style={styles.settingsRow} onPress={() => setShowDeleteModal(true)}>
+              <View style={[styles.settingsIconWrap, { backgroundColor: "rgba(255,59,48,0.05)" }]}>
+                <Svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="rgba(255,59,48,0.6)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <Path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" />
+                </Svg>
+              </View>
+              <Text style={[styles.settingsLabel, { color: "rgba(255,59,48,0.6)" }]}>Supprimer mon compte</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -724,6 +769,20 @@ export default function ProfilePage({
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <MotivationalNotificationsModal
+        visible={showNotifModal}
+        onClose={() => {
+          setShowNotifModal(false);
+          loadData(true);
+        }}
+        initialValue={dailyNotifs}
+      />
+
+      <DeleteAccountModal
+        visible={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+      />
     </>
   );
 }
@@ -819,6 +878,7 @@ const styles = StyleSheet.create({
   settingsSection: { paddingHorizontal: 20, paddingBottom: 20 },
   settingsSectionLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, paddingLeft: 4 },
   settingsCard: { backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 20, overflow: "hidden" },
+  settingsDivider: { height: 1, backgroundColor: "rgba(255,255,255,0.05)", marginLeft: 60 },
   settingsRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 13, gap: 12 },
   settingsIconWrap: { width: 36, height: 36, borderRadius: 10, justifyContent: "center", alignItems: "center" },
   settingsLabel: { fontSize: 16, color: "#FFF", fontFamily: "Inter_600SemiBold" },

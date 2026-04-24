@@ -3,7 +3,7 @@ import { Slot } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useFonts, Inter_400Regular, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold } from "@expo-google-fonts/inter";
 import { View, StyleSheet } from "react-native";
-// import { GestureHandlerRootView } from "react-native-gesture-handler"; // activer après rebuild natif
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import * as Updates from "expo-updates";
 import { AuthProvider } from "../lib/auth-context";
 import { UploadProvider } from "../lib/upload-context";
@@ -37,23 +37,25 @@ export default function RootLayout() {
   const appReady = fontsLoaded && checksReady;
 
   return (
-    <AuthProvider>
-      <UploadProvider>
-        <ToastProvider>
-          <View style={{ flex: 1 }}>
-            <StatusBar style="light" />
-            {!splashDone && (
-              <SplashScreen ready={appReady} onFinish={() => setSplashDone(true)} />
-            )}
-            {appReady && (
-              <View style={splashDone ? styles.visible : styles.hidden}>
-                <Slot />
-              </View>
-            )}
-          </View>
-        </ToastProvider>
-      </UploadProvider>
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+        <UploadProvider>
+          <ToastProvider>
+            <View style={{ flex: 1 }}>
+              <StatusBar style="light" />
+              {!splashDone && (
+                <SplashScreen ready={appReady} onFinish={() => setSplashDone(true)} />
+              )}
+              {appReady && (
+                <View style={splashDone ? styles.visible : styles.hidden}>
+                  <Slot />
+                </View>
+              )}
+            </View>
+          </ToastProvider>
+        </UploadProvider>
+      </AuthProvider>
+    </GestureHandlerRootView>
   );
 }
 

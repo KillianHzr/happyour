@@ -50,14 +50,14 @@ export default function JoinGroupScreen() {
       if (joinErr) {
         if (joinErr.message.includes("unique")) {
           showToast("Info", "Tu fais déjà partie de ce groupe.", "info");
-          router.replace(`/(app)/groups/${group.id}`);
+          router.replace(`/(app)/groups/${group.id}?onboarding=true`);
         } else {
           throw joinErr;
         }
       } else {
         showToast("Succès", `Tu as rejoint "${group.name}" !`, "success");
         scheduleFirstMomentReminder(group.id, group.name);
-        router.replace(`/(app)/groups/${group.id}`);
+        router.replace(`/(app)/groups/${group.id}?onboarding=true`);
       }
     } catch (e: any) {
       showToast("Erreur", translateError(e.message));

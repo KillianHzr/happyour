@@ -26,6 +26,7 @@ import GroupSettingsModal from "../../../components/groups/GroupSettingsModal";
 import BottomSheet from "../../../components/BottomSheet";
 import PhotoFeed, { TextSticker } from "../../../components/PhotoFeed";
 import LiveReactions from "../../../components/reveal/LiveReactions";
+import MotivationalNotificationsModal from "../../../components/MotivationalNotificationsModal";
 import { scheduleImmediateLocalNotification, scheduleFirstMomentReminder } from "../../../lib/notifications";
 
 const isEmoji = (str: string) => {
@@ -67,7 +68,7 @@ function getWeekBounds(revealDayOfWeek = 0, revealHour = 20) {
 }
 
 export default function MainPagerScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, onboarding } = useLocalSearchParams<{ id: string; onboarding?: string }>();
   const { user } = useAuth();
   const { showToast } = useToast();
   const insets = useSafeAreaInsets();
@@ -102,6 +103,7 @@ export default function MainPagerScreen() {
   const [showReveal, setShowReveal] = useState(false);
   const [showGroupSettings, setShowGroupSettings] = useState(false);
   const [showAddGroupModal, setShowAddGroupModal] = useState(false);
+  const [showNotifOnboarding, setShowNotifOnboarding] = useState(false);
   const [addGroupView, setAddGroupView] = useState<null | "create" | "join">(null);
   const [newGroupName, setNewGroupName] = useState("");
   const [joinCode, setJoinCode] = useState("");
@@ -154,6 +156,13 @@ export default function MainPagerScreen() {
   const unlocked = inCurrentRevealWindow || inPrevRevealWindow || (__DEV__ && debugUnlocked);
   const lockedRevealDate = now >= revealDate ? nextRevealDate : revealDate;
   const currentUserPostedThisWeek = photos.some(p => p.user_id === user?.id);
+
+  useEffect(() => {
+    if (onboarding === "true" && allGroups.length <= 1) {
+      const timer = setTimeout(() => setShowNotifOnboarding(true), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [onboarding, allGroups.length]);
 
   // ── Fetch all groups data at once ──
   const fetchAllData = useCallback(async () => {
@@ -594,9 +603,23 @@ export default function MainPagerScreen() {
   const handleRenameGroup = async (newName: string) => {
     if (!activeGroupId || !newName.trim()) return;
     console.log(`[DB WRITE] handleRenameGroup: Updating group ${activeGroupId}`);
-    await supabase.from("groups").update({ name: newName.trim() }).eq("id", activeGroupId);
-    setGroupData((prev) => ({ ...prev, [activeGroupId]: { ...prev[activeGroupId], name: newName.trim() } }));
-    setAllGroups((prev) => prev.map((g) => g.id === activeGroupId ? { ...g, name: newName.trim() } : g));
+    try {
+      const { data, error } = await supabase
+        .from("groups")
+        .update({ name: newName.trim() })
+        .eq("id", activeGroupId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      setGroupData((prev) => ({ ...prev, [activeGroupId]: { ...prev[activeGroupId], name: newName.trim() } }));
+      setAllGroups((prev) => prev.map((g) => g.id === activeGroupId ? { ...g, name: newName.trim() } : g));
+      showToast("Succès", "Groupe renommé avec succès", "success");
+    } catch (e: any) {
+      showToast("Erreur", "Impossible de renommer le groupe", "error");
+      throw e;
+    }
   };
 
   const handleLeaveGroup = async () => {
@@ -605,21 +628,30 @@ export default function MainPagerScreen() {
     console.log(`[DB WRITE] handleLeaveGroup: User ${user.id} leaving group ${activeGroupId}`);
     try {
       const others = members.filter((m: any) => m.user_id !== user.id);
-      if (isAdmin && others.length > 0) {
-        await supabase
+      
+      if (others.length === 0) {
+        // DERNIER MEMBRE : On supprime le groupe entièrement
+        console.log(`[DB WRITE] handleLeaveGroup: Last member, deleting group ${activeGroupId}`);
+        const { error: delErr } = await supabase.from("groups").delete().eq("id", activeGroupId);
+        if (delErr) throw delErr;
+      } else {
+        // D'AUTRES MEMBRES RESTENT : On transfère l'admin si nécessaire et on se retire
+        if (isAdmin) {
+          await supabase
+            .from("group_members")
+            .update({ role: "admin" })
+            .eq("group_id", activeGroupId)
+            .eq("user_id", others[0].user_id);
+        }
+        const { error: leaveErr } = await supabase
           .from("group_members")
-          .update({ role: "admin" })
+          .delete()
           .eq("group_id", activeGroupId)
-          .eq("user_id", others[0].user_id);
+          .eq("user_id", user.id);
+        if (leaveErr) throw leaveErr;
       }
-      const { data: deleted, error: leaveErr } = await supabase
-        .from("group_members")
-        .delete()
-        .eq("group_id", activeGroupId)
-        .eq("user_id", user.id)
-        .select();
-      if (leaveErr) throw new Error(leaveErr.message);
-      if (!deleted || deleted.length === 0) throw new Error("Aucune ligne supprimée.");
+
+      // Mise à jour de l'état local et redirection
       const remaining = allGroups.filter((g) => g.id !== activeGroupId);
       if (remaining.length > 0) {
         setAllGroups(remaining);
@@ -693,9 +725,13 @@ export default function MainPagerScreen() {
         .single();
       if (error) throw error;
       await supabase.from("group_members").insert({ group_id: group.id, user_id: user.id, role: "admin" });
+      const isFirstGroup = allGroups.length === 0;
       closeAddGroupModal();
       await fetchAllData();
       setActiveGroupId(group.id);
+      if (isFirstGroup) {
+        setTimeout(() => setShowNotifOnboarding(true), 500);
+      }
     } catch (e: any) {
       showToast("Erreur", translateError(e.message));
     } finally {
@@ -724,9 +760,13 @@ export default function MainPagerScreen() {
       if (joinErr) throw joinErr;
       
       showToast("Succès", `Tu as rejoint "${group.name}" !`, "success");
+      const isFirstGroup = allGroups.length === 0;
       closeAddGroupModal();
       await fetchAllData();
       setActiveGroupId(group.id);
+      if (isFirstGroup) {
+        setTimeout(() => setShowNotifOnboarding(true), 500);
+      }
     } catch (e: any) {
       showToast("Erreur", translateError(e.message));
     } finally {
@@ -1151,10 +1191,18 @@ export default function MainPagerScreen() {
 
       {/* ── LEAVE CONFIRM (non-admin) ── */}
       <BottomSheet visible={showLeaveConfirm} onClose={() => setShowLeaveConfirm(false)}>
-        <Text style={styles.leaveTitle}>Quitter le groupe</Text>
-        <Text style={styles.leaveBody}>Tu ne pourras plus accéder aux moments de ce groupe.</Text>
+        <Text style={styles.leaveTitle}>
+          {members.length === 1 ? "Supprimer le groupe ?" : "Quitter le groupe"}
+        </Text>
+        <Text style={styles.leaveBody}>
+          {members.length === 1 
+            ? "Tu es le dernier membre. En quittant ce groupe, il sera définitivement supprimé ainsi que tous ses moments."
+            : "Tu ne pourras plus accéder aux moments de ce groupe."}
+        </Text>
         <TouchableOpacity style={styles.leaveConfirmBtn} onPress={handleLeaveGroup} disabled={isLeaving}>
-          <Text style={styles.leaveConfirmText}>{isLeaving ? "..." : "Quitter"}</Text>
+          <Text style={styles.leaveConfirmText}>
+            {isLeaving ? "..." : (members.length === 1 ? "Quitter et supprimer" : "Quitter")}
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => setShowLeaveConfirm(false)} style={styles.leaveCancelWrap}>
           <Text style={styles.leaveCancelText}>Annuler</Text>
@@ -1236,6 +1284,11 @@ export default function MainPagerScreen() {
           </>
         )}
       </BottomSheet>
+
+      <MotivationalNotificationsModal
+        visible={showNotifOnboarding}
+        onClose={() => setShowNotifOnboarding(false)}
+      />
     </View>
   );
 }
