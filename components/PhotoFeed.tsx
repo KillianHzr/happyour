@@ -19,6 +19,7 @@ import Reanimated, {
   useAnimatedStyle,
   interpolate,
   Extrapolation,
+  withTiming,
   type SharedValue,
 } from "react-native-reanimated";
 import { Image } from "expo-image";
@@ -331,6 +332,13 @@ function PhotoMomentPage({ moment, currentUserId, crownWinnerId, onOpenPicker, o
   const [swapped, setSwapped] = useState(false);
   const isOwn = moment.user_id === currentUserId;
 
+  const uiOpacity = useSharedValue(1);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const animatedUiStyle = useAnimatedStyle(() => ({
+    opacity: uiOpacity.value,
+  }));
+
   const hasSecond = !!moment.second_image_path;
   const effectivePath = swapped && hasSecond ? moment.second_image_path! : moment.image_path;
   const effectiveNote = swapped && hasSecond ? moment.second_note : moment.note;
@@ -399,42 +407,68 @@ function PhotoMomentPage({ moment, currentUserId, crownWinnerId, onOpenPicker, o
     return <PhotoImage url={effectiveUrl} fallback_url={swapped ? undefined : moment.fallback_url} isDrawing={isDrawing} />;
   };
 
+  const handlePressIn = () => {
+    if (!isTextOnly) {
+      holdTimer.current = setTimeout(() => {
+        uiOpacity.value = withTiming(0, { duration: 200 });
+      }, 300);
+    }
+  };
+
+  const handlePressOut = () => {
+    if (holdTimer.current) {
+      clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
+    uiOpacity.value = withTiming(1, { duration: 200 });
+  };
+
   return (
     <View style={[styles.fullscreenPage, { paddingTop: Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 12) / 2), paddingBottom: Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 12) / 2) }]}>
       <View style={styles.momentWrapper}>
         <Animated.View style={[StyleSheet.absoluteFill, { opacity: swapFade }]}>
           {renderMainContent()}
         </Animated.View>
-        <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-          {moment.groupName && (
-            <View style={styles.groupTag} pointerEvents="none">
-              <Text style={styles.groupTagText}>{moment.groupName}</Text>
-            </View>
-          )}
-          <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.momentOverlay}>
-            {!isTextOnly && (
-              <View style={styles.authorInfo}>
-                <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={crownWinnerId === moment.user_id} />
-                <View style={{ flex: 1 }}>
-                  <View style={styles.usernameLine}><Text style={styles.username}>{moment.username}</Text><Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text></View>
-                  {effectiveNote && <ExpandableNote text={effectiveNote} maxLines={2} />}
-                </View>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
-                    <CommentIcon hasBadge={moment.hasNewComments} />
-                  </TouchableOpacity>
-                  {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
-                </View>
-              </View>
+
+        <Pressable 
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          style={StyleSheet.absoluteFill}
+        >
+          <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+            {moment.groupName && (
+              <Reanimated.View style={[styles.groupTag, animatedUiStyle]} pointerEvents="none">
+                <Text style={styles.groupTagText}>{moment.groupName}</Text>
+              </Reanimated.View>
             )}
-            <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} photoId={moment.id} crownWinnerId={crownWinnerId} onOpenPicker={isOwn ? undefined : onOpenPicker} />
-          </LinearGradient>
-          {thumbnailPath && (
-            <Animated.View style={[StyleSheet.absoluteFill, { opacity: swapFade }]} pointerEvents="box-none">
-              <SecondCaptureThumbnail secondPath={thumbnailPath} secondNote={thumbnailNote} onPress={handleSwap} />
-            </Animated.View>
-          )}
-        </View>
+            <Reanimated.View style={[styles.momentOverlay, animatedUiStyle]} pointerEvents="box-none">
+              <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
+              {!isTextOnly && (
+                <View style={styles.authorInfo}>
+                  <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={crownWinnerId === moment.user_id} />
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.usernameLine}><Text style={styles.username}>{moment.username}</Text><Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text></View>
+                    {effectiveNote && <ExpandableNote text={effectiveNote} maxLines={2} />}
+                  </View>
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
+                      <CommentIcon hasBadge={moment.hasNewComments} />
+                    </TouchableOpacity>
+                    {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
+                  </View>
+                </View>
+              )}
+              <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} photoId={moment.id} crownWinnerId={crownWinnerId} onOpenPicker={isOwn ? undefined : onOpenPicker} />
+            </Reanimated.View>
+            {thumbnailPath && (
+              <Reanimated.View style={[StyleSheet.absoluteFill, animatedUiStyle]} pointerEvents="box-none">
+                <Animated.View style={[StyleSheet.absoluteFill, { opacity: swapFade }]} pointerEvents="box-none">
+                  <SecondCaptureThumbnail secondPath={thumbnailPath} secondNote={thumbnailNote} onPress={handleSwap} />
+                </Animated.View>
+              </Reanimated.View>
+            )}
+          </View>
+        </Pressable>
       </View>
     </View>
   );
@@ -672,12 +706,33 @@ function AudioMoment({ moment, isVisible, currentUserId, crownWinnerId, onScroll
   const insets = useSafeAreaInsets();
   const [swapped, setSwapped] = useState(false);
 
+  const uiOpacity = useSharedValue(1);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const animatedUiStyle = useAnimatedStyle(() => ({
+    opacity: uiOpacity.value,
+  }));
+
   const hasSecond = !!moment.second_image_path;
   const player = useAudioPlayer(!swapped ? moment.url : "");
   const status = useAudioPlayerStatus(player);
   const isOwn = moment.user_id === currentUserId;
 
   useEffect(() => { if (!isVisible) player.pause(); }, [isVisible]);
+
+  const handlePressIn = () => {
+    holdTimer.current = setTimeout(() => {
+      uiOpacity.value = withTiming(0, { duration: 200 });
+    }, 300);
+  };
+
+  const handlePressOut = () => {
+    if (holdTimer.current) {
+      clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
+    uiOpacity.value = withTiming(1, { duration: 200 });
+  };
 
   const renderContent = () => {
     if (swapped && hasSecond) {
@@ -718,35 +773,48 @@ function AudioMoment({ moment, isVisible, currentUserId, crownWinnerId, onScroll
   return (
     <View style={[styles.fullscreenPage, { paddingTop: Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 12) / 2), paddingBottom: Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 12) / 2) }]}>
       <View style={styles.momentWrapper}>
-        {renderContent()}
-        <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-          {moment.groupName && <View style={styles.groupTag} pointerEvents="none"><Text style={styles.groupTagText}>{moment.groupName}</Text></View>}
-          <LinearGradient colors={["transparent", "rgba(0,0,0,0.92)"]} style={styles.momentOverlay}>
-            {!overlayIsText && (
-              <View style={styles.authorInfo}>
-                <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={crownWinnerId === moment.user_id} />
-                <View style={{ flex: 1 }}>
-                  <View style={styles.usernameLine}><Text style={styles.username}>{moment.username}</Text><Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text></View>
-                  {overlayNote && <ExpandableNote text={overlayNote} maxLines={3} />}
-                </View>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
-                    <CommentIcon hasBadge={moment.hasNewComments} />
-                  </TouchableOpacity>
-                  {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
-                </View>
-              </View>
+        <Pressable
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          style={StyleSheet.absoluteFill}
+        >
+          {renderContent()}
+          <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+            {moment.groupName && (
+              <Reanimated.View style={[styles.groupTag, animatedUiStyle]} pointerEvents="none">
+                <Text style={styles.groupTagText}>{moment.groupName}</Text>
+              </Reanimated.View>
             )}
-            <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} photoId={moment.id} crownWinnerId={crownWinnerId} onOpenPicker={onOpenPicker} />
-          </LinearGradient>
-          {hasSecond && (
-            <SecondCaptureThumbnail
-              secondPath={swapped ? moment.image_path : moment.second_image_path!}
-              secondNote={swapped ? moment.note : moment.second_note}
-              onPress={() => setSwapped(v => !v)}
-            />
-          )}
-        </View>
+            <Reanimated.View style={[styles.momentOverlay, animatedUiStyle]} pointerEvents="box-none">
+              <LinearGradient colors={["transparent", "rgba(0,0,0,0.92)"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
+              {!overlayIsText && (
+                <View style={styles.authorInfo}>
+                  <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={crownWinnerId === moment.user_id} />
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.usernameLine}><Text style={styles.username}>{moment.username}</Text><Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text></View>
+                    {overlayNote && <ExpandableNote text={overlayNote} maxLines={3} />}
+                  </View>
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
+                      <CommentIcon hasBadge={moment.hasNewComments} />
+                    </TouchableOpacity>
+                    {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
+                  </View>
+                </View>
+              )}
+              <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} photoId={moment.id} crownWinnerId={crownWinnerId} onOpenPicker={onOpenPicker} />
+            </Reanimated.View>
+            {hasSecond && (
+              <Reanimated.View style={[StyleSheet.absoluteFill, animatedUiStyle]} pointerEvents="box-none">
+                <SecondCaptureThumbnail
+                  secondPath={swapped ? moment.image_path : moment.second_image_path!}
+                  secondNote={swapped ? moment.note : moment.second_note}
+                  onPress={() => setSwapped(v => !v)}
+                />
+              </Reanimated.View>
+            )}
+          </View>
+        </Pressable>
       </View>
     </View>
   );
@@ -766,6 +834,13 @@ function VideoMoment({ moment, isVisible, cachedUrl, currentUserId, crownWinnerI
   const [isPaused, setIsPaused] = useState(false);
   const [swapped, setSwapped] = useState(false);
 
+  const uiOpacity = useSharedValue(1);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const animatedUiStyle = useAnimatedStyle(() => ({
+    opacity: uiOpacity.value,
+  }));
+
   const hasSecond = !!moment.second_image_path;
   const player = useVideoPlayer((!swapped && cachedUrl) ? cachedUrl : null, (p) => {
     p.loop = true;
@@ -783,6 +858,20 @@ function VideoMoment({ moment, isVisible, cachedUrl, currentUserId, crownWinnerI
     if (!isVisible) setIsPaused(false);
   }, [isVisible]);
 
+  const handlePressIn = () => {
+    holdTimer.current = setTimeout(() => {
+      uiOpacity.value = withTiming(0, { duration: 200 });
+    }, 300);
+  };
+
+  const handlePressOut = () => {
+    if (holdTimer.current) {
+      clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
+    uiOpacity.value = withTiming(1, { duration: 200 });
+  };
+
   if (swapped && hasSecond) {
     const secondPath = moment.second_image_path!;
     const secondIsText = secondPath === "text_mode";
@@ -794,46 +883,55 @@ function VideoMoment({ moment, isVisible, cachedUrl, currentUserId, crownWinnerI
     return (
       <View style={[styles.fullscreenPage, { paddingTop: Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 12) / 2), paddingBottom: Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 12) / 2) }]}>
         <View style={styles.momentWrapper}>
-          {secondIsText ? (
-            <View style={styles.textMomentBg}>
-              <View style={styles.quoteContainer}>
-                <Text style={[styles.textMomentContent, { fontSize, lineHeight: Math.round(fontSize * 1.4) }]}>{secondNote}</Text>
-                <View style={styles.citationFooter}>
-                  <View style={styles.citationAvatar}><CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} isCrown={crownWinnerId === moment.user_id} /></View>
-                  <View style={{ flex: 1 }}><Text style={styles.citationUsername}>{moment.username}</Text><Text style={styles.citationTime}>{formatTime(moment.created_at)}</Text></View>
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
-                      <CommentIcon hasBadge={moment.hasNewComments} />
-                    </TouchableOpacity>
-                    {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
+          <Pressable
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+            style={StyleSheet.absoluteFill}
+          >
+            {secondIsText ? (
+              <View style={styles.textMomentBg}>
+                <View style={styles.quoteContainer}>
+                  <Text style={[styles.textMomentContent, { fontSize, lineHeight: Math.round(fontSize * 1.4) }]}>{secondNote}</Text>
+                  <View style={styles.citationFooter}>
+                    <View style={styles.citationAvatar}><CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={32} isCrown={crownWinnerId === moment.user_id} /></View>
+                    <View style={{ flex: 1 }}><Text style={styles.citationUsername}>{moment.username}</Text><Text style={styles.citationTime}>{formatTime(moment.created_at)}</Text></View>
+                    <View style={{ flexDirection: "row", gap: 8 }}>
+                      <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
+                        <CommentIcon hasBadge={moment.hasNewComments} />
+                      </TouchableOpacity>
+                      {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
+                    </View>
                   </View>
                 </View>
               </View>
+            ) : (
+              <PhotoImage url={secondUrl} isDrawing={secondIsDrawing} />
+            )}
+            <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+              <Reanimated.View style={[styles.momentOverlay, animatedUiStyle]} pointerEvents="box-none">
+                <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                {!secondIsText && (
+                  <View style={styles.authorInfo}>
+                    <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={crownWinnerId === moment.user_id} />
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.usernameLine}><Text style={styles.username}>{moment.username}</Text><Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text></View>
+                      {secondNote && <ExpandableNote text={secondNote} maxLines={2} />}
+                    </View>
+                    <View style={{ flexDirection: "row", gap: 8 }}>
+                      <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
+                        <CommentIcon hasBadge={moment.hasNewComments} />
+                      </TouchableOpacity>
+                      {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
+                    </View>
+                  </View>
+                )}
+                <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} photoId={moment.id} crownWinnerId={crownWinnerId} onOpenPicker={onOpenPicker} />
+              </Reanimated.View>
+              <Reanimated.View style={[StyleSheet.absoluteFill, animatedUiStyle]} pointerEvents="box-none">
+                <SecondCaptureThumbnail secondPath={moment.image_path} secondNote={moment.note} onPress={() => setSwapped(false)} />
+              </Reanimated.View>
             </View>
-          ) : (
-            <PhotoImage url={secondUrl} isDrawing={secondIsDrawing} />
-          )}
-          <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-            <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.momentOverlay}>
-              {!secondIsText && (
-                <View style={styles.authorInfo}>
-                  <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={crownWinnerId === moment.user_id} />
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.usernameLine}><Text style={styles.username}>{moment.username}</Text><Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text></View>
-                    {secondNote && <ExpandableNote text={secondNote} maxLines={2} />}
-                  </View>
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
-                      <CommentIcon hasBadge={moment.hasNewComments} />
-                    </TouchableOpacity>
-                    {!isOwn && <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}><PlusIcon /></TouchableOpacity>}
-                  </View>
-                </View>
-              )}
-              <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} photoId={moment.id} crownWinnerId={crownWinnerId} onOpenPicker={onOpenPicker} />
-            </LinearGradient>
-            <SecondCaptureThumbnail secondPath={moment.image_path} secondNote={moment.note} onPress={() => setSwapped(false)} />
-          </View>
+          </Pressable>
         </View>
       </View>
     );
@@ -846,7 +944,12 @@ function VideoMoment({ moment, isVisible, cachedUrl, currentUserId, crownWinnerI
           <ActivityIndicator size="large" color="rgba(255,255,255,0.5)" />
         </View>
         <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />
-        <Pressable style={StyleSheet.absoluteFill} onPress={() => setIsPaused((v) => !v)}>
+        <Pressable 
+          style={StyleSheet.absoluteFill} 
+          onPress={() => setIsPaused((v) => !v)}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+        >
           {isVisible && isPaused && (
             <View style={styles.pauseOverlay} pointerEvents="none">
               <View style={styles.pauseCircle}>
@@ -854,36 +957,43 @@ function VideoMoment({ moment, isVisible, cachedUrl, currentUserId, crownWinnerI
               </View>
             </View>
           )}
-        </Pressable>
-        <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-          {moment.groupName && <View style={styles.groupTag} pointerEvents="none"><Text style={styles.groupTagText}>{moment.groupName}</Text></View>}
-          <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={styles.momentOverlay}>
-            <View style={styles.authorInfo}>
-              <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={crownWinnerId === moment.user_id} />
-              <View style={{ flex: 1 }}>
-                <View style={styles.usernameLine}>
-                  <Text style={styles.username}>{moment.username}</Text>
-                  <Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text>
+          <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+            {moment.groupName && (
+              <Reanimated.View style={[styles.groupTag, animatedUiStyle]} pointerEvents="none">
+                <Text style={styles.groupTagText}>{moment.groupName}</Text>
+              </Reanimated.View>
+            )}
+            <Reanimated.View style={[styles.momentOverlay, animatedUiStyle]} pointerEvents="box-none">
+              <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
+              <View style={styles.authorInfo}>
+                <CrownedAvatar avatar_url={moment.avatar_url} username={moment.username} size={36} isCrown={crownWinnerId === moment.user_id} />
+                <View style={{ flex: 1 }}>
+                  <View style={styles.usernameLine}>
+                    <Text style={styles.username}>{moment.username}</Text>
+                    <Text style={styles.momentTime}>{formatTime(moment.created_at)}</Text>
+                  </View>
+                  {moment.note && <ExpandableNote text={moment.note} maxLines={3} />}
                 </View>
-                {moment.note && <ExpandableNote text={moment.note} maxLines={3} />}
-              </View>
-              <View style={{ flexDirection: "row", gap: 8 }}>
-                <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
-                  <CommentIcon hasBadge={moment.hasNewComments} />
-                </TouchableOpacity>
-                {!isOwn && (
-                  <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}>
-                    <PlusIcon />
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenComments?.(moment.id, moment.user_id)}>
+                    <CommentIcon hasBadge={moment.hasNewComments} />
                   </TouchableOpacity>
-                )}
+                  {!isOwn && (
+                    <TouchableOpacity style={styles.reactBtnInline} onPress={() => onOpenPicker?.(moment.id)}>
+                      <PlusIcon />
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
-            </View>
-            <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} photoId={moment.id} crownWinnerId={crownWinnerId} onOpenPicker={onOpenPicker} />
-          </LinearGradient>
-          {hasSecond && (
-            <SecondCaptureThumbnail secondPath={moment.second_image_path!} secondNote={moment.second_note} onPress={() => setSwapped(true)} />
-          )}
-        </View>
+              <ReactionsRow reactions={moment.reactions} currentUserId={currentUserId} photoId={moment.id} crownWinnerId={crownWinnerId} onOpenPicker={onOpenPicker} />
+            </Reanimated.View>
+            {hasSecond && (
+              <Reanimated.View style={[StyleSheet.absoluteFill, animatedUiStyle]} pointerEvents="box-none">
+                <SecondCaptureThumbnail secondPath={moment.second_image_path!} secondNote={moment.second_note} onPress={() => setSwapped(true)} />
+              </Reanimated.View>
+            )}
+          </View>
+        </Pressable>
       </View>
     </View>
   );
@@ -1134,11 +1244,11 @@ export default function PhotoFeed({ photos, currentUserId, nextUnlockDate, revea
       const isVideo = moment.image_path.endsWith(".mp4");
 
       if (isAudio) {
-        content = <AudioMoment moment={moment} isVisible={index === visibleIndex} currentUserId={currentUserId} crownWinnerId={crownWinnerId} onScrollLock={(locked) => { flatListRef.current?.setNativeProps({ scrollEnabled: !locked }); onScrollLock?.(locked); }} onOpenPicker={onOpenPicker} onOpenComments={onOpenComments || openComments} />;
+        content = <AudioMoment moment={moment} isVisible={index === visibleIndex} currentUserId={currentUserId} crownWinnerId={crownWinnerId} onScrollLock={(locked) => { flatListRef.current?.setNativeProps({ scrollEnabled: !locked }); onScrollLock?.(locked); }} onOpenPicker={onOpenPicker} onOpenComments={(pid, oid) => { openComments(pid, oid); onOpenComments?.(pid, oid); }} />;
       } else if (isVideo) {
-        content = <VideoMoment moment={moment} isVisible={index === visibleIndex} currentUserId={currentUserId} crownWinnerId={crownWinnerId} cachedUrl={videoCache[moment.url] ?? moment.url} onOpenPicker={onOpenPicker} onOpenComments={onOpenComments || openComments} />;
+        content = <VideoMoment moment={moment} isVisible={index === visibleIndex} currentUserId={currentUserId} crownWinnerId={crownWinnerId} cachedUrl={videoCache[moment.url] ?? moment.url} onOpenPicker={onOpenPicker} onOpenComments={(pid, oid) => { openComments(pid, oid); onOpenComments?.(pid, oid); }} />;
       } else {
-        content = <PhotoMomentPage moment={moment} currentUserId={currentUserId} crownWinnerId={crownWinnerId} onOpenPicker={onOpenPicker} onOpenComments={onOpenComments || openComments} isVisible={index === visibleIndex} />;
+        content = <PhotoMomentPage moment={moment} currentUserId={currentUserId} crownWinnerId={crownWinnerId} onOpenPicker={onOpenPicker} onOpenComments={(pid, oid) => { openComments(pid, oid); onOpenComments?.(pid, oid); }} isVisible={index === visibleIndex} />;
       }
     }
 
