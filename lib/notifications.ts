@@ -369,6 +369,113 @@ export async function cancelFirstMomentReminder(groupId: string) {
   } catch (_) {}
 }
 
+// ── Motivational Notifications ──
+
+export async function cancelAllMotivationalNotifications() {
+  if (!Notifications) return;
+  try {
+    const all = await Notifications.getAllScheduledNotificationsAsync();
+    for (const n of all) {
+      if (n.identifier.startsWith("motivational_")) {
+        await Notifications.cancelScheduledNotificationAsync(n.identifier);
+      }
+    }
+  } catch (e) {
+    console.warn("cancelAllMotivationalNotifications error:", e);
+  }
+}
+
+export async function scheduleMotivationalNotifications(count: number, periods: ("morning" | "afternoon" | "evening")[]) {
+  if (!Notifications || count === 0 || periods.length === 0) {
+    await cancelAllMotivationalNotifications();
+    return;
+  }
+
+  await cancelAllMotivationalNotifications();
+
+  // 1. Récupérer les messages
+  const { data: dbMessages } = await supabase.from("motivational_notifications").select("category, message");
+  if (!dbMessages || dbMessages.length === 0) return;
+
+  const windows: Record<string, { start: number; end: number }> = {
+    morning: { start: 7, end: 10 },
+    afternoon: { start: 15, end: 18 },
+    evening: { start: 19, end: 23 },
+  };
+
+  const activeSlots = [...periods];
+  if (periods.includes("morning") && periods.includes("afternoon")) {
+    activeSlots.push("noon" as any);
+    windows["noon"] = { start: 12, end: 14 };
+  }
+
+  const now = new Date();
+
+  // 2. Planifier pour les 7 prochains jours
+  for (let day = 0; day < 7; day++) {
+    // Déterminer combien de notifs par créneau pour ce jour
+    const dailySlotsCount: Record<string, number> = {};
+    const slotsPool = [...activeSlots].sort(() => Math.random() - 0.5);
+    
+    for (let i = 0; i < count; i++) {
+      const slot = slotsPool[i % slotsPool.length];
+      dailySlotsCount[slot] = (dailySlotsCount[slot] || 0) + 1;
+    }
+
+    const usedMessages = new Set<string>();
+
+    // Pour chaque créneau actif, on répartit les notifs qui lui sont assignées
+    for (const slot of Object.keys(dailySlotsCount)) {
+      const nInSlot = dailySlotsCount[slot];
+      const win = windows[slot];
+      
+      // On divise la fenêtre en N segments pour bien répartir
+      const totalMinutes = (win.end - win.start) * 60;
+      const segmentMinutes = totalMinutes / nInSlot;
+
+      for (let j = 0; j < nInSlot; j++) {
+        // Heure aléatoire dans son segment dédié
+        const randomOffset = Math.floor(Math.random() * segmentMinutes);
+        const minutesFromStart = Math.floor((j * segmentMinutes) + randomOffset);
+        
+        const hour = win.start + Math.floor(minutesFromStart / 60);
+        const minute = minutesFromStart % 60;
+
+        let scheduledDate = new Date();
+        scheduledDate.setDate(scheduledDate.getDate() + day);
+        scheduledDate.setHours(hour, minute, 0, 0);
+
+        if (day === 0 && scheduledDate <= now) continue;
+
+        // Sélection du message
+        const contextual = dbMessages.filter(m => m.category === slot && !usedMessages.has(m.message));
+        const randoms = dbMessages.filter(m => m.category === "random" && !usedMessages.has(m.message));
+        
+        let pool = [...randoms];
+        if (Math.random() > 0.5 && contextual.length > 0) pool = contextual;
+        else if (pool.length === 0) pool = contextual.length > 0 ? contextual : dbMessages;
+
+        const chosen = pool[Math.floor(Math.random() * pool.length)];
+        usedMessages.add(chosen.message);
+
+        const secondsUntil = Math.floor((scheduledDate.getTime() - now.getTime()) / 1000);
+        if (secondsUntil <= 0) continue;
+
+        await Notifications.scheduleNotificationAsync({
+          identifier: `motivational_${day}_${slot}_${j}`,
+          content: {
+            title: "HappyOur ✨",
+            body: chosen.message,
+            sound: "default",
+            channelId: "default",
+          },
+          trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: secondsUntil },
+        });
+      }
+    }
+  }
+}
+
 // ── Setup notification handler (FIXED WARNING) ──
 
 export function setupNotificationHandler() {

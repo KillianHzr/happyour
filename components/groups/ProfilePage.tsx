@@ -147,6 +147,7 @@ export default function ProfilePage({
   const [refreshing, setRefreshing] = useState(false);
 
   const [dailyNotifs, setDailyNotifs] = useState(3);
+  const [notifPeriods, setNotifPeriods] = useState<("morning" | "afternoon" | "evening")[]>(["morning", "afternoon", "evening"]);
   const [showNotifModal, setShowNotifModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
@@ -184,7 +185,7 @@ export default function ProfilePage({
         .order("created_at", { ascending: true }),
       supabase
         .from("profiles")
-        .select("daily_notifications_count")
+        .select("daily_notifications_count, notification_periods")
         .eq("id", userId)
         .single()
     ]);
@@ -194,6 +195,7 @@ export default function ProfilePage({
 
     if (profileRes.data) {
       setDailyNotifs(profileRes.data.daily_notifications_count ?? 3);
+      setNotifPeriods(profileRes.data.notification_periods ?? ["morning", "afternoon", "evening"]);
     }
 
     // ── Daily streak ──
@@ -777,6 +779,7 @@ export default function ProfilePage({
           loadData(true);
         }}
         initialValue={dailyNotifs}
+        initialPeriods={notifPeriods}
       />
 
       <DeleteAccountModal

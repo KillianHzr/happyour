@@ -94,6 +94,9 @@ export default function MainPagerScreen() {
   const [streakDays, setStreakDays] = useState(0);
   const [profileRefreshKey, setProfileRefreshKey] = useState(0);
 
+  const [dailyNotifs, setDailyNotifs] = useState(3);
+  const [notifPeriods, setNotifPeriods] = useState<("morning" | "afternoon" | "evening")[]>(["morning", "afternoon", "evening"]);
+
   // Pager
   const [currentPage, setCurrentPage] = useState(1);
   const [cameraScrollLocked, setCameraScrollLocked] = useState(false);
@@ -174,7 +177,7 @@ export default function MainPagerScreen() {
       console.log("[DB FETCH] fetchAllData: Querying app_config and profiles");
       const [cfgRows, profileRes] = await Promise.all([
         supabase.from("app_config").select("key, value").in("key", ["reveal_day", "reveal_hour"]),
-        supabase.from("profiles").select("username, avatar_url, email").eq("id", user.id).single(),
+        supabase.from("profiles").select("username, avatar_url, email, daily_notifications_count, notification_periods").eq("id", user.id).single(),
       ]);
       
       const cfgMap = Object.fromEntries((cfgRows.data ?? []).map((r: any) => [r.key, Number(r.value)]));
@@ -205,6 +208,8 @@ export default function MainPagerScreen() {
         setUsername(profileRes.data.username);
         setAvatarUrl(profileRes.data.avatar_url);
         setEmail(profileRes.data.email || user.email || "");
+        setDailyNotifs(profileRes.data.daily_notifications_count ?? 3);
+        setNotifPeriods(profileRes.data.notification_periods ?? ["morning", "afternoon", "evening"]);
       }
 
       console.log(`[DB FETCH] fetchAllData: Processing ${groups.length} groups...`);
@@ -1288,6 +1293,8 @@ export default function MainPagerScreen() {
       <MotivationalNotificationsModal
         visible={showNotifOnboarding}
         onClose={() => setShowNotifOnboarding(false)}
+        initialValue={dailyNotifs}
+        initialPeriods={notifPeriods}
       />
     </View>
   );
