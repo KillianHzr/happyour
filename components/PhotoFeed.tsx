@@ -12,6 +12,7 @@ import {
   PanResponder,
   Animated,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import Reanimated, {
   useSharedValue,
@@ -24,6 +25,7 @@ import Reanimated, {
 } from "react-native-reanimated";
 import { Image } from "expo-image";
 import * as FileSystem from "expo-file-system/legacy";
+import * as MediaLibrary from 'expo-media-library';
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { LinearGradient } from "expo-linear-gradient";
@@ -40,6 +42,83 @@ export const isEmoji = (str: string) => {
   const regexExp = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/gi;
   return regexExp.test(str);
 };
+
+const handleDownloadMedia = async (url: string, filename: string) => {
+  if (!url) return;
+  try {
+    const { status, canAskAgain } = await MediaLibrary.getPermissionsAsync();
+    let finalStatus = status;
+
+    if (finalStatus !== 'granted' && canAskAgain) {
+      const { status: askStatus } = await MediaLibrary.requestPermissionsAsync();
+      finalStatus = askStatus;
+    }
+
+    if (finalStatus !== 'granted') {
+      Alert.alert("Permission requise", "Nous avons besoin de votre permission pour enregistrer le média.");
+      return;
+    }
+
+    let localUri = url;
+    
+    // If it's a remote URL, check if we already have it in cache
+    if (url.startsWith('http')) {
+      const extension = url.split('.').pop()?.split('?')[0] || (url.includes('video') ? 'mp4' : 'jpg');
+      const cachePath = FileSystem.cacheDirectory + `download_${filename}.${extension}`;
+      
+      const fileInfo = await FileSystem.getInfoAsync(cachePath);
+      if (fileInfo.exists) {
+        localUri = fileInfo.uri;
+      } else {
+        // Only fetch if not in cache
+        const { uri } = await FileSystem.downloadAsync(url, cachePath);
+        localUri = uri;
+      }
+    }
+
+    const asset = await MediaLibrary.createAssetAsync(localUri);
+    try {
+      await MediaLibrary.createAlbumAsync('Happyour', asset, true);
+    } catch (e) {
+      console.log("[MediaLibrary] Album creation skipped, asset is in gallery.", e);
+    }
+    Alert.alert("Succès", "Média enregistré !");
+  } catch (error) {
+    console.error("[Download Error]", error);
+    Alert.alert("Erreur", "Impossible d'enregistrer le média.");
+  }
+};
+
+const DownloadIcon = ({ size = 20, color = "rgba(255,255,255,0.9)" }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <Path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+  </Svg>
+);
+
+function DownloadButton({ url, filename, style }: { url: string; filename: string; style?: any }) {
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const onDownload = async () => {
+    setIsDownloading(true);
+    await handleDownloadMedia(url, filename);
+    setIsDownloading(false);
+  };
+
+  return (
+    <TouchableOpacity 
+      style={[styles.downloadBtn, style]} 
+      onPress={onDownload} 
+      disabled={isDownloading}
+      activeOpacity={0.7}
+    >
+      {isDownloading ? (
+        <ActivityIndicator size="small" color="#FFF" />
+      ) : (
+        <DownloadIcon />
+      )}
+    </TouchableOpacity>
+  );
+}
 
 export function TextSticker({ text, fontSize = 42 }: { text: string; fontSize?: number }) {
   const displayValue = (text || "—").toUpperCase();
@@ -441,6 +520,11 @@ function PhotoMomentPage({ moment, currentUserId, crownWinnerId, onOpenPicker, o
                 <Text style={styles.groupTagText}>{moment.groupName}</Text>
               </Reanimated.View>
             )}
+            {!isTextOnly && !isEffectiveAudio && (
+              <Reanimated.View style={[styles.downloadBtnContainer, animatedUiStyle]}>
+                <DownloadButton url={effectiveUrl} filename={moment.id} />
+              </Reanimated.View>
+            )}
             <Reanimated.View style={[styles.momentOverlay, animatedUiStyle]} pointerEvents="box-none">
               <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
               {!isTextOnly && (
@@ -785,6 +869,11 @@ function AudioMoment({ moment, isVisible, currentUserId, crownWinnerId, onScroll
                 <Text style={styles.groupTagText}>{moment.groupName}</Text>
               </Reanimated.View>
             )}
+            {swapped && hasSecond && moment.second_image_path !== "text_mode" && (
+              <Reanimated.View style={[styles.downloadBtnContainer, animatedUiStyle]}>
+                <DownloadButton url={r2Storage.getPublicUrl(moment.second_image_path!)} filename={`${moment.id}_2`} />
+              </Reanimated.View>
+            )}
             <Reanimated.View style={[styles.momentOverlay, animatedUiStyle]} pointerEvents="box-none">
               <LinearGradient colors={["transparent", "rgba(0,0,0,0.92)"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
               {!overlayIsText && (
@@ -908,6 +997,11 @@ function VideoMoment({ moment, isVisible, cachedUrl, currentUserId, crownWinnerI
               <PhotoImage url={secondUrl} isDrawing={secondIsDrawing} />
             )}
             <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+              {!secondIsText && (
+                <Reanimated.View style={[styles.downloadBtnContainer, animatedUiStyle]}>
+                  <DownloadButton url={secondUrl} filename={`${moment.id}_2`} />
+                </Reanimated.View>
+              )}
               <Reanimated.View style={[styles.momentOverlay, animatedUiStyle]} pointerEvents="box-none">
                 <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
                 {!secondIsText && (
@@ -963,6 +1057,9 @@ function VideoMoment({ moment, isVisible, cachedUrl, currentUserId, crownWinnerI
                 <Text style={styles.groupTagText}>{moment.groupName}</Text>
               </Reanimated.View>
             )}
+            <Reanimated.View style={[styles.downloadBtnContainer, animatedUiStyle]}>
+              <DownloadButton url={cachedUrl} filename={moment.id} />
+            </Reanimated.View>
             <Reanimated.View style={[styles.momentOverlay, animatedUiStyle]} pointerEvents="box-none">
               <LinearGradient colors={["transparent", "rgba(0,0,0,0.85)"]} style={StyleSheet.absoluteFill} pointerEvents="none" />
               <View style={styles.authorInfo}>
@@ -1382,4 +1479,20 @@ const styles = StyleSheet.create({
   secondThumbOverlay: { position: "absolute", bottom: 6, right: 6, width: 26, height: 26, borderRadius: 4, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center" },
   secondThumbPlayBadge: { width: 22, height: 22, borderRadius: 11, backgroundColor: "rgba(255,255,255,0.2)", justifyContent: "center", alignItems: "center", paddingLeft: 1 },
   secondThumbPlayCircle: { width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", paddingLeft: 2 },
+  downloadBtnContainer: {
+    position: "absolute",
+    top: 14,
+    right: 14,
+    zIndex: 10,
+  },
+  downloadBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+  },
 });

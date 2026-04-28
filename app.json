@@ -35,8 +35,10 @@
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
-      ]
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
+      "versionCode": 2
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -58,6 +60,13 @@
         {
           "cameraPermission": "L'app a besoin de la caméra pour capturer des moments.",
           "microphonePermission": "L'app a besoin du micro pour enregistrer des vidéos."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "L'app a besoin d'accéder à tes photos pour enregistrer les images sur ton téléphone.",
+          "savePhotosPermission": "L'app a besoin d'accéder à tes photos pour enregistrer les images sur ton téléphone."
         }
       ],
       [
