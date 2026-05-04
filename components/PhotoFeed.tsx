@@ -31,6 +31,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Svg, Path, Circle, Text as SvgText } from "react-native-svg";
 import { r2Storage } from "../lib/r2";
 import CommentModal from "./CommentModal";
+import { type ChallengeWithData } from "../lib/challenges";
+import ChallengeVotePage from "./groups/ChallengeVotePage";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const NAVBAR_HEIGHT = 100;
@@ -112,6 +114,7 @@ type FeedItem =
   | { type: "crown" }
   | { type: "moment"; data: PhotoEntry }
   | { type: "separator"; date: string; label: string }
+  | { type: "challenge_vote"; challenge: ChallengeWithData; period: 1 | 2 }
   | { type: "end" };
 
 type Props = {
@@ -130,6 +133,9 @@ type Props = {
   onActiveIndexChange?: (index: number) => void;
   onOpenPicker?: (photoId: string) => void;
   onOpenComments?: (photoId: string, ownerId: string) => void;
+  challengePeriod1?: ChallengeWithData | null;
+  challengePeriod2?: ChallengeWithData | null;
+  onVoteChallenge?: (challengeId: string, responseId: string) => void;
 };
 
 const PlusIcon = ({ size = 22, color = "rgba(255,255,255,0.9)" }) => (
@@ -1081,7 +1087,7 @@ function AnimatedPageWrapper({ index, scrollY, children }: {
   );
 }
 
-export default function PhotoFeed({ photos, currentUserId, nextUnlockDate, revealEndDate, crownWinnerId, crownDurationMs = 0, groupName, introTitle, introSubtitle, hideIntro = false, hideEnd = false, onScrollLock, onActiveIndexChange, onOpenPicker, onOpenComments }: Props) {
+export default function PhotoFeed({ photos, currentUserId, nextUnlockDate, revealEndDate, crownWinnerId, crownDurationMs = 0, groupName, introTitle, introSubtitle, hideIntro = false, hideEnd = false, onScrollLock, onActiveIndexChange, onOpenPicker, onOpenComments, challengePeriod1, challengePeriod2, onVoteChallenge }: Props) {
   const insets = useSafeAreaInsets();
   const scrollY = useSharedValue(0);
   const onScroll = useAnimatedScrollHandler((event) => {
@@ -1170,12 +1176,19 @@ export default function PhotoFeed({ photos, currentUserId, nextUnlockDate, revea
   }), []);
 
   const items = useMemo<FeedItem[]>(() => {
-    if (photos.length === 0) return [];
+    if (photos.length === 0 && !challengePeriod1 && !challengePeriod2) return [];
     const result: FeedItem[] = [];
     if (!hideIntro) result.push({ type: "intro" });
     if (crownWinnerId && !hideIntro) result.push({ type: "crown" });
     let lastDate = "";
+    let challenge1Inserted = false;
     for (const photo of photos) {
+      const photoDay = new Date(photo.created_at).getDay();
+      // Insert challenge 1 page between Wednesday (3) and Thursday (4+) moments
+      if (!challenge1Inserted && challengePeriod1 && lastDate !== "" && photoDay >= 4) {
+        result.push({ type: "challenge_vote", challenge: challengePeriod1, period: 1 });
+        challenge1Inserted = true;
+      }
       const d = photo.created_at.slice(0, 10);
       if (d !== lastDate && !hideIntro) {
         result.push({ type: "separator", ...formatDayLabel(photo.created_at) });
@@ -1183,9 +1196,15 @@ export default function PhotoFeed({ photos, currentUserId, nextUnlockDate, revea
       }
       result.push({ type: "moment", data: photo });
     }
+    if (!challenge1Inserted && challengePeriod1) {
+      result.push({ type: "challenge_vote", challenge: challengePeriod1, period: 1 });
+    }
+    if (challengePeriod2) {
+      result.push({ type: "challenge_vote", challenge: challengePeriod2, period: 2 });
+    }
     if (!hideEnd) result.push({ type: "end" });
     return result;
-  }, [photos, crownWinnerId]);
+  }, [photos, crownWinnerId, challengePeriod1, challengePeriod2, hideIntro, hideEnd]);
 
   const renderItem = ({ item, index }: { item: FeedItem; index: number }) => {
     let content: React.ReactNode = null;
@@ -1199,6 +1218,15 @@ export default function PhotoFeed({ photos, currentUserId, nextUnlockDate, revea
     } else if (item.type === "separator") {
       const [day, date] = item.label.split("\n");
       content = <View style={styles.fullscreenPage}><Text style={styles.separatorDay}>{day}</Text><Text style={styles.separatorDate}>{date}</Text></View>;
+    } else if (item.type === "challenge_vote") {
+      content = (
+        <ChallengeVotePage
+          challenge={item.challenge}
+          period={item.period}
+          currentUserId={currentUserId}
+          onVote={onVoteChallenge ?? (() => {})}
+        />
+      );
     } else if (item.type === "end") {
       content = <View style={styles.fullscreenPage}><View style={styles.endLogoMark} /><Text style={styles.endTitle}>Reveal terminé.</Text><Text style={styles.endSubtitle}>Prochain rewind dans :</Text><Text style={styles.countdownText}>{countdownText}</Text></View>;
     } else {

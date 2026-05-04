@@ -15,6 +15,7 @@ import { mediaCache } from "../../../lib/media-cache";
 import Svg, { Path } from "react-native-svg";
 
 import { type PhotoEntry, type Reaction } from "../../../components/PhotoFeed";
+import { fetchChallengeData, getChallengeWeekStart, type ChallengeWithData } from "../../../lib/challenges";
 import Loader from "../../../components/Loader";
 import { ProfileIcon, VaultIcon, MomentIcon } from "../../../components/icons";
 import { CloseIcon } from "../../../components/groups/GroupIcons";
@@ -49,6 +50,7 @@ type GroupData = {
   crownWinnerId: string | null;
   crownDurationMs: number;
   isAdmin: boolean;
+  challenges: { period1: ChallengeWithData | null; period2: ChallengeWithData | null } | null;
 };
 
 function getWeekBounds(revealDayOfWeek = 0, revealHour = 20) {
@@ -144,6 +146,7 @@ export default function MainPagerScreen() {
   const crownWinnerId = activeData?.crownWinnerId ?? null;
   const crownDurationMs = activeData?.crownDurationMs ?? 0;
   const isAdmin = activeData?.isAdmin ?? false;
+  const challenges = activeData?.challenges ?? null;
 
   const { revealDate, prevRevealDate } = getWeekBounds(revealConfig.day, revealConfig.hour);
   const revealEndDate = new Date(revealDate.getTime() + 24 * 60 * 60 * 1000);
@@ -235,6 +238,9 @@ export default function MainPagerScreen() {
 
           const photoIds = (photosRes.data ?? []).map((p: any) => p.id);
           
+          const challengeWeekStart = getChallengeWeekStart(prevRevealDate);
+          const challenges = await fetchChallengeData(g.id, challengeWeekStart, membersData);
+
           if (photoIds.length > 0) {
             console.log(`[DB FETCH] group[${g.name}]: Querying reactions, views, and latest comments for ${photoIds.length} photos`);
             const [reactionsRes, viewsRes, latestCommentsRes] = await Promise.all([
@@ -298,6 +304,7 @@ export default function MainPagerScreen() {
               crownWinnerId: crown?.winnerId ?? null,
               crownDurationMs: crown?.durationMs ?? 0,
               isAdmin: isAdminForGroup,
+              challenges,
             }] as [string, GroupData];
           }
 
@@ -310,6 +317,7 @@ export default function MainPagerScreen() {
             crownWinnerId: null,
             crownDurationMs: 0,
             isAdmin: isAdminForGroup,
+            challenges,
           }] as [string, GroupData];
         })
       );
@@ -364,6 +372,44 @@ export default function MainPagerScreen() {
 
   const refreshReactionsRef = useRef(refreshReactions);
   refreshReactionsRef.current = refreshReactions;
+
+  const handleVoteChallenge = useCallback(async (challengeId: string, responseId: string) => {
+    if (!user) return;
+    // Optimistic update
+    setGroupData((prev) => {
+      const g = prev[activeGroupId];
+      if (!g || !g.challenges) return prev;
+      const updatePeriod = (c: ChallengeWithData | null) => {
+        if (!c || c.id !== challengeId) return c;
+        const existingIdx = c.votes.findIndex((v) => v.voter_id === user.id);
+        const newVote = { id: "temp", challenge_id: challengeId, response_id: responseId, voter_id: user.id };
+        const votes = existingIdx >= 0
+          ? c.votes.map((v, i) => (i === existingIdx ? newVote : v))
+          : [...c.votes, newVote];
+        return { ...c, votes };
+      };
+      return {
+        ...prev,
+        [activeGroupId]: {
+          ...g,
+          challenges: {
+            period1: updatePeriod(g.challenges.period1),
+            period2: updatePeriod(g.challenges.period2),
+          },
+        },
+      };
+    });
+    try {
+      await supabase.from("challenge_votes")
+        .upsert(
+          { challenge_id: challengeId, response_id: responseId, voter_id: user.id },
+          { onConflict: "challenge_id,voter_id" }
+        );
+    } catch (e) {
+      console.error("[DB WRITE] handleVoteChallenge error:", e);
+      fetchAllDataRef.current();
+    }
+  }, [user, activeGroupId]);
 
   useEffect(() => { fetchAllData(); }, [fetchAllData]);
 
@@ -958,6 +1004,7 @@ export default function MainPagerScreen() {
               await fetchAllData();
             }}
             groupId={activeGroupId}
+            vaultChallenges={challenges}
             refreshing={refreshing}
             onRefresh={async () => {
               setRefreshing(true);
@@ -968,6 +1015,20 @@ export default function MainPagerScreen() {
             onDebugNotifReveal={__DEV__ ? () => scheduleImmediateLocalNotification("Le coffre est ouvert !", `Les moments de "${groupName}" sont disponibles`, { type: "recap", groupId: activeGroupId }) : undefined}
             onDebugNotifPhoto={__DEV__ ? () => scheduleImmediateLocalNotification(groupName || "Groupe", "Un ami a partagé un moment !", { type: "new_photo", groupId: activeGroupId }) : undefined}
             onDebugNotifInvite={__DEV__ ? () => scheduleImmediateLocalNotification("Nouvelle invitation !", `Tu as été invité à rejoindre "${groupName}"`, { type: "invite", groupName: groupName || "Groupe" }) : undefined}
+            onDebugResetChallenges={__DEV__ ? async () => {
+              const weekStart = getChallengeWeekStart();
+              await supabase.from("weekly_challenges").delete().eq("group_id", activeGroupId).eq("week_start", weekStart);
+              await fetchAllData();
+            } : undefined}
+            onDebugResetMyResponse={__DEV__ ? async () => {
+              const weekStart = getChallengeWeekStart();
+              const { data: ch } = await supabase.from("weekly_challenges").select("id").eq("group_id", activeGroupId).eq("week_start", weekStart);
+              if (ch && ch.length > 0) {
+                const ids = ch.map((c: any) => c.id);
+                await supabase.from("challenge_responses").delete().eq("user_id", user?.id ?? "").in("challenge_id", ids);
+              }
+              await fetchAllData();
+            } : undefined}
           />
         </View>
       </Animated.ScrollView>
@@ -1025,6 +1086,9 @@ export default function MainPagerScreen() {
             onScrollLock={lockScrollDirect}
             onOpenPicker={setActiveReactionPhotoId}
             onOpenComments={handleCommentSeen}
+            challengePeriod1={challenges?.period1 ?? null}
+            challengePeriod2={challenges?.period2 ?? null}
+            onVoteChallenge={handleVoteChallenge}
           />
           {user?.id && username && (
             <LiveReactions

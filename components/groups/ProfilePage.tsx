@@ -13,6 +13,11 @@ import Svg, { Path } from "react-native-svg";
 import { supabase } from "../../lib/supabase";
 import { r2Storage } from "../../lib/r2";
 import { mediaCache } from "../../lib/media-cache";
+import {
+  getCurrentSeasonStart, getChallengePrompt, getWinnerResponseIds,
+  mapChallenge, CHALLENGE_SELECT,
+  type ChallengeWithData,
+} from "../../lib/challenges";
 import { useAuth } from "../../lib/auth-context";
 import { useToast } from "../../lib/toast-context";
 import PhotoFeed from "../PhotoFeed";
@@ -162,6 +167,9 @@ export default function ProfilePage({
   const [showWeekReveal, setShowWeekReveal] = useState(false);
   const [loadingWeek, setLoadingWeek] = useState(false);
 
+  // ── Challenge history (user was target) ──
+  const [targetedChallenges, setTargetedChallenges] = useState<ChallengeWithData[]>([]);
+
   // ── Random moment modal ──
   const [randomPhoto, setRandomPhoto] = useState<PhotoEntry | null>(null);
   const [showRandomReveal, setShowRandomReveal] = useState(false);
@@ -235,8 +243,50 @@ export default function ProfilePage({
     if (isRefresh) setRefreshing(false); else setLoadingData(false);
   }, [userId, allGroups.length, revealConfig.day, revealConfig.hour]);
 
+  const loadChallengeHistory = useCallback(async () => {
+    if (!userId) return;
+    const seasonStart = getCurrentSeasonStart();
+    const { data: challengeRows } = await supabase
+      .from("weekly_challenges")
+      .select(CHALLENGE_SELECT)
+      .eq("target_user_id", userId)
+      .gte("week_start", seasonStart.toISOString().slice(0, 10))
+      .order("week_start", { ascending: false });
+
+    if (!challengeRows || challengeRows.length === 0) { setTargetedChallenges([]); return; }
+
+    const challengeIds = challengeRows.map((c: any) => c.id);
+    const [respRes, voteRes] = await Promise.all([
+      supabase.from("challenge_responses").select("*").in("challenge_id", challengeIds),
+      supabase.from("challenge_votes").select("*").in("challenge_id", challengeIds),
+    ]);
+    const allResponses = respRes.data ?? [];
+    const allVotes = voteRes.data ?? [];
+
+    const responderIds = [...new Set(allResponses.map((r: any) => r.user_id))];
+    const profilesMap: Record<string, { username: string; avatar_url: string | null }> = {};
+    if (responderIds.length > 0) {
+      const { data: pd } = await supabase.from("profiles").select("id, username, avatar_url").in("id", responderIds);
+      (pd ?? []).forEach((p: any) => { profilesMap[p.id] = { username: p.username, avatar_url: p.avatar_url }; });
+    }
+
+    const mapped: ChallengeWithData[] = challengeRows.map((c: any) => {
+      const base = mapChallenge(c);
+      const responses = allResponses
+        .filter((r: any) => r.challenge_id === c.id)
+        .map((r: any) => {
+          const prof = profilesMap[r.user_id];
+          return { ...r, url: r.image_path === "text_mode" ? "" : r2Storage.getPublicUrl(r.image_path), username: prof?.username ?? "Anonyme", avatar_url: prof?.avatar_url ?? null };
+        });
+      const votes = allVotes.filter((v: any) => v.challenge_id === c.id);
+      return { ...base, responses, votes };
+    });
+    setTargetedChallenges(mapped);
+  }, [userId, username]);
+
   // Initial load
   useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { loadChallengeHistory(); }, [loadChallengeHistory]);
 
   // Refetch every time the profile tab becomes active
   const prevActive = useRef(false);
@@ -494,7 +544,7 @@ export default function ProfilePage({
             </View>
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <Text style={styles.profileCardName}>{username || "—"}</Text>
+            <Text style={styles.profileCardName}>{username || "-"}</Text>
             <TouchableOpacity style={styles.editChip} onPress={() => { setNewUsername(username); setIsEditingUsername(true); }}>
               <Svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <Path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -602,6 +652,45 @@ export default function ProfilePage({
               ? <ActivityIndicator color="#FFF" size="small" />
               : <><RandomIcon /><Text style={styles.randomBtnText}>Moment aléatoire</Text></>}
           </TouchableOpacity>
+        )}
+
+        {/* ── Challenge history ── */}
+        {targetedChallenges.length > 0 && (
+          <View style={{ marginBottom: 28 }}>
+            <Text style={styles.calendarTitle}>Défis · Tu étais la cible</Text>
+            {targetedChallenges.map((c) => {
+              const winnerIds = getWinnerResponseIds(c.responses, c.votes);
+              const winners = c.responses.filter((r) => !r.is_target_response && winnerIds.includes(r.id));
+              const prompt = getChallengePrompt(c.target_username, c.theme.label);
+              const dateStr = c.week_start;
+              return (
+                <View key={c.id} style={phStyles.challengeCard}>
+                  <Text style={phStyles.challengeWeek}>Semaine du {dateStr} · Défi {c.period}</Text>
+                  <Text style={phStyles.challengePrompt} numberOfLines={2}>{prompt}</Text>
+                  {winners.length > 0 ? (
+                    <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
+                      {winners.slice(0, 3).map((w) => (
+                        <View key={w.id} style={phStyles.winnerThumb}>
+                          {w.image_path === "text_mode" ? (
+                            <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 6 }}>
+                              <Text style={{ color: "#FFF", fontSize: 9, textAlign: "center", fontFamily: "Inter_600SemiBold" }} numberOfLines={4}>{w.note}</Text>
+                            </View>
+                          ) : (
+                            <Image source={{ uri: w.url }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+                          )}
+                          <View style={phStyles.winnerLabel}>
+                            <Text style={phStyles.winnerLabelText} numberOfLines={1}>🏆 {w.username}</Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <Text style={phStyles.noVotes}>Aucun vote encore</Text>
+                  )}
+                </View>
+              );
+            })}
+          </View>
         )}
 
         {/* ── Account settings ── */}
@@ -932,4 +1021,54 @@ const styles = StyleSheet.create({
   editSheetBtnText: { color: "#000", fontSize: 16, fontFamily: "Inter_700Bold" },
   editSheetCancel: { paddingVertical: 12, alignItems: "center" },
   editSheetCancelText: { color: "rgba(255,255,255,0.35)", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+});
+
+const phStyles = StyleSheet.create({
+  challengeCard: {
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  challengeWeek: {
+    color: "rgba(255,255,255,0.4)",
+    fontFamily: "Inter_400Regular",
+    fontSize: 11,
+    marginBottom: 4,
+  },
+  challengePrompt: {
+    color: "#FFF",
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 14,
+    lineHeight: 19,
+  },
+  winnerThumb: {
+    width: 80,
+    height: 80,
+    borderRadius: 10,
+    overflow: "hidden",
+    backgroundColor: "#1A1A1A",
+  },
+  winnerLabel: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    paddingVertical: 3,
+    paddingHorizontal: 4,
+  },
+  winnerLabelText: {
+    color: "#FFF",
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 9,
+  },
+  noVotes: {
+    color: "rgba(255,255,255,0.3)",
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    marginTop: 6,
+  },
 });

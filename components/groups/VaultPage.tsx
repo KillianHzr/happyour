@@ -9,6 +9,7 @@ import Svg, { Path } from "react-native-svg";
 import { scheduleImmediateLocalNotification } from "../../lib/notifications";
 import { type PhotoEntry } from "../PhotoFeed";
 import BottomSheet from "../BottomSheet";
+import { getChallengePrompt, getWinnerResponseIds, type ChallengeWithData } from "../../lib/challenges";
 
 type GroupInfo = { id: string; name: string; invite_code: string };
 type MemberInfo = { user_id: string; username: string; avatar_url?: string | null; role?: string };
@@ -34,12 +35,15 @@ type Props = {
   onLeaveGroup: () => void;
   onRemoveMember?: (userId: string) => Promise<void>;
   groupId: string;
+  vaultChallenges?: { period1: ChallengeWithData | null; period2: ChallengeWithData | null } | null;
   onRefresh: () => Promise<void>;
   refreshing: boolean;
   onSimulateReveal?: () => void;
   onDebugNotifReveal?: () => void;
   onDebugNotifPhoto?: () => void;
   onDebugNotifInvite?: () => void;
+  onDebugResetChallenges?: () => void;
+  onDebugResetMyResponse?: () => void;
 };
 
 function getStrokeWidth(count: number): number {
@@ -108,7 +112,8 @@ export default function VaultPage({
   allGroups, activeGroupId, onSwitchGroup, onAddGroup,
   groupName, inviteCode, isAdmin, currentUserId, members, photoCount, photos, revealDate, revealEndDate,
   unlocked, currentUserPostedThisWeek, onOpenReveal, onOpenSettings, onLeaveGroup, onRemoveMember,
-  groupId, onRefresh, refreshing, onSimulateReveal, onDebugNotifReveal, onDebugNotifPhoto, onDebugNotifInvite,
+  groupId, vaultChallenges, onRefresh, refreshing, onSimulateReveal, onDebugNotifReveal, onDebugNotifPhoto, onDebugNotifInvite,
+  onDebugResetChallenges, onDebugResetMyResponse,
 }: Props) {
   const insets = useSafeAreaInsets();
   const { text: timeLeft } = useCountdown(revealDate);
@@ -365,6 +370,11 @@ export default function VaultPage({
           </>
         )}
 
+        {/* Challenge results (visible after reveal ends) */}
+        {!unlocked && vaultChallenges && (vaultChallenges.period1 || vaultChallenges.period2) && (
+          <VaultChallengeCard challenges={vaultChallenges} currentUserId={currentUserId} />
+        )}
+
         {/* Participants */}
         <Text style={styles.sectionTitle}>Participants</Text>
         <View style={styles.participantsRow}>
@@ -424,6 +434,16 @@ export default function VaultPage({
                 <Text style={styles.debugBtnText}>🔔 Debug Invite (DEV)</Text>
               </TouchableOpacity>
             )}
+            {onDebugResetChallenges && (
+              <TouchableOpacity style={styles.debugBtn} onPress={onDebugResetChallenges}>
+                <Text style={styles.debugBtnText}>🗑️ Reset défis semaine (DEV)</Text>
+              </TouchableOpacity>
+            )}
+            {onDebugResetMyResponse && (
+              <TouchableOpacity style={styles.debugBtn} onPress={onDebugResetMyResponse}>
+                <Text style={styles.debugBtnText}>↩️ Reset ma réponse défi (DEV)</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </ScrollView>
@@ -479,6 +499,231 @@ export default function VaultPage({
     </View>
   );
 }
+
+function VaultChallengeCard({
+  challenges,
+  currentUserId,
+}: {
+  challenges: { period1: ChallengeWithData | null; period2: ChallengeWithData | null };
+  currentUserId?: string;
+}) {
+  const periods: Array<{ label: string; data: ChallengeWithData | null }> = [
+    { label: "Défi 1 · Lundi → Mercredi", data: challenges.period1 },
+    { label: "Défi 2 · Jeudi → Dimanche", data: challenges.period2 },
+  ];
+  const hasAny = periods.some((p) => p.data !== null);
+  if (!hasAny) return null;
+
+  return (
+    <View style={vcStyles.card}>
+      <View style={vcStyles.header}>
+        <Svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <Path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+          <Path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+          <Path d="M4 22h16" />
+          <Path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+          <Path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+          <Path d="M18 2H6v7a6 6 0 0 0 12 0V2z" />
+        </Svg>
+        <Text style={vcStyles.headerText}>Défis de la semaine</Text>
+      </View>
+      {periods.map(({ label, data }) => {
+        if (!data) return null;
+        const winnerIds = getWinnerResponseIds(data.responses, data.votes);
+        const winnerResponses = data.responses.filter((r) => winnerIds.includes(r.id));
+        const targetResponse = data.responses.find((r) => r.is_target_response);
+        const prompt = data.target_user_id === currentUserId
+          ? "Tu étais la cible !"
+          : getChallengePrompt(data.target_username, data.theme.label);
+        return (
+          <View key={data.id} style={vcStyles.period}>
+            <Text style={vcStyles.periodLabel}>{label}</Text>
+            <Text style={vcStyles.prompt} numberOfLines={2}>{prompt}</Text>
+            <View style={vcStyles.row}>
+              {/* Target self-photo */}
+              {targetResponse && targetResponse.image_path !== "text_mode" ? (
+                <View style={vcStyles.thumbWrap}>
+                  <Image source={{ uri: targetResponse.url }} style={vcStyles.thumb} contentFit="cover" />
+                  <View style={vcStyles.avatarOverlay}>
+                    {data.target_avatar_url ? (
+                      <Image source={{ uri: data.target_avatar_url }} style={vcStyles.avatarSmall} contentFit="cover" />
+                    ) : (
+                      <View style={[vcStyles.avatarSmall, vcStyles.avatarFallback]}>
+                        <Text style={vcStyles.avatarLetter}>{data.target_username[0]?.toUpperCase()}</Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={vcStyles.targetLabel}>
+                    <Text style={vcStyles.targetLabelText}>Cible</Text>
+                  </View>
+                </View>
+              ) : (
+                <View style={[vcStyles.thumbWrap, vcStyles.thumbEmpty]}>
+                  {data.target_avatar_url ? (
+                    <Image source={{ uri: data.target_avatar_url }} style={vcStyles.avatarCenter} contentFit="cover" />
+                  ) : (
+                    <View style={[vcStyles.avatarCenter, vcStyles.avatarFallback]}>
+                      <Text style={vcStyles.avatarLetter}>{data.target_username[0]?.toUpperCase()}</Text>
+                    </View>
+                  )}
+                  <Text style={vcStyles.thumbName}>{data.target_username}</Text>
+                </View>
+              )}
+              {/* Winner response(s) */}
+              {winnerResponses.length > 0 ? (
+                winnerResponses.slice(0, 2).map((r) => (
+                  <View key={r.id} style={vcStyles.thumbWrap}>
+                    {r.image_path === "text_mode" ? (
+                      <View style={[vcStyles.thumb, { backgroundColor: "#1A1A1A", justifyContent: "center", alignItems: "center", padding: 6 }]}>
+                        <Text style={{ color: "#FFF", fontSize: 10, textAlign: "center", fontFamily: "Inter_600SemiBold" }} numberOfLines={4}>{r.note}</Text>
+                      </View>
+                    ) : (
+                      <Image source={{ uri: r.url }} style={vcStyles.thumb} contentFit="cover" />
+                    )}
+                    <View style={vcStyles.winnerBadge}>
+                      <Text style={{ fontSize: 11 }}>🏆</Text>
+                    </View>
+                    <View style={vcStyles.targetLabel}>
+                      <Text style={vcStyles.targetLabelText}>{r.username}</Text>
+                    </View>
+                  </View>
+                ))
+              ) : (
+                <View style={[vcStyles.thumbWrap, vcStyles.thumbEmpty]}>
+                  <Text style={vcStyles.emptyText}>Aucun vote</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+const vcStyles = StyleSheet.create({
+  card: {
+    backgroundColor: "#2C2C2E",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    gap: 16,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  headerText: {
+    color: "#FFF",
+    fontFamily: "Inter_700Bold",
+    fontSize: 15,
+  },
+  period: {
+    gap: 8,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(255,255,255,0.1)",
+  },
+  periodLabel: {
+    color: "rgba(255,255,255,0.4)",
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 11,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  prompt: {
+    color: "#FFF",
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 14,
+    lineHeight: 19,
+  },
+  row: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  thumbWrap: {
+    width: 90,
+    height: 90,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#1A1A1A",
+  },
+  thumb: {
+    width: "100%",
+    height: "100%",
+  },
+  thumbEmpty: {
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 4,
+  },
+  thumbName: {
+    color: "rgba(255,255,255,0.6)",
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 11,
+  },
+  avatarOverlay: {
+    position: "absolute",
+    top: 6,
+    left: 6,
+  },
+  avatarSmall: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: "#000",
+  },
+  avatarCenter: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+  avatarFallback: {
+    backgroundColor: "rgba(255,255,255,0.12)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarLetter: {
+    color: "#FFF",
+    fontFamily: "Inter_700Bold",
+    fontSize: 12,
+  },
+  targetLabel: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    paddingVertical: 3,
+    alignItems: "center",
+  },
+  targetLabelText: {
+    color: "#FFF",
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 10,
+  },
+  winnerBadge: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  emptyText: {
+    color: "rgba(255,255,255,0.3)",
+    fontFamily: "Inter_400Regular",
+    fontSize: 11,
+    textAlign: "center",
+  },
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },

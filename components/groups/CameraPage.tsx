@@ -18,6 +18,8 @@ import StandardCamera from "../StandardCamera";
 import DrawingCanvas, { type DrawingCanvasRef } from "../DrawingCanvas";
 import { SendIcon, FeatherIcon, FlipIcon, CloseIcon, FlashIcon } from "./GroupIcons";
 import { VolumeManager } from "react-native-volume-manager";
+import ChallengesModal from "./ChallengesModal";
+import { type ActiveChallenge } from "../../lib/challenges";
 
 const NAVBAR_HEIGHT = 100;
 
@@ -54,10 +56,12 @@ class CameraErrorBoundary extends Component<{ children: React.ReactNode }, { has
 
 function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, onCaptureSent }: Props) {
   const insets = useSafeAreaInsets();
-  const { startUpload } = useUpload();
+  const { startUpload, startChallengeUpload } = useUpload();
 
   const [showGroupPicker, setShowGroupPicker] = useState(false);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
+  const [showChallengesModal, setShowChallengesModal] = useState(false);
+  const [activeChallenge, setActiveChallenge] = useState<ActiveChallenge | null>(null);
 
   const cameraRef = useRef<CameraView>(null);
   const drawingRef = useRef<DrawingCanvasRef>(null);
@@ -212,6 +216,12 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     capturingSecondRef.current = false;
     setTextModeContent("");
     setIsDrawingActive(false);
+    setActiveChallenge(null);
+  };
+
+  const handleSelectChallenge = (challenge: ActiveChallenge) => {
+    setActiveChallenge(challenge);
+    setCameraMode(challenge.captureType as typeof cameraMode);
   };
 
   const handleTrash = () => {
@@ -388,6 +398,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   };
 
   const openGroupPicker = () => {
+    if (activeChallenge !== null) { confirmUpload([activeChallenge.groupId]); return; }
     if (allGroups.length <= 1) { confirmUpload([groupId]); return; }
     setSelectedGroupIds([groupId]);
     setShowGroupPicker(true);
@@ -529,7 +540,17 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         }
       }
 
-      startUpload(fileName, fileUri, contentType, dbData, secondFile);
+      if (activeChallenge !== null) {
+        startChallengeUpload(
+          activeChallenge.challengeId,
+          fileName, fileUri, contentType,
+          { group_id: gId, user_id: userId, note: dbNote },
+          secondFile,
+          activeChallenge.isTarget
+        );
+      } else {
+        startUpload(fileName, fileUri, contentType, dbData, secondFile);
+      }
     });
     onCaptureSent?.();
     resetAll();
@@ -652,12 +673,14 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 onPinchingChange={setIsPinching}
                 onDoubleTap={() => setFacing(prev => prev === "back" ? "front" : "back")}
               />
-              <TouchableOpacity
-                style={styles.flashBtn}
-                onPress={() => setFlash(prev => prev === "off" ? "on" : prev === "on" ? "auto" : "off")}
-              >
-                <FlashIcon mode={flash} />
-              </TouchableOpacity>
+              {activeChallenge === null && (
+                <TouchableOpacity
+                  style={styles.flashBtn}
+                  onPress={() => setFlash(prev => prev === "off" ? "on" : prev === "on" ? "auto" : "off")}
+                >
+                  <FlashIcon mode={flash} />
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         )
@@ -666,6 +689,49 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       {/* ── Camera UI overlay ── */}
       {isCapturing && (
         <View style={styles.fill} pointerEvents="box-none">
+          {/* Challenge top area (button or active banner) */}
+          {!capturingSecond && !(cameraMode === "DESSIN" && isDrawingActive) && (
+            <View
+              style={[challengeStyles.topContainer, { top: Math.max(insets.top, 12) + 12, left: 12, right: 12 }]}
+              pointerEvents="box-none"
+            >
+              {activeChallenge === null ? (
+                <View style={challengeStyles.btnWrapper}>
+                  <TouchableOpacity
+                    style={challengeStyles.challengeBtn}
+                    onPress={() => setShowChallengesModal(true)}
+                    activeOpacity={0.8}
+                  >
+                    <Svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <Path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+                      <Path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+                      <Path d="M4 22h16" />
+                      <Path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+                      <Path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+                      <Path d="M18 2H6v7a6 6 0 0 0 12 0V2z" />
+                    </Svg>
+                    <Text style={challengeStyles.challengeBtnText}>Défis</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={challengeStyles.bannerRow} pointerEvents="box-none">
+                  <TouchableOpacity
+                    style={challengeStyles.bannerClose}
+                    onPress={() => setActiveChallenge(null)}
+                    activeOpacity={0.7}
+                  >
+                    <Svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                      <Path d="M18 6L6 18M6 6l12 12" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" />
+                    </Svg>
+                  </TouchableOpacity>
+                  <Text style={challengeStyles.bannerText} numberOfLines={2}>
+                    {activeChallenge.promptText}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+
           {cameraMode === "DESSIN" && isDrawingActive && (
             <TouchableOpacity
               pointerEvents="auto"
@@ -718,13 +784,15 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               </View>
             ) : (
               <View style={{ alignItems: "center", gap: 6 }}>
-                <View style={styles.modeSlider}>
-                  {(["PHOTO", "VIDEO", "AUDIO", "DESSIN", "TEXTE"] as CameraMode[]).map((m) => (
-                    <TouchableOpacity key={m} onPress={() => { setCameraMode(m); if (m !== "DESSIN") setIsDrawingActive(false); }} disabled={isRecording || isAudioRecording}>
-                      <Text style={[styles.modeText, cameraMode === m && styles.modeTextActive]}>{m}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
+                {activeChallenge === null && (
+                  <View style={styles.modeSlider}>
+                    {(["PHOTO", "VIDEO", "AUDIO", "DESSIN", "TEXTE"] as CameraMode[]).map((m) => (
+                      <TouchableOpacity key={m} onPress={() => { setCameraMode(m); if (m !== "DESSIN") setIsDrawingActive(false); }} disabled={isRecording || isAudioRecording}>
+                        <Text style={[styles.modeText, cameraMode === m && styles.modeTextActive]}>{m}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
               </View>
             )}
 
@@ -803,12 +871,24 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         <View style={[styles.previewContainer, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 8, paddingHorizontal: 12 }]}>
           {previewSlot.mode === "TEXTE" ? (
             <View style={[styles.previewImageWrapper, { backgroundColor: "#0A0A0A" }]}>
+              {activeChallenge !== null && (
+                <View style={challengeStyles.previewBannerOverlay} pointerEvents="box-none">
+                  <View style={challengeStyles.bannerRow}>
+                    <TouchableOpacity style={challengeStyles.bannerClose} onPress={() => setActiveChallenge(null)} activeOpacity={0.7}>
+                      <Svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                        <Path d="M18 6L6 18M6 6l12 12" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" />
+                      </Svg>
+                    </TouchableOpacity>
+                    <Text style={challengeStyles.bannerText} numberOfLines={2}>{activeChallenge.promptText}</Text>
+                  </View>
+                </View>
+              )}
               <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 32 }}>
                 <Text style={{ color: "#FFF", fontFamily: "Inter_700Bold", textAlign: "center", fontSize: previewSlot.textContent.length <= 120 ? 32 : previewSlot.textContent.length <= 260 ? 26 : previewSlot.textContent.length <= 450 ? 21 : 17 }}>
                   {previewSlot.textContent}
                 </Text>
               </View>
-              <View style={styles.previewTopBtns}>
+              <View style={[styles.previewTopBtns, activeChallenge !== null && { top: 70 }]}>
                 <TouchableOpacity style={styles.topSquareBtn} onPress={resetAll}><CloseIcon /></TouchableOpacity>
                 {hasSlot2 && <TouchableOpacity style={styles.topSquareBtn} onPress={handleTrash}><TrashIcon /></TouchableOpacity>}
               </View>
@@ -828,6 +908,18 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
             </View>
           ) : (
             <View style={[styles.previewImageWrapper, previewSlot.mode === "DESSIN" && { backgroundColor: "#000" }]}>
+              {activeChallenge !== null && (
+                <View style={challengeStyles.previewBannerOverlay} pointerEvents="box-none">
+                  <View style={challengeStyles.bannerRow}>
+                    <TouchableOpacity style={challengeStyles.bannerClose} onPress={() => setActiveChallenge(null)} activeOpacity={0.7}>
+                      <Svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                        <Path d="M18 6L6 18M6 6l12 12" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" />
+                      </Svg>
+                    </TouchableOpacity>
+                    <Text style={challengeStyles.bannerText} numberOfLines={2}>{activeChallenge.promptText}</Text>
+                  </View>
+                </View>
+              )}
               {previewSlot.mode === "DESSIN" ? (
                 <View style={styles.drawingPreviewCenter}>
                   <Image source={{ uri: previewSlot.uri ?? "" }} style={styles.drawingPreviewImage} contentFit="fill" />
@@ -839,7 +931,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               ) : (
                 <Image source={{ uri: previewSlot.uri ?? "" }} style={styles.previewImage} contentFit="cover" />
               )}
-              <View style={styles.previewTopBtns}>
+              <View style={[styles.previewTopBtns, activeChallenge !== null && { top: 70 }]}>
                 <TouchableOpacity style={styles.topSquareBtn} onPress={resetAll}><CloseIcon /></TouchableOpacity>
                 {hasSlot2 && <TouchableOpacity style={styles.topSquareBtn} onPress={handleTrash}><TrashIcon /></TouchableOpacity>}
               </View>
@@ -876,8 +968,20 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       {!isCapturing && isActive && previewSlot?.mode === "AUDIO" && (
         <View style={[styles.previewContainer, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 8, paddingHorizontal: 12 }]}>
           <View style={[styles.previewImageWrapper, { justifyContent: "center", alignItems: "center" }]}>
+            {activeChallenge !== null && (
+              <View style={challengeStyles.previewBannerOverlay} pointerEvents="box-none">
+                <View style={challengeStyles.bannerRow}>
+                  <TouchableOpacity style={challengeStyles.bannerClose} onPress={() => setActiveChallenge(null)} activeOpacity={0.7}>
+                    <Svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                      <Path d="M18 6L6 18M6 6l12 12" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" />
+                    </Svg>
+                  </TouchableOpacity>
+                  <Text style={challengeStyles.bannerText} numberOfLines={2}>{activeChallenge.promptText}</Text>
+                </View>
+              </View>
+            )}
             <View style={[styles.fill, { backgroundColor: "#0A0A0A" }]} />
-            <View style={styles.previewTopBtns}>
+            <View style={[styles.previewTopBtns, activeChallenge !== null && { top: 70 }]}>
               <TouchableOpacity style={styles.topSquareBtn} onPress={resetAll}><CloseIcon /></TouchableOpacity>
               {hasSlot2 && <TouchableOpacity style={styles.topSquareBtn} onPress={handleTrash}><TrashIcon /></TouchableOpacity>}
             </View>
@@ -948,6 +1052,15 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
           </Modal>
         </View>
       )}
+
+      {/* ── Challenges Modal ── */}
+      <ChallengesModal
+        visible={showChallengesModal}
+        onClose={() => setShowChallengesModal(false)}
+        allGroups={allGroups}
+        currentUserId={userId}
+        onSelectChallenge={handleSelectChallenge}
+      />
 
       {/* ── Group Picker ── */}
       <Modal visible={showGroupPicker} transparent animationType="fade" onRequestClose={() => setShowGroupPicker(false)}>
@@ -1161,6 +1274,73 @@ const styles = StyleSheet.create({
   // Barre full-width de switch/envoi pendant la 2e capture
   capturingSecondBar: { position: "absolute", left: 12, right: 12, height: 72, flexDirection: "row", gap: 12 },
   capturingSecondThumb: { flex: 1, borderRadius: 16, overflow: "hidden" },
+});
+
+const challengeStyles = StyleSheet.create({
+  topContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
+  btnWrapper: {
+    backgroundColor: "#000",
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    padding: 8,
+  },
+  challengeBtn: {
+    backgroundColor: "#FFF",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 24,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  challengeBtnText: {
+    color: "#000",
+    fontFamily: "Inter_700Bold",
+    fontSize: 14,
+  },
+  bannerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    width: "100%",
+    backgroundColor: "#000",
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 14,
+  },
+  previewBannerOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1,
+  },
+  bannerClose: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+    flexShrink: 0,
+  },
+  bannerText: {
+    flex: 1,
+    color: "#FFF",
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 13,
+    lineHeight: 18,
+  },
 });
 
 const pickerStyles = StyleSheet.create({
