@@ -138,6 +138,15 @@ function UploadBanner({ upload }: { upload: { id: string; progress: number; stat
       Animated.spring(opacity, { toValue: 1, useNativeDriver: true, tension: 40, friction: 7 }),
       Animated.spring(translateY, { toValue: 0, useNativeDriver: true, tension: 40, friction: 7 }),
     ]).start();
+
+    const timer = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(opacity, { toValue: 0, duration: 300, useNativeDriver: true }),
+        Animated.timing(translateY, { toValue: -20, duration: 300, useNativeDriver: true }),
+      ]).start();
+    }, 2000);
+
+    return () => clearTimeout(timer);
   }, []);
 
   const label =
