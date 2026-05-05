@@ -118,7 +118,23 @@ export default function ChallengesModal({ visible, onClose, allGroups, currentUs
               .maybeSingle();
             if (data) challenge = mapChallenge(data);
           } else {
-            challenge = await fetchOrGenerateChallenge(g.id, effectivePeriod, weekStart, members);
+            // DEV: when forcing a period that hasn't started yet, simulate without
+            // mutating the queue item status (no premature "active" marking).
+            const isDevOverride = __DEV__ && devPeriodOverride !== "auto";
+            let devNow: Date | undefined;
+            if (isDevOverride && effectivePeriod === 2) {
+              const d = new Date();
+              const daysToThursday = (4 - d.getDay() + 7) % 7;
+              if (daysToThursday > 0) {
+                d.setDate(d.getDate() + daysToThursday);
+                devNow = d;
+              }
+            }
+            challenge = await fetchOrGenerateChallenge(
+              g.id, effectivePeriod, weekStart, members,
+              devNow ?? new Date(),
+              isDevOverride,
+            );
           }
 
           // Check if user already responded
@@ -161,6 +177,7 @@ export default function ChallengesModal({ visible, onClose, allGroups, currentUs
       promptText,
       groupId: gc.groupId,
       isTarget,
+      proposedByUsername: gc.challenge.proposed_by_username ?? null,
     });
     onClose();
   };
@@ -260,6 +277,11 @@ export default function ChallengesModal({ visible, onClose, allGroups, currentUs
                             {gc.challenge.target_user_id === currentUserId ? "Photo" : CAPTURE_LABEL[gc.challenge.theme.capture_type]}
                           </Text>
                         </View>
+                        {gc.challenge.proposed_by_username && (
+                          <View style={styles.proposerBadge}>
+                            <Text style={styles.proposerBadgeText}>✦ {gc.challenge.proposed_by_username}</Text>
+                          </View>
+                        )}
                       </View>
                     </View>
 
@@ -410,6 +432,21 @@ const styles = StyleSheet.create({
   },
   gapTagText: {
     color: "rgba(255,255,255,0.4)",
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 11,
+  },
+  proposerBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,200,80,0.12)",
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: "rgba(255,200,80,0.25)",
+  },
+  proposerBadgeText: {
+    color: "rgba(255,200,80,0.85)",
     fontFamily: "Inter_600SemiBold",
     fontSize: 11,
   },

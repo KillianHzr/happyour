@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState } from "react";
 import * as FileSystem from "expo-file-system/legacy";
-import { decode } from "base64-arraybuffer";
 import { r2Storage } from "./r2";
 import { supabase } from "./supabase";
 import { notifyNewPhoto, cancelFirstMomentReminder, cancelPostReminderNotification } from "./notifications";
@@ -47,9 +46,7 @@ async function uploadFilesToR2(
 ): Promise<{ finalPath: string; secondPath: string | null }> {
   let finalPath = "text_mode";
   if (fileName && fileUri && contentType) {
-    const isVideo = contentType.includes("video") || fileName.endsWith(".mp4");
-    const isAudio = contentType.includes("audio") || fileName.endsWith(".m4a");
-    if (isVideo || isAudio) {
+    {
       const presignedUrl = await r2Storage.getPresignedUploadUrl(fileName, contentType);
       const uploadResult = await FileSystem.uploadAsync(presignedUrl, fileUri, {
         httpMethod: "PUT",
@@ -58,9 +55,6 @@ async function uploadFilesToR2(
       if (uploadResult.status < 200 || uploadResult.status >= 300) {
         throw new Error(`Upload échoué: HTTP ${uploadResult.status}`);
       }
-    } else {
-      const base64 = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
-      await r2Storage.upload(fileName, decode(base64), contentType);
     }
     finalPath = fileName;
   }
@@ -71,9 +65,7 @@ async function uploadFilesToR2(
       secondPath = "text_mode";
     } else if (secondFile.fileName && secondFile.fileUri && secondFile.contentType) {
       const sf = secondFile as { fileName: string; fileUri: string; contentType: string };
-      const isSecondVideo = sf.contentType.includes("video") || sf.fileName.endsWith(".mp4");
-      const isSecondAudio = sf.contentType.includes("audio") || sf.fileName.endsWith(".m4a");
-      if (isSecondVideo || isSecondAudio) {
+      {
         const presignedUrl2 = await r2Storage.getPresignedUploadUrl(sf.fileName, sf.contentType);
         const uploadResult2 = await FileSystem.uploadAsync(presignedUrl2, sf.fileUri, {
           httpMethod: "PUT",
@@ -82,9 +74,6 @@ async function uploadFilesToR2(
         if (uploadResult2.status < 200 || uploadResult2.status >= 300) {
           throw new Error(`Upload 2e capture échoué: HTTP ${uploadResult2.status}`);
         }
-      } else {
-        const base64b = await FileSystem.readAsStringAsync(sf.fileUri, { encoding: FileSystem.EncodingType.Base64 });
-        await r2Storage.upload(sf.fileName, decode(base64b), sf.contentType);
       }
       secondPath = sf.fileName;
     }

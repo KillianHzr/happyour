@@ -24,6 +24,8 @@ import ProfilePage from "../../../components/groups/ProfilePage";
 import CameraPage from "../../../components/groups/CameraPage";
 import VaultPage from "../../../components/groups/VaultPage";
 import GroupSettingsModal from "../../../components/groups/GroupSettingsModal";
+import CustomChallengeCreatePage from "../../../components/groups/CustomChallengeCreatePage";
+import CustomChallengeQueuePage from "../../../components/groups/CustomChallengeQueuePage";
 import BottomSheet from "../../../components/BottomSheet";
 import PhotoFeed, { TextSticker } from "../../../components/PhotoFeed";
 import LiveReactions from "../../../components/reveal/LiveReactions";
@@ -137,6 +139,8 @@ export default function MainPagerScreen() {
   // DEV
   const [debugUnlocked, setDebugUnlocked] = useState(false);
   const [debugVaultChallenges, setDebugVaultChallenges] = useState<{ period1: ChallengeWithData | null; period2: ChallengeWithData | null } | null>(null);
+  const [showCustomChallengeCreate, setShowCustomChallengeCreate] = useState(false);
+  const [showCustomChallengeQueue, setShowCustomChallengeQueue] = useState(false);
 
   // Derived from active group data
   const activeData = groupData[activeGroupId] ?? null;
@@ -1066,6 +1070,8 @@ export default function MainPagerScreen() {
               const result = await fetchChallengeData(activeGroupId, currentWeekStart, members);
               setDebugVaultChallenges(result);
             } : undefined}
+            onDebugOpenCreateCustom={__DEV__ ? () => setShowCustomChallengeCreate(true) : undefined}
+            onDebugOpenQueueCustom={__DEV__ ? () => setShowCustomChallengeQueue(true) : undefined}
           />
         </View>
       </Animated.ScrollView>
@@ -1396,6 +1402,23 @@ export default function MainPagerScreen() {
         onClose={() => setShowNotifOnboarding(false)}
         initialValue={dailyNotifs}
         initialPeriods={notifPeriods}
+      />
+
+      <CustomChallengeCreatePage
+        visible={showCustomChallengeCreate}
+        onClose={() => setShowCustomChallengeCreate(false)}
+        groupId={activeGroupId}
+        currentUserId={user?.id ?? ""}
+        members={members}
+        onAdded={() => {}}
+      />
+
+      <CustomChallengeQueuePage
+        visible={showCustomChallengeQueue}
+        onClose={() => setShowCustomChallengeQueue(false)}
+        groupId={activeGroupId}
+        currentUserId={user?.id ?? ""}
+        members={members}
       />
     </View>
   );

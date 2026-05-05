@@ -158,6 +158,11 @@ export default function ChallengeVotePage({
 
       {/* Prompt */}
       <Text style={cvStyles.prompt} numberOfLines={3}>{prompt}</Text>
+      {challenge.proposed_by_username && (
+        <View style={cvStyles.proposerChip}>
+          <Text style={cvStyles.proposerChipText}>✦ Proposé par {challenge.proposed_by_username}</Text>
+        </View>
+      )}
 
       {/* Target row */}
       <View style={cvStyles.targetRow}>
@@ -300,6 +305,21 @@ const cvStyles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     fontSize: 12,
     letterSpacing: 0.8,
+  },
+  proposerChip: {
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(255,200,80,0.12)",
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,200,80,0.25)",
+  },
+  proposerChipText: {
+    color: "rgba(255,200,80,0.85)",
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 11,
   },
   periodLabel: {
     color: "rgba(255,255,255,0.4)",

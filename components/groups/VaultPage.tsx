@@ -47,6 +47,8 @@ type Props = {
   onDebugResetChallenges?: () => void;
   onDebugResetMyResponse?: () => void;
   onDebugShowCurrentChallenges?: () => void;
+  onDebugOpenCreateCustom?: () => void;
+  onDebugOpenQueueCustom?: () => void;
 };
 
 function getStrokeWidth(count: number): number {
@@ -117,6 +119,7 @@ export default function VaultPage({
   unlocked, currentUserPostedThisWeek, onOpenReveal, onOpenSettings, onLeaveGroup, onRemoveMember,
   groupId, vaultChallenges, onRefresh, refreshing, onSimulateReveal, onDebugNotifReveal, onDebugNotifPhoto, onDebugNotifInvite,
   onDebugResetChallenges, onDebugResetMyResponse, onDebugShowCurrentChallenges,
+  onDebugOpenCreateCustom, onDebugOpenQueueCustom,
 }: Props) {
   const insets = useSafeAreaInsets();
   const { text: timeLeft } = useCountdown(revealDate);
@@ -452,6 +455,16 @@ export default function VaultPage({
                 <Text style={styles.debugBtnText}>📅 Défis semaine actuelle (DEV)</Text>
               </TouchableOpacity>
             )}
+            {onDebugOpenCreateCustom && (
+              <TouchableOpacity style={styles.debugBtn} onPress={onDebugOpenCreateCustom}>
+                <Text style={styles.debugBtnText}>🎯 Créer défi custom (DEV)</Text>
+              </TouchableOpacity>
+            )}
+            {onDebugOpenQueueCustom && (
+              <TouchableOpacity style={styles.debugBtn} onPress={onDebugOpenQueueCustom}>
+                <Text style={styles.debugBtnText}>📋 Ma file custom (DEV)</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </ScrollView>
@@ -651,6 +664,11 @@ function VaultChallengeCard({
           <View key={data.id} style={vcStyles.period}>
             <Text style={vcStyles.periodLabel}>{label}</Text>
             <Text style={vcStyles.prompt} numberOfLines={2}>{prompt}</Text>
+            {data.proposed_by_username && (
+              <View style={vcStyles.proposerChip}>
+                <Text style={vcStyles.proposerChipText}>✦ {data.proposed_by_username}</Text>
+              </View>
+            )}
             <View style={vcStyles.row}>
               {/* Target response */}
               {targetResponse ? (
@@ -824,6 +842,21 @@ const vcStyles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
     fontSize: 14,
     lineHeight: 19,
+  },
+  proposerChip: {
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(255,200,80,0.1)",
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: "rgba(255,200,80,0.22)",
+  },
+  proposerChipText: {
+    color: "rgba(255,200,80,0.8)",
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 10,
   },
   row: {
     flexDirection: "row",

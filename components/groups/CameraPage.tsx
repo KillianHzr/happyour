@@ -723,9 +723,12 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                       <Path d="M18 6L6 18M6 6l12 12" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" />
                     </Svg>
                   </TouchableOpacity>
-                  <Text style={challengeStyles.bannerText} numberOfLines={2}>
-                    {activeChallenge.promptText}
-                  </Text>
+                  <View style={challengeStyles.bannerTextWrapper}>
+                    <Text style={challengeStyles.bannerText} numberOfLines={2}>{activeChallenge.promptText}</Text>
+                    {activeChallenge.proposedByUsername && (
+                      <Text style={challengeStyles.bannerProposerText}>↳ {activeChallenge.proposedByUsername}</Text>
+                    )}
+                  </View>
                 </View>
               </View>
             )
@@ -878,7 +881,12 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                         <Path d="M18 6L6 18M6 6l12 12" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" />
                       </Svg>
                     </TouchableOpacity>
-                    <Text style={challengeStyles.bannerText} numberOfLines={2}>{activeChallenge.promptText}</Text>
+                    <View style={challengeStyles.bannerTextWrapper}>
+                      <Text style={challengeStyles.bannerText} numberOfLines={2}>{activeChallenge.promptText}</Text>
+                      {activeChallenge.proposedByUsername && (
+                        <Text style={challengeStyles.bannerProposerText}>↳ {activeChallenge.proposedByUsername}</Text>
+                      )}
+                    </View>
                   </View>
                 </View>
               )}
@@ -915,7 +923,12 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                         <Path d="M18 6L6 18M6 6l12 12" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" />
                       </Svg>
                     </TouchableOpacity>
-                    <Text style={challengeStyles.bannerText} numberOfLines={2}>{activeChallenge.promptText}</Text>
+                    <View style={challengeStyles.bannerTextWrapper}>
+                      <Text style={challengeStyles.bannerText} numberOfLines={2}>{activeChallenge.promptText}</Text>
+                      {activeChallenge.proposedByUsername && (
+                        <Text style={challengeStyles.bannerProposerText}>↳ {activeChallenge.proposedByUsername}</Text>
+                      )}
+                    </View>
                   </View>
                 </View>
               )}
@@ -975,7 +988,12 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                       <Path d="M18 6L6 18M6 6l12 12" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" />
                     </Svg>
                   </TouchableOpacity>
-                  <Text style={challengeStyles.bannerText} numberOfLines={2}>{activeChallenge.promptText}</Text>
+                  <View style={challengeStyles.bannerTextWrapper}>
+                    <Text style={challengeStyles.bannerText} numberOfLines={2}>{activeChallenge.promptText}</Text>
+                    {activeChallenge.proposedByUsername && (
+                      <Text style={challengeStyles.bannerProposerText}>↳ {activeChallenge.proposedByUsername}</Text>
+                    )}
+                  </View>
                 </View>
               </View>
             )}
@@ -1333,12 +1351,20 @@ const challengeStyles = StyleSheet.create({
     alignItems: "center",
     flexShrink: 0,
   },
-  bannerText: {
+  bannerTextWrapper: {
     flex: 1,
+  },
+  bannerText: {
     color: "#FFF",
     fontFamily: "Inter_600SemiBold",
     fontSize: 13,
     lineHeight: 18,
+  },
+  bannerProposerText: {
+    color: "rgba(255,200,80,0.75)",
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 10,
+    marginTop: 2,
   },
 });
 

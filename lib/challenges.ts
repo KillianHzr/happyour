@@ -156,7 +156,8 @@ export async function fetchOrGenerateChallenge(
   period: 1 | 2,
   weekStart: string,
   members: { user_id: string }[],
-  now: Date = new Date()
+  now: Date = new Date(),
+  simulate = false
 ): Promise<WeeklyChallenge | null> {
   // Period 2 can only be generated once period 1 has ended (Thursday)
   if (period === 2) {
@@ -208,7 +209,7 @@ export async function fetchOrGenerateChallenge(
 
   // Check custom queue — oldest pending item takes priority
   const { data: queueItem } = await supabase
-    .from("custom_challenge_queue")
+    .from("challenge_queue_custom")
     .select("*, creator:created_by(username)")
     .eq("group_id", groupId)
     .eq("status", "pending")
@@ -246,11 +247,13 @@ export async function fetchOrGenerateChallenge(
       themeId = t.id;
     }
 
-    // Mark queue item as active before inserting challenge
-    await supabase
-      .from("custom_challenge_queue")
-      .update({ status: "active", activated_at: new Date().toISOString() })
-      .eq("id", queueItem.id);
+    // Mark queue item as active before inserting challenge (skip in simulate/dev mode)
+    if (!simulate) {
+      await supabase
+        .from("challenge_queue_custom")
+        .update({ status: "active", activated_at: new Date().toISOString() })
+        .eq("id", queueItem.id);
+    }
   } else {
     // Regular random generation
     if (!themes || themes.length === 0) return null;
@@ -277,10 +280,10 @@ export async function fetchOrGenerateChallenge(
     .select("id")
     .maybeSingle();
 
-  // If we activated a queue item, link it to the generated challenge
-  if (queueItem && inserted?.id) {
+  // If we activated a queue item, link it to the generated challenge (skip in simulate/dev mode)
+  if (!simulate && queueItem && inserted?.id) {
     await supabase
-      .from("custom_challenge_queue")
+      .from("challenge_queue_custom")
       .update({ challenge_id: inserted.id })
       .eq("id", queueItem.id);
   }
@@ -381,7 +384,7 @@ export function getWinnerResponseIds(
 // Returns the total number of pending items in a group's queue (for position preview)
 export async function getQueuePendingCount(groupId: string): Promise<number> {
   const { count } = await supabase
-    .from("custom_challenge_queue")
+    .from("challenge_queue_custom")
     .select("*", { count: "exact", head: true })
     .eq("group_id", groupId)
     .eq("status", "pending");
@@ -399,7 +402,7 @@ export async function addCustomChallenge(
   }
 ): Promise<{ id: string } | null> {
   const { data, error } = await supabase
-    .from("custom_challenge_queue")
+    .from("challenge_queue_custom")
     .insert({
       group_id: groupId,
       created_by: createdBy,
@@ -424,7 +427,7 @@ export async function updateCustomChallenge(
   }
 ): Promise<void> {
   const { error } = await supabase
-    .from("custom_challenge_queue")
+    .from("challenge_queue_custom")
     .update({
       target_user_id: opts.targetUserId ?? null,
       custom_theme: opts.customTheme ?? null,
@@ -438,7 +441,7 @@ export async function updateCustomChallenge(
 // Delete a pending custom challenge
 export async function deleteCustomChallenge(id: string): Promise<void> {
   const { error } = await supabase
-    .from("custom_challenge_queue")
+    .from("challenge_queue_custom")
     .delete()
     .eq("id", id)
     .eq("status", "pending");
@@ -451,7 +454,7 @@ export async function fetchMyCustomChallengeQueue(
   userId: string
 ): Promise<CustomChallengeQueueItem[]> {
   const { data, error } = await supabase
-    .from("custom_challenge_queue")
+    .from("challenge_queue_custom")
     .select("*, creator:created_by(username)")
     .eq("group_id", groupId)
     .eq("created_by", userId)
@@ -472,7 +475,7 @@ export async function fetchMyCustomChallengeQueue(
 // Fetch all pending items for a group (to compute positions)
 export async function fetchGroupQueuePending(groupId: string): Promise<{ id: string; created_at: string }[]> {
   const { data } = await supabase
-    .from("custom_challenge_queue")
+    .from("challenge_queue_custom")
     .select("id, created_at")
     .eq("group_id", groupId)
     .eq("status", "pending")
