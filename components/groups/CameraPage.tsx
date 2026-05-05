@@ -691,11 +691,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         <View style={styles.fill} pointerEvents="box-none">
           {/* Challenge top area (button or active banner) */}
           {!capturingSecond && !(cameraMode === "DESSIN" && isDrawingActive) && (
-            <View
-              style={[challengeStyles.topContainer, { top: Math.max(insets.top, 12) + 12, left: 12, right: 12 }]}
-              pointerEvents="box-none"
-            >
-              {activeChallenge === null ? (
+            activeChallenge === null ? (
+              <View style={[challengeStyles.topContainer, { paddingTop: insets.top }]} pointerEvents="box-none">
                 <View style={challengeStyles.btnWrapper}>
                   <TouchableOpacity
                     style={challengeStyles.challengeBtn}
@@ -713,7 +710,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                     <Text style={challengeStyles.challengeBtnText}>Défis</Text>
                   </TouchableOpacity>
                 </View>
-              ) : (
+              </View>
+            ) : (
+              <View style={[challengeStyles.topContainer, { top: Math.max(insets.top, 12) + 12, left: 12, right: 12 }]} pointerEvents="box-none">
                 <View style={challengeStyles.bannerRow} pointerEvents="box-none">
                   <TouchableOpacity
                     style={challengeStyles.bannerClose}
@@ -728,8 +727,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                     {activeChallenge.promptText}
                   </Text>
                 </View>
-              )}
-            </View>
+              </View>
+            )
           )}
 
           {cameraMode === "DESSIN" && isDrawingActive && (
@@ -784,7 +783,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               </View>
             ) : (
               <View style={{ alignItems: "center", gap: 6 }}>
-                {activeChallenge === null && (
+                {(activeChallenge === null || capturingSecond) && (
                   <View style={styles.modeSlider}>
                     {(["PHOTO", "VIDEO", "AUDIO", "DESSIN", "TEXTE"] as CameraMode[]).map((m) => (
                       <TouchableOpacity key={m} onPress={() => { setCameraMode(m); if (m !== "DESSIN") setIsDrawingActive(false); }} disabled={isRecording || isAudioRecording}>

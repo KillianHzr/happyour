@@ -51,6 +51,7 @@ type GroupData = {
   crownDurationMs: number;
   isAdmin: boolean;
   challenges: { period1: ChallengeWithData | null; period2: ChallengeWithData | null } | null;
+  currentUserRespondedToChallenge: boolean;
 };
 
 function getWeekBounds(revealDayOfWeek = 0, revealHour = 20) {
@@ -135,6 +136,7 @@ export default function MainPagerScreen() {
 
   // DEV
   const [debugUnlocked, setDebugUnlocked] = useState(false);
+  const [debugVaultChallenges, setDebugVaultChallenges] = useState<{ period1: ChallengeWithData | null; period2: ChallengeWithData | null } | null>(null);
 
   // Derived from active group data
   const activeData = groupData[activeGroupId] ?? null;
@@ -161,7 +163,8 @@ export default function MainPagerScreen() {
   const isAfterRevealWindow = now >= activeRevealEndDate;
   const unlocked = inCurrentRevealWindow || inPrevRevealWindow || (__DEV__ && debugUnlocked);
   const lockedRevealDate = now >= revealDate ? nextRevealDate : revealDate;
-  const currentUserPostedThisWeek = photos.some(p => p.user_id === user?.id);
+  const currentUserRespondedToChallenge = activeData?.currentUserRespondedToChallenge ?? false;
+  const currentUserPostedThisWeek = photos.some(p => p.user_id === user?.id) || currentUserRespondedToChallenge;
 
   useEffect(() => {
     if (onboarding === "true" && allGroups.length <= 1) {
@@ -239,7 +242,34 @@ export default function MainPagerScreen() {
           const photoIds = (photosRes.data ?? []).map((p: any) => p.id);
           
           const challengeWeekStart = getChallengeWeekStart(prevRevealDate);
-          const challenges = await fetchChallengeData(g.id, challengeWeekStart, membersData);
+          let challenges = await fetchChallengeData(g.id, challengeWeekStart, membersData);
+          // DEV: if prev week has no challenges, load current week so simulate-reveal shows data
+          if (__DEV__ && !challenges.period1 && !challenges.period2) {
+            const currentWeekStart = getChallengeWeekStart();
+            if (currentWeekStart !== challengeWeekStart) {
+              challenges = await fetchChallengeData(g.id, currentWeekStart, membersData);
+            }
+          }
+
+          // Check if current user responded to any challenge this week (unlocks reveal)
+          const currentChallengeWeekStart = getChallengeWeekStart();
+          const { data: currentWeekChallenges } = await supabase
+            .from("weekly_challenges")
+            .select("id")
+            .eq("group_id", g.id)
+            .eq("week_start", currentChallengeWeekStart);
+          let currentUserRespondedToChallenge = false;
+          if (currentWeekChallenges && currentWeekChallenges.length > 0) {
+            const ids = currentWeekChallenges.map((c: any) => c.id);
+            const { data: myResp } = await supabase
+              .from("challenge_responses")
+              .select("id")
+              .in("challenge_id", ids)
+              .eq("user_id", user.id)
+              .limit(1)
+              .maybeSingle();
+            currentUserRespondedToChallenge = !!myResp;
+          }
 
           if (photoIds.length > 0) {
             console.log(`[DB FETCH] group[${g.name}]: Querying reactions, views, and latest comments for ${photoIds.length} photos`);
@@ -305,6 +335,7 @@ export default function MainPagerScreen() {
               crownDurationMs: crown?.durationMs ?? 0,
               isAdmin: isAdminForGroup,
               challenges,
+              currentUserRespondedToChallenge,
             }] as [string, GroupData];
           }
 
@@ -318,6 +349,7 @@ export default function MainPagerScreen() {
             crownDurationMs: 0,
             isAdmin: isAdminForGroup,
             challenges,
+            currentUserRespondedToChallenge,
           }] as [string, GroupData];
         })
       );
@@ -1004,7 +1036,7 @@ export default function MainPagerScreen() {
               await fetchAllData();
             }}
             groupId={activeGroupId}
-            vaultChallenges={challenges}
+            vaultChallenges={debugVaultChallenges ?? challenges}
             refreshing={refreshing}
             onRefresh={async () => {
               setRefreshing(true);
@@ -1028,6 +1060,11 @@ export default function MainPagerScreen() {
                 await supabase.from("challenge_responses").delete().eq("user_id", user?.id ?? "").in("challenge_id", ids);
               }
               await fetchAllData();
+            } : undefined}
+            onDebugShowCurrentChallenges={__DEV__ ? async () => {
+              const currentWeekStart = getChallengeWeekStart();
+              const result = await fetchChallengeData(activeGroupId, currentWeekStart, members);
+              setDebugVaultChallenges(result);
             } : undefined}
           />
         </View>

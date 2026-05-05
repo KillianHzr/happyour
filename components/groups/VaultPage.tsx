@@ -1,6 +1,6 @@
 import { useRef, useEffect, useMemo, useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Easing, RefreshControl,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Easing, RefreshControl, Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
@@ -9,7 +9,9 @@ import Svg, { Path } from "react-native-svg";
 import { scheduleImmediateLocalNotification } from "../../lib/notifications";
 import { type PhotoEntry } from "../PhotoFeed";
 import BottomSheet from "../BottomSheet";
-import { getChallengePrompt, getWinnerResponseIds, type ChallengeWithData } from "../../lib/challenges";
+import { getChallengePrompt, getWinnerResponseIds, type ChallengeWithData, type ChallengeResponse } from "../../lib/challenges";
+import { r2Storage } from "../../lib/r2";
+import ChallengeAudioPlayer from "./ChallengeAudioPlayer";
 
 type GroupInfo = { id: string; name: string; invite_code: string };
 type MemberInfo = { user_id: string; username: string; avatar_url?: string | null; role?: string };
@@ -44,6 +46,7 @@ type Props = {
   onDebugNotifInvite?: () => void;
   onDebugResetChallenges?: () => void;
   onDebugResetMyResponse?: () => void;
+  onDebugShowCurrentChallenges?: () => void;
 };
 
 function getStrokeWidth(count: number): number {
@@ -113,7 +116,7 @@ export default function VaultPage({
   groupName, inviteCode, isAdmin, currentUserId, members, photoCount, photos, revealDate, revealEndDate,
   unlocked, currentUserPostedThisWeek, onOpenReveal, onOpenSettings, onLeaveGroup, onRemoveMember,
   groupId, vaultChallenges, onRefresh, refreshing, onSimulateReveal, onDebugNotifReveal, onDebugNotifPhoto, onDebugNotifInvite,
-  onDebugResetChallenges, onDebugResetMyResponse,
+  onDebugResetChallenges, onDebugResetMyResponse, onDebugShowCurrentChallenges,
 }: Props) {
   const insets = useSafeAreaInsets();
   const { text: timeLeft } = useCountdown(revealDate);
@@ -372,7 +375,7 @@ export default function VaultPage({
 
         {/* Challenge results (visible after reveal ends) */}
         {!unlocked && vaultChallenges && (vaultChallenges.period1 || vaultChallenges.period2) && (
-          <VaultChallengeCard challenges={vaultChallenges} currentUserId={currentUserId} />
+          <VaultChallengeCard challenges={vaultChallenges} currentUserId={currentUserId} members={members} />
         )}
 
         {/* Participants */}
@@ -444,6 +447,11 @@ export default function VaultPage({
                 <Text style={styles.debugBtnText}>↩️ Reset ma réponse défi (DEV)</Text>
               </TouchableOpacity>
             )}
+            {onDebugShowCurrentChallenges && (
+              <TouchableOpacity style={styles.debugBtn} onPress={onDebugShowCurrentChallenges}>
+                <Text style={styles.debugBtnText}>📅 Défis semaine actuelle (DEV)</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </ScrollView>
@@ -500,19 +508,120 @@ export default function VaultPage({
   );
 }
 
+// Shared media type detection (same logic as ChallengeVotePage)
+function vcMediaType(path: string | null): "text" | "audio" | "drawing" | "photo" {
+  if (!path || path === "text_mode") return "text";
+  if (path.endsWith(".m4a")) return "audio";
+  if (path.includes("_draw")) return "drawing";
+  return "photo";
+}
+
+const VC_MINI_WAVE = [5, 9, 7, 13, 9, 11, 6];
+
+function VcThumbContent({ r }: { r: ChallengeResponse }) {
+  const type = vcMediaType(r.image_path);
+  if (type === "text") {
+    return (
+      <View style={[vcStyles.thumb, { backgroundColor: "#1A1A1A", justifyContent: "center", alignItems: "center", padding: 6 }]}>
+        <Text style={{ color: "#FFF", fontSize: 10, textAlign: "center", fontFamily: "Inter_600SemiBold" }} numberOfLines={4}>
+          {r.note}
+        </Text>
+      </View>
+    );
+  }
+  if (type === "audio") {
+    return (
+      <View style={[vcStyles.thumb, { backgroundColor: "#111", justifyContent: "center", alignItems: "center", gap: 4 }]}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+          {VC_MINI_WAVE.map((h, i) => (
+            <View key={i} style={{ width: 2.5, height: h, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.55)" }} />
+          ))}
+        </View>
+        <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.12)", justifyContent: "center", alignItems: "center" }}>
+          <Svg width="8" height="8" viewBox="0 0 24 24" fill="#FFF">
+            <Path d="M8 5v14l11-7z" />
+          </Svg>
+        </View>
+      </View>
+    );
+  }
+  // drawing or photo — cover for thumbnail
+  return <Image source={{ uri: r.url }} style={vcStyles.thumb} contentFit="cover" />;
+}
+
+function VcModalMedia({ imagePath, url, note }: { imagePath: string | null; url: string | null; note: string | null }) {
+  const type = vcMediaType(imagePath);
+  if (type === "text") {
+    return (
+      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#111", justifyContent: "center", alignItems: "center", padding: 28 }]}>
+        <Text style={{ color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 20, textAlign: "center", lineHeight: 28 }}>
+          {note}
+        </Text>
+      </View>
+    );
+  }
+  if (type === "audio") {
+    return <ChallengeAudioPlayer key={url} url={url ?? ""} />;
+  }
+  if (type === "drawing") {
+    return (
+      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#111", justifyContent: "center", alignItems: "center" }]}>
+        <Image source={{ uri: url ?? "" }} style={{ width: "100%", aspectRatio: 3 / 4 }} contentFit="fill" />
+      </View>
+    );
+  }
+  return (
+    <Image
+      source={{ uri: url ?? "" }}
+      style={StyleSheet.absoluteFillObject}
+      contentFit="cover"
+      contentPosition={{ top: 0, left: "50%" }}
+    />
+  );
+}
+
 function VaultChallengeCard({
   challenges,
   currentUserId,
+  members,
 }: {
   challenges: { period1: ChallengeWithData | null; period2: ChallengeWithData | null };
   currentUserId?: string;
+  members: MemberInfo[];
 }) {
+  const insets = useSafeAreaInsets();
+  const [selected, setSelected] = useState<{ response: ChallengeResponse; challenge: ChallengeWithData } | null>(null);
+  const [swapped, setSwapped] = useState(false);
+
   const periods: Array<{ label: string; data: ChallengeWithData | null }> = [
     { label: "Défi 1 · Lundi → Mercredi", data: challenges.period1 },
     { label: "Défi 2 · Jeudi → Dimanche", data: challenges.period2 },
   ];
   const hasAny = periods.some((p) => p.data !== null);
   if (!hasAny) return null;
+
+  const openResponse = (response: ChallengeResponse, challenge: ChallengeWithData) => {
+    setSelected({ response, challenge });
+    setSwapped(false);
+  };
+
+  const sel = selected?.response ?? null;
+  const selChallenge = selected?.challenge ?? null;
+  const hasSecond = sel ? !!(sel.second_image_path) : false;
+  const modalImagePath = sel ? (swapped ? (sel.second_image_path ?? sel.image_path) : sel.image_path) : null;
+  const modalUrl = sel
+    ? swapped
+      ? sel.second_image_path ? r2Storage.getPublicUrl(sel.second_image_path) : sel.url
+      : sel.url
+    : null;
+  const modalNote = sel ? (swapped ? (sel.second_note ?? null) : sel.note) : null;
+  const modalType = vcMediaType(modalImagePath);
+  const voters = sel && selChallenge
+    ? selChallenge.votes.filter((v) => v.response_id === sel.id).map((v) => {
+        const m = members.find((m) => m.user_id === v.voter_id);
+        return m ?? { user_id: v.voter_id, username: "?", avatar_url: null };
+      })
+    : [];
 
   return (
     <View style={vcStyles.card}>
@@ -527,6 +636,7 @@ function VaultChallengeCard({
         </Svg>
         <Text style={vcStyles.headerText}>Défis de la semaine</Text>
       </View>
+
       {periods.map(({ label, data }) => {
         if (!data) return null;
         const winnerIds = getWinnerResponseIds(data.responses, data.votes);
@@ -535,28 +645,40 @@ function VaultChallengeCard({
         const prompt = data.target_user_id === currentUserId
           ? "Tu étais la cible !"
           : getChallengePrompt(data.target_username, data.theme.label);
+
         return (
           <View key={data.id} style={vcStyles.period}>
             <Text style={vcStyles.periodLabel}>{label}</Text>
             <Text style={vcStyles.prompt} numberOfLines={2}>{prompt}</Text>
             <View style={vcStyles.row}>
-              {/* Target self-photo */}
-              {targetResponse && targetResponse.image_path !== "text_mode" ? (
-                <View style={vcStyles.thumbWrap}>
-                  <Image source={{ uri: targetResponse.url }} style={vcStyles.thumb} contentFit="cover" />
-                  <View style={vcStyles.avatarOverlay}>
-                    {data.target_avatar_url ? (
-                      <Image source={{ uri: data.target_avatar_url }} style={vcStyles.avatarSmall} contentFit="cover" />
-                    ) : (
-                      <View style={[vcStyles.avatarSmall, vcStyles.avatarFallback]}>
-                        <Text style={vcStyles.avatarLetter}>{data.target_username[0]?.toUpperCase()}</Text>
-                      </View>
-                    )}
-                  </View>
-                  <View style={vcStyles.targetLabel}>
-                    <Text style={vcStyles.targetLabelText}>Cible</Text>
-                  </View>
-                </View>
+              {/* Target response */}
+              {targetResponse ? (
+                vcMediaType(targetResponse.image_path) !== "text" ? (
+                  <TouchableOpacity style={vcStyles.thumbWrap} onPress={() => openResponse(targetResponse, data)} activeOpacity={0.8}>
+                    <VcThumbContent r={targetResponse} />
+                    <View style={vcStyles.avatarOverlay}>
+                      {data.target_avatar_url ? (
+                        <Image source={{ uri: data.target_avatar_url }} style={vcStyles.avatarSmall} contentFit="cover" />
+                      ) : (
+                        <View style={[vcStyles.avatarSmall, vcStyles.avatarFallback]}>
+                          <Text style={vcStyles.avatarLetter}>{data.target_username[0]?.toUpperCase()}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <View style={vcStyles.targetLabel}>
+                      <Text style={vcStyles.targetLabelText}>Cible</Text>
+                    </View>
+                    {targetResponse.second_image_path && <View style={vcStyles.dualDot} />}
+                  </TouchableOpacity>
+                ) : (
+                  // Text response for target — show as tappable text tile
+                  <TouchableOpacity style={vcStyles.thumbWrap} onPress={() => openResponse(targetResponse, data)} activeOpacity={0.8}>
+                    <VcThumbContent r={targetResponse} />
+                    <View style={vcStyles.targetLabel}>
+                      <Text style={vcStyles.targetLabelText}>Cible</Text>
+                    </View>
+                  </TouchableOpacity>
+                )
               ) : (
                 <View style={[vcStyles.thumbWrap, vcStyles.thumbEmpty]}>
                   {data.target_avatar_url ? (
@@ -572,21 +694,14 @@ function VaultChallengeCard({
               {/* Winner response(s) */}
               {winnerResponses.length > 0 ? (
                 winnerResponses.slice(0, 2).map((r) => (
-                  <View key={r.id} style={vcStyles.thumbWrap}>
-                    {r.image_path === "text_mode" ? (
-                      <View style={[vcStyles.thumb, { backgroundColor: "#1A1A1A", justifyContent: "center", alignItems: "center", padding: 6 }]}>
-                        <Text style={{ color: "#FFF", fontSize: 10, textAlign: "center", fontFamily: "Inter_600SemiBold" }} numberOfLines={4}>{r.note}</Text>
-                      </View>
-                    ) : (
-                      <Image source={{ uri: r.url }} style={vcStyles.thumb} contentFit="cover" />
-                    )}
-                    <View style={vcStyles.winnerBadge}>
-                      <Text style={{ fontSize: 11 }}>🏆</Text>
-                    </View>
+                  <TouchableOpacity key={r.id} style={vcStyles.thumbWrap} onPress={() => openResponse(r, data)} activeOpacity={0.8}>
+                    <VcThumbContent r={r} />
+                    <View style={vcStyles.winnerBadge}><Text style={{ fontSize: 11 }}>🏆</Text></View>
                     <View style={vcStyles.targetLabel}>
                       <Text style={vcStyles.targetLabelText}>{r.username}</Text>
                     </View>
-                  </View>
+                    {r.second_image_path && <View style={vcStyles.dualDot} />}
+                  </TouchableOpacity>
                 ))
               ) : (
                 <View style={[vcStyles.thumbWrap, vcStyles.thumbEmpty]}>
@@ -597,6 +712,75 @@ function VaultChallengeCard({
           </View>
         );
       })}
+
+      {/* Detail modal */}
+      <Modal visible={!!selected} transparent animationType="fade" onRequestClose={() => setSelected(null)}>
+        {sel && selChallenge && (
+          <View style={vcStyles.modalOverlay}>
+            <View style={[vcStyles.modalContainer, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 20 }]}>
+              {/* Top bar */}
+              <View style={vcStyles.modalTopBar}>
+                <TouchableOpacity style={vcStyles.modalCloseBtn} onPress={() => setSelected(null)} activeOpacity={0.7}>
+                  <Svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <Path d="M18 6L6 18M6 6l12 12" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" />
+                  </Svg>
+                </TouchableOpacity>
+                <View style={vcStyles.modalAuthorRow}>
+                  {sel.avatar_url ? (
+                    <Image source={{ uri: sel.avatar_url }} style={vcStyles.modalAvatar} contentFit="cover" />
+                  ) : (
+                    <View style={[vcStyles.modalAvatar, vcStyles.avatarFallback]}>
+                      <Text style={vcStyles.avatarLetter}>{sel.username[0]?.toUpperCase()}</Text>
+                    </View>
+                  )}
+                  <Text style={vcStyles.modalAuthorName}>{sel.username}</Text>
+                </View>
+                {hasSecond && (
+                  <TouchableOpacity style={vcStyles.swapBtn} onPress={() => setSwapped(v => !v)} activeOpacity={0.7}>
+                    <Svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <Path d="M7 16V4m0 0L3 8m4-4l4 4" /><Path d="M17 8v12m0 0l4-4m-4 4l-4-4" />
+                    </Svg>
+                    <Text style={vcStyles.swapBtnText}>{swapped ? "1ère" : "2ème"}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Media */}
+              <View style={vcStyles.modalMedia}>
+                <VcModalMedia imagePath={modalImagePath} url={modalUrl} note={modalNote} />
+              </View>
+
+              {/* Caption — skip when text_mode (content is already the media) */}
+              {modalType !== "text" && modalNote ? (
+                <View style={vcStyles.noteBox}>
+                  <Text style={vcStyles.noteText}>{modalNote}</Text>
+                </View>
+              ) : null}
+
+              {/* Voters */}
+              {voters.length > 0 && (
+                <View style={vcStyles.votersRow}>
+                  <Text style={vcStyles.votersLabel}>Votes ({voters.length})</Text>
+                  <View style={vcStyles.votersList}>
+                    {voters.map((v) => (
+                      <View key={v.user_id} style={vcStyles.voterChip}>
+                        {v.avatar_url ? (
+                          <Image source={{ uri: v.avatar_url }} style={vcStyles.voterAvatar} contentFit="cover" />
+                        ) : (
+                          <View style={[vcStyles.voterAvatar, vcStyles.avatarFallback]}>
+                            <Text style={{ color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 10 }}>{v.username[0]?.toUpperCase()}</Text>
+                          </View>
+                        )}
+                        <Text style={vcStyles.voterName}>{v.username}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+      </Modal>
     </View>
   );
 }
@@ -722,6 +906,123 @@ const vcStyles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     fontSize: 11,
     textAlign: "center",
+  },
+  dualDot: {
+    position: "absolute",
+    bottom: 22,
+    right: 6,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: "rgba(255,255,255,0.7)",
+  },
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.96)",
+  },
+  modalContainer: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  modalTopBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 14,
+  },
+  modalCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalAuthorRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  modalAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+  },
+  modalAuthorName: {
+    color: "#FFF",
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 14,
+  },
+  swapBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 16,
+  },
+  swapBtnText: {
+    color: "rgba(255,255,255,0.8)",
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 12,
+  },
+  modalMedia: {
+    flex: 1,
+    borderRadius: 20,
+    overflow: "hidden",
+    backgroundColor: "#111",
+    marginBottom: 12,
+  },
+  noteBox: {
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  noteText: {
+    color: "rgba(255,255,255,0.75)",
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  votersRow: {
+    gap: 8,
+  },
+  votersLabel: {
+    color: "rgba(255,255,255,0.4)",
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 11,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  votersList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  voterChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  voterAvatar: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+  },
+  voterName: {
+    color: "rgba(255,255,255,0.8)",
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 12,
   },
 });
 
