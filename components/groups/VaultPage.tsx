@@ -555,13 +555,14 @@ function VcModalMedia({ imagePath, url, note }: { imagePath: string | null; url:
     return (
       <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#111", justifyContent: "center", alignItems: "center", padding: 28 }]}>
         <Text style={{ color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 20, textAlign: "center", lineHeight: 28 }}>
-          {note}
+          {note ?? ""}
         </Text>
       </View>
     );
   }
   if (type === "audio") {
-    return <ChallengeAudioPlayer key={url} url={url ?? ""} />;
+    if (!url) return null;
+    return <ChallengeAudioPlayer key={url} url={url} />;
   }
   if (type === "drawing") {
     return (

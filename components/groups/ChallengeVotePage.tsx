@@ -67,13 +67,14 @@ function ModalMedia({ imagePath, url, note }: { imagePath: string | null; url: s
     return (
       <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#111", justifyContent: "center", alignItems: "center", padding: 28 }]}>
         <Text style={{ color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 20, textAlign: "center", lineHeight: 28 }}>
-          {note}
+          {note ?? ""}
         </Text>
       </View>
     );
   }
   if (type === "audio") {
-    return <ChallengeAudioPlayer key={url} url={url ?? ""} />;
+    if (!url) return null;
+    return <ChallengeAudioPlayer key={url} url={url} />;
   }
   if (type === "drawing") {
     return (
@@ -173,7 +174,7 @@ export default function ChallengeVotePage({
         </View>
         {targetResponse && targetResponse.image_path !== "text_mode" && (
           <TouchableOpacity style={cvStyles.targetThumb} onPress={() => openResponse(targetResponse)} activeOpacity={0.8}>
-            <Image source={{ uri: targetResponse.url }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+            <ResponseThumb r={targetResponse} />
           </TouchableOpacity>
         )}
       </View>

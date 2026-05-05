@@ -20,7 +20,7 @@ export default function ChallengeAudioPlayer({ url }: { url: string }) {
 
   useEffect(() => {
     return () => {
-      try { player.pause(); } catch (_) {}
+      try { playerRef.current.pause(); } catch (_) {}
     };
   }, []);
 
@@ -81,16 +81,18 @@ export default function ChallengeAudioPlayer({ url }: { url: string }) {
         const ratio = Math.max(0, Math.min(1, relX / seekWidthRef.current));
         dragRatioRef.current = ratio;
         fillRef.current?.setNativeProps({ style: { width: `${ratio * 100}%` } });
-        thumbRef.current?.setNativeProps({ left: `${Math.min(ratio * 100, 100)}%` });
+        thumbRef.current?.setNativeProps({ style: { left: `${Math.min(ratio * 100, 100)}%` } });
         const now = Date.now();
-        if (now - lastSeekTimeRef.current > 100) {
+        if (durationRef.current > 0 && now - lastSeekTimeRef.current > 100) {
           lastSeekTimeRef.current = now;
           playerRef.current.seekTo(ratio * durationRef.current);
         }
       },
       onPanResponderRelease: () => {
         isDraggingRef.current = false;
-        playerRef.current.seekTo(dragRatioRef.current * durationRef.current);
+        if (durationRef.current > 0) {
+          playerRef.current.seekTo(dragRatioRef.current * durationRef.current);
+        }
       },
       onPanResponderTerminate: () => {
         isDraggingRef.current = false;
