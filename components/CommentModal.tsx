@@ -149,19 +149,19 @@ export default function CommentModal({ visible, onClose, onSeen, photoId, photoO
   }, [overlayOpacity, translateY]);
 
   useEffect(() => {
+    console.log(`[CommentModal] visible prop changed: ${visible}, mounted state: ${mounted}, photoId: ${photoId}`);
     if (visible) {
       animateIn();
       fetchComments();
       markAsSeen();
     } else if (mounted) {
+      console.log("[CommentModal] visible is false, triggering animateOut");
       animateOut();
     }
-    // We only want to trigger these actions when the 'visible' prop changes.
-    // Including fetchComments or markAsSeen here causes an infinite loop 
-    // because they are re-created when the parent state updates.
   }, [visible]);
 
   const handleClose = () => {
+    console.log("[CommentModal] handleClose triggered");
     animateOut(onClose);
   };
 
