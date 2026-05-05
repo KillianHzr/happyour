@@ -24,6 +24,7 @@ type Props = {
 
 const CAPTURE_OPTIONS: { type: ChallengeCapture; label: string; icon: string }[] = [
   { type: "PHOTO", label: "Photo", icon: "📷" },
+  { type: "VIDEO", label: "Vidéo", icon: "🎥" },
   { type: "AUDIO", label: "Audio", icon: "🎙" },
   { type: "DESSIN", label: "Dessin", icon: "✏️" },
   { type: "TEXTE", label: "Texte", icon: "📝" },

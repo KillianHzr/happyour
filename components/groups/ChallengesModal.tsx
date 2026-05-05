@@ -56,12 +56,18 @@ function CaptureTypeIcon({ type }: { type: ChallengeCapture }) {
         <Path d="M12 20h9" /><Path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
       </Svg>
     ),
+    VIDEO: (
+      <Svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <Path d="M23 7l-7 5 7 5V7z" /><Path d="M1 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H1a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" />
+      </Svg>
+    ),
   };
   return <>{icons[type]}</>;
 }
 
 const CAPTURE_LABEL: Record<ChallengeCapture, string> = {
   PHOTO: "Photo",
+  VIDEO: "Vidéo",
   TEXTE: "Texte",
   AUDIO: "Audio",
   DESSIN: "Dessin",

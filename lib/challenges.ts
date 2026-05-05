@@ -1,7 +1,7 @@
 import { supabase } from "./supabase";
 import { r2Storage } from "./r2";
 
-export type ChallengeCapture = "PHOTO" | "TEXTE" | "AUDIO" | "DESSIN";
+export type ChallengeCapture = "PHOTO" | "VIDEO" | "TEXTE" | "AUDIO" | "DESSIN";
 
 export type ChallengeTheme = {
   id: string;
