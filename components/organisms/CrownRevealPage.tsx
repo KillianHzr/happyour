@@ -4,6 +4,7 @@ import { Svg, Path } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { UserAvatar } from "../atoms/Avatar";
 import { PhotoEntry } from "../../lib/feed-types";
+import { colors, spacing, typography } from "../../lib/theme";
 
 const NAVBAR_HEIGHT = 100;
 
@@ -31,18 +32,18 @@ export const CrownRevealPage = ({ winner, durationMs }: CrownRevealPageProps) =>
   return (
     <View style={[styles.fullscreenPage, { paddingTop: paddingTopBottom, paddingBottom: paddingTopBottom }]}>
       <View style={styles.crownRevealInner}>
-        <Svg width={64} height={64} viewBox="0 0 24 24" style={{ marginBottom: 4 }}>
+        <Svg width={64} height={64} viewBox="0 0 24 24" style={{ marginBottom: spacing.xs }}>
           <Path 
             d="M2 19l2-9 4.5 4L12 5l3.5 9L20 10l2 9H2z" 
-            fill="#FFD700" 
-            stroke="#B8860B" 
+            fill={colors.gold} 
+            stroke={colors.goldDark} 
             strokeWidth="0.8" 
             strokeLinejoin="round" 
           />
         </Svg>
         <Text style={styles.crownRevealTitle}>Couronne de la semaine</Text>
         <View style={styles.crownRevealAvatarWrap}>
-          <View style={{ borderWidth: 3, borderColor: "#FFD700", borderRadius: 44 }}>
+          <View style={{ borderWidth: 3, borderColor: colors.gold, borderRadius: 44 }}>
             <UserAvatar avatar_url={winner.avatar_url} username={winner.username} size={80} />
           </View>
         </View>
@@ -61,41 +62,42 @@ const styles = StyleSheet.create({
     height: "100%", 
     justifyContent: "center", 
     alignItems: "center", 
-    backgroundColor: "#0A0A0A" 
+    backgroundColor: colors.bg 
   },
   crownRevealInner: { 
     alignItems: "center", 
-    paddingHorizontal: 32 
+    paddingHorizontal: spacing.xxl 
   },
   crownRevealTitle: { 
-    fontFamily: "Inter_700Bold", 
-    fontSize: 13, 
-    color: "#FFD700", 
+    fontFamily: typography.family.bold, 
+    fontSize: typography.size.xs + 1, // 13
+    color: colors.gold, 
     letterSpacing: 2, 
     textTransform: "uppercase", 
-    marginBottom: 28, 
-    marginTop: 8 
+    marginBottom: spacing.xl + 4, // 28
+    marginTop: spacing.sm 
   },
   crownRevealAvatarWrap: { 
-    marginBottom: 20 
+    marginBottom: spacing.lg 
   },
   crownRevealUsername: { 
-    fontFamily: "Inter_700Bold", 
-    fontSize: 28, 
-    color: "#FFF", 
-    marginBottom: 12, 
+    fontFamily: typography.family.bold, 
+    fontSize: typography.size.xxl + 4, // 28
+    color: colors.white, 
+    marginBottom: spacing.md, 
     textAlign: "center" 
   },
   crownRevealDurationLabel: { 
-    fontFamily: "Inter_400Regular", 
-    fontSize: 14, 
-    color: "rgba(255,255,255,0.5)", 
-    marginBottom: 6 
+    fontFamily: typography.family.regular, 
+    fontSize: typography.size.sm, 
+    color: colors.textMuted, 
+    marginBottom: spacing.xs + 2 // 6 
   },
   crownRevealDuration: { 
-    fontFamily: "Inter_700Bold", 
-    fontSize: 38, 
-    color: "#FFD700", 
+    fontFamily: typography.family.bold, 
+    fontSize: typography.size.xxl + 14, // 38
+    color: colors.gold, 
     letterSpacing: 1 
   },
 });
+

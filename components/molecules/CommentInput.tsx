@@ -1,6 +1,7 @@
 import React from "react";
 import { View, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet } from "react-native";
 import { SendIcon } from "../atoms/SendIcon";
+import { colors, spacing, radii, typography } from "../../lib/theme";
 
 interface CommentInputProps {
   content: string;
@@ -18,7 +19,7 @@ export const CommentInput = ({ content, setContent, onSubmit, submitting }: Comm
         <TextInput
           style={styles.input}
           placeholder="Ajouter un commentaire..."
-          placeholderTextColor="rgba(255,255,255,0.4)"
+          placeholderTextColor={colors.textMuted}
           value={content}
           onChangeText={setContent}
           multiline
@@ -30,7 +31,7 @@ export const CommentInput = ({ content, setContent, onSubmit, submitting }: Comm
           disabled={isDisabled}
         >
           {submitting ? (
-            <ActivityIndicator size="small" color="#000" />
+            <ActivityIndicator size="small" color={colors.black} />
           ) : (
             <SendIcon disabled={!content.trim()} />
           )}
@@ -42,41 +43,42 @@ export const CommentInput = ({ content, setContent, onSubmit, submitting }: Comm
 
 const styles = StyleSheet.create({
   inputArea: {
-    padding: 20,
-    paddingTop: 12,
+    padding: spacing.xl,
+    paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(0,0,0,0.2)",
+    borderTopColor: colors.cardBorder,
+    backgroundColor: colors.glassMuted,
   },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderRadius: 26,
-    paddingLeft: 16,
-    paddingRight: 6,
-    paddingVertical: 6,
+    backgroundColor: colors.glassMuted,
+    borderRadius: radii.full,
+    paddingLeft: spacing.lg,
+    paddingRight: spacing.xs,
+    paddingVertical: spacing.xs,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: colors.cardBorder,
   },
   input: {
     flex: 1,
-    color: "#FFF",
-    fontFamily: "Inter_500Medium",
-    fontSize: 15,
+    color: colors.white,
+    fontFamily: typography.family.regular,
+    fontSize: typography.size.lg,
     maxHeight: 100,
-    paddingVertical: 8,
+    paddingVertical: spacing.sm,
   },
   sendBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: "#FFF",
+    borderRadius: radii.full,
+    backgroundColor: colors.white,
     justifyContent: "center",
     alignItems: "center",
-    marginLeft: 8,
+    marginLeft: spacing.sm,
   },
   sendBtnDisabled: {
-    backgroundColor: "rgba(255,255,255,0.2)",
+    backgroundColor: colors.glass,
   },
 });
+

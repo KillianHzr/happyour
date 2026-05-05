@@ -12,6 +12,7 @@ import { SecondCaptureThumbnail } from "../molecules/SecondCaptureThumbnail";
 import { AuthorInfo } from "../molecules/AuthorInfo";
 import { ReactionsRow } from "../molecules/ReactionsRow";
 import { r2Storage } from "../../lib/r2";
+import { colors, spacing, radii, typography } from "../../lib/theme";
 import { PhotoEntry, Reaction } from "../../lib/feed-types";
 
 interface VideoMomentProps {
@@ -105,13 +106,13 @@ export const VideoMoment = ({
     return (
       <>
         <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center" }]} pointerEvents="none">
-          <ActivityIndicator size="large" color="rgba(255,255,255,0.5)" />
+          <ActivityIndicator size="large" color={colors.textMuted} />
         </View>
         <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />
         {isVisible && isPaused && (
           <View style={styles.pauseOverlay} pointerEvents="none">
             <View style={styles.pauseCircle}>
-              <Svg width="24" height="24" viewBox="0 0 24 24" fill="#FFF">
+              <Svg width="24" height="24" viewBox="0 0 24 24" fill={colors.white}>
                 <Path d="M8 5v14l11-7z" />
               </Svg>
             </View>
@@ -196,49 +197,49 @@ const styles = StyleSheet.create({
     height: "100%", 
     justifyContent: "center", 
     alignItems: "center", 
-    backgroundColor: "#000", 
-    paddingHorizontal: 12 
+    backgroundColor: colors.bg, 
+    paddingHorizontal: spacing.md 
   },
   momentWrapper: { 
     flex: 1, 
     width: '100%', 
-    borderRadius: 32, 
+    borderRadius: spacing.xxl, 
     overflow: "hidden", 
     backgroundColor: "transparent" 
   },
   groupTag: { 
     position: "absolute", 
-    top: 14, 
-    left: 14, 
+    top: spacing.md + 2, 
+    left: spacing.md + 2, 
     zIndex: 5, 
     backgroundColor: "rgba(0,0,0,0.58)", 
     borderRadius: 10, 
-    paddingHorizontal: 10, 
-    paddingVertical: 5, 
+    paddingHorizontal: spacing.sm + 2, 
+    paddingVertical: spacing.xs + 1, 
     borderWidth: 1, 
-    borderColor: "rgba(255,255,255,0.18)" 
+    borderColor: colors.cardBorder 
   },
   groupTagText: { 
-    color: "#FFF", 
-    fontSize: 12, 
-    fontFamily: "Inter_600SemiBold" 
+    color: colors.white, 
+    fontSize: typography.size.xs, 
+    fontFamily: typography.family.semibold 
   },
   textMomentBg: { 
     flex: 1, 
     width: "100%", 
     justifyContent: "center", 
     alignItems: "center", 
-    padding: 32, 
-    backgroundColor: "#050505" 
+    padding: spacing.xxl, 
+    backgroundColor: colors.bg 
   },
   quoteContainer: { 
     width: "100%", 
     alignItems: "center", 
-    gap: 32 
+    gap: spacing.xxl 
   },
   textMomentContent: { 
-    fontFamily: "Inter_700Bold", 
-    color: "#FFF", 
+    fontFamily: typography.family.bold, 
+    color: colors.white, 
     textAlign: "center", 
     letterSpacing: -0.5 
   },
@@ -247,15 +248,15 @@ const styles = StyleSheet.create({
     bottom: 0, 
     left: 0, 
     right: 0, 
-    padding: 24, 
-    paddingBottom: 32, 
+    padding: spacing.xl + 2, 
+    paddingBottom: spacing.xxl, 
     paddingTop: 80, 
-    gap: 14 
+    gap: spacing.md + 2 
   },
   downloadBtnContainer: {
     position: "absolute",
-    top: 14,
-    right: 14,
+    top: spacing.md + 2,
+    right: spacing.md + 2,
     zIndex: 10,
   },
   pauseOverlay: { 
@@ -267,7 +268,7 @@ const styles = StyleSheet.create({
     width: 64, 
     height: 64, 
     borderRadius: 32, 
-    backgroundColor: "rgba(0,0,0,0.4)", 
+    backgroundColor: colors.overlay, 
     justifyContent: "center", 
     alignItems: "center" 
   },

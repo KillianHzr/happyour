@@ -4,6 +4,7 @@ import Reanimated, { useSharedValue, useAnimatedStyle, withTiming } from "react-
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import { colors, spacing, radii, typography } from "../../lib/theme";
 
 import { PhotoImage } from "../atoms/PhotoImage";
 import { DownloadButton } from "../atoms/DownloadButton";
@@ -164,49 +165,49 @@ const styles = StyleSheet.create({
     height: "100%", 
     justifyContent: "center", 
     alignItems: "center", 
-    backgroundColor: "#000", 
-    paddingHorizontal: 12 
+    backgroundColor: colors.black, 
+    paddingHorizontal: spacing.md 
   },
   momentWrapper: { 
     flex: 1, 
     width: '100%', 
-    borderRadius: 32, 
+    borderRadius: radii.xl, 
     overflow: "hidden", 
     backgroundColor: "transparent" 
   },
   groupTag: { 
     position: "absolute", 
-    top: 14, 
-    left: 14, 
+    top: spacing.md, 
+    left: spacing.md, 
     zIndex: 5, 
-    backgroundColor: "rgba(0,0,0,0.58)", 
-    borderRadius: 10, 
+    backgroundColor: colors.overlay, 
+    borderRadius: radii.md, 
     paddingHorizontal: 10, 
     paddingVertical: 5, 
     borderWidth: 1, 
-    borderColor: "rgba(255,255,255,0.18)" 
+    borderColor: colors.cardBorder 
   },
   groupTagText: { 
-    color: "#FFF", 
-    fontSize: 12, 
-    fontFamily: "Inter_600SemiBold" 
+    color: colors.white, 
+    fontSize: typography.size.xs, 
+    fontFamily: typography.family.semibold 
   },
   textMomentBg: { 
     flex: 1, 
     width: "100%", 
     justifyContent: "center", 
     alignItems: "center", 
-    padding: 32, 
-    backgroundColor: "#050505" 
+    padding: spacing.xxl, 
+    backgroundColor: colors.black 
   },
   quoteContainer: { 
     width: "100%", 
     alignItems: "center", 
-    gap: 32 
+    gap: spacing.xxl 
   },
   textMomentContent: { 
-    fontFamily: "Inter_700Bold", 
-    color: "#FFF", 
+    fontFamily: typography.family.bold, 
+    color: colors.white, 
     textAlign: "center", 
     letterSpacing: -0.5 
   },
@@ -215,15 +216,15 @@ const styles = StyleSheet.create({
     bottom: 0, 
     left: 0, 
     right: 0, 
-    padding: 24, 
-    paddingBottom: 32, 
+    padding: spacing.xl, 
+    paddingBottom: spacing.xxl, 
     paddingTop: 80, 
-    gap: 14 
+    gap: spacing.md 
   },
   downloadBtnContainer: {
     position: "absolute",
-    top: 14,
-    right: 14,
+    top: spacing.md,
+    right: spacing.md,
     zIndex: 10,
   },
 });

@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { UserAvatar } from "../atoms/Avatar";
 import { TrashIcon } from "../atoms/TrashIcon";
+import { colors, spacing, radii, typography } from "../../lib/theme";
 
 export interface Comment {
   id: string;
@@ -52,8 +53,8 @@ export const CommentItem = ({ item, isMyComment, onDelete }: CommentItemProps) =
 const styles = StyleSheet.create({
   commentRow: {
     flexDirection: "row",
-    marginBottom: 22,
-    gap: 12,
+    marginBottom: spacing.xl,
+    gap: spacing.md,
   },
   avatarContainer: {
     width: 38,
@@ -61,30 +62,30 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    borderColor: colors.glassBorder,
   },
   commentContent: {
     flex: 1,
-    gap: 4,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    padding: 12,
-    borderRadius: 16,
-    borderTopLeftRadius: 2,
+    gap: spacing.xs,
+    backgroundColor: colors.glassMuted,
+    padding: spacing.md,
+    borderRadius: radii.lg,
+    borderTopLeftRadius: radii.xs,
     flexDirection: "row",
     alignItems: "center",
   },
   username: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 13,
-    color: "rgba(255,255,255,0.6)",
+    fontFamily: typography.family.bold,
+    fontSize: typography.size.sm,
+    color: colors.textMuted,
   },
   deleteBtn: {
-    padding: 4,
+    padding: spacing.xs,
   },
   content: {
-    fontFamily: "Inter_400Regular",
-    fontSize: 14,
-    color: "#FFF",
+    fontFamily: typography.family.regular,
+    fontSize: typography.size.md,
+    color: colors.white,
     lineHeight: 20,
   },
 });

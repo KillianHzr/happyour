@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, PanResponder } from "react-native";
 import { Svg, Path } from "react-native-svg";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import { colors, spacing, radii, typography } from "../../lib/theme";
 
 interface AudioPlayerViewProps {
   player: ReturnType<typeof useAudioPlayer>;
@@ -105,7 +106,7 @@ export const AudioPlayerView = ({ player, status, onScrollLock }: AudioPlayerVie
       </View>
       <View style={styles.audioPlayerRow}>
         <TouchableOpacity onPress={togglePlay} style={styles.audioPlayBtn}>
-          <Svg width="26" height="26" viewBox="0 0 24 24" fill="#FFF">
+          <Svg width="26" height="26" viewBox="0 0 24 24" fill={colors.white}>
             {status.playing ? <Path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /> : <Path d="M8 5v14l11-7z" />}
           </Svg>
         </TouchableOpacity>
@@ -132,11 +133,11 @@ export const AudioPlayerView = ({ player, status, onScrollLock }: AudioPlayerVie
 const styles = StyleSheet.create({
   container: { 
     ...StyleSheet.absoluteFillObject, 
-    backgroundColor: "#0A0A0A", 
+    backgroundColor: colors.black, 
     justifyContent: "center", 
     alignItems: "center", 
-    gap: 24, 
-    paddingHorizontal: 16 
+    gap: spacing.xl, 
+    paddingHorizontal: spacing.lg 
   },
   audioWaveContainer: { 
     flexDirection: "row", 
@@ -146,39 +147,39 @@ const styles = StyleSheet.create({
   },
   audioWaveBar: { 
     width: 3, 
-    borderRadius: 2, 
-    backgroundColor: "#FFF" 
+    borderRadius: radii.xs, 
+    backgroundColor: colors.white 
   },
   audioPlayerRow: { 
     flexDirection: "row", 
     alignItems: "center", 
-    gap: 14, 
+    gap: spacing.md, 
     alignSelf: "stretch" 
   },
   audioPlayBtn: { 
     width: 52, 
     height: 52, 
-    borderRadius: 26, 
-    backgroundColor: "rgba(255,255,255,0.15)", 
+    borderRadius: radii.full, 
+    backgroundColor: colors.glass, 
     justifyContent: "center", 
     alignItems: "center" 
   },
   audioSpeedBtn: { 
     width: 40, 
     height: 28, 
-    borderRadius: 8, 
-    backgroundColor: "rgba(255,255,255,0.15)", 
+    borderRadius: radii.sm, 
+    backgroundColor: colors.glass, 
     justifyContent: "center", 
     alignItems: "center" 
   },
   audioSpeedText: { 
-    color: "#FFF", 
-    fontFamily: "Inter_600SemiBold", 
-    fontSize: 12 
+    color: colors.white, 
+    fontFamily: typography.family.semibold, 
+    fontSize: typography.size.xs 
   },
   audioProgressWrapper: { 
     flex: 1, 
-    gap: 4 
+    gap: spacing.xs 
   },
   audioSeekHitArea: { 
     paddingVertical: 14, 
@@ -186,20 +187,20 @@ const styles = StyleSheet.create({
   },
   audioSeekTrack: { 
     height: 3, 
-    backgroundColor: "rgba(255,255,255,0.22)", 
-    borderRadius: 2 
+    backgroundColor: colors.glassMuted, 
+    borderRadius: radii.xs 
   },
   audioSeekFill: { 
     height: 3, 
-    backgroundColor: "#FFF", 
-    borderRadius: 2 
+    backgroundColor: colors.white, 
+    borderRadius: radii.xs 
   },
   audioSeekThumb: { 
     position: "absolute", 
     width: 13, 
     height: 13, 
-    borderRadius: 7, 
-    backgroundColor: "#FFF", 
+    borderRadius: radii.sm, 
+    backgroundColor: colors.white, 
     marginLeft: -6, 
     top: 14 - 5 
   },
@@ -208,8 +209,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between" 
   },
   audioTimeText: { 
-    fontSize: 11, 
-    color: "rgba(255,255,255,0.5)", 
-    fontFamily: "Inter_400Regular" 
+    fontSize: typography.size.xs, 
+    color: colors.textMuted, 
+    fontFamily: typography.family.regular 
   },
 });
+

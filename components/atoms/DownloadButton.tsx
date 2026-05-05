@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { TouchableOpacity, ActivityIndicator, StyleSheet } from "react-native";
 import { DownloadIcon } from "./DownloadIcon";
 import { handleDownloadMedia } from "../../lib/media-utils";
+import { colors, radii } from "../../lib/theme";
 
 interface DownloadButtonProps {
   url: string;
@@ -26,7 +27,7 @@ export const DownloadButton = ({ url, filename, style }: DownloadButtonProps) =>
       activeOpacity={0.7}
     >
       {isDownloading ? (
-        <ActivityIndicator size="small" color="#FFF" />
+        <ActivityIndicator size="small" color={colors.white} />
       ) : (
         <DownloadIcon />
       )}
@@ -38,11 +39,11 @@ const styles = StyleSheet.create({
   downloadBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    borderRadius: radii.lg,
+    backgroundColor: colors.overlay,
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
+    borderColor: colors.cardBorder,
   },
 });

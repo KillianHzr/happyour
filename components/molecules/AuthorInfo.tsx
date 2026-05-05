@@ -4,6 +4,7 @@ import { CrownedAvatar } from "../atoms/Avatar";
 import { ExpandableNote } from "../atoms/ExpandableNote";
 import { CommentIcon } from "../atoms/CommentIcon";
 import { PlusIcon } from "../atoms/PlusIcon";
+import { colors, spacing, radii, typography } from "../../lib/theme";
 
 interface AuthorInfoProps {
   avatar_url?: string | null;
@@ -45,7 +46,7 @@ export const AuthorInfo = ({
         </View>
         {note && <ExpandableNote text={note} maxLines={2} />}
       </View>
-      <View style={{ flexDirection: "row", gap: 8 }}>
+      <View style={{ flexDirection: "row", gap: spacing.sm }}>
         <TouchableOpacity style={styles.reactBtnInline} onPress={onOpenComments}>
           <CommentIcon hasBadge={hasNewComments} />
         </TouchableOpacity>
@@ -63,31 +64,31 @@ const styles = StyleSheet.create({
   authorInfo: { 
     flexDirection: "row", 
     alignItems: "flex-start", 
-    gap: 12 
+    gap: spacing.md 
   },
   usernameLine: { 
     flexDirection: "row", 
     alignItems: "center", 
-    gap: 8 
+    gap: spacing.sm 
   },
   username: { 
-    color: "#FFF", 
-    fontFamily: "Inter_700Bold", 
-    fontSize: 14 
+    color: colors.white, 
+    fontFamily: typography.family.bold, 
+    fontSize: typography.size.md 
   },
   momentTime: { 
-    color: "rgba(255,255,255,0.55)", 
-    fontFamily: "Inter_600SemiBold", 
-    fontSize: 12 
+    color: colors.textMuted, 
+    fontFamily: typography.family.semibold, 
+    fontSize: typography.size.xs 
   },
   reactBtnInline: { 
     width: 36, 
     height: 36, 
-    borderRadius: 18, 
-    backgroundColor: "rgba(255,255,255,0.15)", 
+    borderRadius: radii.full, 
+    backgroundColor: colors.glass, 
     justifyContent: "center", 
     alignItems: "center", 
     borderWidth: 1, 
-    borderColor: "rgba(255,255,255,0.2)" 
+    borderColor: colors.glassBorder 
   },
 });

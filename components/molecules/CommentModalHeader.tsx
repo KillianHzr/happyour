@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { CloseIcon } from "../atoms/CloseIcon";
+import { colors, spacing, radii, typography } from "../../lib/theme";
 
 interface CommentModalHeaderProps {
   onClose: () => void;
@@ -23,40 +24,41 @@ export const CommentModalHeader = ({ onClose }: CommentModalHeaderProps) => {
 const styles = StyleSheet.create({
   header: {
     width: "100%",
-    backgroundColor: "rgba(255,255,255,0.03)",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: colors.glassMuted,
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
     overflow: "hidden",
   },
   headerIndicator: {
     width: 40,
     height: 4,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    borderRadius: 2,
+    backgroundColor: colors.glass,
+    borderRadius: radii.xs,
     alignSelf: "center",
-    marginTop: 10,
+    marginTop: spacing.md,
   },
   headerContent: {
     width: "100%",
-    paddingVertical: 12,
+    paddingVertical: spacing.md,
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "center",
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.1)",
+    borderBottomColor: colors.cardBorder,
   },
   headerTitle: {
-    fontFamily: "Inter_700Bold",
-    fontSize: 16,
-    color: "#FFF",
+    fontFamily: typography.family.bold,
+    fontSize: typography.size.lg,
+    color: colors.white,
     letterSpacing: 0.5,
   },
   closeBtn: {
     position: "absolute",
-    right: 20,
+    right: spacing.xl,
     width: 32,
     height: 32,
     justifyContent: "center",
     alignItems: "center",
   },
 });
+

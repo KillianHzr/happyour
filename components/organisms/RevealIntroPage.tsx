@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Animated } from "react-native";
 import { Svg, Path } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { colors, spacing, typography } from "../../lib/theme";
 
 const NAVBAR_HEIGHT = 100;
 
@@ -71,7 +72,7 @@ export const RevealIntroPage = ({
         <Svg width={24} height={24} viewBox="0 0 24 24">
           <Path 
             d="M12 5v14M5 12l7 7 7-7" 
-            stroke="rgba(255,255,255,0.35)" 
+            stroke={colors.textMuted} 
             strokeWidth="1.5" 
             strokeLinecap="round" 
             strokeLinejoin="round" 
@@ -90,40 +91,40 @@ const styles = StyleSheet.create({
     height: "100%", 
     justifyContent: "center", 
     alignItems: "center", 
-    backgroundColor: "#000" 
+    backgroundColor: colors.bg 
   },
   revealIntroEyebrow: { 
-    fontFamily: "Inter_400Regular", 
-    fontSize: 13, 
-    color: "rgba(255,255,255,0.4)", 
+    fontFamily: typography.family.regular, 
+    fontSize: typography.size.sm, 
+    color: colors.textMuted, 
     letterSpacing: 4, 
     textTransform: "uppercase", 
-    marginBottom: 10 
+    marginBottom: spacing.md 
   },
   revealIntroTitle: { 
-    fontFamily: "Inter_700Bold", 
+    fontFamily: typography.family.bold, 
     fontSize: 58, 
-    color: "#FFF", 
+    color: colors.white, 
     letterSpacing: -1.5, 
     lineHeight: 62, 
     textAlign: "center" 
   },
   revealIntroGroup: { 
-    fontFamily: "Inter_400Regular", 
-    fontSize: 18, 
-    color: "rgba(255,255,255,0.4)", 
-    marginTop: 10, 
+    fontFamily: typography.family.regular, 
+    fontSize: typography.size.xl, 
+    color: colors.textMuted, 
+    marginTop: spacing.md, 
     textAlign: "center" 
   },
   revealIntroHint: { 
     position: "absolute", 
     alignItems: "center", 
-    gap: 6 
+    gap: spacing.xs + 2 
   },
   revealIntroHintText: { 
-    fontFamily: "Inter_400Regular", 
-    fontSize: 11, 
-    color: "rgba(255,255,255,0.3)", 
+    fontFamily: typography.family.regular, 
+    fontSize: typography.size.xs - 1, 
+    color: colors.textMuted, 
     letterSpacing: 2, 
     textTransform: "uppercase" 
   },
