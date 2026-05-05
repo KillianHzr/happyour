@@ -177,7 +177,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         const p = cameraRef.current.recordAsync({ maxDuration: 1 });
         warmUpPromise.current = p;
         await new Promise(r => setTimeout(r, 200));
-        if (!warmUpCancelled.current) cameraRef.current.stopRecording();
+        if (!warmUpCancelled.current && cameraRef.current) {
+          try { cameraRef.current.stopRecording(); } catch (e) { console.warn("[CAM] warmUp stopRecording error:", e); }
+        }
         try { await p; } catch (_) {}
       } finally {
         warmUpPromise.current = null;
@@ -266,7 +268,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     if (cameraMode !== "VIDEO") setCameraMode("VIDEO");
     if (isWarmingUp.current) {
       warmUpCancelled.current = true;
-      cameraRef.current.stopRecording();
+      try { cameraRef.current?.stopRecording(); } catch (e) { console.warn("[CAM] stopRecording (warmup) error:", e); }
       if (warmUpPromise.current) { try { await warmUpPromise.current; } catch (_) {} }
       isWarmingUp.current = false;
     }
@@ -286,7 +288,14 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     }
   };
 
-  const stopVideoRecording = () => { if (!isRecording) return; cameraRef.current?.stopRecording(); };
+  const stopVideoRecording = () => {
+    if (!isRecording) return;
+    try {
+      cameraRef.current?.stopRecording();
+    } catch (e) {
+      console.warn("[CAM] stopVideoRecording error:", e);
+    }
+  };
 
   const startAudioRecording = async () => {
     const perm = await AudioModule.requestRecordingPermissionsAsync();
@@ -366,7 +375,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     console.log("[CAM] takePictureAsync START");
     try {
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.9,
+        quality: 1,
         skipProcessing: Platform.OS === "android",
         exif: Platform.OS === "android",
       });
@@ -385,7 +394,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         let finalUri = photo.uri;
         if (actions.length > 0) {
           console.log(`[CAM] manipulateAsync START | actions=${JSON.stringify(actions)}`);
-          const result = await manipulateAsync(photo.uri, actions, { compress: 0.92, format: SaveFormat.JPEG });
+          // On fait juste la rotation/flip ici, compression différée à l'upload
+          const result = await manipulateAsync(photo.uri, actions, { compress: 1, format: SaveFormat.JPEG });
           finalUri = result.uri;
           console.log("[CAM] manipulateAsync END");
         }

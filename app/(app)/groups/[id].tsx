@@ -14,7 +14,8 @@ import { useUpload } from "../../../lib/upload-context";
 import { mediaCache } from "../../../lib/media-cache";
 import Svg, { Path } from "react-native-svg";
 
-import { type PhotoEntry, type Reaction } from "../../../components/PhotoFeed";
+import PhotoFeed, { type PhotoEntry, type Reaction } from "../../../components/PhotoFeed";
+import { TextSticker } from "../../../components/atoms/TextSticker";
 import { fetchChallengeData, getChallengeWeekStart, type ChallengeWithData } from "../../../lib/challenges";
 import Loader from "../../../components/Loader";
 import { ProfileIcon, VaultIcon, MomentIcon } from "../../../components/icons";
@@ -25,7 +26,6 @@ import CameraPage from "../../../components/groups/CameraPage";
 import VaultPage from "../../../components/groups/VaultPage";
 import GroupSettingsModal from "../../../components/groups/GroupSettingsModal";
 import BottomSheet from "../../../components/BottomSheet";
-import PhotoFeed, { TextSticker } from "../../../components/PhotoFeed";
 import LiveReactions from "../../../components/reveal/LiveReactions";
 import MotivationalNotificationsModal from "../../../components/MotivationalNotificationsModal";
 import { scheduleImmediateLocalNotification, scheduleFirstMomentReminder } from "../../../lib/notifications";

@@ -10,6 +10,7 @@ import {
   Modal,
   Dimensions,
   Pressable,
+  TouchableOpacity,
   Animated,
   PanResponder,
   Easing,
