@@ -15,7 +15,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.jeanmiduntm.HappyOur",
       "icon": "./assets/icon.png",
-      "buildNumber": "4",
+      "buildNumber": "5",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }

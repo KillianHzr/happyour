@@ -1233,10 +1233,15 @@ export default function PhotoFeed({ photos, currentUserId, nextUnlockDate, revea
   const [activePhotoOwnerId, setActivePhotoOwnerId] = useState<string | null>(null);
 
   const openComments = (photoId: string, ownerId: string) => {
+    console.log(`[PhotoFeed] openComments triggered for photoId: ${photoId}, ownerId: ${ownerId}`);
     setActivePhotoId(photoId);
     setActivePhotoOwnerId(ownerId);
     setCommentModalVisible(true);
   };
+
+  useEffect(() => {
+    console.log(`[PhotoFeed] commentModalVisible changed: ${commentModalVisible}, activePhotoId: ${activePhotoId}`);
+  }, [commentModalVisible, activePhotoId]);
 
   useEffect(() => {
     // Videos that are already local (served from mediaCache) don't need downloading again.

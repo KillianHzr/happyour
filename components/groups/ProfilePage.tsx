@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { decode } from "base64-arraybuffer";
-import Svg, { Path } from "react-native-svg";
+import Svg, { Path, Circle } from "react-native-svg";
 import { supabase } from "../../lib/supabase";
 import { r2Storage } from "../../lib/r2";
 import { mediaCache } from "../../lib/media-cache";
@@ -124,6 +124,14 @@ const BackArrow = () => (
   </Svg>
 );
 
+const InfoIcon = () => (
+  <Svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <Circle cx="12" cy="12" r="10" />
+    <Path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+    <Path d="M12 17h.01" />
+  </Svg>
+);
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function ProfilePage({
   userId, username, avatarUrl, email, allGroups, revealConfig,
@@ -150,6 +158,7 @@ export default function ProfilePage({
   const [notifPeriods, setNotifPeriods] = useState<("morning" | "afternoon" | "evening")[]>(["morning", "afternoon", "evening"]);
   const [showNotifModal, setShowNotifModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showRandomInfo, setShowRandomInfo] = useState(false);
 
   // ── Calendar ──
   const now = new Date();
@@ -322,10 +331,16 @@ export default function ProfilePage({
     setLoadingWeek(false);
   }, [userId, allGroups, revealConfig, username, avatarUrl]);
 
-  // ── Fetch a random viewable photo (excludes current one if possible) ──
+  // ── Fetch a random viewable photo (excludes current one and photos < 1 month old) ──
   const fetchRandomPhoto = useCallback(async (excludeId?: string): Promise<PhotoEntry | null> => {
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+
     const viewable = photoTimestamps.filter(p => {
-      const monday = getMondayOf(new Date(p.created_at));
+      const photoDate = new Date(p.created_at);
+      if (photoDate > oneMonthAgo) return false;
+
+      const monday = getMondayOf(photoDate);
       return isWeekViewable(monday, revealConfig.day, revealConfig.hour);
     });
     if (viewable.length === 0) return null;
@@ -597,11 +612,20 @@ export default function ProfilePage({
 
         {/* ── Random moment button ── */}
         {photoTimestamps.length > 0 && (
-          <TouchableOpacity style={styles.randomBtn} onPress={openRandom} disabled={randomBusy} activeOpacity={0.8}>
-            {loadingRandom
-              ? <ActivityIndicator color="#FFF" size="small" />
-              : <><RandomIcon /><Text style={styles.randomBtnText}>Moment aléatoire</Text></>}
-          </TouchableOpacity>
+          <View style={{ marginBottom: 32 }}>
+            <TouchableOpacity 
+              style={{ alignSelf: 'flex-end', marginRight: 24, marginBottom: 8 }}
+              onPress={() => setShowRandomInfo(true)}
+              hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+            >
+              <InfoIcon />
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.randomBtn, { marginHorizontal: 20, marginBottom: 0 }]} onPress={openRandom} disabled={randomBusy} activeOpacity={0.8}>
+              {loadingRandom
+                ? <ActivityIndicator color="#FFF" size="small" />
+                : <><RandomIcon /><Text style={styles.randomBtnText}>Moment aléatoire</Text></>}
+            </TouchableOpacity>
+          </View>
         )}
 
         {/* ── Account settings ── */}
@@ -680,18 +704,19 @@ export default function ProfilePage({
           >
             <BackArrow />
           </TouchableOpacity>
-          <PhotoFeed
-            photos={weekRevealPhotos}
-            currentUserId={userId}
-            nextUnlockDate={new Date(Date.now() + 7 * 86400000)}
-            revealEndDate={undefined}
-            crownWinnerId={null}
-            onScrollLock={() => {}}
-            onOpenPicker={() => {}}
-            introTitle="Tes moments"
-            introSubtitle={weekRevealIntroSubtitle}
-            hideEnd={true}
-          />
+            <PhotoFeed
+              photos={weekRevealPhotos}
+              currentUserId={userId}
+              nextUnlockDate={new Date(Date.now() + 7 * 86400000)}
+              revealEndDate={undefined}
+              crownWinnerId={null}
+              onScrollLock={() => {}}
+              onOpenPicker={() => {}}
+              onOpenComments={() => {}}
+              introTitle="Tes moments"
+              introSubtitle={weekRevealIntroSubtitle}
+              hideEnd={true}
+            />
           {weekRevealIntroSubtitle !== "" && (
             <View style={[styles.weekLabelPill, { top: insets.top + 8 }]} pointerEvents="none">
               <Text style={styles.weekLabelPillText}>{weekRevealIntroSubtitle}</Text>
@@ -720,6 +745,7 @@ export default function ProfilePage({
                 crownWinnerId={null}
                 onScrollLock={() => {}}
                 onOpenPicker={() => {}}
+                onOpenComments={() => {}}
                 hideIntro={true}
                 hideEnd={true}
               />
@@ -786,6 +812,29 @@ export default function ProfilePage({
         visible={showDeleteModal}
         onClose={() => setShowDeleteModal(false)}
       />
+
+      <Modal visible={showRandomInfo} transparent animationType="fade" onRequestClose={() => setShowRandomInfo(false)}>
+        <TouchableOpacity 
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 32 }}
+          activeOpacity={1}
+          onPress={() => setShowRandomInfo(false)}
+        >
+          <View style={{ backgroundColor: '#2C2C2E', borderRadius: 24, padding: 24, width: '100%', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}>
+            <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 20 }}>
+              <InfoIcon />
+            </View>
+            <Text style={{ color: '#FFF', fontFamily: 'Inter_600SemiBold', fontSize: 16, textAlign: 'center', lineHeight: 24, marginBottom: 24 }}>
+              Seuls les moments publiés depuis plus d'un mois apparaîtront dans la sélection aléatoire.
+            </Text>
+            <TouchableOpacity 
+              style={{ backgroundColor: '#FFF', borderRadius: 16, paddingVertical: 14, width: '100%', alignItems: 'center' }}
+              onPress={() => setShowRandomInfo(false)}
+            >
+              <Text style={{ color: '#000', fontFamily: 'Inter_700Bold', fontSize: 16 }}>Compris</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </>
   );
 }
