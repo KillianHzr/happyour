@@ -12,13 +12,15 @@ export type ChallengeTheme = {
 export type WeeklyChallenge = {
   id: string;
   group_id: string;
-  theme_id: string;
+  theme_id: string | null;
   target_user_id: string;
   period: 1 | 2;
   week_start: string;
   theme: ChallengeTheme;
   target_username: string;
   target_avatar_url: string | null;
+  proposed_by_user_id: string | null;
+  proposed_by_username: string | null;
 };
 
 export type ChallengeResponse = {
@@ -54,6 +56,26 @@ export type ActiveChallenge = {
   promptText: string;
   groupId: string;
   isTarget: boolean;
+  proposedByUsername: string | null;
+};
+
+// Option type for custom challenges
+export type CustomChallengeOption = 1 | 2 | 3;
+// 1 = target only, 2 = theme+type only, 3 = target+theme+type
+
+export type CustomChallengeQueueItem = {
+  id: string;
+  group_id: string;
+  created_by: string;
+  created_at: string;
+  target_user_id: string | null;
+  custom_theme: string | null;
+  capture_type: ChallengeCapture | null;
+  status: "pending" | "active" | "done";
+  activated_at: string | null;
+  challenge_id: string | null;
+  // computed at fetch time
+  creator_username: string;
 };
 
 // Period 1: Monday (1) – Wednesday (3)
@@ -105,27 +127,30 @@ export function mapChallenge(row: any): WeeklyChallenge {
   return {
     id: row.id,
     group_id: row.group_id,
-    theme_id: row.theme_id,
+    theme_id: row.theme_id ?? null,
     target_user_id: row.target_user_id,
     period: row.period as 1 | 2,
     week_start: row.week_start,
     theme: {
-      id: theme?.id ?? "",
-      label: theme?.label ?? "",
-      capture_type: (theme?.capture_type ?? "PHOTO") as ChallengeCapture,
+      id: row.custom_theme_label ? "custom" : (theme?.id ?? ""),
+      label: row.custom_theme_label ?? theme?.label ?? "",
+      capture_type: (row.custom_capture_type ?? theme?.capture_type ?? "PHOTO") as ChallengeCapture,
     },
     target_username: profile?.username ?? "Quelqu'un",
     target_avatar_url: profile?.avatar_url ?? null,
+    proposed_by_user_id: row.proposed_by_user_id ?? null,
+    proposed_by_username: row.proposed_by_username ?? null,
   };
 }
 
 export const CHALLENGE_SELECT =
   "id, group_id, theme_id, target_user_id, period, week_start, " +
+  "proposed_by_user_id, proposed_by_username, custom_theme_label, custom_capture_type, " +
   "challenge_themes:theme_id(id, label, capture_type), " +
   "profiles:target_user_id(username, avatar_url)";
 
 // Lazy generation: fetch existing or create for this group/period/week.
-// Race condition is handled by UNIQUE constraint (ON CONFLICT → re-read).
+// Checks custom challenge queue first before random generation.
 export async function fetchOrGenerateChallenge(
   groupId: string,
   period: 1 | 2,
@@ -150,11 +175,10 @@ export async function fetchOrGenerateChallenge(
 
   if (existing) return mapChallenge(existing);
 
-  // Get all themes
+  // Get all themes (still needed for option 1 queue items or regular generation)
   const { data: themes } = await supabase
     .from("challenge_themes")
     .select("id, label, capture_type");
-  if (!themes || themes.length === 0) return null;
   if (members.length === 0) return null;
 
   // Rotation: exclude recent targets (last memberCount-1 challenges)
@@ -182,14 +206,84 @@ export async function fetchOrGenerateChallenge(
   let eligible = members.filter((m) => !excluded.has(m.user_id));
   if (eligible.length === 0) eligible = members;
 
-  const target = eligible[Math.floor(Math.random() * eligible.length)];
-  const theme = themes[Math.floor(Math.random() * themes.length)];
+  // Check custom queue — oldest pending item takes priority
+  const { data: queueItem } = await supabase
+    .from("custom_challenge_queue")
+    .select("*, creator:created_by(username)")
+    .eq("group_id", groupId)
+    .eq("status", "pending")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  let targetUserId: string;
+  let themeId: string | null = null;
+  let customThemeLabel: string | null = null;
+  let customCaptureType: string | null = null;
+  let proposedByUserId: string | null = null;
+  let proposedByUsername: string | null = null;
+
+  if (queueItem) {
+    proposedByUserId = queueItem.created_by;
+    const creator = Array.isArray(queueItem.creator) ? queueItem.creator[0] : queueItem.creator;
+    proposedByUsername = creator?.username ?? null;
+
+    // Resolve target: use specified one, or pick from rotation
+    if (queueItem.target_user_id) {
+      targetUserId = queueItem.target_user_id;
+    } else {
+      const t = eligible[Math.floor(Math.random() * eligible.length)];
+      targetUserId = t.user_id;
+    }
+
+    // Resolve theme: use custom or pick random
+    if (queueItem.custom_theme) {
+      customThemeLabel = queueItem.custom_theme;
+      customCaptureType = queueItem.capture_type;
+    } else {
+      if (!themes || themes.length === 0) return null;
+      const t = themes[Math.floor(Math.random() * themes.length)];
+      themeId = t.id;
+    }
+
+    // Mark queue item as active before inserting challenge
+    await supabase
+      .from("custom_challenge_queue")
+      .update({ status: "active", activated_at: new Date().toISOString() })
+      .eq("id", queueItem.id);
+  } else {
+    // Regular random generation
+    if (!themes || themes.length === 0) return null;
+    const target = eligible[Math.floor(Math.random() * eligible.length)];
+    const theme = themes[Math.floor(Math.random() * themes.length)];
+    targetUserId = target.user_id;
+    themeId = theme.id;
+  }
 
   // Insert — ignore conflict (another device may have beaten us)
-  await supabase
+  const { data: inserted } = await supabase
     .from("weekly_challenges")
-    .insert({ group_id: groupId, theme_id: theme.id, target_user_id: target.user_id, period, week_start: weekStart })
+    .insert({
+      group_id: groupId,
+      theme_id: themeId,
+      target_user_id: targetUserId,
+      period,
+      week_start: weekStart,
+      proposed_by_user_id: proposedByUserId,
+      proposed_by_username: proposedByUsername,
+      custom_theme_label: customThemeLabel,
+      custom_capture_type: customCaptureType,
+    })
+    .select("id")
     .maybeSingle();
+
+  // If we activated a queue item, link it to the generated challenge
+  if (queueItem && inserted?.id) {
+    await supabase
+      .from("custom_challenge_queue")
+      .update({ challenge_id: inserted.id })
+      .eq("id", queueItem.id);
+  }
 
   // Re-read the canonical row
   const { data: final } = await supabase
@@ -280,4 +374,108 @@ export function getWinnerResponseIds(
   const max = Math.max(...Object.values(counts));
   if (max === 0) return [];
   return Object.entries(counts).filter(([, n]) => n === max).map(([id]) => id);
+}
+
+// ─── Custom challenge queue helpers ──────────────────────────────────────────
+
+// Returns the total number of pending items in a group's queue (for position preview)
+export async function getQueuePendingCount(groupId: string): Promise<number> {
+  const { count } = await supabase
+    .from("custom_challenge_queue")
+    .select("*", { count: "exact", head: true })
+    .eq("group_id", groupId)
+    .eq("status", "pending");
+  return count ?? 0;
+}
+
+// Add a custom challenge to the queue
+export async function addCustomChallenge(
+  groupId: string,
+  createdBy: string,
+  opts: {
+    targetUserId?: string | null;
+    customTheme?: string | null;
+    captureType?: ChallengeCapture | null;
+  }
+): Promise<{ id: string } | null> {
+  const { data, error } = await supabase
+    .from("custom_challenge_queue")
+    .insert({
+      group_id: groupId,
+      created_by: createdBy,
+      target_user_id: opts.targetUserId ?? null,
+      custom_theme: opts.customTheme ?? null,
+      capture_type: opts.captureType ?? null,
+      status: "pending",
+    })
+    .select("id")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+// Update a pending custom challenge
+export async function updateCustomChallenge(
+  id: string,
+  opts: {
+    targetUserId?: string | null;
+    customTheme?: string | null;
+    captureType?: ChallengeCapture | null;
+  }
+): Promise<void> {
+  const { error } = await supabase
+    .from("custom_challenge_queue")
+    .update({
+      target_user_id: opts.targetUserId ?? null,
+      custom_theme: opts.customTheme ?? null,
+      capture_type: opts.captureType ?? null,
+    })
+    .eq("id", id)
+    .eq("status", "pending");
+  if (error) throw new Error(error.message);
+}
+
+// Delete a pending custom challenge
+export async function deleteCustomChallenge(id: string): Promise<void> {
+  const { error } = await supabase
+    .from("custom_challenge_queue")
+    .delete()
+    .eq("id", id)
+    .eq("status", "pending");
+  if (error) throw new Error(error.message);
+}
+
+// Fetch the user's own queue items for a group (pending + active, no done)
+export async function fetchMyCustomChallengeQueue(
+  groupId: string,
+  userId: string
+): Promise<CustomChallengeQueueItem[]> {
+  const { data, error } = await supabase
+    .from("custom_challenge_queue")
+    .select("*, creator:created_by(username)")
+    .eq("group_id", groupId)
+    .eq("created_by", userId)
+    .in("status", ["pending", "active"])
+    .order("created_at", { ascending: true });
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((row: any) => {
+    const creator = Array.isArray(row.creator) ? row.creator[0] : row.creator;
+    return {
+      ...row,
+      creator_username: creator?.username ?? "",
+    };
+  });
+}
+
+// Fetch all pending items for a group (to compute positions)
+export async function fetchGroupQueuePending(groupId: string): Promise<{ id: string; created_at: string }[]> {
+  const { data } = await supabase
+    .from("custom_challenge_queue")
+    .select("id, created_at")
+    .eq("group_id", groupId)
+    .eq("status", "pending")
+    .order("created_at", { ascending: true });
+  return data ?? [];
 }
