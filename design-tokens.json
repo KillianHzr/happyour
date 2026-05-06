@@ -1,0 +1,110 @@
+{
+  "primitive": {
+    "color": {
+      "black": { "$value": "#000000", "$type": "color" },
+      "white": { "$value": "#FFFFFF", "$type": "color" },
+      "slate": {
+        "50": { "$value": "#f8fafc", "$type": "color" },
+        "100": { "$value": "#f1f5f9", "$type": "color" },
+        "200": { "$value": "#e2e8f0", "$type": "color" },
+        "300": { "$value": "#cbd5e1", "$type": "color" },
+        "400": { "$value": "#94a3b8", "$type": "color" },
+        "500": { "$value": "#64748b", "$type": "color" },
+        "600": { "$value": "#475569", "$type": "color" },
+        "700": { "$value": "#334155", "$type": "color" },
+        "800": { "$value": "#1e293b", "$type": "color" },
+        "900": { "$value": "#0f172a", "$type": "color" },
+        "950": { "$value": "#020617", "$type": "color" },
+        "surface": { "$value": "#2C2C2E", "$type": "color" }
+      },
+      "gold": {
+        "light": { "$value": "#FFD700", "$type": "color" },
+        "dark": { "$value": "#B8860B", "$type": "color" }
+      },
+      "red": {
+        "400": { "$value": "#FF453A", "$type": "color" },
+        "500": { "$value": "#EF4444", "$type": "color" },
+        "600": { "$value": "#DC2626", "$type": "color" },
+        "danger": { "$value": "#FF3B30", "$type": "color" }
+      },
+      "glass": {
+        "base": { "$value": "rgba(255,255,255,0.03)", "$type": "color" },
+        "card": { "$value": "rgba(255,255,255,0.08)", "$type": "color" },
+        "border": { "$value": "rgba(255,255,255,0.18)", "$type": "color" },
+        "muted": { "$value": "rgba(255,255,255,0.06)", "$type": "color" }
+      }
+    },
+    "spacing": {
+      "0": { "$value": 0, "$type": "dimension" },
+      "4": { "$value": 4, "$type": "dimension" },
+      "8": { "$value": 8, "$type": "dimension" },
+      "12": { "$value": 12, "$type": "dimension" },
+      "16": { "$value": 16, "$type": "dimension" },
+      "24": { "$value": 24, "$type": "dimension" },
+      "32": { "$value": 32, "$type": "dimension" },
+      "48": { "$value": 48, "$type": "dimension" }
+    },
+    "radii": {
+      "none": { "$value": 0, "$type": "dimension" },
+      "xs": { "$value": 2, "$type": "dimension" },
+      "sm": { "$value": 4, "$type": "dimension" },
+      "md": { "$value": 8, "$type": "dimension" },
+      "lg": { "$value": 14, "$type": "dimension" },
+      "xl": { "$value": 16, "$type": "dimension" },
+      "xxl": { "$value": 20, "$type": "dimension" },
+      "full": { "$value": 9999, "$type": "dimension" }
+    }
+  },
+  "semantic": {
+    "color": {
+      "bg": { "$value": "{primitive.color.black}", "$type": "color" },
+      "text": {
+        "primary": { "$value": "{primitive.color.white}", "$type": "color" },
+        "secondary": { "$value": "{primitive.color.slate.400}", "$type": "color" },
+        "muted": { "$value": "rgba(255,255,255,0.6)", "$type": "color" }
+      },
+      "accent": {
+        "primary": { "$value": "{primitive.color.white}", "$type": "color" },
+        "muted": { "$value": "{primitive.color.slate.500}", "$type": "color" }
+      },
+      "card": {
+        "bg": { "$value": "{primitive.color.glass.card}", "$type": "color" },
+        "border": { "$value": "{primitive.color.glass.border}", "$type": "color" }
+      },
+      "status": {
+        "danger": { "$value": "{primitive.color.red.danger}", "$type": "color" },
+        "dangerLight": { "$value": "{primitive.color.red.400}", "$type": "color" },
+        "gold": { "$value": "{primitive.color.gold.light}", "$type": "color" }
+      },
+      "surface": { "$value": "{primitive.color.slate.surface}", "$type": "color" }
+    },
+    "spacing": {
+      "xs": { "$value": "{primitive.spacing.4}", "$type": "dimension" },
+      "sm": { "$value": "{primitive.spacing.8}", "$type": "dimension" },
+      "md": { "$value": "{primitive.spacing.12}", "$type": "dimension" },
+      "lg": { "$value": "{primitive.spacing.16}", "$type": "dimension" },
+      "xl": { "$value": "{primitive.spacing.24}", "$type": "dimension" },
+      "xxl": { "$value": "{primitive.spacing.32}", "$type": "dimension" }
+    },
+    "radii": {
+      "button": { "$value": "{primitive.radii.lg}", "$type": "dimension" },
+      "card": { "$value": "{primitive.radii.xxl}", "$type": "dimension" },
+      "input": { "$value": "{primitive.radii.lg}", "$type": "dimension" }
+    }
+  },
+  "typography": {
+    "size": {
+      "xs": { "$value": 12, "$type": "dimension" },
+      "sm": { "$value": 13, "$type": "dimension" },
+      "md": { "$value": 14, "$type": "dimension" },
+      "lg": { "$value": 16, "$type": "dimension" },
+      "xl": { "$value": 18, "$type": "dimension" },
+      "xxl": { "$value": 24, "$type": "dimension" }
+    },
+    "family": {
+      "regular": { "$value": "Inter_400Regular", "$type": "fontFamily" },
+      "semibold": { "$value": "Inter_600SemiBold", "$type": "fontFamily" },
+      "bold": { "$value": "Inter_700Bold", "$type": "fontFamily" }
+    }
+  }
+}

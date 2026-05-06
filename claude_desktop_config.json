@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "happyour-filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/Users/killian/Dev/Projects/School/Projet_FinM2/HappyOur"
+      ]
+    }
+  }
+}
