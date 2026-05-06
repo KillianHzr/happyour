@@ -181,6 +181,7 @@ export default function ProfilePage({
 
   // ── Random moment modal ──
   const [randomPhoto, setRandomPhoto] = useState<PhotoEntry | null>(null);
+  const [randomWeekLabel, setRandomWeekLabel] = useState("");
   const [showRandomReveal, setShowRandomReveal] = useState(false);
   const [loadingRandom, setLoadingRandom] = useState(false);
   const [randomBusy, setRandomBusy] = useState(false);
@@ -451,6 +452,12 @@ export default function ProfilePage({
     shuffleBtnOpacity.setValue(1);
     const photo = await fetchRandomPhoto();
     if (!photo) { setLoadingRandom(false); setRandomBusy(false); return; }
+
+    const monday = getMondayOf(new Date(photo.created_at));
+    const sunday = addDays(monday, 6);
+    const weekNum = getISOWeek(monday);
+    setRandomWeekLabel(`S${weekNum}  ·  ${fmtDDMM(monday)} au ${fmtDDMM(sunday)}`);
+
     setRandomPhoto(photo);
     setShowRandomReveal(true);
     setLoadingRandom(false);
@@ -468,7 +475,13 @@ export default function ProfilePage({
     ]).start(async () => {
       setLoadingRandom(true);
       const photo = await fetchRandomPhoto(currentId);
-      if (photo) setRandomPhoto(photo);
+      if (photo) {
+        setRandomPhoto(photo);
+        const monday = getMondayOf(new Date(photo.created_at));
+        const sunday = addDays(monday, 6);
+        const weekNum = getISOWeek(monday);
+        setRandomWeekLabel(`S${weekNum}  ·  ${fmtDDMM(monday)} au ${fmtDDMM(sunday)}`);
+      }
       setLoadingRandom(false);
       requestAnimationFrame(() => {
         randomSlideAnim.setValue(28);
@@ -840,6 +853,12 @@ export default function ProfilePage({
               />
             )}
           </Animated.View>
+
+          {randomWeekLabel !== "" && (
+            <View style={[styles.weekLabelPill, { top: insets.top + 8 }]} pointerEvents="none">
+              <Text style={styles.weekLabelPillText}>{randomWeekLabel}</Text>
+            </View>
+          )}
 
           {loadingRandom && (
             <View style={styles.randomLoadingOverlay}>

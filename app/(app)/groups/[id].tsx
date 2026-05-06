@@ -14,7 +14,8 @@ import { useUpload } from "../../../lib/upload-context";
 import { mediaCache } from "../../../lib/media-cache";
 import Svg, { Path } from "react-native-svg";
 
-import { type PhotoEntry, type Reaction } from "../../../components/PhotoFeed";
+import PhotoFeed, { type PhotoEntry, type Reaction } from "../../../components/PhotoFeed";
+import { TextSticker } from "../../../components/atoms/TextSticker";
 import { fetchChallengeData, getChallengeWeekStart, type ChallengeWithData } from "../../../lib/challenges";
 import Loader from "../../../components/Loader";
 import { ProfileIcon, VaultIcon, MomentIcon } from "../../../components/icons";
@@ -27,7 +28,6 @@ import GroupSettingsModal from "../../../components/groups/GroupSettingsModal";
 import CustomChallengeCreatePage from "../../../components/groups/CustomChallengeCreatePage";
 import CustomChallengeQueuePage from "../../../components/groups/CustomChallengeQueuePage";
 import BottomSheet from "../../../components/BottomSheet";
-import PhotoFeed, { TextSticker } from "../../../components/PhotoFeed";
 import LiveReactions from "../../../components/reveal/LiveReactions";
 import MotivationalNotificationsModal from "../../../components/MotivationalNotificationsModal";
 import { scheduleImmediateLocalNotification, scheduleFirstMomentReminder } from "../../../lib/notifications";
@@ -51,6 +51,7 @@ type GroupData = {
   photos: PhotoEntry[];
   crownWinnerId: string | null;
   crownDurationMs: number;
+  allDurations: Record<string, number>;
   isAdmin: boolean;
   challenges: { period1: ChallengeWithData | null; period2: ChallengeWithData | null } | null;
   currentUserRespondedToChallenge: boolean;
@@ -337,6 +338,7 @@ export default function MainPagerScreen() {
               photos: groupPhotos,
               crownWinnerId: crown?.winnerId ?? null,
               crownDurationMs: crown?.durationMs ?? 0,
+              allDurations: crown?.allDurations ?? {},
               isAdmin: isAdminForGroup,
               challenges,
               currentUserRespondedToChallenge,
@@ -351,6 +353,7 @@ export default function MainPagerScreen() {
             photos: [],
             crownWinnerId: null,
             crownDurationMs: 0,
+            allDurations: {},
             isAdmin: isAdminForGroup,
             challenges,
             currentUserRespondedToChallenge,
@@ -1125,6 +1128,7 @@ export default function MainPagerScreen() {
             revealEndDate={activeRevealEndDate}
             crownWinnerId={crownWinnerId}
             crownDurationMs={crownDurationMs}
+            crownAllDurations={activeData?.allDurations ?? {}}
             groupName={groupName}
             onScrollLock={lockScrollDirect}
             onOpenPicker={setActiveReactionPhotoId}
@@ -1150,6 +1154,7 @@ export default function MainPagerScreen() {
                 opacity: emojiWheelAnim,
                 transform: [{ scale: emojiWheelAnim }]
               }]}>
+                <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
                 {(() => {
                   const activePhoto = photos.find(p => p.id === activeReactionPhotoId);
                   const myReactionStr = activePhoto?.reactions.find(r => r.user_id === user?.id)?.sticker_id;
@@ -1479,8 +1484,8 @@ const styles = StyleSheet.create({
   emojiWheel: {
     position: "absolute",
     right: 24, // Match the padding of the momentOverlay
-    bottom: NAVBAR_HEIGHT + 180, // Elevated further to ensure it sits above the + button
-    backgroundColor: "rgba(255,255,255,0.18)",
+    bottom: NAVBAR_HEIGHT + 140, // Elevated further to ensure it sits above the + button
+    backgroundColor: "rgba(255,255,255,0.05)",
     borderRadius: 35,
     padding: 8,
     gap: 10,
@@ -1492,6 +1497,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
     shadowRadius: 12,
+    overflow: "hidden",
   },
   wheelBtn: {
     width: 56,

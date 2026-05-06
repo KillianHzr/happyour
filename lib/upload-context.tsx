@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState } from "react";
 import * as FileSystem from "expo-file-system/legacy";
+import { decode } from "base64-arraybuffer";
+import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { r2Storage } from "./r2";
 import { supabase } from "./supabase";
 import { notifyNewPhoto, cancelFirstMomentReminder, cancelPostReminderNotification } from "./notifications";
@@ -46,15 +48,31 @@ async function uploadFilesToR2(
 ): Promise<{ finalPath: string; secondPath: string | null }> {
   let finalPath = "text_mode";
   if (fileName && fileUri && contentType) {
-    {
+    const isVideo = contentType.includes("video") || fileName.endsWith(".mp4");
+    const isAudio = contentType.includes("audio") || fileName.endsWith(".m4a");
+    const isImage = contentType.includes("image") || fileName.endsWith(".jpg") || fileName.endsWith(".jpeg");
+
+    let uploadUri = fileUri;
+
+    // Compression différée pour les images (Photos et Dessins)
+    if (isImage && !fileName.includes("_draw")) {
+       console.log(`[Upload] Compression de l'image principale: ${fileName}`);
+       const result = await manipulateAsync(fileUri, [], { compress: 0.8, format: SaveFormat.JPEG });
+       uploadUri = result.uri;
+    }
+
+    if (isVideo || isAudio) {
       const presignedUrl = await r2Storage.getPresignedUploadUrl(fileName, contentType);
-      const uploadResult = await FileSystem.uploadAsync(presignedUrl, fileUri, {
+      const uploadResult = await FileSystem.uploadAsync(presignedUrl, uploadUri, {
         httpMethod: "PUT",
         headers: { "Content-Type": contentType },
       });
       if (uploadResult.status < 200 || uploadResult.status >= 300) {
         throw new Error(`Upload échoué: HTTP ${uploadResult.status}`);
       }
+    } else {
+      const base64 = await FileSystem.readAsStringAsync(uploadUri, { encoding: FileSystem.EncodingType.Base64 });
+      await r2Storage.upload(fileName, decode(base64), contentType);
     }
     finalPath = fileName;
   }
@@ -65,15 +83,30 @@ async function uploadFilesToR2(
       secondPath = "text_mode";
     } else if (secondFile.fileName && secondFile.fileUri && secondFile.contentType) {
       const sf = secondFile as { fileName: string; fileUri: string; contentType: string };
-      {
+      const isSecondVideo = sf.contentType.includes("video") || sf.fileName.endsWith(".mp4");
+      const isSecondAudio = sf.contentType.includes("audio") || sf.fileName.endsWith(".m4a");
+      const isSecondImage = sf.contentType.includes("image") || sf.fileName.endsWith(".jpg") || sf.fileName.endsWith(".jpeg");
+
+      let secondUploadUri = sf.fileUri;
+
+      if (isSecondImage && !sf.fileName.includes("_draw")) {
+        console.log(`[Upload] Compression de la 2e image: ${sf.fileName}`);
+        const result2 = await manipulateAsync(sf.fileUri, [], { compress: 0.8, format: SaveFormat.JPEG });
+        secondUploadUri = result2.uri;
+      }
+
+      if (isSecondVideo || isSecondAudio) {
         const presignedUrl2 = await r2Storage.getPresignedUploadUrl(sf.fileName, sf.contentType);
-        const uploadResult2 = await FileSystem.uploadAsync(presignedUrl2, sf.fileUri, {
+        const uploadResult2 = await FileSystem.uploadAsync(presignedUrl2, secondUploadUri, {
           httpMethod: "PUT",
           headers: { "Content-Type": sf.contentType },
         });
         if (uploadResult2.status < 200 || uploadResult2.status >= 300) {
           throw new Error(`Upload 2e capture échoué: HTTP ${uploadResult2.status}`);
         }
+      } else {
+        const base64b = await FileSystem.readAsStringAsync(secondUploadUri, { encoding: FileSystem.EncodingType.Base64 });
+        await r2Storage.upload(sf.fileName, decode(base64b), sf.contentType);
       }
       secondPath = sf.fileName;
     }

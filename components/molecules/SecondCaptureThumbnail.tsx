@@ -102,23 +102,23 @@ export const SecondCaptureThumbnail = ({ secondPath, secondNote, onPress }: Seco
 const styles = StyleSheet.create({
   secondThumb: { 
     position: "absolute", 
-    bottom: 140, 
-    right: spacing.lg, 
-    borderRadius: radii.md, 
+    bottom: 189,
+    right: spacing.lg,
+    borderRadius: radii.md,
     overflow: "hidden", 
     borderWidth: 2, 
-    borderColor: colors.glassBorder 
+    borderColor: colors.glassBorder
   },
   secondThumbBg: { 
     flex: 1, 
-    backgroundColor: colors.black, 
+    backgroundColor: colors.black,
     justifyContent: "center", 
     alignItems: "center" 
   },
   secondThumbText: { 
-    color: colors.text, 
-    fontFamily: typography.family.semibold, 
-    fontSize: typography.size.xs, 
+    color: colors.text,
+    fontFamily: typography.family.semibold,
+    fontSize: typography.size.xs,
     textAlign: "center", 
     lineHeight: 13 
   },
@@ -128,12 +128,12 @@ const styles = StyleSheet.create({
   },
   secondThumbOverlay: { 
     position: "absolute", 
-    bottom: spacing.xs, 
-    right: spacing.xs, 
+    bottom: spacing.xs,
+    right: spacing.xs,
     width: 26, 
     height: 26, 
-    borderRadius: radii.sm, 
-    backgroundColor: colors.overlay, 
+    borderRadius: radii.sm,
+    backgroundColor: colors.overlay,
     justifyContent: "center", 
     alignItems: "center" 
   },
@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
     width: 22, 
     height: 22, 
     borderRadius: 11, 
-    backgroundColor: colors.glass, 
+    backgroundColor: colors.glass,
     justifyContent: "center", 
     alignItems: "center", 
     paddingLeft: 1 
@@ -150,10 +150,9 @@ const styles = StyleSheet.create({
     width: 28, 
     height: 28, 
     borderRadius: 14, 
-    backgroundColor: colors.overlay, 
+    backgroundColor: colors.overlay,
     justifyContent: "center", 
     alignItems: "center", 
     paddingLeft: 2 
   },
 });
-

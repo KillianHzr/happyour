@@ -46,15 +46,15 @@ export const AuthorInfo = ({
         </View>
         {note && <ExpandableNote text={note} maxLines={2} />}
       </View>
-      <View style={{ flexDirection: "row", gap: spacing.sm }}>
-        <TouchableOpacity style={styles.reactBtnInline} onPress={onOpenComments}>
-          <CommentIcon hasBadge={hasNewComments} />
-        </TouchableOpacity>
+      <View style={styles.actionsColumn}>
         {!isOwn && (
           <TouchableOpacity style={styles.reactBtnInline} onPress={onOpenPicker}>
             <PlusIcon />
           </TouchableOpacity>
         )}
+        <TouchableOpacity style={styles.reactBtnInline} onPress={onOpenComments}>
+          <CommentIcon hasBadge={hasNewComments} />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -62,33 +62,38 @@ export const AuthorInfo = ({
 
 const styles = StyleSheet.create({
   authorInfo: { 
-    flexDirection: "row", 
-    alignItems: "flex-start", 
-    gap: spacing.md 
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: spacing.md
   },
   usernameLine: { 
     flexDirection: "row", 
     alignItems: "center", 
-    gap: spacing.sm 
+    gap: spacing.sm
   },
   username: { 
-    color: colors.white, 
-    fontFamily: typography.family.bold, 
-    fontSize: typography.size.md 
+    color: colors.white,
+    fontFamily: typography.family.bold,
+    fontSize: typography.size.md
   },
   momentTime: { 
-    color: colors.textMuted, 
-    fontFamily: typography.family.semibold, 
-    fontSize: typography.size.xs 
+    color: colors.textMuted,
+    fontFamily: typography.family.semibold,
+    fontSize: typography.size.xs
   },
-  reactBtnInline: { 
-    width: 36, 
-    height: 36, 
-    borderRadius: radii.full, 
-    backgroundColor: colors.glass, 
-    justifyContent: "center", 
+  actionsColumn: {
+    flexDirection: "column",
+    gap: 12,
+    alignItems: "center",
+  },
+  reactBtnInline: {
+    width: 42,
+    height: 42,
+    borderRadius: radii.full,
+    backgroundColor: colors.glass,
+    justifyContent: "center",
     alignItems: "center", 
     borderWidth: 1, 
-    borderColor: colors.glassBorder 
+    borderColor: colors.glassBorder
   },
 });
