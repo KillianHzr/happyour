@@ -1144,6 +1144,7 @@ export default function MainPagerScreen() {
                 opacity: emojiWheelAnim,
                 transform: [{ scale: emojiWheelAnim }]
               }]}>
+                <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
                 {(() => {
                   const activePhoto = photos.find(p => p.id === activeReactionPhotoId);
                   const myReactionStr = activePhoto?.reactions.find(r => r.user_id === user?.id)?.sticker_id;
@@ -1456,8 +1457,8 @@ const styles = StyleSheet.create({
   emojiWheel: {
     position: "absolute",
     right: 24, // Match the padding of the momentOverlay
-    bottom: NAVBAR_HEIGHT + 180, // Elevated further to ensure it sits above the + button
-    backgroundColor: "rgba(255,255,255,0.18)",
+    bottom: NAVBAR_HEIGHT + 140, // Elevated further to ensure it sits above the + button
+    backgroundColor: "rgba(255,255,255,0.05)",
     borderRadius: 35,
     padding: 8,
     gap: 10,
@@ -1469,6 +1470,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
     shadowRadius: 12,
+    overflow: "hidden",
   },
   wheelBtn: {
     width: 56,

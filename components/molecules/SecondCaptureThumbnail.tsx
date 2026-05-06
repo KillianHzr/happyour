@@ -101,7 +101,7 @@ export const SecondCaptureThumbnail = ({ secondPath, secondNote, onPress }: Seco
 const styles = StyleSheet.create({
   secondThumb: { 
     position: "absolute", 
-    bottom: 140, 
+    bottom: 189, 
     right: 16, 
     borderRadius: 12, 
     overflow: "hidden", 

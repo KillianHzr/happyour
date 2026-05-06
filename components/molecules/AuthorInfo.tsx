@@ -45,15 +45,15 @@ export const AuthorInfo = ({
         </View>
         {note && <ExpandableNote text={note} maxLines={2} />}
       </View>
-      <View style={{ flexDirection: "row", gap: 8 }}>
-        <TouchableOpacity style={styles.reactBtnInline} onPress={onOpenComments}>
-          <CommentIcon hasBadge={hasNewComments} />
-        </TouchableOpacity>
+      <View style={styles.actionsColumn}>
         {!isOwn && (
           <TouchableOpacity style={styles.reactBtnInline} onPress={onOpenPicker}>
             <PlusIcon />
           </TouchableOpacity>
         )}
+        <TouchableOpacity style={styles.reactBtnInline} onPress={onOpenComments}>
+          <CommentIcon hasBadge={hasNewComments} />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -62,7 +62,7 @@ export const AuthorInfo = ({
 const styles = StyleSheet.create({
   authorInfo: { 
     flexDirection: "row", 
-    alignItems: "flex-start", 
+    alignItems: "flex-end", 
     gap: 12 
   },
   usernameLine: { 
@@ -80,10 +80,15 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold", 
     fontSize: 12 
   },
+  actionsColumn: {
+    flexDirection: "column",
+    gap: 12,
+    alignItems: "center",
+  },
   reactBtnInline: { 
-    width: 36, 
-    height: 36, 
-    borderRadius: 18, 
+    width: 42, 
+    height: 42, 
+    borderRadius: 21, 
     backgroundColor: "rgba(255,255,255,0.15)", 
     justifyContent: "center", 
     alignItems: "center", 
