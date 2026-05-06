@@ -284,6 +284,7 @@ export async function scheduleAllRecaps(userId: string) {
     .select("group_id, groups:group_id(name)")
     .eq("user_id", userId);
   if (!memberships) return;
+
   const now = new Date();
   const day = now.getDay();
   const diffToSunday = day === 0 ? 0 : 7 - day;
@@ -293,6 +294,7 @@ export async function scheduleAllRecaps(userId: string) {
   if (now >= sunday) {
     sunday.setDate(sunday.getDate() + 7);
   }
+
   for (const m of memberships as any[]) {
     const groupName = m.groups?.name;
     if (groupName) {
@@ -300,7 +302,85 @@ export async function scheduleAllRecaps(userId: string) {
       await scheduleCountdownNotification(m.group_id, groupName, sunday);
       await scheduleReactionsReminder(m.group_id, groupName, sunday);
       await schedulePostReminderNotification(m.group_id, groupName, sunday);
+      
+      // Vérification asynchrone de la participation (après 2 jours)
+      checkGroupParticipationAndNotify(m.group_id, groupName);
     }
+  }
+}
+
+/**
+ * Au bout de 2 jours si moins de 45% des membres dans le groupe ne postent pas, 
+ * une notifications push s’envoie au groupe : ”N’oublie pas de partager un moment à ton groupe !“
+ */
+export async function checkGroupParticipationAndNotify(groupId: string, groupName: string) {
+  try {
+    const now = new Date();
+    
+    // Calcul du début de la semaine (dernier dimanche 20h)
+    const day = now.getDay();
+    const diffToSunday = day === 0 ? 0 : 7 - day;
+    const sunday = new Date(now);
+    sunday.setDate(now.getDate() + diffToSunday);
+    sunday.setHours(20, 0, 0, 0);
+    if (now >= sunday) {
+      sunday.setDate(sunday.getDate() + 7);
+    }
+    const weekStart = new Date(sunday.getTime() - 7 * 24 * 3600 * 1000);
+    
+    // Seuil de 2 jours après le début de la semaine (Mardi 20h)
+    const reminderThreshold = new Date(weekStart.getTime() + 2 * 24 * 3600 * 1000);
+    if (now < reminderThreshold) return;
+
+    // 1. Vérifier si une notification a déjà été envoyée cette semaine pour ce groupe
+    const { data: existing, error: checkError } = await supabase
+      .from("group_notifications")
+      .select("sent_at")
+      .eq("group_id", groupId)
+      .eq("notification_type", "participation_reminder")
+      .gte("sent_at", weekStart.toISOString())
+      .limit(1);
+
+    if (checkError || (existing && existing.length > 0)) return;
+
+    // 2. Calculer le taux de participation actuel
+    const [membersRes, photosRes] = await Promise.all([
+      supabase.from("group_members").select("user_id", { count: "exact", head: true }).eq("group_id", groupId),
+      supabase.from("photos")
+        .select("user_id")
+        .eq("group_id", groupId)
+        .gte("created_at", weekStart.toISOString())
+    ]);
+
+    const memberCount = membersRes.count || 0;
+    if (memberCount === 0) return;
+
+    const uniquePosters = new Set((photosRes.data || []).map((p: any) => p.user_id)).size;
+    const participationRate = uniquePosters / memberCount;
+
+    // 3. Si participation < 45%, envoyer le rappel
+    if (participationRate < 0.45) {
+      const tokens = await getGroupMemberTokens(groupId);
+      if (tokens.length > 0) {
+        console.log(`[Participation] Envoi rappel pour "${groupName}" (${Math.round(participationRate * 100)}% de participation)`);
+        await sendPushToTokens(
+          tokens,
+          groupName,
+          "N’oublie pas de partager un moment à ton groupe !"
+        );
+        
+        // 4. Marquer comme envoyé dans la base de données
+        await supabase
+          .from("group_notifications")
+          .insert({
+            group_id: groupId,
+            notification_type: "participation_reminder",
+            sent_at: now.toISOString()
+          });
+      }
+    }
+  } catch (e) {
+    console.error("Error in checkGroupParticipationAndNotify:", e);
   }
 }
 
