@@ -10,6 +10,8 @@ const NAVBAR_HEIGHT = 100;
 interface CrownRevealPageProps {
   winner: PhotoEntry;
   durationMs: number;
+  currentUserId?: string;
+  userDurationMs?: number;
 }
 
 function formatCrownDuration(ms: number): string {
@@ -24,9 +26,10 @@ function formatCrownDuration(ms: number): string {
   return parts.join(" ");
 }
 
-export const CrownRevealPage = ({ winner, durationMs }: CrownRevealPageProps) => {
+export const CrownRevealPage = ({ winner, durationMs, currentUserId, userDurationMs = 0 }: CrownRevealPageProps) => {
   const insets = useSafeAreaInsets();
   const paddingTopBottom = Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 24) / 2);
+  const isWinner = currentUserId === winner.user_id;
 
   return (
     <View style={[styles.fullscreenPage, { paddingTop: paddingTopBottom, paddingBottom: paddingTopBottom }]}>
@@ -46,9 +49,20 @@ export const CrownRevealPage = ({ winner, durationMs }: CrownRevealPageProps) =>
             <UserAvatar avatar_url={winner.avatar_url} username={winner.username} size={80} />
           </View>
         </View>
-        <Text style={styles.crownRevealUsername}>{winner.username}</Text>
-        <Text style={styles.crownRevealDurationLabel}>a tenu la couronne pendant</Text>
+        <Text style={styles.crownRevealUsername}>{isWinner ? "Tu as gagné !" : winner.username}</Text>
+        <Text style={styles.crownRevealDurationLabel}>
+          {isWinner ? "Tu as tenu la couronne pendant" : "a tenu la couronne pendant"}
+        </Text>
         <Text style={styles.crownRevealDuration}>{formatCrownDuration(durationMs)}</Text>
+
+        {!isWinner && (
+          <View style={styles.personalStatsContainer}>
+            <View style={styles.statsDivider} />
+            <Text style={styles.personalStatsLabel}>Tes stats</Text>
+            <Text style={styles.personalDuration}>{formatCrownDuration(userDurationMs)}</Text>
+            <Text style={styles.personalDurationLabel}>de règne cette semaine</Text>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -97,5 +111,35 @@ const styles = StyleSheet.create({
     fontSize: 38, 
     color: "#FFD700", 
     letterSpacing: 1 
+  },
+  personalStatsContainer: {
+    marginTop: 48,
+    alignItems: "center",
+    width: "100%",
+  },
+  statsDivider: {
+    width: 40,
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    marginBottom: 24,
+  },
+  personalStatsLabel: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 11,
+    color: "rgba(255,255,255,0.3)",
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+    marginBottom: 12,
+  },
+  personalDuration: {
+    fontFamily: "Inter_700Bold",
+    fontSize: 24,
+    color: "#FFF",
+    marginBottom: 4,
+  },
+  personalDurationLabel: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    color: "rgba(255,255,255,0.4)",
   },
 });

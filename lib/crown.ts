@@ -13,6 +13,7 @@ import type { PhotoEntry } from "../components/PhotoFeed";
 export type CrownResult = {
   winnerId: string;
   durationMs: number;
+  allDurations: Record<string, number>;
 } | null;
 
 export function computeCrownWinner(
@@ -52,5 +53,5 @@ export function computeCrownWinner(
   }
 
   if (!winnerId) return null;
-  return { winnerId, durationMs: maxMs };
+  return { winnerId, durationMs: maxMs, allDurations: durations };
 }

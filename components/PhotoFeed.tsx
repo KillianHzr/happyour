@@ -54,6 +54,7 @@ type Props = {
   revealEndDate?: Date;
   crownWinnerId?: string | null;
   crownDurationMs?: number;
+  crownAllDurations?: Record<string, number>;
   groupName?: string;
   introTitle?: string;
   introSubtitle?: string;
@@ -84,6 +85,7 @@ export default function PhotoFeed({
   revealEndDate,
   crownWinnerId,
   crownDurationMs = 0,
+  crownAllDurations = {},
   groupName,
   introTitle,
   introSubtitle,
@@ -220,7 +222,14 @@ export default function PhotoFeed({
     } else if (item.type === "crown") {
       const winner = photos.find((p) => p.user_id === crownWinnerId);
       if (!winner) return null;
-      content = <CrownRevealPage winner={winner} durationMs={crownDurationMs} />;
+      content = (
+        <CrownRevealPage 
+          winner={winner} 
+          durationMs={crownDurationMs} 
+          currentUserId={currentUserId}
+          userDurationMs={currentUserId ? (crownAllDurations[currentUserId] ?? 0) : 0}
+        />
+      );
     } else if (item.type === "separator") {
       const [day, date] = item.label.split("\n");
       content = (

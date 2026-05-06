@@ -49,6 +49,7 @@ type GroupData = {
   photos: PhotoEntry[];
   crownWinnerId: string | null;
   crownDurationMs: number;
+  allDurations: Record<string, number>;
   isAdmin: boolean;
   challenges: { period1: ChallengeWithData | null; period2: ChallengeWithData | null } | null;
   currentUserRespondedToChallenge: boolean;
@@ -333,6 +334,7 @@ export default function MainPagerScreen() {
               photos: groupPhotos,
               crownWinnerId: crown?.winnerId ?? null,
               crownDurationMs: crown?.durationMs ?? 0,
+              allDurations: crown?.allDurations ?? {},
               isAdmin: isAdminForGroup,
               challenges,
               currentUserRespondedToChallenge,
@@ -347,6 +349,7 @@ export default function MainPagerScreen() {
             photos: [],
             crownWinnerId: null,
             crownDurationMs: 0,
+            allDurations: {},
             isAdmin: isAdminForGroup,
             challenges,
             currentUserRespondedToChallenge,
@@ -1119,6 +1122,7 @@ export default function MainPagerScreen() {
             revealEndDate={activeRevealEndDate}
             crownWinnerId={crownWinnerId}
             crownDurationMs={crownDurationMs}
+            crownAllDurations={activeData?.allDurations ?? {}}
             groupName={groupName}
             onScrollLock={lockScrollDirect}
             onOpenPicker={setActiveReactionPhotoId}
