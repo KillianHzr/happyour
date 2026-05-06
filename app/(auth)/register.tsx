@@ -53,6 +53,7 @@ export default function RegisterScreen() {
           autoCapitalize="none"
           value={username}
           onChangeText={setUsername}
+          maxLength={30}
         />
         <TextInput
           style={[theme.glassInput, styles.input]}
