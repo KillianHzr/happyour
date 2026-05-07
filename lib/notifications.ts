@@ -108,12 +108,12 @@ export async function sendPushToTokens(
           })
         );
       } else {
-        console.error("[Push] Erreurs API Expo:", result.errors);
+        console.warn("[Push] Erreurs API Expo:", result.errors);
       }
     } else if (result.data) {
       result.data.forEach((ticket: any, index: number) => {
         if (ticket.status === "error") {
-          console.error(`[Push] Erreur token ${tokens[index]}: ${ticket.message} | details: ${JSON.stringify(ticket.details)}`);
+          console.warn(`[Push] Erreur token ${tokens[index]}: ${ticket.message} | details: ${JSON.stringify(ticket.details)}`);
           if (ticket.details?.error === "DeviceNotRegistered") {
             supabase.from("profiles").update({ expo_push_token: null }).eq("expo_push_token", tokens[index]).then();
           }
@@ -123,7 +123,7 @@ export async function sendPushToTokens(
       });
     }
   } catch (e) {
-    console.error("[Push] Erreur fatale fetch:", e);
+    console.warn("[Push] Erreur fatale fetch:", e);
   }
 }
 
