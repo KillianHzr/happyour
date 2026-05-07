@@ -71,9 +71,6 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const audioTimer = useRef<NodeJS.Timeout | null>(null);
   const isAudioRecordingRef = useRef(false);
   const audioProgressAnim = useRef(new Animated.Value(0)).current;
-  const isWarmingUp = useRef(false);
-  const warmUpCancelled = useRef(false);
-  const warmUpPromise = useRef<Promise<any> | null>(null);
   const lastVolumeButtonTrigger = useRef(0);
   const lastVolumeRef = useRef(0);
 
@@ -158,38 +155,6 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     onScrollLock(locked);
   }, [slot1, isPinching, isDrawingActive]);
 
-  useEffect(() => {
-    if (cameraMode === "AUDIO" && isCapturing && !capturedAudioUri) {
-      AudioModule.setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true }).catch(() => {});
-    } else {
-      AudioModule.setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }).catch(() => {});
-    }
-  }, [cameraMode, isCapturing, capturedAudioUri]);
-
-  useEffect(() => {
-    if (cameraMode !== "VIDEO" || !isActive) return;
-    warmUpCancelled.current = false;
-    const doWarmUp = async () => {
-      await new Promise(r => setTimeout(r, 300));
-      if (warmUpCancelled.current || !cameraRef.current) return;
-      isWarmingUp.current = true;
-      try {
-        const p = cameraRef.current.recordAsync({ maxDuration: 1 });
-        warmUpPromise.current = p;
-        await new Promise(r => setTimeout(r, 200));
-        if (!warmUpCancelled.current && cameraRef.current) {
-          try { cameraRef.current.stopRecording(); } catch (e) { console.warn("[CAM] warmUp stopRecording error:", e); }
-        }
-        try { await p; } catch (_) {}
-      } finally {
-        warmUpPromise.current = null;
-        isWarmingUp.current = false;
-      }
-    };
-    doWarmUp();
-    return () => { warmUpCancelled.current = true; };
-  }, [cameraMode, isActive]);
-
   // ── Debug: log every render state ──
   useEffect(() => {
     console.log(`[CAM] render | slot1=${!!slot1} slot2=${!!slot2} capturingSecond=${capturingSecond} viewingSlot=${viewingSlot} isCapturing=${isCapturing} capturing=${capturing} isPinching=${isPinching} mode=${cameraMode} isActive=${isActive}`);
@@ -266,12 +231,6 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const startVideoRecording = async () => {
     if (!cameraRef.current || isRecording) return;
     if (cameraMode !== "VIDEO") setCameraMode("VIDEO");
-    if (isWarmingUp.current) {
-      warmUpCancelled.current = true;
-      try { cameraRef.current?.stopRecording(); } catch (e) { console.warn("[CAM] stopRecording (warmup) error:", e); }
-      if (warmUpPromise.current) { try { await warmUpPromise.current; } catch (_) {} }
-      isWarmingUp.current = false;
-    }
     setIsRecording(true);
     setRecordingSeconds(0);
     recordingTimer.current = setInterval(() => {
@@ -330,6 +289,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     if (!isAudioRecordingRef.current) return;
     isAudioRecordingRef.current = false;
     try { await audioRecorder.stop(); } catch (_) {}
+    await AudioModule.setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
     if (audioTimer.current) { clearInterval(audioTimer.current); audioTimer.current = null; }
     audioProgressAnim.stopAnimation();
     audioWaveAnims.forEach(({ anim }) => { anim.stopAnimation(); anim.setValue(0.15); });
@@ -395,7 +355,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         if (actions.length > 0) {
           console.log(`[CAM] manipulateAsync START | actions=${JSON.stringify(actions)}`);
           // On fait juste la rotation/flip ici, compression différée à l'upload
-          const result = await manipulateAsync(photo.uri, actions, { compress: 1, format: SaveFormat.JPEG });
+          const result = await manipulateAsync(photo.uri, actions, { compress: 0.5, format: SaveFormat.JPEG });
           finalUri = result.uri;
           console.log("[CAM] manipulateAsync END");
         }
@@ -674,7 +634,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               <StandardCamera
                 ref={cameraRef}
                 isActive={isCapturing}
-                mode={Platform.OS === "ios" ? "video" : cameraMode === "VIDEO" ? "video" : "picture"}
+                mode={cameraMode === "VIDEO" ? "video" : "picture"}
                 facing={facing}
                 flash={flash}
                 zoom={zoom}
