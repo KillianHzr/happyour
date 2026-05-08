@@ -1,1 +1,397 @@
-{}
+{
+  "Collection 1": {
+    "Color/Brand/100": {
+      "Primitives": "#f5f5f5"
+    },
+    "Color/Brand/200": {
+      "Primitives": "#e6e6e6"
+    },
+    "Color/Brand/300": {
+      "Primitives": "#d9d9d9"
+    },
+    "Color/Brand/400": {
+      "Primitives": "#b3b3b3"
+    },
+    "Color/Brand/500": {
+      "Primitives": "#757575"
+    },
+    "Color/Brand/600": {
+      "Primitives": "#444444"
+    },
+    "Color/Brand/700": {
+      "Primitives": "#383838"
+    },
+    "Color/Brand/800": {
+      "Primitives": "#2c2c2c"
+    },
+    "Color/Brand/900": {
+      "Primitives": "#1e1e1e"
+    },
+    "Color/Brand/1000": {
+      "Primitives": "#111111"
+    },
+    "Color/Black/100": {
+      "Primitives": "#0c0c0d0d"
+    },
+    "Color/Black/200": {
+      "Primitives": "#0c0c0d1a"
+    },
+    "Color/Black/300": {
+      "Primitives": "#0c0c0d33"
+    },
+    "Color/Black/400": {
+      "Primitives": "#0c0c0d66"
+    },
+    "Color/Black/500": {
+      "Primitives": "#0c0c0db2"
+    },
+    "Color/Black/600": {
+      "Primitives": "#0c0c0dcc"
+    },
+    "Color/Black/700": {
+      "Primitives": "#0c0c0dd9"
+    },
+    "Color/Black/800": {
+      "Primitives": "#0c0c0de5"
+    },
+    "Color/Black/900": {
+      "Primitives": "#0c0c0df2"
+    },
+    "Color/Black/1000": {
+      "Primitives": "#0c0c0d"
+    },
+    "Color/White/100": {
+      "Primitives": "#ffffff0d"
+    },
+    "Color/White/200": {
+      "Primitives": "#ffffff1a"
+    },
+    "Color/White/300": {
+      "Primitives": "#ffffff33"
+    },
+    "Color/White/400": {
+      "Primitives": "#ffffff66"
+    },
+    "Color/White/500": {
+      "Primitives": "#ffffffb2"
+    },
+    "Color/White/600": {
+      "Primitives": "#ffffffcc"
+    },
+    "Color/White/700": {
+      "Primitives": "#ffffffd9"
+    },
+    "Color/White/800": {
+      "Primitives": "#ffffffe5"
+    },
+    "Color/White/900": {
+      "Primitives": "#fffffff2"
+    },
+    "Color/White/1000": {
+      "Primitives": "#ffffff"
+    },
+    "Color/Green/100": {
+      "Primitives": "#ebffee"
+    },
+    "Color/Green/200": {
+      "Primitives": "#cff7d3"
+    },
+    "Color/Green/300": {
+      "Primitives": "#aff4c6"
+    },
+    "Color/Green/400": {
+      "Primitives": "#85e0a3"
+    },
+    "Color/Green/500": {
+      "Primitives": "#14ae5c"
+    },
+    "Color/Green/600": {
+      "Primitives": "#009951"
+    },
+    "Color/Green/700": {
+      "Primitives": "#008043"
+    },
+    "Color/Green/800": {
+      "Primitives": "#02542d"
+    },
+    "Color/Green/900": {
+      "Primitives": "#024023"
+    },
+    "Color/Green/1000": {
+      "Primitives": "#062d1b"
+    },
+    "Color/Gray/100": {
+      "Primitives": "#f5f5f5"
+    },
+    "Color/Gray/200": {
+      "Primitives": "#e6e6e6"
+    },
+    "Color/Gray/300": {
+      "Primitives": "#d9d9d9"
+    },
+    "Color/Gray/400": {
+      "Primitives": "#b3b3b3"
+    },
+    "Color/Gray/500": {
+      "Primitives": "#757575"
+    },
+    "Color/Gray/600": {
+      "Primitives": "#444444"
+    },
+    "Color/Gray/700": {
+      "Primitives": "#383838"
+    },
+    "Color/Gray/800": {
+      "Primitives": "#2c2c2c"
+    },
+    "Color/Gray/900": {
+      "Primitives": "#1e1e1e"
+    },
+    "Color/Gray/1000": {
+      "Primitives": "#111111"
+    },
+    "Color/Pink/100": {
+      "Primitives": "#fcf1fd"
+    },
+    "Color/Pink/200": {
+      "Primitives": "#fae1fa"
+    },
+    "Color/Pink/300": {
+      "Primitives": "#f5c0ef"
+    },
+    "Color/Pink/400": {
+      "Primitives": "#f19edc"
+    },
+    "Color/Pink/500": {
+      "Primitives": "#ea3fb8"
+    },
+    "Color/Pink/600": {
+      "Primitives": "#d732a8"
+    },
+    "Color/Pink/700": {
+      "Primitives": "#ba2a92"
+    },
+    "Color/Pink/800": {
+      "Primitives": "#8a226f"
+    },
+    "Color/Pink/900": {
+      "Primitives": "#57184a"
+    },
+    "Color/Pink/1000": {
+      "Primitives": "#3f1536"
+    },
+    "Color/Red/100": {
+      "Primitives": "#fee9e7"
+    },
+    "Color/Red/200": {
+      "Primitives": "#fdd3d0"
+    },
+    "Color/Red/300": {
+      "Primitives": "#fcb3ad"
+    },
+    "Color/Red/400": {
+      "Primitives": "#f4776a"
+    },
+    "Color/Red/500": {
+      "Primitives": "#ec221f"
+    },
+    "Color/Red/600": {
+      "Primitives": "#c00f0c"
+    },
+    "Color/Red/700": {
+      "Primitives": "#900b09"
+    },
+    "Color/Red/800": {
+      "Primitives": "#690807"
+    },
+    "Color/Red/900": {
+      "Primitives": "#4d0b0a"
+    },
+    "Color/Red/1000": {
+      "Primitives": "#300603"
+    },
+    "Color/Slate/100": {
+      "Primitives": "#f3f3f3"
+    },
+    "Color/Slate/200": {
+      "Primitives": "#e3e3e3"
+    },
+    "Color/Slate/300": {
+      "Primitives": "#cdcdcd"
+    },
+    "Color/Slate/400": {
+      "Primitives": "#b2b2b2"
+    },
+    "Color/Slate/500": {
+      "Primitives": "#949494"
+    },
+    "Color/Slate/600": {
+      "Primitives": "#767676"
+    },
+    "Color/Slate/700": {
+      "Primitives": "#5a5a5a"
+    },
+    "Color/Slate/800": {
+      "Primitives": "#434343"
+    },
+    "Color/Slate/900": {
+      "Primitives": "#303030"
+    },
+    "Color/Slate/1000": {
+      "Primitives": "#242424"
+    },
+    "Color/Yellow/100": {
+      "Primitives": "#fffbeb"
+    },
+    "Color/Yellow/200": {
+      "Primitives": "#fff1c2"
+    },
+    "Color/Yellow/300": {
+      "Primitives": "#ffe8a3"
+    },
+    "Color/Yellow/400": {
+      "Primitives": "#e8b931"
+    },
+    "Color/Yellow/500": {
+      "Primitives": "#e5a000"
+    },
+    "Color/Yellow/600": {
+      "Primitives": "#bf6a02"
+    },
+    "Color/Yellow/700": {
+      "Primitives": "#975102"
+    },
+    "Color/Yellow/800": {
+      "Primitives": "#682d03"
+    },
+    "Color/Yellow/900": {
+      "Primitives": "#522504"
+    },
+    "Color/Yellow/1000": {
+      "Primitives": "#401b01"
+    },
+    "Color/Blue/100": {
+      "Primitives": "#f1f6fd"
+    },
+    "Color/Blue/200": {
+      "Primitives": "#e1ebfa"
+    },
+    "Color/Blue/300": {
+      "Primitives": "#c0d4f5"
+    },
+    "Color/Blue/400": {
+      "Primitives": "#9ebef1"
+    },
+    "Color/Blue/500": {
+      "Primitives": "#3f81ea"
+    },
+    "Color/Blue/600": {
+      "Primitives": "#3271d7"
+    },
+    "Color/Blue/700": {
+      "Primitives": "#2a61ba"
+    },
+    "Color/Blue/800": {
+      "Primitives": "#224a8a"
+    },
+    "Color/Blue/900": {
+      "Primitives": "#183057"
+    },
+    "Color/Blue/1000": {
+      "Primitives": "#15253f"
+    },
+    "Typography/Family Sans": {
+      "Primitives": "Inter"
+    },
+    "Typography/Family Serif": {
+      "Primitives": "Noto Serif"
+    },
+    "Typography/Family Mono": {
+      "Primitives": "Roboto Mono"
+    },
+    "Typography/Scale 01": {
+      "Primitives": 12
+    },
+    "Typography/Scale 02": {
+      "Primitives": 14
+    },
+    "Typography/Scale 03": {
+      "Primitives": 16
+    },
+    "Typography/Scale 04": {
+      "Primitives": 20
+    },
+    "Typography/Scale 05": {
+      "Primitives": 24
+    },
+    "Typography/Scale 06": {
+      "Primitives": 32
+    },
+    "Typography/Scale 07": {
+      "Primitives": 40
+    },
+    "Typography/Scale 08": {
+      "Primitives": 48
+    },
+    "Typography/Scale 09": {
+      "Primitives": 64
+    },
+    "Typography/Scale 10": {
+      "Primitives": 72
+    },
+    "Typography/Weight Thin": {
+      "Primitives": 100
+    },
+    "Typography/Weight Thin Italic": {
+      "Primitives": "Thin Italic"
+    },
+    "Typography/Weight Extra Light": {
+      "Primitives": 200
+    },
+    "Typography/Weight Extralight Italic": {
+      "Primitives": "Extra Light Italic"
+    },
+    "Typography/Weight Light": {
+      "Primitives": 300
+    },
+    "Typography/Weight Light Italic": {
+      "Primitives": "Light Italic"
+    },
+    "Typography/Weight Regular": {
+      "Primitives": 400
+    },
+    "Typography/Weight Regular Italic": {
+      "Primitives": "Italic"
+    },
+    "Typography/Weight Medium": {
+      "Primitives": 500
+    },
+    "Typography/Weight Medium Italic": {
+      "Primitives": "Medium Italic"
+    },
+    "Typography/Weight Semibold": {
+      "Primitives": 600
+    },
+    "Typography/Weight Semibold Italic": {
+      "Primitives": "Semi Bold Italic"
+    },
+    "Typography/Weight Bold": {
+      "Primitives": 700
+    },
+    "Typography/Weight Bold Italic": {
+      "Primitives": "Bold Italic"
+    },
+    "Typography/Weight Extra Bold": {
+      "Primitives": 800
+    },
+    "Typography/Weight Extra Bold Italic": {
+      "Primitives": "Extra Bold Italic"
+    },
+    "Typography/Weight Black": {
+      "Primitives": 900
+    },
+    "Typography/Weight Black Italic": {
+      "Primitives": "Black Italic"
+    }
+  }
+}
