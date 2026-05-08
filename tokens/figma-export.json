@@ -1,59 +1,34 @@
 {
-  "primitives": {
-    "color": {
-      "blue": { "$type": "color", "$value": "#0d99ff" },
-      "white": { "$type": "color", "$value": "#ffffff" },
-      "black": { "$type": "color", "$value": "#1e1e1e" }
+  "Primitives": {
+    "color/blue": {
+      "Light": "#0D99FF",
+      "Dark": "#0D99FF"
     },
-    "spacing": {
-      "sm": { "$type": "dimension", "$value": "8px" },
-      "md": { "$type": "dimension", "$value": "16px" }
+    "color/white": {
+      "Light": "#FFFFFF",
+      "Dark": "#FFFFFF"
+    },
+    "color/black": {
+      "Light": "#1E1E1E",
+      "Dark": "#1E1E1E"
+    },
+    "spacing/sm": {
+      "Light": 8,
+      "Dark": 8
+    },
+    "spacing/md": {
+      "Light": 16,
+      "Dark": 16
     }
   },
-  "semantic": {
-    "color": {
-      "bg": {
-        "primary": {
-          "$type": "color",
-          "$value": {
-            "light": "{primitives.color.white}",
-            "dark": "{primitives.color.black}"
-          }
-        }
-      },
-      "text": {
-        "main": {
-          "$type": "color",
-          "$value": {
-            "light": "{primitives.color.black}",
-            "dark": "{primitives.color.blue}"
-          }
-        }
-      }
-    }
-  },
-  "composite": {
-    "typography": {
-      "body": {
-        "$type": "typography",
-        "$value": {
-          "fontFamily": "Inter",
-          "fontWeight": "Regular",
-          "fontSize": "16px"
-        }
-      }
+  "Semantic": {
+    "color/bg/primary": {
+      "Light": "#FFFFFF",
+      "Dark": "#1E1E1E"
     },
-    "shadow": {
-      "card": {
-        "$type": "shadow",
-        "$value": {
-          "color": "#000000",
-          "opacity": 0.1,
-          "offsetX": "0px",
-          "offsetY": "2px",
-          "blur": "8px"
-        }
-      }
+    "color/text/main": {
+      "Light": "#1E1E1E",
+      "Dark": "#0D99FF"
     }
   }
 }
