@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: sans-serif; padding: 16px; font-size: 13px; }
+        input { width: 100%; margin-bottom: 12px; padding: 6px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background: #0d99ff; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;}
+        button:disabled { background: #ccc; }
+        #status { margin-top: 12px; color: #555; font-size: 12px; }
+    </style>
+</head>
+<body>
+
+<h2>Figma → GitHub</h2>
+
+<label>GitHub PAT :</label>
+<input type="password" id="token" placeholder="ghp_xxx..." />
+
+<label>Owner / Repo :</label>
+<div style="display: flex; gap: 8px;">
+    <input type="text" id="owner" placeholder="Owner" />
+    <input type="text" id="repo" placeholder="Repo" />
+</div>
+
+<label>Chemin du fichier :</label>
+<input type="text" id="path" placeholder="tokens/figma-export.json" />
+
+<label>Branche :</label>
+<input type="text" id="branch" placeholder="main" />
+
+<button id="btn-push" disabled>Chargement des variables...</button>
+<div id="status"></div>
+
+<script>
+    let tokensData = null;
+
+    // --- SAUVEGARDE AUTOMATIQUE ---
+    function saveConfig() {
+        const config = {
+            token: document.getElementById('token').value,
+            owner: document.getElementById('owner').value,
+            repo: document.getElementById('repo').value,
+            path: document.getElementById('path').value,
+            branch: document.getElementById('branch').value
+        };
+        // Envoie la config à code.js pour qu'il la stocke dans Figma
+        parent.postMessage({ pluginMessage: { type: 'SAVE_CONFIG', config } }, '*');
+    }
+
+    // Ajoute un écouteur sur tous les inputs : dès qu'on tape, ça sauvegarde !
+    document.querySelectorAll('input').forEach(input => {
+        input.addEventListener('input', saveConfig);
+    });
+    // ------------------------------
+
+    // Réception des messages venant de code.js
+    window.onmessage = (event) => {
+        const msg = event.data.pluginMessage;
+
+        // Chargement de la configuration initiale
+        if (msg && msg.type === 'LOAD_CONFIG') {
+            const c = msg.config;
+            if (c.token) document.getElementById('token').value = c.token;
+            if (c.owner) document.getElementById('owner').value = c.owner;
+            if (c.repo) document.getElementById('repo').value = c.repo;
+            if (c.path) document.getElementById('path').value = c.path;
+            // On met une valeur par défaut pour la branche et le chemin si vide
+            document.getElementById('branch').value = c.branch || "main";
+            document.getElementById('path').value = c.path || "tokens/figma-export.json";
+        }
+
+        // Réception des variables prêtes à être envoyées
+        if (msg && msg.type === 'VARIABLES_EXTRACTED') {
+            tokensData = msg.data;
+            document.getElementById('btn-push').innerText = "Pousser vers GitHub";
+            document.getElementById('btn-push').disabled = false;
+            document.getElementById('status').innerText = "Variables prêtes à être envoyées !";
+        }
+    };
+
+    // Logique de push sur GitHub
+    document.getElementById('btn-push').onclick = async () => {
+        if (!tokensData) return;
+
+        const token = document.getElementById('token').value;
+        const owner = document.getElementById('owner').value;
+        const repo = document.getElementById('repo').value;
+        const path = document.getElementById('path').value;
+        const branch = document.getElementById('branch').value;
+        const statusLabel = document.getElementById('status');
+
+        if (!token || !owner || !repo || !path || !branch) {
+            statusLabel.innerText = "❌ Remplissez tous les champs.";
+            return;
+        }
+
+        statusLabel.innerText = "⏳ Envoi en cours...";
+        const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+
+        try {
+            let fileSha = null;
+            const getResponse = await fetch(`${url}?ref=${branch}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (getResponse.ok) {
+                const getJson = await getResponse.json();
+                fileSha = getJson.sha;
+            }
+
+            const jsonString = JSON.stringify(tokensData, null, 2);
+            const base64Content = btoa(unescape(encodeURIComponent(jsonString)));
+
+            const body = {
+                message: "Update variables from Figma",
+                content: base64Content,
+                branch: branch
+            };
+            if (fileSha) body.sha = fileSha;
+
+            const putResponse = await fetch(url, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(body)
+            });
+
+            if (putResponse.ok) {
+                statusLabel.innerText = "✅ Push réussi sur la branche " + branch + " !";
+            } else {
+                const errorData = await putResponse.json();
+                statusLabel.innerText = "❌ Erreur GitHub : " + errorData.message;
+            }
+        } catch (error) {
+            statusLabel.innerText = "❌ Erreur réseau : " + error.message;
+        }
+    };
+</script>
+</body>
+</html>
