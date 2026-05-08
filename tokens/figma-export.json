@@ -3,45 +3,29 @@
     "color": {
       "blue": { "$type": "color", "$value": "#0d99ff" },
       "white": { "$type": "color", "$value": "#ffffff" },
-      "black": { "$type": "color", "$value": "#1e1e1e" },
-      "gray": { "$type": "color", "$value": "#f5f5f5" },
-      "darkGray": { "$type": "color", "$value": "#2c2c2c" }
+      "black": { "$type": "color", "$value": "#1e1e1e" }
     },
-    "dimension": {
+    "spacing": {
       "sm": { "$type": "dimension", "$value": "8px" },
       "md": { "$type": "dimension", "$value": "16px" }
     }
   },
   "semantic": {
     "color": {
-      "background": {
+      "bg": {
         "primary": {
           "$type": "color",
           "$value": {
             "light": "{primitives.color.white}",
             "dark": "{primitives.color.black}"
           }
-        },
-        "secondary": {
-          "$type": "color",
-          "$value": {
-            "light": "{primitives.color.gray}",
-            "dark": "{primitives.color.darkGray}"
-          }
         }
       },
       "text": {
-        "primary": {
+        "main": {
           "$type": "color",
           "$value": {
             "light": "{primitives.color.black}",
-            "dark": "{primitives.color.white}"
-          }
-        },
-        "brand": {
-          "$type": "color",
-          "$value": {
-            "light": "{primitives.color.blue}",
             "dark": "{primitives.color.blue}"
           }
         }
@@ -50,26 +34,24 @@
   },
   "composite": {
     "typography": {
-      "heading": {
+      "body": {
         "$type": "typography",
         "$value": {
           "fontFamily": "Inter",
-          "fontWeight": 700,
-          "fontSize": "{primitives.dimension.md}",
-          "lineHeight": 1.2
+          "fontWeight": "Regular",
+          "fontSize": "16px"
         }
       }
     },
     "shadow": {
-      "elevation": {
+      "card": {
         "$type": "shadow",
         "$value": {
           "color": "#000000",
-          "opacity": 0.15,
+          "opacity": 0.1,
           "offsetX": "0px",
-          "offsetY": "4px",
-          "blur": "12px",
-          "spread": "0px"
+          "offsetY": "2px",
+          "blur": "8px"
         }
       }
     }
