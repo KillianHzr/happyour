@@ -2104,29 +2104,29 @@
     "typography/code/size-small": {
       "type": "FLOAT",
       "values": {
-        "Light": "{Semantics/typography/body/size-small}",
-        "Dark": "{Semantics/typography/body/size-small}"
+        "Light": "{Primitives/typography/body/size-small}",
+        "Dark": "{Primitives/typography/body/size-small}"
       }
     },
     "typography/code/size-base": {
       "type": "FLOAT",
       "values": {
-        "Light": "{Semantics/typography/body/size-medium}",
-        "Dark": "{Semantics/typography/body/size-medium}"
+        "Light": "{Primitives/typography/body/size-medium}",
+        "Dark": "{Primitives/typography/body/size-medium}"
       }
     },
     "typography/code/size-large": {
       "type": "FLOAT",
       "values": {
-        "Light": "{Semantics/typography/body/size-large}",
-        "Dark": "{Semantics/typography/body/size-large}"
+        "Light": "{Primitives/typography/body/size-large}",
+        "Dark": "{Primitives/typography/body/size-large}"
       }
     },
     "typography/code/font-weight": {
       "type": "FLOAT",
       "values": {
-        "Light": "{Semantics/typography/body/font-weight-regular}",
-        "Dark": "{Semantics/typography/body/font-weight-regular}"
+        "Light": "{Primitives/typography/body/font-weight-regular}",
+        "Dark": "{Primitives/typography/body/font-weight-regular}"
       }
     },
     "size/space/0": {
@@ -2414,6 +2414,204 @@
       "values": {
         "Light": "{Primitives/size/40}",
         "Dark": "{Primitives/size/40}"
+      }
+    }
+  },
+  "Styles": {
+    "Typography": {
+      "Title Hero": {
+        "fontFamily": "Inter",
+        "fontWeight": "Bold",
+        "fontSize": 72,
+        "lineHeight": 1.2000000476837158
+      },
+      "Title Page": {
+        "fontFamily": "Inter",
+        "fontWeight": "Bold",
+        "fontSize": 48,
+        "lineHeight": 1.2000000476837158
+      },
+      "Subtitle": {
+        "fontFamily": "Inter",
+        "fontWeight": "Regular",
+        "fontSize": 32,
+        "lineHeight": 1.2000000476837158
+      },
+      "Heading": {
+        "fontFamily": "Inter",
+        "fontWeight": "Semi Bold",
+        "fontSize": 24,
+        "lineHeight": 1.2000000476837158
+      },
+      "Subheading": {
+        "fontFamily": "Inter",
+        "fontWeight": "Regular",
+        "fontSize": 20,
+        "lineHeight": 1.2000000476837158
+      },
+      "Body Base": {
+        "fontFamily": "Inter",
+        "fontWeight": "Regular",
+        "fontSize": 16,
+        "lineHeight": 1.399999976158142
+      },
+      "Body Strong": {
+        "fontFamily": "Inter",
+        "fontWeight": "Semi Bold",
+        "fontSize": 16,
+        "lineHeight": 1.399999976158142
+      },
+      "Body Emphasis": {
+        "fontFamily": "Inter",
+        "fontWeight": "Italic",
+        "fontSize": 16,
+        "lineHeight": 1.399999976158142
+      },
+      "Body Link": {
+        "fontFamily": "Inter",
+        "fontWeight": "Regular",
+        "fontSize": 16,
+        "lineHeight": 1.399999976158142
+      },
+      "Body Small": {
+        "fontFamily": "Inter",
+        "fontWeight": "Regular",
+        "fontSize": 14,
+        "lineHeight": 1.399999976158142
+      },
+      "Body Small Strong": {
+        "fontFamily": "Inter",
+        "fontWeight": "Semi Bold",
+        "fontSize": 14,
+        "lineHeight": 1.399999976158142
+      },
+      "Body Code": {
+        "fontFamily": "Roboto Mono",
+        "fontWeight": "Regular",
+        "fontSize": 16,
+        "lineHeight": 1.2999999523162842
+      },
+      "Single Line/Body Base": {
+        "fontFamily": "Inter",
+        "fontWeight": "Regular",
+        "fontSize": 16,
+        "lineHeight": 1
+      },
+      "Single Line/Body Small Strong": {
+        "fontFamily": "Inter",
+        "fontWeight": "Semi Bold",
+        "fontSize": 14,
+        "lineHeight": 1
+      },
+      ".Utilities/Component notes/Regular": {
+        "fontFamily": "Roboto Mono",
+        "fontWeight": "Regular",
+        "fontSize": 16,
+        "lineHeight": 1.399999976158142
+      },
+      ".Utilities/Component notes/Bold": {
+        "fontFamily": "Roboto Mono",
+        "fontWeight": "Bold",
+        "fontSize": 16,
+        "lineHeight": 1.399999976158142
+      }
+    },
+    "Effects": {
+      "Drop Shadow/100": {
+        "color": "#0C0C0D",
+        "opacity": 0.05000000074505806,
+        "x": 0,
+        "y": 1,
+        "blur": 4,
+        "spread": 0
+      },
+      "Drop Shadow/200": {
+        "color": "#0C0C0D",
+        "opacity": 0.05000000074505806,
+        "x": 0,
+        "y": 1,
+        "blur": 4,
+        "spread": 0
+      },
+      "Drop Shadow/300": {
+        "color": "#0C0C0D",
+        "opacity": 0.05000000074505806,
+        "x": 0,
+        "y": 4,
+        "blur": 4,
+        "spread": -1
+      },
+      "Drop Shadow/400": {
+        "color": "#0C0C0D",
+        "opacity": 0.05000000074505806,
+        "x": 0,
+        "y": 4,
+        "blur": 4,
+        "spread": -4
+      },
+      "Drop Shadow/500": {
+        "color": "#0C0C0D",
+        "opacity": 0.05000000074505806,
+        "x": 0,
+        "y": 4,
+        "blur": 4,
+        "spread": -4
+      },
+      "Drop Shadow/600": {
+        "color": "#0C0C0D",
+        "opacity": 0.4000000059604645,
+        "x": 0,
+        "y": 16,
+        "blur": 32,
+        "spread": -8
+      },
+      "Inner Shadow/100": {
+        "color": "#0C0C0D",
+        "opacity": 0.05000000074505806,
+        "x": 0,
+        "y": 1,
+        "blur": 4,
+        "spread": 0
+      },
+      "Inner Shadow/200": {
+        "color": "#0C0C0D",
+        "opacity": 0.05000000074505806,
+        "x": 0,
+        "y": 1,
+        "blur": 4,
+        "spread": 0
+      },
+      "Inner Shadow/300": {
+        "color": "#0C0C0D",
+        "opacity": 0.05000000074505806,
+        "x": 0,
+        "y": 4,
+        "blur": 4,
+        "spread": -1
+      },
+      "Inner Shadow/400": {
+        "color": "#0C0C0D",
+        "opacity": 0.10000000149011612,
+        "x": 0,
+        "y": 16,
+        "blur": 32,
+        "spread": -4
+      },
+      "Inner Shadow/500": {
+        "color": "#0C0C0D",
+        "opacity": 0.10000000149011612,
+        "x": 0,
+        "y": 16,
+        "blur": 16,
+        "spread": -8
+      },
+      "Inner Shadow/600": {
+        "color": "#0C0C0D",
+        "opacity": 0.4000000059604645,
+        "x": 0,
+        "y": 16,
+        "blur": 32,
+        "spread": -8
       }
     }
   }
