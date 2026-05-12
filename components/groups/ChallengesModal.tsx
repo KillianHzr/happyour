@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import Svg, { Path } from "react-native-svg";
 import { supabase } from "../../lib/supabase";
+import { typography } from "../../lib/theme";
 import {
   getCurrentChallengePeriod, getChallengeWeekStart,
   fetchOrGenerateChallenge, getChallengePrompt,
@@ -339,12 +340,12 @@ const styles = StyleSheet.create({
   },
   title: {
     color: "#FFF",
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 22,
   },
   subtitle: {
     color: "rgba(255,255,255,0.45)",
-    fontFamily: "Inter_400Regular",
+    fontFamily: typography.family.regular,
     fontSize: 13,
     marginTop: 1,
   },
@@ -358,7 +359,7 @@ const styles = StyleSheet.create({
   },
   groupName: {
     color: "rgba(255,255,255,0.5)",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 12,
     letterSpacing: 0.8,
     textTransform: "uppercase",
@@ -390,12 +391,12 @@ const styles = StyleSheet.create({
   },
   avatarLetter: {
     color: "#FFF",
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 18,
   },
   promptText: {
     color: "#FFF",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 15,
     lineHeight: 21,
   },
@@ -414,7 +415,7 @@ const styles = StyleSheet.create({
   },
   captureBadgeText: {
     color: "rgba(255,255,255,0.7)",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 12,
   },
   doneTag: {
@@ -427,7 +428,7 @@ const styles = StyleSheet.create({
   },
   doneTagText: {
     color: "#34C759",
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 14,
   },
   gapTag: {
@@ -438,7 +439,7 @@ const styles = StyleSheet.create({
   },
   gapTagText: {
     color: "rgba(255,255,255,0.4)",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 11,
   },
   proposerBadge: {
@@ -453,12 +454,12 @@ const styles = StyleSheet.create({
   },
   proposerBadgeText: {
     color: "rgba(255,200,80,0.85)",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 11,
   },
   noThemeText: {
     color: "rgba(255,255,255,0.3)",
-    fontFamily: "Inter_400Regular",
+    fontFamily: typography.family.regular,
     fontSize: 14,
     textAlign: "center",
     paddingVertical: 4,
@@ -475,7 +476,7 @@ const styles = StyleSheet.create({
   },
   devLabel: {
     color: "rgba(255,200,0,0.6)",
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 10,
     letterSpacing: 0.8,
     marginRight: 4,
@@ -493,7 +494,7 @@ const styles = StyleSheet.create({
   },
   devPillText: {
     color: "rgba(255,200,0,0.5)",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 12,
   },
   devPillTextActive: {

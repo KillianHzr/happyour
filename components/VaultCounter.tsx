@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { Image } from "expo-image";
-import { colors, theme } from "../lib/theme";
+import { colors, theme, typography } from "../lib/theme";
 
 type Props = {
   totalCount: number;
@@ -116,9 +116,9 @@ const styles = StyleSheet.create({
   crownWrap: { marginBottom: -8, zIndex: 1 },
   lastPosterAvatar: { width: 56, height: 56, borderRadius: 28, borderWidth: 2, borderColor: "rgba(255,215,0,0.7)" },
   lastPosterAvatarFallback: { backgroundColor: "#FFF", justifyContent: "center", alignItems: "center" },
-  lastPosterInitial: { fontFamily: "Inter_700Bold", fontSize: 22, color: "#000" },
-  lastPosterName: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: "rgba(255,255,255,0.7)", marginTop: 8 },
-  lastPosterHint: { fontFamily: "Inter_400Regular", fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 4, textAlign: "center" },
+  lastPosterInitial: { fontFamily: typography.family.bold, fontSize: 22, color: "#000" },
+  lastPosterName: { fontFamily: typography.family.semibold, fontSize: 13, color: "rgba(255,255,255,0.7)", marginTop: 8 },
+  lastPosterHint: { fontFamily: typography.family.regular, fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 4, textAlign: "center" },
   statsRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -132,13 +132,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   count: { 
-    fontFamily: "Inter_700Bold", 
+    fontFamily: typography.family.bold, 
     fontSize: 48, 
     color: colors.text,
     letterSpacing: -1,
   },
   label: { 
-    fontFamily: "Inter_600SemiBold", 
+    fontFamily: typography.family.semibold, 
     fontSize: 11, 
     color: colors.secondary, 
     textTransform: "uppercase",
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.1)",
   },
   description: {
-    fontFamily: "Inter_400Regular",
+    fontFamily: typography.family.regular,
     fontSize: 14,
     color: colors.secondary,
     opacity: 0.6,
@@ -163,7 +163,7 @@ const styles = StyleSheet.create({
     marginVertical: 24,
   },
   countdownTitle: {
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 10,
     color: colors.secondary,
     textTransform: "uppercase",
@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   countdownValue: {
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 24,
     color: "#FFF",
     letterSpacing: 1,

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { typography } from "../../lib/theme";
 
 interface ExpandableNoteProps {
   text: string;
@@ -33,13 +34,13 @@ export const ExpandableNote = ({ text, maxLines }: ExpandableNoteProps) => {
 const styles = StyleSheet.create({
   momentNote: { 
     color: "rgba(255,255,255,0.75)", 
-    fontFamily: "Inter_400Regular", 
+    fontFamily: typography.family.regular, 
     fontSize: 12, 
     marginTop: 3 
   },
   noteExpand: { 
     color: "rgba(255,255,255,0.45)", 
-    fontFamily: "Inter_600SemiBold", 
+    fontFamily: typography.family.semibold, 
     fontSize: 12, 
     marginTop: 2 
   },

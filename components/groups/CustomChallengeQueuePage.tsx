@@ -6,6 +6,7 @@ import {
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
+import { typography } from "../../lib/theme";
 import {
   fetchMyCustomChallengeQueue, fetchGroupQueuePending,
   updateCustomChallenge, deleteCustomChallenge,
@@ -334,7 +335,7 @@ const s = StyleSheet.create({
   },
   title: {
     color: "#FFF",
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 20,
   },
   loaderWrap: {
@@ -355,12 +356,12 @@ const s = StyleSheet.create({
   emptyEmoji: { fontSize: 40 },
   emptyTitle: {
     color: "#FFF",
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 18,
   },
   emptyHint: {
     color: "rgba(255,255,255,0.4)",
-    fontFamily: "Inter_400Regular",
+    fontFamily: typography.family.regular,
     fontSize: 14,
     textAlign: "center",
     paddingHorizontal: 20,
@@ -368,7 +369,7 @@ const s = StyleSheet.create({
   },
   sectionLabel: {
     color: "rgba(255,255,255,0.35)",
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 11,
     letterSpacing: 1,
     textTransform: "uppercase",
@@ -391,18 +392,18 @@ const s = StyleSheet.create({
   },
   activeBadgeText: {
     color: "#FFD700",
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 12,
   },
   itemLabel: {
     color: "#FFF",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 14,
     lineHeight: 20,
   },
   itemHint: {
     color: "rgba(255,255,255,0.35)",
-    fontFamily: "Inter_400Regular",
+    fontFamily: typography.family.regular,
     fontSize: 12,
   },
   pendingCard: {
@@ -426,7 +427,7 @@ const s = StyleSheet.create({
   },
   positionPillText: {
     color: "rgba(255,255,255,0.6)",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 11,
   },
   pendingActions: {
@@ -455,7 +456,7 @@ const s = StyleSheet.create({
   },
   editLabel: {
     color: "rgba(255,255,255,0.4)",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 11,
     letterSpacing: 0.5,
     textTransform: "uppercase",
@@ -491,13 +492,13 @@ const s = StyleSheet.create({
   },
   avatarLetter: {
     color: "#FFF",
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 12,
   },
   editMemberName: {
     flex: 1,
     color: "rgba(255,255,255,0.6)",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 14,
   },
   editInput: {
@@ -508,7 +509,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 11,
     color: "#FFF",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 14,
   },
   editCaptureRow: {
@@ -534,7 +535,7 @@ const s = StyleSheet.create({
   editCaptureIcon: { fontSize: 14 },
   editCaptureLabel: {
     color: "rgba(255,255,255,0.55)",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 12,
   },
   editBtns: {
@@ -551,7 +552,7 @@ const s = StyleSheet.create({
   },
   cancelEditText: {
     color: "rgba(255,255,255,0.55)",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 14,
   },
   saveEditBtn: {
@@ -564,7 +565,7 @@ const s = StyleSheet.create({
   },
   saveEditText: {
     color: "#000",
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 14,
   },
 });

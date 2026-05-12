@@ -29,6 +29,7 @@ import { notifyNewPhoto } from "../../../../lib/notifications";
 import { useUpload } from "../../../../lib/upload-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
+import { typography } from "../../../../lib/theme";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const NAVBAR_HEIGHT = 100;
@@ -203,15 +204,15 @@ const styles = StyleSheet.create({
   previewImage: { width: "100%", height: "100%" },
   previewContent: { position: "absolute", left: 24, right: 24 },
   previewNoteBox: { backgroundColor: "rgba(0,0,0,0.5)", padding: 16, borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
-  previewNoteText: { color: "#FFF", fontSize: 16, fontFamily: "Inter_600SemiBold", textAlign: "center" },
+  previewNoteText: { color: "#FFF", fontSize: 16, fontFamily: typography.family.semibold, textAlign: "center" },
   addNoteBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, padding: 16, borderRadius: 16, backgroundColor: "rgba(0,0,0,0.4)", borderStyle: "dashed", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
-  addNoteBtnText: { color: "rgba(255,255,255,0.6)", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  addNoteBtnText: { color: "rgba(255,255,255,0.6)", fontSize: 15, fontFamily: typography.family.semibold },
   backCaptureBtnInside: { position: "absolute", left: 16, width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" },
   postCaptureActions: { position: "absolute", left: 0, right: 0, alignItems: "center" },
   sendCaptureBtn: { width: 84, height: 84, borderRadius: 42, borderWidth: 5, borderColor: "#FFF", justifyContent: "center", alignItems: "center" },
   sendCaptureInner: { width: 66, height: 66, borderRadius: 33, backgroundColor: "#FFF", justifyContent: "center", alignItems: "center" },
   noteEditorContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: 40 },
-  largeNoteInput: { width: "100%", color: "#FFF", fontSize: 28, fontFamily: "Inter_700Bold", textAlign: "center", marginBottom: 40 },
+  largeNoteInput: { width: "100%", color: "#FFF", fontSize: 28, fontFamily: typography.family.bold, textAlign: "center", marginBottom: 40 },
   doneNoteBtn: { backgroundColor: "#FFF", paddingHorizontal: 32, paddingVertical: 14, borderRadius: 100 },
-  doneNoteText: { color: "#000", fontFamily: "Inter_700Bold", fontSize: 16 },
+  doneNoteText: { color: "#000", fontFamily: typography.family.bold, fontSize: 16 },
 });

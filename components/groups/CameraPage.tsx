@@ -20,6 +20,7 @@ import { SendIcon, FeatherIcon, FlipIcon, CloseIcon, FlashIcon } from "./GroupIc
 import { VolumeManager } from "react-native-volume-manager";
 import ChallengesModal from "./ChallengesModal";
 import { type ActiveChallenge } from "../../lib/challenges";
+import { typography } from "../../lib/theme";
 
 const NAVBAR_HEIGHT = 100;
 
@@ -594,7 +595,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     // TEXTE
     return (
       <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#1A1A1A", justifyContent: "center", alignItems: "center", padding: 6 }]}>
-        <Text style={{ color: "#FFF", fontSize: 9, fontFamily: "Inter_600SemiBold" }} numberOfLines={2}>{slot.textContent}</Text>
+        <Text style={{ color: "#FFF", fontSize: 9, fontFamily: typography.family.semibold }} numberOfLines={2}>{slot.textContent}</Text>
       </View>
     );
   };
@@ -901,7 +902,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 </View>
               )}
               <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 32 }}>
-                <Text style={{ color: "#FFF", fontFamily: "Inter_700Bold", textAlign: "center", fontSize: previewSlot.textContent.length <= 120 ? 32 : previewSlot.textContent.length <= 260 ? 26 : previewSlot.textContent.length <= 450 ? 21 : 17 }}>
+                <Text style={{ color: "#FFF", fontFamily: typography.family.bold, textAlign: "center", fontSize: previewSlot.textContent.length <= 120 ? 32 : previewSlot.textContent.length <= 260 ? 26 : previewSlot.textContent.length <= 450 ? 21 : 17 }}>
                   {previewSlot.textContent}
                 </Text>
               </View>
@@ -1202,10 +1203,10 @@ const slotBarStyles = StyleSheet.create({
   bar: { height: 72, flexDirection: "row", gap: 12, marginTop: 8 },
   addBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#FFF", borderRadius: 16 },
   sendBtn: { flex: 2, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: "#FFF", borderRadius: 16 },
-  sendText: { color: "#000", fontFamily: "Inter_700Bold", fontSize: 16 },
+  sendText: { color: "#000", fontFamily: typography.family.bold, fontSize: 16 },
   thumbBtn: { flex: 1, borderRadius: 16, overflow: "hidden" },
   badge: { position: "absolute", top: 8, right: 8, width: 18, height: 18, borderRadius: 9, backgroundColor: "#FFF", justifyContent: "center", alignItems: "center" },
-  badgeText: { color: "#000", fontFamily: "Inter_700Bold", fontSize: 10 },
+  badgeText: { color: "#000", fontFamily: typography.family.bold, fontSize: 10 },
   swapOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "center", alignItems: "center" },
 });
 
@@ -1223,23 +1224,23 @@ const styles = StyleSheet.create({
   cameraInner: { flex: 1, width: "100%" },
   flashBtn: { position: "absolute", top: 16, right: 16, width: 48, height: 48, borderRadius: 24, backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "center", alignItems: "center" },
   textModeContainer: { flex: 1, justifyContent: "flex-start", backgroundColor: "#0A0A0A", paddingHorizontal: 32 },
-  textModeInput: { color: "#FFF", fontFamily: "Inter_700Bold", textAlign: "center", width: "100%", paddingTop: 0 },
+  textModeInput: { color: "#FFF", fontFamily: typography.family.bold, textAlign: "center", width: "100%", paddingTop: 0 },
   audioModeContainer: { flex: 1, justifyContent: "center", alignItems: "center", gap: 20, backgroundColor: "#0A0A0A" },
   audioProgressBar: { position: "absolute", left: 16, right: 16, height: 3, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.15)", overflow: "hidden" },
   audioProgressFill: { height: "100%", borderRadius: 2, backgroundColor: "#A78BFA" },
   audioRecordingIndicator: { flexDirection: "row", alignItems: "center", gap: 12 },
   audioRedDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#FF3B30" },
-  audioTimerText: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 38, letterSpacing: 2, width: 260, textAlign: "center" },
-  audioHintText: { color: "rgba(255,255,255,0.3)", fontFamily: "Inter_400Regular", fontSize: 13, letterSpacing: 0.5, marginTop: 4 },
+  audioTimerText: { color: "#FFF", fontFamily: typography.family.bold, fontSize: 38, letterSpacing: 2, width: 260, textAlign: "center" },
+  audioHintText: { color: "rgba(255,255,255,0.3)", fontFamily: typography.family.regular, fontSize: 13, letterSpacing: 0.5, marginTop: 4 },
   audioWaveformRow: { flexDirection: "row", alignItems: "center", gap: 4, height: 52 },
   audioWaveformBar: { width: 3.5, height: 44, borderRadius: 2, backgroundColor: "#FFF" },
   cameraFooter: { position: "absolute", left: 0, right: 0, alignItems: "center", gap: 24 },
   modeSlider: { flexDirection: "row", gap: 4, backgroundColor: "rgba(0,0,0,0.3)", paddingHorizontal: 20, paddingVertical: 4, borderRadius: 20, marginBottom: 12 },
-  modeText: { color: "rgba(255,255,255,0.4)", fontFamily: "Inter_700Bold", fontSize: 12, paddingVertical: 10, paddingHorizontal: 8 },
+  modeText: { color: "rgba(255,255,255,0.4)", fontFamily: typography.family.bold, fontSize: 12, paddingVertical: 10, paddingHorizontal: 8 },
   modeTextActive: { color: "#FFF" },
   drawingArea: { width: "100%", aspectRatio: 3 / 4, borderRadius: 32, overflow: "hidden", backgroundColor: "#FFF" },
   drawingIdleOverlay: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12 },
-  drawingHintText: { color: "rgba(0,0,0,0.25)", fontFamily: "Inter_400Regular", fontSize: 13, letterSpacing: 0.5 },
+  drawingHintText: { color: "rgba(0,0,0,0.25)", fontFamily: typography.family.regular, fontSize: 13, letterSpacing: 0.5 },
   drawingToolbar: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "rgba(0,0,0,0.55)", paddingHorizontal: 12, paddingVertical: 10, borderRadius: 20, marginBottom: 12 },
   drawingColorGrid: { flexDirection: "column", gap: 6 },
   drawingColorRow: { flexDirection: "row", gap: 6 },
@@ -1272,7 +1273,7 @@ const styles = StyleSheet.create({
   captureInnerAudioRecording: { backgroundColor: "#FFF", width: 28, height: 28, borderRadius: 6 },
   recordingTimer: { position: "absolute", alignSelf: "center", flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, gap: 8 },
   recordingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#FF3B30" },
-  recordingText: { color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 14 },
+  recordingText: { color: "#FFF", fontFamily: typography.family.semibold, fontSize: 14 },
   // Preview
   previewContainer: { flex: 1, backgroundColor: "#000", alignItems: "center" },
   previewImageWrapper: { flex: 1, width: "100%", borderRadius: 32, overflow: "hidden", backgroundColor: "#1A1A1A" },
@@ -1283,13 +1284,13 @@ const styles = StyleSheet.create({
   topSquareBtn: { width: 38, height: 38, borderRadius: 10, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center" },
   previewContent: { position: "absolute", left: 24, right: 24 },
   previewNoteBox: { backgroundColor: "rgba(0,0,0,0.5)", padding: 16, borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
-  previewNoteText: { color: "#FFF", fontSize: 16, fontFamily: "Inter_600SemiBold", textAlign: "center" },
+  previewNoteText: { color: "#FFF", fontSize: 16, fontFamily: typography.family.semibold, textAlign: "center" },
   addNoteBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, padding: 16, borderRadius: 16, backgroundColor: "rgba(0,0,0,0.4)", borderStyle: "dashed", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
-  addNoteBtnText: { color: "rgba(255,255,255,0.6)", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  addNoteBtnText: { color: "rgba(255,255,255,0.6)", fontSize: 15, fontFamily: typography.family.semibold },
   noteEditorContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: 40 },
-  largeNoteInput: { width: "100%", color: "#FFF", fontSize: 28, fontFamily: "Inter_700Bold", textAlign: "center", marginBottom: 40 },
+  largeNoteInput: { width: "100%", color: "#FFF", fontSize: 28, fontFamily: typography.family.bold, textAlign: "center", marginBottom: 40 },
   doneNoteBtn: { backgroundColor: "#FFF", paddingHorizontal: 32, paddingVertical: 14, borderRadius: 100 },
-  doneNoteText: { color: "#000", fontFamily: "Inter_700Bold", fontSize: 16 },
+  doneNoteText: { color: "#000", fontFamily: typography.family.bold, fontSize: 16 },
   // Audio preview
   audioPreviewPlayer: { flexDirection: "row", alignItems: "center", gap: 14, marginTop: 32, paddingHorizontal: 24, width: "100%" },
   audioPreviewPlayBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
@@ -1297,7 +1298,7 @@ const styles = StyleSheet.create({
   audioPreviewTrack: { height: 3, backgroundColor: "rgba(255,255,255,0.22)", borderRadius: 2 },
   audioPreviewFill: { height: 3, backgroundColor: "#FFF", borderRadius: 2 },
   audioPreviewThumb: { position: "absolute", width: 13, height: 13, borderRadius: 7, backgroundColor: "#FFF", marginLeft: -6, top: 14 - 5 },
-  audioPreviewTime: { fontSize: 11, color: "rgba(255,255,255,0.5)", fontFamily: "Inter_400Regular" },
+  audioPreviewTime: { fontSize: 11, color: "rgba(255,255,255,0.5)", fontFamily: typography.family.regular },
   // Barre full-width de switch/envoi pendant la 2e capture
   capturingSecondBar: { position: "absolute", left: 12, right: 12, height: 72, flexDirection: "row", gap: 12 },
   capturingSecondThumb: { flex: 1, borderRadius: 16, overflow: "hidden" },
@@ -1330,7 +1331,7 @@ const challengeStyles = StyleSheet.create({
   },
   challengeBtnText: {
     color: "#000",
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 14,
   },
   bannerRow: {
@@ -1366,13 +1367,13 @@ const challengeStyles = StyleSheet.create({
   },
   bannerText: {
     color: "#FFF",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 13,
     lineHeight: 18,
   },
   bannerProposerText: {
     color: "rgba(255,200,80,0.75)",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 10,
     marginTop: 2,
   },
@@ -1381,15 +1382,15 @@ const challengeStyles = StyleSheet.create({
 const pickerStyles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.78)", justifyContent: "center", alignItems: "center", padding: 28 },
   card: { backgroundColor: "#1C1C1E", borderRadius: 20, padding: 24, width: "100%" },
-  title: { fontSize: 18, fontFamily: "Inter_700Bold", color: "#FFF", marginBottom: 20 },
+  title: { fontSize: 18, fontFamily: typography.family.bold, color: "#FFF", marginBottom: 20 },
   row: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(255,255,255,0.08)" },
   checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: "rgba(255,255,255,0.3)", justifyContent: "center", alignItems: "center" },
   checkboxOn: { backgroundColor: "#FFF", borderColor: "#FFF" },
-  groupName: { color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 16, flex: 1 },
+  groupName: { color: "#FFF", fontFamily: typography.family.semibold, fontSize: 16, flex: 1 },
   sendBtn: { backgroundColor: "#FFF", borderRadius: 14, paddingVertical: 14, alignItems: "center", marginTop: 20, marginBottom: 8 },
-  sendBtnText: { color: "#000", fontSize: 16, fontFamily: "Inter_700Bold" },
+  sendBtnText: { color: "#000", fontSize: 16, fontFamily: typography.family.bold },
   cancelWrap: { alignItems: "center", paddingVertical: 8 },
-  cancelText: { color: "rgba(255,255,255,0.4)", fontFamily: "Inter_600SemiBold", fontSize: 15 },
+  cancelText: { color: "rgba(255,255,255,0.4)", fontFamily: typography.family.semibold, fontSize: 15 },
 });
 
 export default function CameraPage(props: Props) {

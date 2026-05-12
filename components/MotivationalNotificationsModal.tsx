@@ -20,7 +20,7 @@ import Svg, { Path } from "react-native-svg";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth-context";
 import { useToast } from "../lib/toast-context";
-import { colors, theme } from "../lib/theme";
+import { colors, theme, typography } from "../lib/theme";
 import { CloseIcon } from "./groups/GroupIcons";
 import { scheduleMotivationalNotifications } from "../lib/notifications";
 
@@ -253,11 +253,11 @@ const styles = StyleSheet.create({
   content: { flex: 1, paddingHorizontal: 20, alignItems: "center" },
   header: { alignItems: "center", marginBottom: 30 },
   iconCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center", marginBottom: 24 },
-  title: { fontSize: 28, fontFamily: "Inter_700Bold", color: colors.text, textAlign: "center", marginBottom: 12, letterSpacing: -0.5 },
-  description: { fontSize: 16, fontFamily: "Inter_400Regular", color: colors.secondary, textAlign: "center", lineHeight: 24, paddingHorizontal: 10 },
+  title: { fontSize: 28, fontFamily: typography.family.bold, color: colors.text, textAlign: "center", marginBottom: 12, letterSpacing: -0.5 },
+  description: { fontSize: 16, fontFamily: typography.family.regular, color: colors.secondary, textAlign: "center", lineHeight: 24, paddingHorizontal: 10 },
   box: { width: "100%", backgroundColor: "#2C2C2E", borderRadius: 20, padding: 20, alignItems: "center" },
-  boxText: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: colors.text, textAlign: "center", marginBottom: 16, lineHeight: 22 },
-  countText: { color: "#FFF", fontSize: 20, fontFamily: "Inter_800ExtraBold" },
+  boxText: { fontSize: 15, fontFamily: typography.family.semibold, color: colors.text, textAlign: "center", marginBottom: 16, lineHeight: 22 },
+  countText: { color: "#FFF", fontSize: 20, fontFamily: typography.family.extrabold },
   sliderContainer: { width: SLIDER_WIDTH, height: 50, justifyContent: "center" },
   sliderTrack: { width: "100%", height: 6, backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 3, position: "relative" },
   tick: { position: "absolute", width: 2, height: 6, borderRadius: 1, backgroundColor: "rgba(255,255,255,0.15)", top: 0, zIndex: 1 },
@@ -265,14 +265,14 @@ const styles = StyleSheet.create({
   sliderHandle: { position: "absolute", width: 28, height: 28, borderRadius: 14, backgroundColor: "#FFF", left: -14, justifyContent: "center", alignItems: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 3, elevation: 5, zIndex: 10 },
   handleInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#000" },
   sliderLabels: { width: SLIDER_WIDTH, flexDirection: "row", justifyContent: "space-between", marginTop: 8 },
-  label: { fontSize: 13, fontFamily: "Inter_700Bold", color: "rgba(255,255,255,0.9)" },
+  label: { fontSize: 13, fontFamily: typography.family.bold, color: "rgba(255,255,255,0.9)" },
   
   periodsSection: { width: "100%", marginTop: 20, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.05)", paddingTop: 20 },
-  periodsTitle: { fontSize: 12, fontFamily: "Inter_700Bold", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: 12, textAlign: "center", letterSpacing: 1 },
+  periodsTitle: { fontSize: 12, fontFamily: typography.family.bold, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", marginBottom: 12, textAlign: "center", letterSpacing: 1 },
   periodsList: { width: "100%", backgroundColor: "rgba(255,255,255,0.03)", borderRadius: 14, overflow: "hidden" },
   periodItem: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 14 },
   periodItemActive: { backgroundColor: "rgba(255,255,255,0.04)" },
-  periodLabel: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: "rgba(255,255,255,0.7)" },
+  periodLabel: { fontSize: 15, fontFamily: typography.family.semibold, color: "rgba(255,255,255,0.7)" },
   periodLabelActive: { color: "#FFF" },
   itemDivider: { height: 1, backgroundColor: "rgba(255,255,255,0.05)", marginHorizontal: 16 },
   
@@ -280,6 +280,6 @@ const styles = StyleSheet.create({
   radioOuterActive: { borderColor: "#FFF" },
   radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#FFF" },
   
-  errorText: { color: "#FF453A", fontSize: 12, fontFamily: "Inter_600SemiBold", marginTop: 12, textAlign: "center" },
+  errorText: { color: "#FF453A", fontSize: 12, fontFamily: typography.family.semibold, marginTop: 12, textAlign: "center" },
   confirmBtn: { width: "100%", height: 60, justifyContent: "center" },
 });

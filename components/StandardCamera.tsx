@@ -1,6 +1,7 @@
 import React, { forwardRef, useEffect, useRef, useState } from "react";
 import { View, StyleSheet, Text, TouchableOpacity, Dimensions } from "react-native";
 import { CameraView, useCameraPermissions, useMicrophonePermissions, FlashMode, CameraType } from "expo-camera";
+import { typography } from "../lib/theme";
 
 interface Props {
   isActive?: boolean;
@@ -170,7 +171,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   center: { justifyContent: "center", alignItems: "center", padding: 40 },
-  errorText: { color: "#FFF", textAlign: "center", marginBottom: 20, fontFamily: "Inter_400Regular" },
+  errorText: { color: "#FFF", textAlign: "center", marginBottom: 20, fontFamily: typography.family.regular },
   button: { backgroundColor: "#FFF", paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
-  buttonText: { color: "#000", fontFamily: "Inter_700Bold" },
+  buttonText: { color: "#000", fontFamily: typography.family.bold },
 });

@@ -6,6 +6,7 @@ import { getChallengePrompt, type ChallengeWithData, type ChallengeResponse } fr
 import Svg, { Path } from "react-native-svg";
 import { r2Storage } from "../../lib/r2";
 import ChallengeAudioPlayer from "./ChallengeAudioPlayer";
+import { typography } from "../../lib/theme";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -34,7 +35,7 @@ function ResponseThumb({ r }: { r: ChallengeResponse }) {
   if (type === "text") {
     return (
       <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#1A1A1A", justifyContent: "center", alignItems: "center", padding: 6 }]}>
-        <Text style={{ color: "#FFF", fontSize: 9, fontFamily: "Inter_600SemiBold", textAlign: "center" }} numberOfLines={4}>
+        <Text style={{ color: "#FFF", fontSize: 9, fontFamily: typography.family.semibold, textAlign: "center" }} numberOfLines={4}>
           {r.note}
         </Text>
       </View>
@@ -66,7 +67,7 @@ function ModalMedia({ imagePath, url, note }: { imagePath: string | null; url: s
   if (type === "text") {
     return (
       <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#111", justifyContent: "center", alignItems: "center", padding: 28 }]}>
-        <Text style={{ color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 20, textAlign: "center", lineHeight: 28 }}>
+        <Text style={{ color: "#FFF", fontFamily: typography.family.semibold, fontSize: 20, textAlign: "center", lineHeight: 28 }}>
           {note ?? ""}
         </Text>
       </View>
@@ -302,7 +303,7 @@ const cvStyles = StyleSheet.create({
   },
   defiPillText: {
     color: "#FFF",
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 12,
     letterSpacing: 0.8,
   },
@@ -318,18 +319,18 @@ const cvStyles = StyleSheet.create({
   },
   proposerChipText: {
     color: "rgba(255,200,80,0.85)",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 11,
   },
   periodLabel: {
     color: "rgba(255,255,255,0.4)",
-    fontFamily: "Inter_400Regular",
+    fontFamily: typography.family.regular,
     fontSize: 12,
     letterSpacing: 0.5,
   },
   prompt: {
     color: "#FFF",
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 18,
     lineHeight: 24,
     marginBottom: 14,
@@ -355,18 +356,18 @@ const cvStyles = StyleSheet.create({
   },
   avatarLetter: {
     color: "#FFF",
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 14,
   },
   targetLabel: {
     color: "rgba(255,255,255,0.4)",
-    fontFamily: "Inter_400Regular",
+    fontFamily: typography.family.regular,
     fontSize: 11,
     letterSpacing: 0.5,
   },
   targetName: {
     color: "#FFF",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 14,
   },
   targetThumb: {
@@ -378,7 +379,7 @@ const cvStyles = StyleSheet.create({
   },
   responsesLabel: {
     color: "rgba(255,255,255,0.4)",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 11,
     letterSpacing: 0.8,
     textTransform: "uppercase",
@@ -418,7 +419,7 @@ const cvStyles = StyleSheet.create({
   },
   votedBadgeText: {
     color: "#FFF",
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 11,
   },
   dualCaptureDot: {
@@ -432,7 +433,7 @@ const cvStyles = StyleSheet.create({
   },
   hint: {
     color: "rgba(255,255,255,0.35)",
-    fontFamily: "Inter_400Regular",
+    fontFamily: typography.family.regular,
     fontSize: 12,
     textAlign: "center",
     marginTop: 14,
@@ -471,7 +472,7 @@ const cvStyles = StyleSheet.create({
   },
   swapBtnText: {
     color: "rgba(255,255,255,0.8)",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 12,
   },
   modalMedia: {
@@ -490,7 +491,7 @@ const cvStyles = StyleSheet.create({
   },
   noteText: {
     color: "rgba(255,255,255,0.75)",
-    fontFamily: "Inter_400Regular",
+    fontFamily: typography.family.regular,
     fontSize: 14,
     textAlign: "center",
     lineHeight: 20,
@@ -503,7 +504,7 @@ const cvStyles = StyleSheet.create({
   },
   voteBtnText: {
     color: "#000",
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 15,
   },
   voteBtnVoted: {
@@ -516,7 +517,7 @@ const cvStyles = StyleSheet.create({
   },
   voteBtnVotedText: {
     color: "#34C759",
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 15,
   },
 });

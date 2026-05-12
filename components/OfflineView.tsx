@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { colors } from "../lib/theme";
+import { colors, typography } from "../lib/theme";
 
 export default function OfflineView() {
   return (
@@ -34,14 +34,14 @@ const styles = StyleSheet.create({
     opacity: 0.3,
   },
   title: {
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 24,
     color: colors.text,
     marginBottom: 8,
     textAlign: "center",
   },
   subtitle: {
-    fontFamily: "Inter_400Regular",
+    fontFamily: typography.family.regular,
     fontSize: 14,
     color: colors.secondary,
     textAlign: "center",

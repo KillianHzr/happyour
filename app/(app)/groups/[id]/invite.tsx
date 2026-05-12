@@ -16,7 +16,7 @@ import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, router } from "expo-router";
 import { supabase } from "../../../../lib/supabase";
 import { useAuth } from "../../../../lib/auth-context";
-import { colors, theme } from "../../../../lib/theme";
+import { colors, theme, typography } from "../../../../lib/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Loader from "../../../../components/Loader";
 import Svg, { Path } from "react-native-svg";
@@ -224,35 +224,35 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { flex: 1, paddingHorizontal: 24 },
   backBtn: { marginBottom: 32 },
-  backText: { color: colors.secondary, fontFamily: "Inter_600SemiBold", fontSize: 16 },
-  title: { fontFamily: "Inter_700Bold", fontSize: 32, color: "#FFF", marginBottom: 40, letterSpacing: -1 },
+  backText: { color: colors.secondary, fontFamily: typography.family.semibold, fontSize: 16 },
+  title: { fontFamily: typography.family.bold, fontSize: 32, color: "#FFF", marginBottom: 40, letterSpacing: -1 },
   
   section: { marginBottom: 32 },
-  sectionTitle: { fontFamily: "Inter_700Bold", fontSize: 18, color: "#FFF", marginBottom: 8 },
-  sectionDesc: { fontFamily: "Inter_400Regular", fontSize: 14, color: colors.secondary, marginBottom: 20, lineHeight: 20 },
+  sectionTitle: { fontFamily: typography.family.bold, fontSize: 18, color: "#FFF", marginBottom: 8 },
+  sectionDesc: { fontFamily: typography.family.regular, fontSize: 14, color: colors.secondary, marginBottom: 20, lineHeight: 20 },
   
   row: { flexDirection: "row", gap: 12 },
   input: { flex: 1, height: 56, paddingVertical: 0 },
   addBtn: { width: 100, height: 56, justifyContent: "center" },
-  addBtnText: { color: "#000", fontFamily: "Inter_700Bold", fontSize: 14 },
+  addBtnText: { color: "#000", fontFamily: typography.family.bold, fontSize: 14 },
   
   divider: { height: 1, backgroundColor: "rgba(255,255,255,0.1)", marginVertical: 12, marginBottom: 40 },
   
   codeCard: { padding: 32, alignItems: "center", backgroundColor: "rgba(255,255,255,0.03)", marginBottom: 24 },
-  codeLabel: { fontSize: 10, fontFamily: "Inter_700Bold", color: colors.secondary, letterSpacing: 2, marginBottom: 12 },
+  codeLabel: { fontSize: 10, fontFamily: typography.family.bold, color: colors.secondary, letterSpacing: 2, marginBottom: 12 },
   codeRow: { flexDirection: "row", alignItems: "center", gap: 16 },
-  codeValue: { fontSize: 32, fontFamily: "Inter_700Bold", color: "#FFF", letterSpacing: 4 },
+  codeValue: { fontSize: 32, fontFamily: typography.family.bold, color: "#FFF", letterSpacing: 4 },
   copyBtn: { width: 44, height: 44, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center" },
   
   shareBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, backgroundColor: "rgba(255,255,255,0.1)", padding: 20, borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
-  shareBtnText: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 16 },
+  shareBtnText: { color: "#FFF", fontFamily: typography.family.bold, fontSize: 16 },
 
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center", padding: 24 },
   modalBox: { backgroundColor: "#1A1A1A", borderRadius: 20, padding: 28, width: "100%", borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
-  modalTitle: { fontFamily: "Inter_700Bold", fontSize: 20, color: "#FFF", marginBottom: 12 },
-  modalDesc: { fontFamily: "Inter_400Regular", fontSize: 14, color: colors.secondary, lineHeight: 20, marginBottom: 28 },
+  modalTitle: { fontFamily: typography.family.bold, fontSize: 20, color: "#FFF", marginBottom: 12 },
+  modalDesc: { fontFamily: typography.family.regular, fontSize: 14, color: colors.secondary, lineHeight: 20, marginBottom: 28 },
   modalConfirmBtn: { backgroundColor: "#E53E3E", padding: 16, borderRadius: 14, alignItems: "center", marginBottom: 10 },
-  modalConfirmText: { fontFamily: "Inter_700Bold", fontSize: 16, color: "#FFF" },
+  modalConfirmText: { fontFamily: typography.family.bold, fontSize: 16, color: "#FFF" },
   modalCancelBtn: { padding: 16, borderRadius: 14, alignItems: "center" },
-  modalCancelText: { fontFamily: "Inter_600SemiBold", fontSize: 16, color: colors.secondary },
+  modalCancelText: { fontFamily: typography.family.semibold, fontSize: 16, color: colors.secondary },
 });

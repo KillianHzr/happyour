@@ -1,6 +1,7 @@
 import React from "react";
 import { View } from "react-native";
 import { Svg, Text as SvgText } from "react-native-svg";
+import { typography } from "../../lib/theme";
 
 interface TextStickerProps {
   text: string;
@@ -25,7 +26,7 @@ export const TextSticker = ({ text, fontSize = 42 }: TextStickerProps) => {
           strokeLinejoin="round"
           fontSize={fontSize}
           fontWeight="bold"
-          fontFamily="Inter_700Bold"
+          fontFamily={typography.family.bold}
           x="50%"
           y={y}
           textAnchor="middle"
@@ -36,7 +37,7 @@ export const TextSticker = ({ text, fontSize = 42 }: TextStickerProps) => {
           fill="black"
           fontSize={fontSize}
           fontWeight="bold"
-          fontFamily="Inter_700Bold"
+          fontFamily={typography.family.bold}
           x="50%"
           y={y}
           textAnchor="middle"

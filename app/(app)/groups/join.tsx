@@ -6,7 +6,7 @@ import { useAuth } from "../../../lib/auth-context";
 import { useToast } from "../../../lib/toast-context";
 import { translateError } from "../../../lib/error-messages";
 import { scheduleFirstMomentReminder } from "../../../lib/notifications";
-import { colors, theme } from "../../../lib/theme";
+import { colors, theme, typography } from "../../../lib/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Loader from "../../../components/Loader";
 
@@ -101,9 +101,9 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { flex: 1, paddingHorizontal: 24 },
   backBtn: { marginBottom: 32 },
-  backText: { color: colors.secondary, fontFamily: "Inter_600SemiBold", fontSize: 16 },
-  title: { fontFamily: "Inter_700Bold", fontSize: 32, color: "#FFF", marginBottom: 12, letterSpacing: -1 },
-  subtitle: { fontFamily: "Inter_400Regular", fontSize: 16, color: colors.secondary, lineHeight: 24, marginBottom: 40 },
-  input: { fontSize: 24, fontFamily: "Inter_700Bold", textAlign: "center", letterSpacing: 2 },
+  backText: { color: colors.secondary, fontFamily: typography.family.semibold, fontSize: 16 },
+  title: { fontFamily: typography.family.bold, fontSize: 32, color: "#FFF", marginBottom: 12, letterSpacing: -1 },
+  subtitle: { fontFamily: typography.family.regular, fontSize: 16, color: colors.secondary, lineHeight: 24, marginBottom: 40 },
+  input: { fontSize: 24, fontFamily: typography.family.bold, textAlign: "center", letterSpacing: 2 },
   button: { marginTop: 24 },
 });

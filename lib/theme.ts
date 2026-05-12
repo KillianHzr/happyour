@@ -2,90 +2,136 @@ import { StyleSheet } from "react-native";
 import tokens from "../design-tokens.json";
 
 /**
- * Resolves a token value, following references if they exist.
- * Example: "{primitive.color.black}" -> "#000000"
+ * Résout un token depuis le format plat généré par Figma.
+ * Gère automatiquement la résolution des alias {Collection/Chemin_de_la_variable}.
  */
-const token = (path: string): any => {
-  const parts = path.split(".");
-  let current: any = tokens;
-  
-  for (const part of parts) {
-    if (current[part] === undefined) {
-      console.warn(`Token not found: ${path}`);
-      return undefined;
-    }
-    current = current[part];
+const resolveToken = (path: string, mode: "Light" | "Dark" | "Value" = "Light"): any => {
+  // On sépare la collection (avant le 1er slash) du nom de la variable (après le 1er slash)
+  const firstSlashIndex = path.indexOf("/");
+  if (firstSlashIndex === -1) {
+    console.warn(`Format de chemin invalide: ${path}`);
+    return undefined;
   }
 
-  const value = current.$value;
+  const collection = path.substring(0, firstSlashIndex); // Ex: "Primitives"
+  const variableName = path.substring(firstSlashIndex + 1); // Ex: "color/slate/100"
 
-  // Resolve references if value is in curly braces: "{path.to.token}"
+  // @ts-ignore
+  const variable = tokens[collection]?.[variableName];
+
+  if (!variable) {
+    console.warn(`Token introuvable: ${path}`);
+    return undefined;
+  }
+
+  // On récupère la valeur selon le mode demandé
+  let value = variable.values[mode];
+
+  // Fallbacks automatiques (si on demande Light sur une Primitive qui n'a que Value)
+  if (value === undefined) value = variable.values["Value"];
+  if (value === undefined) value = variable.values["Light"];
+
+  // Résolution récursive des alias (ex: "{Primitives/color/black}")
   if (typeof value === "string" && value.startsWith("{") && value.endsWith("}")) {
     const referencePath = value.slice(1, -1);
-    return token(referencePath);
+    return resolveToken(referencePath, mode);
+  }
+
+  // Sécurité React Native : Convertit les "16px" en nombres pour les variables FLOAT
+  if (variable.type === "FLOAT" && typeof value === "string" && value.endsWith("px")) {
+    return parseFloat(value);
   }
 
   return value;
 };
 
-// --- Semantic Mappings for backward compatibility and clean API ---
+// --- Mode Actuel ---
+// Pour tester, tu peux changer en "Dark" ici, ou lier ça à un Context React plus tard !
+const activeMode = "Light";
 
+// --- Semantic Mappings ---
 export const colors = {
-  bg: token("semantic.color.bg"),
-  card: token("semantic.color.card.bg"),
-  cardBorder: token("semantic.color.card.border"),
-  accent: token("semantic.color.accent.primary"),
-  accentMuted: token("semantic.color.accent.muted"),
-  text: token("semantic.color.text.primary"),
-  textMuted: token("semantic.color.text.muted"),
-  secondary: token("semantic.color.text.secondary"),
-  muted: token("primitive.color.slate.600"),
-  danger: token("semantic.color.status.danger"),
-  gold: token("semantic.color.status.gold"),
-  goldDark: token("primitive.color.gold.dark"),
-  glass: token("primitive.color.glass.base"),
-  glassMuted: token("primitive.color.glass.muted"),
-  white: token("primitive.color.white"),
-  black: token("primitive.color.black"),
+  bg: resolveToken("Semantics/color/bg", activeMode),
+  card: resolveToken("Semantics/color/card/bg", activeMode),
+  cardBorder: resolveToken("Semantics/color/card/border", activeMode),
+  accent: resolveToken("Semantics/color/accent/primary", activeMode),
+  accentMuted: resolveToken("Semantics/color/accent/muted", activeMode),
+  text: resolveToken("Semantics/color/text/primary", activeMode),
+  textMuted: resolveToken("Semantics/color/text/muted", activeMode),
+  secondary: resolveToken("Semantics/color/text/secondary", activeMode),
+  muted: resolveToken("Primitives/color/slate/600", activeMode),
+  danger: resolveToken("Semantics/color/status/danger", activeMode),
+  gold: resolveToken("Semantics/color/status/gold", activeMode),
+  goldDark: resolveToken("Primitives/color/gold/dark", activeMode),
+  glass: resolveToken("Primitives/color/glass/base", activeMode),
+  glassMuted: resolveToken("Primitives/color/glass/muted", activeMode),
+  white: resolveToken("Primitives/color/white", activeMode),
+  black: resolveToken("Primitives/color/black", activeMode),
 } as const;
 
 export const spacing = {
-  none: token("primitive.spacing.0"),
-  xs: token("semantic.spacing.xs"),
-  sm: token("semantic.spacing.sm"),
-  md: token("semantic.spacing.md"),
-  lg: token("semantic.spacing.lg"),
-  xl: token("semantic.spacing.xl"),
-  xxl: token("semantic.spacing.xxl"),
+  none: resolveToken("Primitives/spacing/0", activeMode),
+  xs: resolveToken("Semantics/spacing/xs", activeMode),
+  sm: resolveToken("Semantics/spacing/sm", activeMode),
+  md: resolveToken("Semantics/spacing/md", activeMode),
+  lg: resolveToken("Semantics/spacing/lg", activeMode),
+  xl: resolveToken("Semantics/spacing/xl", activeMode),
+  xxl: resolveToken("Semantics/spacing/xxl", activeMode),
 } as const;
 
 export const radii = {
-  none: token("primitive.radii.none"),
-  xs: token("primitive.radii.xs"),
-  sm: token("primitive.radii.sm"),
-  md: token("primitive.radii.md"),
-  lg: token("primitive.radii.lg"),
-  xl: token("primitive.radii.xl"),
-  xxl: token("primitive.radii.xxl"),
-  full: token("primitive.radii.full"),
-  // Semantic aliases
-  button: token("semantic.radii.button"),
-  card: token("semantic.radii.card"),
+  none: resolveToken("Primitives/radii/none", activeMode),
+  xs: resolveToken("Primitives/radii/xs", activeMode),
+  sm: resolveToken("Primitives/radii/sm", activeMode),
+  md: resolveToken("Primitives/radii/md", activeMode),
+  lg: resolveToken("Primitives/radii/lg", activeMode),
+  xl: resolveToken("Primitives/radii/xl", activeMode),
+  xxl: resolveToken("Primitives/radii/xxl", activeMode),
+  full: resolveToken("Primitives/radii/full", activeMode),
+  button: resolveToken("Semantics/radii/button", activeMode),
+  card: resolveToken("Semantics/radii/card", activeMode),
+  input: resolveToken("Semantics/radii/input", activeMode),
 } as const;
 
 export const typography = {
-  size: {
-    xs: token("typography.size.xs"),
-    sm: token("typography.size.sm"),
-    md: token("typography.size.md"),
-    lg: token("typography.size.lg"),
-    xl: token("typography.size.xl"),
-    xxl: token("typography.size.xxl"),
-  },
   family: {
-    regular: token("typography.family.regular"),
-    semibold: token("typography.family.semibold"),
-    bold: token("typography.family.bold"),
+    regular: "Inter_400Regular",
+    semibold: "Inter_600SemiBold",
+    bold: "Inter_700Bold",
+    extrabold: "Inter_800ExtraBold",
+  },
+  size: {
+    xs: resolveToken("Primitives/typography/scale-01", activeMode) as number,   // 12
+    sm: resolveToken("Primitives/typography/scale-02", activeMode) as number,   // 14
+    md: resolveToken("Primitives/typography/scale-03", activeMode) as number,   // 16
+    lg: 17,
+    xl: resolveToken("Primitives/typography/scale-04", activeMode) as number,   // 20
+    xxl: resolveToken("Primitives/typography/scale-05", activeMode) as number,  // 24
+    xxxl: resolveToken("Primitives/typography/scale-06", activeMode) as number, // 32
+  },
+} as const;
+
+export const shadows = {
+  sm: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  md: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  lg: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.4,
+    shadowRadius: 32,
+    elevation: 16,
   },
 } as const;
 
@@ -102,20 +148,16 @@ export const theme = StyleSheet.create({
     borderColor: colors.cardBorder,
     borderRadius: radii.button,
     padding: spacing.lg,
-    fontFamily: typography.family.regular,
-    fontSize: typography.size.lg,
     color: colors.text,
   },
   accentButton: {
     backgroundColor: colors.accent,
     borderRadius: radii.button,
     padding: spacing.lg,
-    alignItems: "center" as const,
+    alignItems: "center",
   },
   accentButtonText: {
-    fontFamily: typography.family.semibold,
     color: colors.black,
-    fontSize: typography.size.lg,
     letterSpacing: -0.2,
   },
   outlineButton: {
@@ -124,12 +166,10 @@ export const theme = StyleSheet.create({
     borderColor: colors.cardBorder,
     borderRadius: radii.button,
     padding: spacing.lg,
-    alignItems: "center" as const,
+    alignItems: "center",
   },
   outlineButtonText: {
-    fontFamily: typography.family.semibold,
     color: colors.text,
-    fontSize: typography.size.lg,
   },
   glassTabBar: {
     backgroundColor: "rgba(0,0,0,0.8)",

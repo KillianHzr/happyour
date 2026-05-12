@@ -13,7 +13,7 @@ import Svg, { Path } from "react-native-svg";
 import { useAuth } from "../lib/auth-context";
 import { useToast } from "../lib/toast-context";
 import { supabase } from "../lib/supabase";
-import { colors, theme } from "../lib/theme";
+import { colors, theme, typography } from "../lib/theme";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -89,7 +89,7 @@ export default function DeleteAccountModal({ visible, onClose }: Props) {
 
             <View style={styles.warningBox}>
               <Text style={styles.warningBoxText}>
-                ⚠️ <Text style={{ fontFamily: "Inter_700Bold" }}>Important :</Text> Tous tes moments partagés seront définitivement supprimés pour tout le monde.
+                ⚠️ <Text style={{ fontFamily: typography.family.bold }}>Important :</Text> Tous tes moments partagés seront définitivement supprimés pour tout le monde.
               </Text>
             </View>
           </View>
@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 32,
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     color: "#FFF",
     textAlign: "center",
     marginBottom: 16,
@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
   },
   description: {
     fontSize: 17,
-    fontFamily: "Inter_400Regular",
+    fontFamily: typography.family.regular,
     color: "rgba(255,255,255,0.6)",
     textAlign: "center",
     lineHeight: 26,
@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
   warningBoxText: {
     color: "#FF453A",
     fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     textAlign: "center",
     lineHeight: 20,
   },
@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
   deleteBtnText: {
     color: "#FFF",
     fontSize: 17,
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
   },
   logoutBtn: {
     backgroundColor: "rgba(255,255,255,0.1)",
@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
   logoutBtnText: {
     color: "#FFF",
     fontSize: 17,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
   },
   cancelBtn: {
     width: "100%",
@@ -220,6 +220,6 @@ const styles = StyleSheet.create({
   cancelBtnText: {
     color: "rgba(255,255,255,0.4)",
     fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
   },
 });

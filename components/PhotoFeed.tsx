@@ -29,6 +29,7 @@ import { VideoMoment } from "./organisms/VideoMoment";
 import { RevealIntroPage } from "./organisms/RevealIntroPage";
 import { CrownRevealPage } from "./organisms/CrownRevealPage";
 import { AnimatedPageWrapper } from "./molecules/AnimatedPageWrapper";
+import { typography } from "../lib/theme";
 
 export { PhotoEntry, Reaction };
 
@@ -372,14 +373,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12 
   },
   separatorDay: { 
-    fontFamily: "Inter_700Bold", 
+    fontFamily: typography.family.bold, 
     fontSize: 48, 
     color: "#FFF", 
     textAlign: "center", 
     letterSpacing: -2 
   },
   separatorDate: { 
-    fontFamily: "Inter_600SemiBold", 
+    fontFamily: typography.family.semibold, 
     fontSize: 14, 
     color: "rgba(255,255,255,0.4)", 
     textTransform: "uppercase", 
@@ -395,18 +396,18 @@ const styles = StyleSheet.create({
     transform: [{ rotate: "45deg" }] 
   },
   endTitle: { 
-    fontFamily: "Inter_700Bold", 
+    fontFamily: typography.family.bold, 
     fontSize: 24, 
     color: "#FFF" 
   },
   endSubtitle: { 
-    fontFamily: "Inter_400Regular", 
+    fontFamily: typography.family.regular, 
     fontSize: 14, 
     color: "rgba(255,255,255,0.4)", 
     marginTop: 8 
   },
   countdownText: { 
-    fontFamily: "Inter_700Bold", 
+    fontFamily: typography.family.bold, 
     fontSize: 32, 
     color: "#FFF", 
     marginTop: 12, 

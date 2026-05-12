@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, Modal, FlatList, TouchableOpacity, Alert } from
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { colors, theme } from "../../lib/theme";
+import { colors, theme, typography } from "../../lib/theme";
 
 type Member = {
   user_id: string;
@@ -84,17 +84,17 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: "#000" },
   content: { flex: 1, paddingHorizontal: 24 },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 32 },
-  title: { fontFamily: "Inter_700Bold", fontSize: 24, color: "#FFF" },
-  closeText: { color: colors.secondary, fontFamily: "Inter_600SemiBold" },
+  title: { fontFamily: typography.family.bold, fontSize: 24, color: "#FFF" },
+  closeText: { color: colors.secondary, fontFamily: typography.family.semibold },
   avatarImg: { width: "100%", height: "100%" },
   memberItem: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16, backgroundColor: "rgba(255,255,255,0.08)", padding: 14, borderRadius: 18 },
   memberAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center", overflow: "hidden" },
-  memberAvatarText: { color: "#FFF", fontFamily: "Inter_700Bold" },
-  memberName: { color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 16, flex: 1 },
+  memberAvatarText: { color: "#FFF", fontFamily: typography.family.bold },
+  memberName: { color: "#FFF", fontFamily: typography.family.semibold, fontSize: 16, flex: 1 },
   removeBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: "rgba(255,60,60,0.15)" },
-  removeText: { color: "#FF3C3C", fontFamily: "Inter_600SemiBold", fontSize: 13 },
+  removeText: { color: "#FF3C3C", fontFamily: typography.family.semibold, fontSize: 13 },
   footer: { marginTop: 24, marginBottom: 40 },
   inviteBtn: { marginBottom: 12 },
   leaveBtn: { paddingVertical: 15, alignItems: "center", borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,59,48,0.35)", backgroundColor: "rgba(255,59,48,0.08)" },
-  leaveBtnText: { color: "#FF3B30", fontFamily: "Inter_600SemiBold", fontSize: 16 },
+  leaveBtnText: { color: "#FF3B30", fontFamily: typography.family.semibold, fontSize: 16 },
 });

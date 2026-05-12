@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   personalStatsLabel: {
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 11,
     color: "rgba(255,255,255,0.3)",
     letterSpacing: 1.5,
@@ -133,13 +133,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   personalDuration: {
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 24,
     color: "#FFF",
     marginBottom: 4,
   },
   personalDurationLabel: {
-    fontFamily: "Inter_400Regular",
+    fontFamily: typography.family.regular,
     fontSize: 12,
     color: "rgba(255,255,255,0.4)",
   },

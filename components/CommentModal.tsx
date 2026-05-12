@@ -27,6 +27,7 @@ import { useAuth } from "../lib/auth-context";
 import { CloseIcon } from "./atoms/CloseIcon";
 import { CommentItem, Comment } from "./molecules/CommentItem";
 import { CommentInput } from "./molecules/CommentInput";
+import { typography } from "../lib/theme";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const MODAL_HEIGHT = SCREEN_HEIGHT * 0.75;
@@ -383,7 +384,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "rgba(255,255,255,0.1)",
   },
   headerTitle: {
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 16,
     color: "#FFF",
     letterSpacing: 0.5,
@@ -428,7 +429,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   alreadySharedText: {
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 14,
     color: "rgba(255,255,255,0.4)",
   },

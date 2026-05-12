@@ -31,6 +31,7 @@ import BottomSheet from "../../../components/BottomSheet";
 import LiveReactions from "../../../components/reveal/LiveReactions";
 import MotivationalNotificationsModal from "../../../components/MotivationalNotificationsModal";
 import { scheduleImmediateLocalNotification, scheduleFirstMomentReminder } from "../../../lib/notifications";
+import { typography } from "../../../lib/theme";
 
 const isEmoji = (str: string) => {
   const regexExp = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/gi;
@@ -1439,10 +1440,10 @@ const styles = StyleSheet.create({
   tabBarContainer: { position: "absolute", bottom: 0, left: 0, right: 0, height: NAVBAR_HEIGHT, overflow: "hidden", zIndex: 100, backgroundColor: "rgba(10,10,10,1)" },
   tabBarContent: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-evenly", paddingTop: 12 },
   tab: { alignItems: "center", justifyContent: "center", gap: 4, flex: 1 },
-  tabLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold", color: "rgba(255,255,255,0.4)" },
+  tabLabel: { fontSize: 10, fontFamily: typography.family.semibold, color: "rgba(255,255,255,0.4)" },
   tabLabelActive: { color: "#FFF" },
   streakBadge: { position: "absolute", top: -5, right: -8, width: 16, height: 16, borderRadius: 8, justifyContent: "center", alignItems: "center" },
-  streakBadgeText: { position: "absolute", fontSize: 8, fontFamily: "Inter_700Bold", color: "#FFF", textAlign: "center", bottom: 1 },
+  streakBadgeText: { position: "absolute", fontSize: 8, fontFamily: typography.family.bold, color: "#FFF", textAlign: "center", bottom: 1 },
 
   // Reveal overlay
   revealOverlay: { zIndex: 200, backgroundColor: "#000" },
@@ -1454,31 +1455,31 @@ const styles = StyleSheet.create({
   },
 
   // Leave confirm
-  leaveTitle: { fontSize: 20, fontFamily: "Inter_700Bold", color: "#FFF", marginBottom: 12 },
-  leaveBody: { fontSize: 15, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.55)", marginBottom: 28, lineHeight: 22 },
+  leaveTitle: { fontSize: 20, fontFamily: typography.family.bold, color: "#FFF", marginBottom: 12 },
+  leaveBody: { fontSize: 15, fontFamily: typography.family.regular, color: "rgba(255,255,255,0.55)", marginBottom: 28, lineHeight: 22 },
   leaveConfirmBtn: { backgroundColor: "#FF3B30", borderRadius: 16, paddingVertical: 15, alignItems: "center", marginBottom: 10 },
-  leaveConfirmText: { color: "#FFF", fontSize: 16, fontFamily: "Inter_700Bold" },
+  leaveConfirmText: { color: "#FFF", fontSize: 16, fontFamily: typography.family.bold },
   leaveCancelWrap: { alignItems: "center", paddingVertical: 8 },
-  leaveCancelText: { color: "rgba(255,255,255,0.35)", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  leaveCancelText: { color: "rgba(255,255,255,0.35)", fontSize: 15, fontFamily: typography.family.semibold },
 
   // Add group
-  addGroupTitle: { fontSize: 20, fontFamily: "Inter_700Bold", color: "#FFF", marginBottom: 8 },
-  addGroupSub: { fontSize: 14, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.45)", marginBottom: 24 },
+  addGroupTitle: { fontSize: 20, fontFamily: typography.family.bold, color: "#FFF", marginBottom: 8 },
+  addGroupSub: { fontSize: 14, fontFamily: typography.family.regular, color: "rgba(255,255,255,0.45)", marginBottom: 24 },
   addGroupPrimary: { backgroundColor: "#FFF", borderRadius: 16, paddingVertical: 16, alignItems: "center", marginBottom: 12 },
-  addGroupPrimaryText: { color: "#000", fontSize: 16, fontFamily: "Inter_700Bold" },
+  addGroupPrimaryText: { color: "#000", fontSize: 16, fontFamily: typography.family.bold },
   addGroupSecondary: { backgroundColor: "rgba(255,255,255,0.08)", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)", borderRadius: 16, paddingVertical: 16, alignItems: "center", marginBottom: 12 },
-  addGroupSecondaryText: { color: "#FFF", fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  addGroupSecondaryText: { color: "#FFF", fontSize: 16, fontFamily: typography.family.semibold },
   // Sheet inputs
   sheetInput: {
     backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 12,
     paddingHorizontal: 16, paddingVertical: 14, color: "#FFF",
-    fontFamily: "Inter_600SemiBold", fontSize: 16,
+    fontFamily: typography.family.semibold, fontSize: 16,
     borderWidth: 1, borderColor: "rgba(255,255,255,0.15)",
     marginBottom: 16,
   },
-  sheetCodeInput: { fontSize: 22, textAlign: "center", letterSpacing: 3, fontFamily: "Inter_700Bold" },
+  sheetCodeInput: { fontSize: 22, textAlign: "center", letterSpacing: 3, fontFamily: typography.family.bold },
   sheetCancelWrap: { alignItems: "center", paddingVertical: 8 },
-  sheetCancelText: { color: "rgba(255,255,255,0.4)", fontFamily: "Inter_600SemiBold", fontSize: 15 },
+  sheetCancelText: { color: "rgba(255,255,255,0.4)", fontFamily: typography.family.semibold, fontSize: 15 },
 
   // New Reactions UI
   emojiWheel: {
@@ -1518,13 +1519,13 @@ const styles = StyleSheet.create({
   customModalClose: { position: "absolute", top: 60, right: 20, width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", zIndex: 10 },
   customInputWrapper: { width: "100%", alignItems: "center", paddingHorizontal: 40, gap: 32 },
   customPreviewSticker: { marginBottom: 10, transform: [{ scale: 1.2 }] },
-  customTextInput: { width: "100%", color: "#FFF", fontFamily: "Inter_800ExtraBold", textAlign: "center", padding: 20, height: 90 },
+  customTextInput: { width: "100%", color: "#FFF", fontFamily: typography.family.extrabold, textAlign: "center", padding: 20, height: 90 },
   customSendBtn: { backgroundColor: "#FFF", paddingHorizontal: 32, paddingVertical: 14, borderRadius: 100 },
   customSendBtnDisabled: { opacity: 0.5 },
-  customSendText: { color: "#000", fontFamily: "Inter_700Bold", fontSize: 16 },
+  customSendText: { color: "#000", fontFamily: typography.family.bold, fontSize: 16 },
   customModalActions: { alignItems: "center", gap: 16, width: "100%" },
   customDeleteBtn: { paddingVertical: 8 },
-  customDeleteText: { color: "#FF3B30", fontFamily: "Inter_600SemiBold", fontSize: 15 },
+  customDeleteText: { color: "#FF3B30", fontFamily: typography.family.semibold, fontSize: 15 },
   customTextInputWrapper: { width: "100%", position: "relative" },
   emojiTooltip: {
     position: "absolute", bottom: "100%", alignSelf: "center", marginBottom: 8,
@@ -1534,8 +1535,8 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
   },
   emojiTooltipIcon: { fontSize: 13 },
-  emojiTooltipText: { color: "rgba(255,255,255,0.8)", fontFamily: "Inter_600SemiBold", fontSize: 13 },
+  emojiTooltipText: { color: "rgba(255,255,255,0.8)", fontFamily: typography.family.semibold, fontSize: 13 },
   historyRow: { flexDirection: "row", gap: 8, justifyContent: "center", flexWrap: "wrap" },
   historyChip: { backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7 },
-  historyChipText: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 13 },
+  historyChipText: { color: "#FFF", fontFamily: typography.family.bold, fontSize: 13 },
 });

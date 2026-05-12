@@ -3,140 +3,264 @@
 <head>
     <meta charset="UTF-8">
     <style>
-        body { font-family: sans-serif; padding: 16px; font-size: 13px; }
-        input { width: 100%; margin-bottom: 12px; padding: 6px; box-sizing: border-box; }
-        button { width: 100%; padding: 10px; background: #0d99ff; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;}
-        button:disabled { background: #ccc; }
-        #status { margin-top: 12px; color: #555; font-size: 12px; }
+        :root {
+            --bg: var(--figma-color-bg, #ffffff);
+            --text: var(--figma-color-text, #333333);
+            --text-secondary: var(--figma-color-text-secondary, #737373);
+            --border: var(--figma-color-border, #e5e5e5);
+            --accent: var(--figma-color-bg-brand, #0d99ff);
+            --accent-hover: var(--figma-color-bg-brand-hover, #0b8ce9);
+            --accent-text: var(--figma-color-text-onbrand, #ffffff);
+        }
+        * { box-sizing: border-box; }
+        body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; font-size: 12px; display: flex; flex-direction: column; height: 100vh; }
+        .header { padding: 16px; border-bottom: 1px solid var(--border); }
+        .header h2 { margin: 0; font-size: 14px; font-weight: 600; }
+        .content { padding: 16px; flex: 1; overflow-y: auto; }
+        .form-group { margin-bottom: 14px; }
+        .form-row { display: flex; gap: 12px; }
+        .form-row .form-group { flex: 1; }
+        label { display: block; font-weight: 500; margin-bottom: 6px; color: var(--text); }
+        input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); outline: none; }
+        input:focus { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+        .footer { padding: 16px; border-top: 1px solid var(--border); }
+        .btn-row { display: flex; gap: 8px; }
+        button { flex: 1; padding: 10px; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; }
+        button.primary { background: var(--accent); color: var(--accent-text); }
+        button.primary:hover { background: var(--accent-hover); }
+        button.secondary { background: var(--border); color: var(--text); }
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.6); padding: 20px; z-index: 1000; }
+        .modal-content { background: var(--bg); border-radius: 8px; padding: 20px; display: flex; flex-direction: column; max-height: 100%; }
+        .modal-content h3 { margin-top: 0; margin-bottom: 12px; }
+        .diff-container { flex: 1; overflow-y: auto; background: var(--border); padding: 10px; border-radius: 6px; font-family: 'JetBrains Mono', monospace, sans-serif; font-size: 11px; margin-bottom: 16px; }
+        .diff-add { color: #14ae5c; margin-bottom: 4px; }
+        .diff-mod { color: #ffa629; margin-bottom: 4px; }
+        .diff-del { color: #f24822; margin-bottom: 4px; }
     </style>
 </head>
 <body>
 
-<h2>Figma → GitHub</h2>
-
-<label>GitHub PAT :</label>
-<input type="password" id="token" placeholder="ghp_xxx..." />
-
-<label>Owner / Repo :</label>
-<div style="display: flex; gap: 8px;">
-    <input type="text" id="owner" placeholder="Owner" />
-    <input type="text" id="repo" placeholder="Repo" />
+<div class="header">
+    <h2>Design Tokens Sync</h2>
 </div>
 
-<label>Chemin du fichier :</label>
-<input type="text" id="path" placeholder="tokens/figma-export.json" />
+<div class="content">
+    <div class="form-group">
+        <label>GitHub PAT (Token)</label>
+        <input type="password" id="token" placeholder="ghp_xxx..." />
+    </div>
+    <div class="form-row">
+        <div class="form-group">
+            <label>Owner / Organisme</label>
+            <input type="text" id="owner" placeholder="user" />
+        </div>
+        <div class="form-group">
+            <label>Repository</label>
+            <input type="text" id="repo" placeholder="my-repo" />
+        </div>
+    </div>
+    <div class="form-group">
+        <label>Chemin du fichier</label>
+        <input type="text" id="path" placeholder="tokens.json" />
+    </div>
+    <div class="form-group">
+        <label>Branche</label>
+        <input type="text" id="branch" placeholder="main" />
+    </div>
+</div>
 
-<label>Branche :</label>
-<input type="text" id="branch" placeholder="main" />
+<div class="footer">
+    <div class="btn-row">
+        <button class="secondary" onclick="prepareAction('PULL')">⬇ Pull depuis GitHub</button>
+        <button class="primary" onclick="prepareAction('PUSH')">⬆ Push vers GitHub</button>
+    </div>
+</div>
 
-<button id="btn-push" disabled>Chargement des variables...</button>
-<div id="status"></div>
+<div id="diffModal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 id="modalTitle">Vérification des changements</h3>
+        <div id="diffList" class="diff-container"></div>
+        <div class="btn-row">
+            <button class="secondary" onclick="closeModal()">Annuler</button>
+            <button class="primary" id="confirmBtn">Confirmer</button>
+        </div>
+    </div>
+</div>
 
 <script>
-    let tokensData = null;
+    let figmaState = null;
+    let gitState = null;
+    let currentAction = '';
+    let currentGitFileSha = null;
 
-    // --- SAUVEGARDE AUTOMATIQUE ---
     function saveConfig() {
         const config = {
-            token: document.getElementById('token').value,
-            owner: document.getElementById('owner').value,
-            repo: document.getElementById('repo').value,
-            path: document.getElementById('path').value,
-            branch: document.getElementById('branch').value
+            token: document.getElementById('token').value.trim(),
+            owner: document.getElementById('owner').value.trim(),
+            repo: document.getElementById('repo').value.trim(),
+            path: document.getElementById('path').value.trim(),
+            branch: document.getElementById('branch').value.trim()
         };
-        // Envoie la config à code.js pour qu'il la stocke dans Figma
         parent.postMessage({ pluginMessage: { type: 'SAVE_CONFIG', config } }, '*');
     }
 
-    // Ajoute un écouteur sur tous les inputs : dès qu'on tape, ça sauvegarde !
-    document.querySelectorAll('input').forEach(input => {
-        input.addEventListener('input', saveConfig);
-    });
-    // ------------------------------
+    document.querySelectorAll('input').forEach(input => input.addEventListener('input', saveConfig));
 
-    // Réception des messages venant de code.js
     window.onmessage = (event) => {
         const msg = event.data.pluginMessage;
 
-        // Chargement de la configuration initiale
-        if (msg && msg.type === 'LOAD_CONFIG') {
+        if (msg.type === 'LOAD_CONFIG') {
             const c = msg.config;
             if (c.token) document.getElementById('token').value = c.token;
             if (c.owner) document.getElementById('owner').value = c.owner;
             if (c.repo) document.getElementById('repo').value = c.repo;
-            if (c.path) document.getElementById('path').value = c.path;
-            // On met une valeur par défaut pour la branche et le chemin si vide
+            document.getElementById('path').value = c.path || "tokens.json";
             document.getElementById('branch').value = c.branch || "main";
-            document.getElementById('path').value = c.path || "tokens/figma-export.json";
         }
 
-        // Réception des variables prêtes à être envoyées
-        if (msg && msg.type === 'VARIABLES_EXTRACTED') {
-            tokensData = msg.data;
-            document.getElementById('btn-push').innerText = "Pousser vers GitHub";
-            document.getElementById('btn-push').disabled = false;
-            document.getElementById('status').innerText = "Variables prêtes à être envoyées !";
+        if (msg.type === 'CURRENT_STATE') figmaState = msg.data;
+
+        if (msg.type === 'IMPORT_SUCCESS') {
+            alert("✅ Variables importées avec succès !");
+            closeModal();
+        }
+
+        if (msg.type === 'ERROR') {
+            alert("❌ Erreur : " + msg.message);
+            closeModal();
         }
     };
 
-    // Logique de push sur GitHub
-    document.getElementById('btn-push').onclick = async () => {
-        if (!tokensData) return;
+    async function prepareAction(action) {
+        currentAction = action;
+        saveConfig();
 
-        const token = document.getElementById('token').value;
-        const owner = document.getElementById('owner').value;
-        const repo = document.getElementById('repo').value;
-        const path = document.getElementById('path').value;
-        const branch = document.getElementById('branch').value;
-        const statusLabel = document.getElementById('status');
+        const token = document.getElementById('token').value.trim();
+        const owner = document.getElementById('owner').value.trim();
+        const repo = document.getElementById('repo').value.trim();
+        const path = document.getElementById('path').value.trim();
+        const branch = document.getElementById('branch').value.trim();
 
         if (!token || !owner || !repo || !path || !branch) {
-            statusLabel.innerText = "❌ Remplissez tous les champs.";
+            alert("Veuillez remplir tous les champs.");
             return;
         }
 
-        statusLabel.innerText = "⏳ Envoi en cours...";
-        const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+        parent.postMessage({ pluginMessage: { type: 'REQUEST_CURRENT_STATE' } }, '*');
 
         try {
-            let fileSha = null;
-            const getResponse = await fetch(`${url}?ref=${branch}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (getResponse.ok) {
-                const getJson = await getResponse.json();
-                fileSha = getJson.sha;
+            const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
+            const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+
+            if (res.ok) {
+                const data = await res.json();
+                currentGitFileSha = data.sha;
+                gitState = JSON.parse(decodeURIComponent(escape(atob(data.content))));
+            } else if (res.status === 404) {
+                gitState = {};
+            } else {
+                throw new Error("Impossible d'accéder au repository.");
             }
 
-            const jsonString = JSON.stringify(tokensData, null, 2);
+            setTimeout(() => showDiffModal(), 500);
+
+        } catch (err) {
+            alert("Erreur réseau : " + err.message);
+        }
+    }
+
+    function showDiffModal() {
+        const title = document.getElementById('modalTitle');
+        const diffContainer = document.getElementById('diffList');
+
+        if (currentAction === 'PULL') {
+            title.innerText = "⬇ Pull : Ce qui va changer dans Figma";
+            diffContainer.innerHTML = calculateDiff(figmaState, gitState);
+        } else {
+            title.innerText = "⬆ Push : Ce qui va changer sur GitHub";
+            diffContainer.innerHTML = calculateDiff(gitState, figmaState);
+        }
+
+        document.getElementById('diffModal').style.display = 'block';
+        document.getElementById('confirmBtn').onclick = executeAction;
+    }
+
+    function closeModal() {
+        document.getElementById('diffModal').style.display = 'none';
+    }
+
+    function calculateDiff(oldState, newState) {
+        let html = "";
+
+        const getKeys = (state) => {
+            let keys = [];
+            if (!state) return keys;
+            for (const collection in state) {
+                for (const variable in state[collection]) {
+                    keys.push(`${collection} / ${variable}`);
+                }
+            }
+            return keys;
+        };
+
+        const oldKeys = getKeys(oldState);
+        const newKeys = getKeys(newState);
+
+        newKeys.forEach(key => {
+            if (!oldKeys.includes(key)) html += `<div class="diff-add">[ + ] Ajouté : ${key}</div>`;
+            else html += `<div class="diff-mod">[ ~ ] Modifié : ${key}</div>`;
+        });
+
+        oldKeys.forEach(key => {
+            if (!newKeys.includes(key)) html += `<div class="diff-del">[ - ] Supprimé : ${key}</div>`;
+        });
+
+        if (html === "") return "<div>Aucun changement détecté.</div>";
+        return html;
+    }
+
+    async function executeAction() {
+        if (currentAction === 'PULL') {
+            parent.postMessage({ pluginMessage: { type: 'IMPORT_TOKENS', tokens: gitState } }, '*');
+        }
+        else if (currentAction === 'PUSH') {
+            const token = document.getElementById('token').value.trim();
+            const owner = document.getElementById('owner').value.trim();
+            const repo = document.getElementById('repo').value.trim();
+            const path = document.getElementById('path').value.trim();
+            const branch = document.getElementById('branch').value.trim();
+
+            const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+
+            const jsonString = JSON.stringify(figmaState, null, 2);
             const base64Content = btoa(unescape(encodeURIComponent(jsonString)));
 
             const body = {
-                message: "Update variables from Figma",
+                message: "🎨 Sync Figma Design Tokens",
                 content: base64Content,
                 branch: branch
             };
-            if (fileSha) body.sha = fileSha;
+            if (currentGitFileSha) body.sha = currentGitFileSha;
 
-            const putResponse = await fetch(url, {
-                method: 'PUT',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(body)
-            });
+            try {
+                const res = await fetch(url, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
 
-            if (putResponse.ok) {
-                statusLabel.innerText = "✅ Push réussi sur la branche " + branch + " !";
-            } else {
-                const errorData = await putResponse.json();
-                statusLabel.innerText = "❌ Erreur GitHub : " + errorData.message;
+                if (res.ok) {
+                    alert("✅ Push réussi vers GitHub !");
+                    closeModal();
+                } else {
+                    const errorData = await res.json();
+                    alert("❌ Erreur GitHub : " + errorData.message);
+                }
+            } catch (err) {
+                alert("Erreur lors du push : " + err.message);
             }
-        } catch (error) {
-            statusLabel.innerText = "❌ Erreur réseau : " + error.message;
         }
-    };
+    }
 </script>
 </body>
 </html>
