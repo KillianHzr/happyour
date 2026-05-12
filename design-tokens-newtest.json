@@ -2348,7 +2348,7 @@
   "Styles": {
     "Color styles": {
       "Image Placeholder": {
-        "color": "#E3E3E3",
+        "color": "{Primitives/color/slate/200}",
         "opacity": 1
       }
     },
@@ -2356,85 +2356,85 @@
       "Title Hero": {
         "fontFamily": "Inter",
         "fontWeight": "Bold",
-        "fontSize": 72,
+        "fontSize": "{-> Typography/title-hero/size}",
         "lineHeight": 1.2000000476837158
       },
       "Title Page": {
         "fontFamily": "Inter",
         "fontWeight": "Bold",
-        "fontSize": 48,
+        "fontSize": "{-> Typography/title-page/size-base}",
         "lineHeight": 1.2000000476837158
       },
       "Subtitle": {
         "fontFamily": "Inter",
         "fontWeight": "Regular",
-        "fontSize": 32,
+        "fontSize": "{-> Typography/subtitle/size-base}",
         "lineHeight": 1.2000000476837158
       },
       "Heading": {
         "fontFamily": "Inter",
         "fontWeight": "Semi Bold",
-        "fontSize": 24,
+        "fontSize": "{-> Typography/heading/size-base}",
         "lineHeight": 1.2000000476837158
       },
       "Subheading": {
         "fontFamily": "Inter",
         "fontWeight": "Regular",
-        "fontSize": 20,
+        "fontSize": "{-> Typography/subheading/size-medium}",
         "lineHeight": 1.2000000476837158
       },
       "Body Base": {
         "fontFamily": "Inter",
         "fontWeight": "Regular",
-        "fontSize": 16,
+        "fontSize": "{-> Typography/body/size-medium}",
         "lineHeight": 1.399999976158142
       },
       "Body Strong": {
         "fontFamily": "Inter",
         "fontWeight": "Semi Bold",
-        "fontSize": 16,
+        "fontSize": "{-> Typography/body/size-medium}",
         "lineHeight": 1.399999976158142
       },
       "Body Emphasis": {
         "fontFamily": "Inter",
         "fontWeight": "Italic",
-        "fontSize": 16,
+        "fontSize": "{-> Typography/body/size-medium}",
         "lineHeight": 1.399999976158142
       },
       "Body Link": {
         "fontFamily": "Inter",
         "fontWeight": "Regular",
-        "fontSize": 16,
+        "fontSize": "{-> Typography/body/size-medium}",
         "lineHeight": 1.399999976158142
       },
       "Body Small": {
         "fontFamily": "Inter",
         "fontWeight": "Regular",
-        "fontSize": 14,
+        "fontSize": "{-> Typography/body/size-small}",
         "lineHeight": 1.399999976158142
       },
       "Body Small Strong": {
         "fontFamily": "Inter",
         "fontWeight": "Semi Bold",
-        "fontSize": 14,
+        "fontSize": "{-> Typography/body/size-small}",
         "lineHeight": 1.399999976158142
       },
       "Body Code": {
         "fontFamily": "Roboto Mono",
         "fontWeight": "Regular",
-        "fontSize": 16,
+        "fontSize": "{-> Typography/body/size-medium}",
         "lineHeight": 1.2999999523162842
       },
       "Single Line/Body Base": {
         "fontFamily": "Inter",
         "fontWeight": "Regular",
-        "fontSize": 16,
+        "fontSize": "{-> Typography/body/size-medium}",
         "lineHeight": 1
       },
       "Single Line/Body Small Strong": {
         "fontFamily": "Inter",
         "fontWeight": "Semi Bold",
-        "fontSize": 14,
+        "fontSize": "{-> Typography/body/size-small}",
         "lineHeight": 1
       },
       ".Utilities/Component notes/Regular": {
@@ -2453,6 +2453,7 @@
     "Effect styles": {
       "Drop Shadow/100": {
         "type": "DROP_SHADOW",
+        "visible": true,
         "color": "#0C0C0D",
         "opacity": 0.05000000074505806,
         "x": 0,
@@ -2462,6 +2463,7 @@
       },
       "Drop Shadow/200": {
         "type": "DROP_SHADOW",
+        "visible": true,
         "color": "#0C0C0D",
         "opacity": 0.05000000074505806,
         "x": 0,
@@ -2471,6 +2473,7 @@
       },
       "Drop Shadow/300": {
         "type": "DROP_SHADOW",
+        "visible": true,
         "color": "#0C0C0D",
         "opacity": 0.05000000074505806,
         "x": 0,
@@ -2480,6 +2483,7 @@
       },
       "Drop Shadow/400": {
         "type": "DROP_SHADOW",
+        "visible": true,
         "color": "#0C0C0D",
         "opacity": 0.05000000074505806,
         "x": 0,
@@ -2489,6 +2493,7 @@
       },
       "Drop Shadow/500": {
         "type": "DROP_SHADOW",
+        "visible": true,
         "color": "#0C0C0D",
         "opacity": 0.05000000074505806,
         "x": 0,
@@ -2498,6 +2503,7 @@
       },
       "Drop Shadow/600": {
         "type": "DROP_SHADOW",
+        "visible": true,
         "color": "#0C0C0D",
         "opacity": 0.4000000059604645,
         "x": 0,
@@ -2505,8 +2511,24 @@
         "blur": 32,
         "spread": -8
       },
+      "Blur/Overlay": {
+        "type": "BACKGROUND_BLUR",
+        "visible": true,
+        "blur": 4
+      },
+      "Blur/Layer": {
+        "type": "LAYER_BLUR",
+        "visible": true,
+        "blur": 4
+      },
+      "Blur/Glass": {
+        "type": "BACKGROUND_BLUR",
+        "visible": true,
+        "blur": 4
+      },
       "Inner Shadow/100": {
         "type": "INNER_SHADOW",
+        "visible": true,
         "color": "#0C0C0D",
         "opacity": 0.05000000074505806,
         "x": 0,
@@ -2516,6 +2538,7 @@
       },
       "Inner Shadow/200": {
         "type": "INNER_SHADOW",
+        "visible": true,
         "color": "#0C0C0D",
         "opacity": 0.05000000074505806,
         "x": 0,
@@ -2525,6 +2548,7 @@
       },
       "Inner Shadow/300": {
         "type": "INNER_SHADOW",
+        "visible": true,
         "color": "#0C0C0D",
         "opacity": 0.05000000074505806,
         "x": 0,
@@ -2534,6 +2558,7 @@
       },
       "Inner Shadow/400": {
         "type": "INNER_SHADOW",
+        "visible": true,
         "color": "#0C0C0D",
         "opacity": 0.10000000149011612,
         "x": 0,
@@ -2543,6 +2568,7 @@
       },
       "Inner Shadow/500": {
         "type": "INNER_SHADOW",
+        "visible": true,
         "color": "#0C0C0D",
         "opacity": 0.10000000149011612,
         "x": 0,
@@ -2552,6 +2578,7 @@
       },
       "Inner Shadow/600": {
         "type": "INNER_SHADOW",
+        "visible": true,
         "color": "#0C0C0D",
         "opacity": 0.4000000059604645,
         "x": 0,
