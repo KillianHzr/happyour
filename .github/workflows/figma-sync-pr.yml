@@ -1,0 +1,31 @@
+name: Figma Sync - PR automatique
+
+on:
+  push:
+    branches:
+      - figma_link
+
+jobs:
+  create-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Créer la PR si elle n'existe pas déjà
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          existing=$(gh pr list --head figma_link --base main --json number --jq '.[0].number')
+
+          if [ -z "$existing" ]; then
+            gh pr create \
+              --base main \
+              --head figma_link \
+              --title "🎨 Sync Design Tokens depuis Figma" \
+              --body "Push automatique depuis le plugin Figma. Vérifier les changements dans \`design-tokens.json\` avant de merger."
+          else
+            echo "PR #$existing existe déjà."
+          fi

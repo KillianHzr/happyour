@@ -1,6 +1,6 @@
 {
-  "name": "Figma to GitHub Push",
-  "id": "figma-to-github-push",
+  "name": "Figma <-> GitHub Push & Pull",
+  "id": "figma-github-push-and-pull",
   "api": "1.0.0",
   "main": "code.js",
   "ui": "ui.html",
