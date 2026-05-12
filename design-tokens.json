@@ -59,7 +59,7 @@
     "size/icon/medium": { "type": "FLOAT", "values": { "Value": 24 } },
     "size/icon/large": { "type": "FLOAT", "values": { "Value": 32 } }
   },
-  "Semantics": {
+  "-> Color": {
     "color/bg": { "type": "COLOR", "values": { "Light": "{Primitives/color/white}", "Dark": "{Primitives/color/slate/950}" } },
     "color/card/bg": { "type": "COLOR", "values": { "Light": "{Primitives/color/slate/50}", "Dark": "{Primitives/color/slate/900}" } },
     "color/card/border": { "type": "COLOR", "values": { "Light": "{Primitives/color/slate/200}", "Dark": "{Primitives/color/slate/800}" } },
@@ -70,7 +70,9 @@
     "color/accent/muted": { "type": "COLOR", "values": { "Light": "{Primitives/color/slate/200}", "Dark": "{Primitives/color/slate/800}" } },
     "color/status/danger": { "type": "COLOR", "values": { "Light": "{Primitives/color/red/light}", "Dark": "{Primitives/color/red/dark}" } },
     "color/status/gold": { "type": "COLOR", "values": { "Light": "{Primitives/color/gold/light}", "Dark": "{Primitives/color/gold/dark}" } },
-    "color/surface": { "type": "COLOR", "values": { "Light": "{Primitives/color/slate/surface}", "Dark": "{Primitives/color/slate/surface}" } },
+    "color/surface": { "type": "COLOR", "values": { "Light": "{Primitives/color/slate/surface}", "Dark": "{Primitives/color/slate/surface}" } }
+  },
+  "-> Size": {
     "spacing/xs": { "type": "FLOAT", "values": { "Light": "{Primitives/spacing/4}", "Dark": "{Primitives/spacing/4}" } },
     "spacing/sm": { "type": "FLOAT", "values": { "Light": "{Primitives/spacing/8}", "Dark": "{Primitives/spacing/8}" } },
     "spacing/md": { "type": "FLOAT", "values": { "Light": "{Primitives/spacing/12}", "Dark": "{Primitives/spacing/12}" } },
@@ -82,71 +84,113 @@
     "radii/input": { "type": "FLOAT", "values": { "Light": "{Primitives/radii/lg}", "Dark": "{Primitives/radii/lg}" } }
   },
   "Styles": {
-    "Typography": {
+    "Text styles": {
       "Caption": {
-        "fontFamily": "Inter",
-        "fontWeight": "Regular",
-        "fontSize": 12,
-        "lineHeight": 1.4
+        "fontFamily": "{Primitives/typography/family-sans}",
+        "fontStyle": "Regular",
+        "fontWeight": "{Primitives/typography/weight-regular}",
+        "fontSize": "{Primitives/typography/scale-01}",
+        "lineHeight": { "unit": "PERCENT", "value": 140 },
+        "letterSpacing": { "unit": "PERCENT", "value": 0 },
+        "paragraphSpacing": 0,
+        "paragraphIndent": 0
       },
       "Body Small": {
-        "fontFamily": "Inter",
-        "fontWeight": "Regular",
-        "fontSize": 14,
-        "lineHeight": 1.4
+        "fontFamily": "{Primitives/typography/family-sans}",
+        "fontStyle": "Regular",
+        "fontWeight": "{Primitives/typography/weight-regular}",
+        "fontSize": "{Primitives/typography/scale-02}",
+        "lineHeight": { "unit": "PERCENT", "value": 140 },
+        "letterSpacing": { "unit": "PERCENT", "value": 0 },
+        "paragraphSpacing": 0,
+        "paragraphIndent": 0
       },
       "Body Small Strong": {
-        "fontFamily": "Inter",
-        "fontWeight": "Semi Bold",
-        "fontSize": 14,
-        "lineHeight": 1.4
+        "fontFamily": "{Primitives/typography/family-sans}",
+        "fontStyle": "Semi Bold",
+        "fontWeight": "{Primitives/typography/weight-semibold}",
+        "fontSize": "{Primitives/typography/scale-02}",
+        "lineHeight": { "unit": "PERCENT", "value": 140 },
+        "letterSpacing": { "unit": "PERCENT", "value": 0 },
+        "paragraphSpacing": 0,
+        "paragraphIndent": 0
       },
       "Body Base": {
-        "fontFamily": "Inter",
-        "fontWeight": "Regular",
-        "fontSize": 16,
-        "lineHeight": 1.4
+        "fontFamily": "{Primitives/typography/family-sans}",
+        "fontStyle": "Regular",
+        "fontWeight": "{Primitives/typography/weight-regular}",
+        "fontSize": "{Primitives/typography/scale-03}",
+        "lineHeight": { "unit": "PERCENT", "value": 140 },
+        "letterSpacing": { "unit": "PERCENT", "value": 0 },
+        "paragraphSpacing": 0,
+        "paragraphIndent": 0
       },
       "Body Strong": {
-        "fontFamily": "Inter",
-        "fontWeight": "Semi Bold",
-        "fontSize": 16,
-        "lineHeight": 1.4
+        "fontFamily": "{Primitives/typography/family-sans}",
+        "fontStyle": "Semi Bold",
+        "fontWeight": "{Primitives/typography/weight-semibold}",
+        "fontSize": "{Primitives/typography/scale-03}",
+        "lineHeight": { "unit": "PERCENT", "value": 140 },
+        "letterSpacing": { "unit": "PERCENT", "value": 0 },
+        "paragraphSpacing": 0,
+        "paragraphIndent": 0
       },
       "Subheading": {
-        "fontFamily": "Inter",
-        "fontWeight": "Regular",
-        "fontSize": 20,
-        "lineHeight": 1.2
+        "fontFamily": "{Primitives/typography/family-sans}",
+        "fontStyle": "Regular",
+        "fontWeight": "{Primitives/typography/weight-regular}",
+        "fontSize": "{Primitives/typography/scale-04}",
+        "lineHeight": { "unit": "PERCENT", "value": 120 },
+        "letterSpacing": { "unit": "PERCENT", "value": 0 },
+        "paragraphSpacing": 0,
+        "paragraphIndent": 0
       },
       "Heading": {
-        "fontFamily": "Inter",
-        "fontWeight": "Bold",
-        "fontSize": 24,
-        "lineHeight": 1.2
+        "fontFamily": "{Primitives/typography/family-sans}",
+        "fontStyle": "Bold",
+        "fontWeight": "{Primitives/typography/weight-bold}",
+        "fontSize": "{Primitives/typography/scale-05}",
+        "lineHeight": { "unit": "PERCENT", "value": 120 },
+        "letterSpacing": { "unit": "PERCENT", "value": 0 },
+        "paragraphSpacing": 0,
+        "paragraphIndent": 0
       },
       "Subtitle": {
-        "fontFamily": "Inter",
-        "fontWeight": "Bold",
-        "fontSize": 32,
-        "lineHeight": 1.2
+        "fontFamily": "{Primitives/typography/family-sans}",
+        "fontStyle": "Bold",
+        "fontWeight": "{Primitives/typography/weight-bold}",
+        "fontSize": "{Primitives/typography/scale-06}",
+        "lineHeight": { "unit": "PERCENT", "value": 120 },
+        "letterSpacing": { "unit": "PERCENT", "value": 0 },
+        "paragraphSpacing": 0,
+        "paragraphIndent": 0
       },
       "Title Page": {
-        "fontFamily": "Inter",
-        "fontWeight": "Bold",
-        "fontSize": 48,
-        "lineHeight": 1.2
+        "fontFamily": "{Primitives/typography/family-sans}",
+        "fontStyle": "Bold",
+        "fontWeight": "{Primitives/typography/weight-bold}",
+        "fontSize": "{Primitives/typography/scale-08}",
+        "lineHeight": { "unit": "PERCENT", "value": 120 },
+        "letterSpacing": { "unit": "PERCENT", "value": 0 },
+        "paragraphSpacing": 0,
+        "paragraphIndent": 0
       },
       "Title Hero": {
-        "fontFamily": "Inter",
-        "fontWeight": "Bold",
-        "fontSize": 72,
-        "lineHeight": 1.2
+        "fontFamily": "{Primitives/typography/family-sans}",
+        "fontStyle": "Bold",
+        "fontWeight": "{Primitives/typography/weight-bold}",
+        "fontSize": "{Primitives/typography/scale-10}",
+        "lineHeight": { "unit": "PERCENT", "value": 120 },
+        "letterSpacing": { "unit": "PERCENT", "value": 0 },
+        "paragraphSpacing": 0,
+        "paragraphIndent": 0
       }
     },
-    "Effects": {
+    "Effect styles": {
       "Drop Shadow/sm": {
-        "color": "#000000",
+        "type": "DROP_SHADOW",
+        "visible": true,
+        "color": "{Primitives/color/black}",
         "opacity": 0.05,
         "x": 0,
         "y": 1,
@@ -154,7 +198,9 @@
         "spread": 0
       },
       "Drop Shadow/md": {
-        "color": "#000000",
+        "type": "DROP_SHADOW",
+        "visible": true,
+        "color": "{Primitives/color/black}",
         "opacity": 0.1,
         "x": 0,
         "y": 4,
@@ -162,7 +208,9 @@
         "spread": -1
       },
       "Drop Shadow/lg": {
-        "color": "#000000",
+        "type": "DROP_SHADOW",
+        "visible": true,
+        "color": "{Primitives/color/black}",
         "opacity": 0.4,
         "x": 0,
         "y": 16,
@@ -171,7 +219,8 @@
       },
       "Inner Shadow/sm": {
         "type": "INNER_SHADOW",
-        "color": "#000000",
+        "visible": true,
+        "color": "{Primitives/color/black}",
         "opacity": 0.05,
         "x": 0,
         "y": 1,
@@ -180,7 +229,8 @@
       },
       "Inner Shadow/md": {
         "type": "INNER_SHADOW",
-        "color": "#000000",
+        "visible": true,
+        "color": "{Primitives/color/black}",
         "opacity": 0.1,
         "x": 0,
         "y": 4,
