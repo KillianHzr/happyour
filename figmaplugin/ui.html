@@ -195,9 +195,33 @@
         const getKeys = (state) => {
             let keys = [];
             if (!state) return keys;
-            for (const collection in state) {
-                for (const variable in state[collection]) {
-                    keys.push(`${collection} / ${variable}`);
+
+            // Primitives -> Collection -> Variable
+            if (state.Primitives) {
+                for (const col in state.Primitives) {
+                    for (const varName in state.Primitives[col]) {
+                        keys.push(`Primitives / ${col} / ${varName}`);
+                    }
+                }
+            }
+
+            // Styles -> Category -> Style
+            if (state.Styles) {
+                for (const cat in state.Styles) {
+                    for (const styleName in state.Styles[cat]) {
+                        keys.push(`Styles / ${cat} / ${styleName}`);
+                    }
+                }
+            }
+
+            // Support pour l'ancienne structure ou catégories personnalisées
+            for (const key in state) {
+                if (key !== 'Primitives' && key !== 'Styles') {
+                    if (typeof state[key] === 'object' && state[key] !== null) {
+                        for (const subKey in state[key]) {
+                            keys.push(`${key} / ${subKey}`);
+                        }
+                    }
                 }
             }
             return keys;
@@ -208,7 +232,10 @@
 
         newKeys.forEach(key => {
             if (!oldKeys.includes(key)) html += `<div class="diff-add">[ + ] Ajouté : ${key}</div>`;
-            else html += `<div class="diff-mod">[ ~ ] Modifié : ${key}</div>`;
+            else {
+                // Optionnel : vérifier si la valeur a changé pour marquer comme [ ~ ]
+                html += `<div class="diff-mod">[ ~ ] Modifié : ${key}</div>`;
+            }
         });
 
         oldKeys.forEach(key => {

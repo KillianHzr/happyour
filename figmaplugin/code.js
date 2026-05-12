@@ -34,39 +34,74 @@ async function sendCurrentStateToUI() {
     const variables = await figma.variables.getLocalVariablesAsync();
     const textStyles = await figma.getLocalTextStylesAsync();
     const effectStyles = await figma.getLocalEffectStylesAsync();
+    const paintStyles = await figma.getLocalPaintStylesAsync();
 
-    const state = { Primitives: {}, Semantics: {}, Styles: { Typography: {}, Effects: {} } };
+    // On prépare l'état avec les collections à la racine
+    const state = { 
+        "Primitives": {},
+        "-> Color": {},
+        "-> Size": {},
+        "-> Typography": {},
+        "Styles": { 
+            "Color styles": {}, 
+            "Text styles": {}, 
+            "Effect styles": {} 
+        } 
+    };
+
+    const targetColNames = ["Primitives", "-> Color", "-> Size", "-> Typography"];
 
     // --- Export des Variables ---
     for (const col of collections) {
-        const colName = col.name === "Primitives" || col.name === "Semantics" ? col.name : "Primitives";
-        const colVars = variables.filter(v => v.variableCollectionId === col.id);
+        if (targetColNames.includes(col.name)) {
+            const colVars = variables.filter(v => v.variableCollectionId === col.id);
+            for (const v of colVars) {
+                state[col.name][v.name] = { type: v.resolvedType, values: {} };
 
-        for (const v of colVars) {
-            state[colName][v.name] = { type: v.resolvedType, values: {} };
+                for (const mode of col.modes) {
+                    let val = v.valuesByMode[mode.modeId];
 
-            for (const mode of col.modes) {
-                let val = v.valuesByMode[mode.modeId];
+                    if (val && val.type === 'VARIABLE_ALIAS') {
+                        const target = variables.find(x => x.id === val.id);
+                        if (target) {
+                            const targetCol = collections.find(c => c.id === target.variableCollectionId);
+                            // Alias format: {CollectionName/VariableName}
+                            val = `{${targetCol.name}/${target.name}}`;
+                        }
+                    } else if (v.resolvedType === 'COLOR' && val !== undefined) {
+                        val = rgbToHex(val);
+                    }
 
-                if (val && val.type === 'VARIABLE_ALIAS') {
-                    const target = variables.find(x => x.id === val.id);
-                    val = target ? `{Primitives/${target.name}}` : val;
-                } else if (v.resolvedType === 'COLOR' && val !== undefined) {
-                    val = rgbToHex(val);
+                    state[col.name][v.name].values[mode.name] = val;
                 }
+            }
+        }
+    }
 
-                state[colName][v.name].values[mode.name] = val;
+    // --- Export des Styles de Couleur ---
+    for (const style of paintStyles) {
+        if (style.paints.length > 0) {
+            const paint = style.paints[0];
+            if (paint.type === 'SOLID') {
+                state.Styles["Color styles"][style.name] = {
+                    color: rgbToHex(paint.color),
+                    opacity: paint.opacity
+                };
+            } else if (paint.type === 'IMAGE') {
+                state.Styles["Color styles"][style.name] = {
+                    type: 'IMAGE'
+                };
             }
         }
     }
 
     // --- Export des Styles de Texte ---
     for (const style of textStyles) {
-        state.Styles.Typography[style.name] = {
+        state.Styles["Text styles"][style.name] = {
             fontFamily: style.fontName.family,
             fontWeight: style.fontName.style,
             fontSize: style.fontSize,
-            lineHeight: style.lineHeight.unit === 'PERCENT' ? style.lineHeight.value / 100 : style.lineHeight.value
+            lineHeight: style.lineHeight.unit === 'PIXELS' ? style.lineHeight.value : (style.lineHeight.unit === 'PERCENT' ? style.lineHeight.value / 100 : 'auto')
         };
     }
 
@@ -74,7 +109,7 @@ async function sendCurrentStateToUI() {
     for (const style of effectStyles) {
         const shadow = style.effects.find(e => e.type === "DROP_SHADOW" || e.type === "INNER_SHADOW");
         if (shadow) {
-            state.Styles.Effects[style.name] = {
+            state.Styles["Effect styles"][style.name] = {
                 type: shadow.type,
                 color: rgbToHex(shadow.color),
                 opacity: shadow.color.a,
@@ -95,9 +130,10 @@ async function sendCurrentStateToUI() {
 async function importTokens(tree) {
     const collections = await figma.variables.getLocalVariableCollectionsAsync();
     const existingVars = await figma.variables.getLocalVariablesAsync();
+    const targetColNames = ["Primitives", "-> Color", "-> Size", "-> Typography"];
 
-    // --- PASSE 1 : Créer les collections, les modes et les variables (sans les lier) ---
-    for (const colName of ["Primitives", "Semantics"]) {
+    // --- PASSE 1 : Créer les collections, les modes et les variables ---
+    for (const colName of targetColNames) {
         if (!tree[colName]) continue;
 
         let collection = collections.find(c => c.name === colName);
@@ -132,12 +168,12 @@ async function importTokens(tree) {
         }
     }
 
-    // Fonction pour résoudre {Primitives/color/black}
+    // Fonction pour résoudre {CollectionName/VariableName}
     function findVariableByFullName(fullName) {
         const cleanName = fullName.replace(/[{}]/g, '');
         const parts = cleanName.split('/');
-        const colName = parts.shift();
-        const varName = parts.join('/');
+        const colName = parts[0];
+        const varName = parts.slice(1).join('/');
 
         const col = collections.find(c => c.name === colName);
         if (!col) return null;
@@ -145,7 +181,7 @@ async function importTokens(tree) {
     }
 
     // --- PASSE 2 : Appliquer les valeurs et relier les Alias ---
-    for (const colName of ["Primitives", "Semantics"]) {
+    for (const colName of targetColNames) {
         if (!tree[colName]) continue;
         const collection = collections.find(c => c.name === colName);
         const jsonVars = tree[colName];
@@ -175,24 +211,45 @@ async function importTokens(tree) {
         }
     }
 
-    // --- PASSE 3 : STYLES DE TEXTE ---
-    if (tree.Styles && tree.Styles.Typography) {
-        for (const [name, data] of Object.entries(tree.Styles.Typography)) {
+    // --- PASSE 3 : COLOR STYLES ---
+    if (tree.Styles && tree.Styles["Color styles"]) {
+        for (const [name, data] of Object.entries(tree.Styles["Color styles"])) {
+            let style = (await figma.getLocalPaintStylesAsync()).find(s => s.name === name) || figma.createPaintStyle();
+            style.name = name;
+            if (data.color) {
+                const color = parseColor(data.color);
+                style.paints = [{
+                    type: 'SOLID',
+                    color: { r: color.r, g: color.g, b: color.b },
+                    opacity: data.opacity !== undefined ? data.opacity : 1
+                }];
+            }
+        }
+    }
+
+    // --- PASSE 4 : TEXT STYLES ---
+    if (tree.Styles && tree.Styles["Text styles"]) {
+        for (const [name, data] of Object.entries(tree.Styles["Text styles"])) {
             try {
                 await figma.loadFontAsync({ family: data.fontFamily, style: data.fontWeight });
                 let style = (await figma.getLocalTextStylesAsync()).find(s => s.name === name) || figma.createTextStyle();
                 style.name = name;
                 style.fontName = { family: data.fontFamily, style: data.fontWeight };
                 style.fontSize = data.fontSize;
+                if (data.lineHeight && data.lineHeight !== 'auto') {
+                    style.lineHeight = { unit: 'PIXELS', value: data.lineHeight };
+                } else {
+                    style.lineHeight = { unit: 'AUTO' };
+                }
             } catch(e) {
                 console.warn(`Impossible de charger la font ${data.fontFamily} - ${data.fontWeight}`);
             }
         }
     }
 
-    // --- PASSE 4 : STYLES D'EFFETS (OMBRES) ---
-    if (tree.Styles && tree.Styles.Effects) {
-        for (const [name, data] of Object.entries(tree.Styles.Effects)) {
+    // --- PASSE 5 : EFFECT STYLES ---
+    if (tree.Styles && tree.Styles["Effect styles"]) {
+        for (const [name, data] of Object.entries(tree.Styles["Effect styles"])) {
             let style = (await figma.getLocalEffectStylesAsync()).find(s => s.name === name) || figma.createEffectStyle();
             style.name = name;
 
