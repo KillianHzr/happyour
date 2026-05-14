@@ -407,6 +407,24 @@ export async function notifyGroupInvite(
   await sendPushToTokens([token], "Nouvelle invitation !", `Tu as ete invite a rejoindre "${groupName}"`, { type: "invite", groupName });
 }
 
+export async function notifyReaction(
+  photoOwnerId: string,
+  reactorName: string,
+  sticker: string,
+  groupName: string,
+  reactorId: string
+): Promise<void> {
+  if (photoOwnerId === reactorId) return;
+  try {
+    const { data } = await supabase.from("profiles").select("expo_push_token").eq("id", photoOwnerId).single();
+    const token = data?.expo_push_token;
+    if (!token) return;
+    await sendPushToTokens([token], groupName, `${reactorName} a réagi à ton moment ${sticker}`);
+  } catch (e) {
+    console.warn("[Notif] notifyReaction error:", e);
+  }
+}
+
 // ── First moment reminder ──
 
 export async function scheduleFirstMomentReminder(groupId: string, groupName: string) {

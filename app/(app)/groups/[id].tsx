@@ -30,7 +30,7 @@ import CustomChallengeQueuePage from "../../../components/groups/CustomChallenge
 import BottomSheet from "../../../components/BottomSheet";
 import LiveReactions from "../../../components/reveal/LiveReactions";
 import MotivationalNotificationsModal from "../../../components/MotivationalNotificationsModal";
-import { scheduleImmediateLocalNotification, scheduleFirstMomentReminder } from "../../../lib/notifications";
+import { scheduleImmediateLocalNotification, scheduleFirstMomentReminder, notifyReaction } from "../../../lib/notifications";
 import { typography } from "../../../lib/theme";
 
 const isEmoji = (str: string) => {
@@ -606,6 +606,11 @@ export default function MainPagerScreen() {
           next[activeGroupId] = { ...g, photos: newPhotos };
           return next;
         });
+      }
+      if (activePhoto && activePhoto.user_id !== user.id) {
+        const groupName = groupData[activeGroupId]?.name ?? "";
+        notifyReaction(activePhoto.user_id, username ?? "", emoji, groupName, user.id)
+          .catch((e) => console.warn("[Notif] Reaction notif error:", e));
       }
     } catch (e) {
       console.error("[DB WRITE] Reaction upsert error:", e);
