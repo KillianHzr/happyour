@@ -80,6 +80,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const startVideoRecordingRef = useRef<(() => Promise<void>) | null>(null);
   const recordingSecondsRef = useRef(0);
   const isCameraSwitchRestartRef = useRef(false);
+  const switchRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastVolumeButtonTrigger = useRef(0);
   const lastVolumeRef = useRef(0);
 
@@ -196,6 +197,15 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     return () => { warmUpCancelled.current = true; };
   }, [cameraMode, isActive]);
 
+  useEffect(() => {
+    return () => {
+      if (switchRestartTimerRef.current !== null) {
+        clearTimeout(switchRestartTimerRef.current);
+        switchRestartTimerRef.current = null;
+      }
+    };
+  }, []);
+
   // ── Debug: log every render state ──
   useEffect(() => {
     console.log(`[CAM] render | slot1=${!!slot1} slot2=${!!slot2} capturingSecond=${capturingSecond} viewingSlot=${viewingSlot} isCapturing=${isCapturing} capturing=${capturing} isPinching=${isPinching} mode=${cameraMode} isActive=${isActive}`);
@@ -298,9 +308,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       if (video?.uri && !discardCurrentClipRef.current) {
         saveToSlot({ mode: "VIDEO", uri: video.uri, audioUri: null, textContent: "", note: "" });
       }
-      discardCurrentClipRef.current = false;
     } catch (e: any) { console.error("Erreur recordAsync:", e); }
     finally {
+      discardCurrentClipRef.current = false;
       setIsRecording(false);
       if (recordingTimer.current) clearInterval(recordingTimer.current);
       if (cameraSwitchTargetRef.current !== null) {
@@ -308,7 +318,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         cameraSwitchTargetRef.current = null;
         setFacing(target);
         // Ne PAS reset recordingSeconds — le timer continue
-        setTimeout(() => {
+        switchRestartTimerRef.current = setTimeout(() => {
+          switchRestartTimerRef.current = null;
           isCameraSwitchRestartRef.current = true;
           startVideoRecordingRef.current?.();
         }, 350);
