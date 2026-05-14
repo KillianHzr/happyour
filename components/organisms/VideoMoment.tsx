@@ -54,10 +54,39 @@ export const VideoMoment = ({
     p.muted = false;
   });
 
+  const isVisibleRef = useRef(isVisible ?? false);
+  const isPausedRef = useRef(isPaused);
+  const playerRef = useRef(player);
+  playerRef.current = player;
+
+  useEffect(() => {
+    isVisibleRef.current = isVisible ?? false;
+    isPausedRef.current = isPaused;
+    if (isVisible && !isPaused) {
+      playerRef.current.play();
+    } else {
+      playerRef.current.pause();
+    }
+  }, [isVisible, isPaused]);
+
   useEffect(() => {
     if (!player) return;
-    if (isVisible && !isPaused) { player.play(); } else { player.pause(); }
-  }, [isVisible, isPaused, player]);
+    let stallTimer: ReturnType<typeof setTimeout> | null = null;
+    const subscription = player.addListener("playingChange", ({ isPlaying }) => {
+      if (!isPlaying && isVisibleRef.current && !isPausedRef.current) {
+        if (stallTimer) clearTimeout(stallTimer);
+        stallTimer = setTimeout(() => {
+          stallTimer = null;
+          if (isVisibleRef.current && !isPausedRef.current) player.play();
+        }, 200);
+      }
+    });
+    if (isVisibleRef.current && !isPausedRef.current) player.play();
+    return () => {
+      if (stallTimer) clearTimeout(stallTimer);
+      subscription.remove();
+    };
+  }, [player]);
 
   useEffect(() => {
     if (!isVisible) setIsPaused(false);

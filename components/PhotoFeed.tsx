@@ -125,19 +125,17 @@ export default function PhotoFeed({
   useEffect(() => {
     const videos = photos.filter((p) => p.url && p.image_path.endsWith(".mp4") && p.url.startsWith("http"));
     let cancelled = false;
-    (async () => {
-      const entries: Record<string, string> = {};
-      await Promise.all(videos.map(async (p) => {
-        const filename = "reveal_" + p.image_path.replace(/\//g, "_");
-        const localUri = `${FileSystem.cacheDirectory}${filename}`;
-        try {
-          const info = await FileSystem.getInfoAsync(localUri);
-          if (!info.exists) await FileSystem.downloadAsync(p.url!, localUri);
-          entries[p.url!] = localUri;
-        } catch { entries[p.url!] = p.url!; }
-      }));
-      if (!cancelled) setVideoCache(entries);
-    })();
+    videos.forEach(async (p) => {
+      const filename = "reveal_" + p.image_path.replace(/\//g, "_");
+      const localUri = `${FileSystem.cacheDirectory}${filename}`;
+      try {
+        const info = await FileSystem.getInfoAsync(localUri);
+        if (!info.exists) await FileSystem.downloadAsync(p.url!, localUri);
+        if (!cancelled) setVideoCache(prev => ({ ...prev, [p.url!]: localUri }));
+      } catch {
+        if (!cancelled) setVideoCache(prev => ({ ...prev, [p.url!]: p.url! }));
+      }
+    });
     return () => { cancelled = true; };
   }, [photos]);
 
