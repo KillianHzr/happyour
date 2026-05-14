@@ -75,6 +75,11 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const isWarmingUp = useRef(false);
   const warmUpCancelled = useRef(false);
   const warmUpPromise = useRef<Promise<any> | null>(null);
+  const discardCurrentClipRef = useRef(false);
+  const cameraSwitchTargetRef = useRef<CameraType | null>(null);
+  const startVideoRecordingRef = useRef<(() => Promise<void>) | null>(null);
+  const recordingSecondsRef = useRef(0);
+  const isCameraSwitchRestartRef = useRef(false);
   const lastVolumeButtonTrigger = useRef(0);
   const lastVolumeRef = useRef(0);
 
@@ -274,20 +279,47 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       isWarmingUp.current = false;
     }
     setIsRecording(true);
-    setRecordingSeconds(0);
+    if (!isCameraSwitchRestartRef.current) {
+      setRecordingSeconds(0);
+      recordingSecondsRef.current = 0;
+    }
+    isCameraSwitchRestartRef.current = false;
     recordingTimer.current = setInterval(() => {
-      setRecordingSeconds(s => { if (s >= 14) { stopVideoRecording(); return s; } return s + 1; });
+      setRecordingSeconds(s => {
+        const next = s >= 14 ? s : s + 1;
+        recordingSecondsRef.current = next;
+        if (s >= 14) stopVideoRecording();
+        return next;
+      });
     }, 1000);
     try {
-      const video = await cameraRef.current.recordAsync({ maxDuration: 15 });
-      if (video?.uri) { saveToSlot({ mode: "VIDEO", uri: video.uri, audioUri: null, textContent: "", note: "" }); }
+      const remainingDuration = Math.max(2, 15 - recordingSecondsRef.current);
+      const video = await cameraRef.current.recordAsync({ maxDuration: remainingDuration });
+      if (video?.uri && !discardCurrentClipRef.current) {
+        saveToSlot({ mode: "VIDEO", uri: video.uri, audioUri: null, textContent: "", note: "" });
+      }
+      discardCurrentClipRef.current = false;
     } catch (e: any) { console.error("Erreur recordAsync:", e); }
     finally {
       setIsRecording(false);
       if (recordingTimer.current) clearInterval(recordingTimer.current);
-      setRecordingSeconds(0);
+      if (cameraSwitchTargetRef.current !== null) {
+        const target = cameraSwitchTargetRef.current;
+        cameraSwitchTargetRef.current = null;
+        setFacing(target);
+        // Ne PAS reset recordingSeconds — le timer continue
+        setTimeout(() => {
+          isCameraSwitchRestartRef.current = true;
+          startVideoRecordingRef.current?.();
+        }, 350);
+      } else {
+        setRecordingSeconds(0);
+        recordingSecondsRef.current = 0;
+      }
     }
   };
+
+  startVideoRecordingRef.current = startVideoRecording;
 
   const stopVideoRecording = () => {
     if (!isRecording) return;
@@ -297,6 +329,23 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       console.warn("[CAM] stopVideoRecording error:", e);
     }
   };
+
+  const handleFlipCamera = () => {
+    if (isRecording) {
+      discardCurrentClipRef.current = true;
+      cameraSwitchTargetRef.current = facing === "back" ? "front" : "back";
+      try {
+        cameraRef.current?.stopRecording();
+      } catch (e) {
+        console.warn("[CAM] handleFlipCamera stopRecording error:", e);
+      }
+    } else {
+      setFacing(prev => prev === "back" ? "front" : "back");
+    }
+  };
+
+  const handleFlipCameraRef = useRef(handleFlipCamera);
+  handleFlipCameraRef.current = handleFlipCamera;
 
   const startAudioRecording = async () => {
     const perm = await AudioModule.requestRecordingPermissionsAsync();
@@ -682,7 +731,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 mirror={cameraMode === "VIDEO" && facing === "front"}
                 onZoomChange={setZoom}
                 onPinchingChange={setIsPinching}
-                onDoubleTap={() => setFacing(prev => prev === "back" ? "front" : "back")}
+                onDoubleTap={() => handleFlipCameraRef.current()}
               />
               {activeChallenge === null && (
                 <TouchableOpacity
@@ -845,7 +894,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 </View>
               </TouchableOpacity>}
               {cameraMode !== "TEXTE" && cameraMode !== "AUDIO" && cameraMode !== "DESSIN" && (
-                <TouchableOpacity style={styles.flipBtn} onPress={() => setFacing(prev => prev === "back" ? "front" : "back")} disabled={isRecording}>
+                <TouchableOpacity style={styles.flipBtn} onPress={handleFlipCamera}>
                   <FlipIcon />
                 </TouchableOpacity>
               )}
