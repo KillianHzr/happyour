@@ -43,19 +43,19 @@ const resolveShadow = (effectStyleName: string, mode: "Light" | "Dark" = "Light"
   const effect = tokens.Styles?.["Effect styles"]?.[effectStyleName];
   if (!effect) return {};
 
-  // Résolution dynamique de la couleur de l'ombre (qu'elle soit liée à une variable ou en dur)
-  let shadowColor = effect.color;
-  if (typeof shadowColor === "string" && shadowColor.startsWith("{")) {
-    shadowColor = resolveToken(shadowColor.slice(1, -1), mode);
-  }
+  const resolveField = (raw: any): any => {
+    if (typeof raw === "string" && raw.startsWith("{") && raw.endsWith("}"))
+      return resolveToken(raw.slice(1, -1), mode);
+    return raw;
+  };
 
-  // Conversion des valeurs Figma en format React Native
+  const blur = resolveField(effect.blur) || 0;
   return {
-    shadowColor: shadowColor || "#000000",
-    shadowOffset: { width: effect.x || 0, height: effect.y || 0 },
+    shadowColor: resolveField(effect.color) || "#000000",
+    shadowOffset: { width: resolveField(effect.x) || 0, height: resolveField(effect.y) || 0 },
     shadowOpacity: effect.opacity ?? 1,
-    shadowRadius: effect.blur || 0,
-    elevation: effect.blur ? Math.round(effect.blur / 2) : 0, // Approx pour Android
+    shadowRadius: blur,
+    elevation: blur ? Math.round(blur / 2) : 0,
   };
 };
 
@@ -100,19 +100,19 @@ const activeMode = "Light";
 // --- EXPORT DES VALEURS (100% Dynamiques) ---
 
 export const colors = {
-  bg: resolveToken("-> Color/background/default/default", activeMode),
-  card: resolveToken("-> Color/background/neutral/secondary", activeMode),
-  cardBorder: resolveToken("-> Color/border/default/default", activeMode),
-  accent: resolveToken("-> Color/background/brand/default", activeMode),
-  accentMuted: resolveToken("-> Color/background/brand/secondary", activeMode),
-  text: resolveToken("-> Color/text/default/default", activeMode),
-  textMuted: resolveToken("-> Color/text/default/secondary", activeMode),
-  secondary: resolveToken("-> Color/text/neutral/secondary", activeMode),
-  danger: resolveToken("-> Color/background/danger/default", activeMode),
-
+  bg: resolveToken("-> Color/color/bg", activeMode),
+  card: resolveToken("-> Color/color/card/bg", activeMode),
+  cardBorder: resolveToken("-> Color/color/card/border", activeMode),
+  accent: resolveToken("-> Color/color/accent/primary", activeMode),
+  accentMuted: resolveToken("-> Color/color/accent/muted", activeMode),
+  text: resolveToken("-> Color/color/text/primary", activeMode),
+  textMuted: resolveToken("-> Color/color/text/muted", activeMode),
+  secondary: resolveToken("-> Color/color/text/secondary", activeMode),
+  danger: resolveToken("-> Color/color/status/danger", activeMode),
+  overlay: resolveToken("-> Color/color/surface", activeMode),
   glass: resolveToken("-> Color/background/utilities/overlay", activeMode),
-  white: resolveToken("Primitives/color/white/100", activeMode),
-  black: resolveToken("Primitives/color/black/100", activeMode),
+  white: resolveToken("Primitives/color/white", activeMode),
+  black: resolveToken("Primitives/color/black", activeMode),
 } as const;
 
 export const spacing = {
