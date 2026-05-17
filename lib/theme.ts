@@ -95,7 +95,7 @@ const resolveTextStyle = (textStyleName: string, mode: "Light" | "Dark" = "Light
 };
 
 // --- Mode Actuel ---
-const activeMode = "Light";
+const activeMode = "Dark";
 
 // --- EXPORT DES VALEURS (100% Dynamiques) ---
 
@@ -109,8 +109,13 @@ export const colors = {
   textMuted: resolveToken("-> Color/color/text/muted", activeMode),
   secondary: resolveToken("-> Color/color/text/secondary", activeMode),
   danger: resolveToken("-> Color/color/status/danger", activeMode),
+  gold: resolveToken("Primitives/color/gold/light", activeMode),
+  goldDark: resolveToken("Primitives/color/gold/dark", activeMode),
+  muted: resolveToken("Primitives/color/slate/600", activeMode),
   overlay: resolveToken("-> Color/color/surface", activeMode),
-  glass: resolveToken("-> Color/background/utilities/overlay", activeMode),
+  glass: "rgba(0, 0, 0, 0.5)" as string,
+  glassMuted: "rgba(255, 255, 255, 0.07)" as string,
+  glassBorder: "rgba(255, 255, 255, 0.12)" as string,
   white: resolveToken("Primitives/color/white", activeMode),
   black: resolveToken("Primitives/color/black", activeMode),
 } as const;
