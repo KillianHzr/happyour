@@ -116,20 +116,38 @@ export const colors = {
 } as const;
 
 export const spacing = {
-  xs: resolveToken("-> Size/space/100", activeMode),
-  sm: resolveToken("-> Size/space/200", activeMode),
-  md: resolveToken("-> Size/space/300", activeMode),
-  lg: resolveToken("-> Size/space/400", activeMode),
-  xl: resolveToken("-> Size/space/600", activeMode),
+  xs: resolveToken("-> Size/spacing/xs", activeMode),
+  sm: resolveToken("-> Size/spacing/sm", activeMode),
+  md: resolveToken("-> Size/spacing/md", activeMode),
+  lg: resolveToken("-> Size/spacing/lg", activeMode),
+  xl: resolveToken("-> Size/spacing/xl", activeMode),
+  xxl: resolveToken("-> Size/spacing/xxl", activeMode),
 } as const;
 
 export const radii = {
-  xs: resolveToken("-> Size/radius/100", activeMode),
-  md: resolveToken("-> Size/radius/200", activeMode),
-  lg: resolveToken("-> Size/radius/400", activeMode),
-  full: resolveToken("-> Size/radius/full", activeMode),
-  card: resolveToken("-> Size/radius/400", activeMode),
-  button: resolveToken("-> Size/radius/200", activeMode),
+  xs: resolveToken("Primitives/radii/xs", activeMode),
+  md: resolveToken("Primitives/radii/md", activeMode),
+  lg: resolveToken("Primitives/radii/xl", activeMode),
+  full: resolveToken("Primitives/radii/full", activeMode),
+  card: resolveToken("-> Size/radii/card", activeMode),
+  button: resolveToken("-> Size/radii/button", activeMode),
+} as const;
+
+export const typography = {
+  family: {
+    regular: "Inter_400Regular",
+    semibold: "Inter_600SemiBold",
+    bold: "Inter_700Bold",
+    extrabold: "Inter_800ExtraBold",
+  },
+  size: {
+    xs: resolveToken("Primitives/typography/scale-01", activeMode) as number,
+    sm: resolveToken("Primitives/typography/scale-02", activeMode) as number,
+    md: resolveToken("Primitives/typography/scale-03", activeMode) as number,
+    lg: 17,
+    xl: resolveToken("Primitives/typography/scale-04", activeMode) as number,
+    xxl: resolveToken("Primitives/typography/scale-05", activeMode) as number,
+  },
 } as const;
 
 // 🔮 On lit maintenant DIRECTEMENT les ombres de Figma !
