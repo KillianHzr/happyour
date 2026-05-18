@@ -14,6 +14,12 @@ class SeamlessRecorderModule : Module() {
       Prop("facing") { view: SeamlessRecorderView, facing: String ->
         view.setFacing(facing)
       }
+      Prop("zoom") { view: SeamlessRecorderView, zoom: Double ->
+        view.setZoom(zoom)
+      }
+      Prop("torch") { view: SeamlessRecorderView, on: Boolean ->
+        view.setTorch(on)
+      }
     }
 
     AsyncFunction("startRecording") { viewTag: Int, promise: Promise ->

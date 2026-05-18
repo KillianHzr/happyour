@@ -79,6 +79,17 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const lastVolumeButtonTrigger = useRef(0);
   const lastVolumeRef = useRef(0);
 
+  // Direct ref to onScrollLock for synchronous calls (bypass React state cycle)
+  const onScrollLockRef = useRef(onScrollLock);
+  useEffect(() => { onScrollLockRef.current = onScrollLock; }, [onScrollLock]);
+
+  // Pinch-to-zoom + double-tap refs
+  const savedZoomRef = useRef(0);
+  const prevPinchDistRef = useRef<number | null>(null);
+  const isPinchingLocalRef = useRef(false);
+  const pinchRafRef = useRef<number | null>(null);
+  const lastCameraTapRef = useRef(0);
+
   // Double-capture slots
   const [slot1, setSlot1] = useState<SlotData | null>(null);
   const [slot2, setSlot2] = useState<SlotData | null>(null);
@@ -93,8 +104,10 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const [facing, setFacing] = useState<CameraType>("back");
   const [flash, setFlash] = useState<FlashMode>("off");
   const [zoom, setZoom] = useState(0);
+  const [torch, setTorch] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isPinching, setIsPinching] = useState(false);
+  const [isZoomDragging, setIsZoomDragging] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [capturing, setCapturing] = useState(false);
   const [isEditingNote, setIsEditingNote] = useState(false);
@@ -155,10 +168,10 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   ).current;
 
   useEffect(() => {
-    const locked = slot1 !== null || isPinching || isDrawingActive;
-    console.log(`[CAM] onScrollLock=${locked} | slot1=${!!slot1} isPinching=${isPinching} isDrawingActive=${isDrawingActive}`);
+    const locked = slot1 !== null || isPinching || isDrawingActive || isZoomDragging || isRecording;
+    console.log(`[CAM] onScrollLock=${locked} | slot1=${!!slot1} isPinching=${isPinching} isDrawingActive=${isDrawingActive} isZoomDragging=${isZoomDragging} isRecording=${isRecording}`);
     onScrollLock(locked);
-  }, [slot1, isPinching, isDrawingActive]);
+  }, [slot1, isPinching, isDrawingActive, isZoomDragging, isRecording]);
 
   useEffect(() => {
     if (cameraMode === "AUDIO" && isCapturing && !capturedAudioUri) {
@@ -175,6 +188,12 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       }
     };
   }, []);
+
+  // Keep savedZoomRef in sync when zoom changes externally (e.g. slider)
+  useEffect(() => { savedZoomRef.current = zoom; }, [zoom]);
+
+  // Reset torch when leaving VIDEO mode
+  useEffect(() => { if (cameraMode !== "VIDEO") setTorch(false); }, [cameraMode]);
 
   // ── Debug: log every render state ──
   useEffect(() => {
@@ -205,6 +224,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     setTextModeContent("");
     setIsDrawingActive(false);
     setActiveChallenge(null);
+    setZoom(0);
+    savedZoomRef.current = 0;
   };
 
   const handleSelectChallenge = (challenge: ActiveChallenge) => {
@@ -284,14 +305,67 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   stopVideoRecordingRef.current = stopVideoRecording;
 
   const handleFlipCamera = () => {
+    setZoom(0);
+    savedZoomRef.current = 0;
     setFacing(prev => prev === "back" ? "front" : "back");
-    if (isRecording) {
-      seamlessRecorderRef.current?.switchCamera();
-    }
+    if (isRecording) seamlessRecorderRef.current?.switchCamera();
   };
 
   const handleFlipCameraRef = useRef(handleFlipCamera);
   handleFlipCameraRef.current = handleFlipCamera;
+
+  // ── Pinch-to-zoom handlers (SeamlessRecorder container) ──
+  const handleCamGrant = (e: any) => {
+    if (e.nativeEvent.touches.length >= 2) {
+      isPinchingLocalRef.current = true;
+      prevPinchDistRef.current = null;
+      setIsPinching(true);
+    }
+  };
+  const handleCamMove = (e: any) => {
+    const touches = e.nativeEvent.touches;
+    if (touches.length < 2 || !isPinchingLocalRef.current) return;
+    const dx = touches[1].pageX - touches[0].pageX;
+    const dy = touches[1].pageY - touches[0].pageY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (prevPinchDistRef.current !== null) {
+      const delta = dist - prevPinchDistRef.current;
+      const next = Math.max(0, Math.min(1, savedZoomRef.current + delta * 0.003));
+      savedZoomRef.current = next;
+      if (pinchRafRef.current === null) {
+        pinchRafRef.current = requestAnimationFrame(() => {
+          setZoom(savedZoomRef.current);
+          pinchRafRef.current = null;
+        });
+      }
+    }
+    prevPinchDistRef.current = dist;
+  };
+  const handleCamRelease = () => {
+    if (isPinchingLocalRef.current) {
+      isPinchingLocalRef.current = false;
+      prevPinchDistRef.current = null;
+      lastCameraTapRef.current = 0;
+      if (pinchRafRef.current !== null) { cancelAnimationFrame(pinchRafRef.current); pinchRafRef.current = null; }
+      setZoom(savedZoomRef.current);
+      setIsPinching(false);
+    }
+  };
+  const handleCamTerminate = () => {
+    isPinchingLocalRef.current = false;
+    prevPinchDistRef.current = null;
+    if (pinchRafRef.current !== null) { cancelAnimationFrame(pinchRafRef.current); pinchRafRef.current = null; }
+    setIsPinching(false);
+  };
+  const handleCamDoubleTap = () => {
+    const now = Date.now();
+    if (now - lastCameraTapRef.current < 350) {
+      handleFlipCameraRef.current();
+      lastCameraTapRef.current = 0;
+    } else {
+      lastCameraTapRef.current = now;
+    }
+  };
 
   const startAudioRecording = async () => {
     const perm = await AudioModule.requestRecordingPermissionsAsync();
@@ -683,14 +757,33 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
           <View style={[styles.cameraPageContainer, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: (capturingSecond && slot1) ? NAVBAR_HEIGHT + 92 : NAVBAR_HEIGHT + 12, paddingHorizontal: 12 }]}>
             <View style={styles.cameraInner}>
               {(cameraMode === "VIDEO" || Platform.OS === "ios") ? (
-                <View style={[StyleSheet.absoluteFillObject, { borderRadius: 32, overflow: "hidden" }]}>
-                  <SeamlessRecorder
-                    ref={seamlessRecorderRef}
-                    facing={facing}
-                    flash={flash === 'torch' ? 'on' : flash as 'off' | 'on' | 'auto'}
+                <>
+                  {/* Camera view clipped to rounded rect */}
+                  <View style={[StyleSheet.absoluteFillObject, { borderRadius: 32, overflow: "hidden" }]}>
+                    <SeamlessRecorder
+                      ref={seamlessRecorderRef}
+                      facing={facing}
+                      flash={flash === 'torch' ? 'on' : flash as 'off' | 'on' | 'auto'}
+                      zoom={zoom}
+                      torch={cameraMode === "VIDEO" ? torch : false}
+                      style={StyleSheet.absoluteFillObject}
+                    />
+                  </View>
+                  {/* Pinch-to-zoom (parent captures 2-finger before child Pressable sees them) */}
+                  <View
                     style={StyleSheet.absoluteFillObject}
-                  />
-                </View>
+                    onStartShouldSetResponderCapture={(e) => e.nativeEvent.touches.length >= 2}
+                    onMoveShouldSetResponderCapture={(e) => isPinchingLocalRef.current && e.nativeEvent.touches.length >= 2}
+                    onResponderGrant={handleCamGrant}
+                    onResponderMove={handleCamMove}
+                    onResponderRelease={handleCamRelease}
+                    onResponderTerminate={handleCamTerminate}
+                    onResponderTerminationRequest={() => !isPinchingLocalRef.current}
+                  >
+                    {/* Double-tap to flip — inside pinch view so 2-finger is intercepted above */}
+                    <Pressable style={StyleSheet.absoluteFillObject} onPress={handleCamDoubleTap} />
+                  </View>
+                </>
               ) : (
                 <StandardCamera
                   ref={cameraRef}
@@ -706,12 +799,19 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                   onCameraReady={() => {}}
                 />
               )}
-              {activeChallenge === null && cameraMode !== "VIDEO" && (
+              {/* Flash (photo) / Torch (video) button */}
+              {activeChallenge === null && (cameraMode === "PHOTO" || cameraMode === "VIDEO") && !isRecording && (
                 <TouchableOpacity
-                  style={styles.flashBtn}
-                  onPress={() => setFlash(prev => prev === "off" ? "on" : prev === "on" ? "auto" : "off")}
+                  style={[styles.flashBtn, cameraMode === "VIDEO" && torch && { backgroundColor: "rgba(255,200,0,0.35)" }]}
+                  onPress={() => {
+                    if (cameraMode === "VIDEO") setTorch(t => !t);
+                    else setFlash(prev => prev === "off" ? "on" : prev === "on" ? "auto" : "off");
+                  }}
                 >
-                  <FlashIcon mode={flash} />
+                  {cameraMode === "VIDEO"
+                    ? <TorchIcon active={torch} />
+                    : <FlashIcon mode={flash} />
+                  }
                 </TouchableOpacity>
               )}
             </View>
@@ -845,10 +945,13 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               </View>
             ) : (
               <View style={{ alignItems: "center", gap: 6 }}>
-                {(activeChallenge === null || capturingSecond) && (
+                {(cameraMode === "PHOTO" || cameraMode === "VIDEO") && (
+                  <ZoomSlider zoom={zoom} onZoom={(z) => { setZoom(z); savedZoomRef.current = z; }} onDragStart={() => { setIsZoomDragging(true); onScrollLockRef.current(true); }} onDragEnd={() => setIsZoomDragging(false)} />
+                )}
+                {(activeChallenge === null || capturingSecond) && !isRecording && !isAudioRecording && (
                   <View style={styles.modeSlider}>
                     {(["PHOTO", "VIDEO", "AUDIO", "DESSIN", "TEXTE"] as CameraMode[]).map((m) => (
-                      <TouchableOpacity key={m} onPress={() => { setCameraMode(m); if (m !== "DESSIN") setIsDrawingActive(false); }} disabled={isRecording || isAudioRecording}>
+                      <TouchableOpacity key={m} onPress={() => { setCameraMode(m); if (m !== "DESSIN") setIsDrawingActive(false); }}>
                         <Text style={[styles.modeText, cameraMode === m && styles.modeTextActive]}>{m}</Text>
                       </TouchableOpacity>
                     ))}
@@ -1170,6 +1273,79 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     </>
   );
 }
+
+function TorchIcon({ active }: { active: boolean }) {
+  const color = active ? "#FFD60A" : "#FFF";
+  return (
+    <Svg width="22" height="22" viewBox="0 0 24 24" fill={active ? "#FFD60A" : "none"} stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+    </Svg>
+  );
+}
+
+function ZoomSlider({ zoom, onZoom, onDragStart, onDragEnd }: { zoom: number; onZoom: (z: number) => void; onDragStart?: () => void; onDragEnd?: () => void }) {
+  const BAR_W = 200;
+  const THUMB = 18;
+  const barPageX = useRef(0);
+  const barRef = useRef<View>(null);
+  const onZoomRef = useRef(onZoom);
+  const onDragStartRef = useRef(onDragStart);
+  const onDragEndRef = useRef(onDragEnd);
+  useEffect(() => { onZoomRef.current = onZoom; }, [onZoom]);
+  useEffect(() => { onDragStartRef.current = onDragStart; }, [onDragStart]);
+  useEffect(() => { onDragEndRef.current = onDragEnd; }, [onDragEnd]);
+
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: (e) => {
+        onDragStartRef.current?.();
+        const relX = e.nativeEvent.pageX - barPageX.current;
+        onZoomRef.current(Math.max(0, Math.min(1, relX / BAR_W)));
+      },
+      onPanResponderMove: (e) => {
+        const relX = e.nativeEvent.pageX - barPageX.current;
+        onZoomRef.current(Math.max(0, Math.min(1, relX / BAR_W)));
+      },
+      onPanResponderRelease: () => { onDragEndRef.current?.(); },
+      onPanResponderTerminate: () => { onDragEndRef.current?.(); },
+    })
+  ).current;
+
+  const label = zoom < 0.005 ? '1×' : `${(1 + zoom * 4).toFixed(1)}×`;
+  const thumbLeft = zoom * (BAR_W - THUMB);
+  const fillPct = `${zoom * 100}%` as any;
+
+  return (
+    <View style={zoomSliderStyles.wrapper}>
+      <Text style={zoomSliderStyles.label}>{label}</Text>
+      <View
+        ref={barRef}
+        style={{ width: BAR_W, height: THUMB, justifyContent: "center" }}
+        onLayout={() => {
+          barRef.current?.measure((_fx, _fy, _w, _h, px) => { barPageX.current = px; });
+        }}
+        {...pan.panHandlers}
+      >
+        <View style={zoomSliderStyles.track}>
+          <View style={[zoomSliderStyles.fill, { width: fillPct }]} />
+        </View>
+        <View style={[zoomSliderStyles.thumb, { left: thumbLeft }]} />
+      </View>
+    </View>
+  );
+}
+
+const zoomSliderStyles = StyleSheet.create({
+  wrapper: { alignItems: "center", gap: 2, paddingBottom: 4 },
+  label: { color: "#FFF", fontSize: 13, fontFamily: typography.family.medium, opacity: 0.85, minWidth: 36, textAlign: "center" },
+  track: { height: 3, backgroundColor: "rgba(255,255,255,0.25)", borderRadius: 2, marginHorizontal: 9, overflow: "hidden" },
+  fill: { height: "100%", backgroundColor: "rgba(255,255,255,0.85)", borderRadius: 2 },
+  thumb: { position: "absolute", width: 18, height: 18, borderRadius: 9, backgroundColor: "#FFF", shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 3, elevation: 3 },
+});
 
 function VideoSlotThumbnail({ uri, borderRadius = 0 }: { uri: string; borderRadius?: number }) {
   const player = useVideoPlayer(uri, p => { p.pause(); });

@@ -1017,7 +1017,7 @@ export default function MainPagerScreen() {
             userId={user?.id ?? ""}
             isActive={currentPage === 1}
             allGroups={allGroups}
-            onScrollLock={(v) => { console.log(`[ID] setCameraScrollLocked=${v}`); setCameraScrollLocked(v); }}
+            onScrollLock={(v) => { console.log(`[ID] setCameraScrollLocked=${v}`); setCameraScrollLocked(v); scrollRef.current?.setNativeProps({ scrollEnabled: !v }); }}
             onCaptureSent={() => setProfileRefreshKey(k => k + 1)}
           />
         </Animated.View>

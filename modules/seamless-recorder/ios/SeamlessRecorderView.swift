@@ -129,6 +129,27 @@ public class SeamlessRecorderView: ExpoView {
     currentFlashMode = flash == "on" ? .on : flash == "auto" ? .auto : .off
   }
 
+  func setZoom(_ zoom: Double) {
+    guard let device = videoDeviceInput?.device else { return }
+    sessionQueue.async {
+      let minF = device.minAvailableVideoZoomFactor
+      let maxF = min(device.maxAvailableVideoZoomFactor, 8.0)
+      let factor = minF + CGFloat(zoom) * (maxF - minF)
+      try? device.lockForConfiguration()
+      device.videoZoomFactor = max(minF, min(maxF, factor))
+      device.unlockForConfiguration()
+    }
+  }
+
+  func setTorch(_ on: Bool) {
+    guard let device = videoDeviceInput?.device, device.hasTorch else { return }
+    sessionQueue.async {
+      try? device.lockForConfiguration()
+      device.torchMode = on ? .on : .off
+      device.unlockForConfiguration()
+    }
+  }
+
   func capturePhoto(promise: Promise) {
     sessionQueue.async { [weak self] in
       guard let self else { return }

@@ -29,8 +29,12 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
   private val mainHandler = Handler(Looper.getMainLooper())
 
   private var cameraProvider: ProcessCameraProvider? = null
+  private var camera: androidx.camera.core.Camera? = null
   private var videoCapture: VideoCapture<Recorder>? = null
   private var activeRecording: Recording? = null
+
+  private var pendingZoom: Float? = null
+  private var pendingTorch: Boolean? = null
 
   private var facingFront = false
   private var pendingFacing: Boolean? = null
@@ -91,6 +95,21 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
     }
   }
 
+  fun setZoom(zoom: Double) {
+    mainHandler.post {
+      val z = zoom.toFloat().coerceIn(0f, 1f)
+      val c = camera
+      if (c != null) c.cameraControl.setLinearZoom(z) else pendingZoom = z
+    }
+  }
+
+  fun setTorch(on: Boolean) {
+    mainHandler.post {
+      val c = camera
+      if (c != null) c.cameraControl.enableTorch(on) else pendingTorch = on
+    }
+  }
+
   fun switchCamera() {
     mainHandler.post {
       if (!isSessionActive) return@post
@@ -126,7 +145,9 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
     val vc = VideoCapture.withOutput(recorder).also { videoCapture = it }
     try {
       provider.unbindAll()
-      provider.bindToLifecycle(lifecycle, selector, preview, vc)
+      camera = provider.bindToLifecycle(lifecycle, selector, preview, vc)
+      pendingZoom?.let { camera?.cameraControl?.setLinearZoom(it); pendingZoom = null }
+      pendingTorch?.let { camera?.cameraControl?.enableTorch(it); pendingTorch = null }
     } catch (e: Exception) {
       Log.e("SeamlessRecorder", "bindCamera failed: ${e.message}")
     }

@@ -11,6 +11,12 @@ public class SeamlessRecorderModule: Module {
       Prop("flash") { (view: SeamlessRecorderView, flash: String) in
         view.setFlash(flash)
       }
+      Prop("zoom") { (view: SeamlessRecorderView, zoom: Double) in
+        view.setZoom(zoom)
+      }
+      Prop("torch") { (view: SeamlessRecorderView, torch: Bool) in
+        view.setTorch(torch)
+      }
     }
 
     AsyncFunction("capturePhoto") { (viewTag: Int, promise: Promise) in
