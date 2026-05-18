@@ -1,6 +1,7 @@
 {
   "platforms": ["ios", "android"],
   "ios": {
+    "podspecPath": "video-concat.podspec",
     "modules": ["VideoConcatModule"]
   },
   "android": {
