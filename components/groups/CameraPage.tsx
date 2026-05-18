@@ -435,11 +435,18 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     setCapturing(true);
     console.log("[CAM] takePictureAsync START");
     try {
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 1,
-        skipProcessing: Platform.OS === "android",
+      // Timeout de 5s pour éviter le freeze infini de l'appareil photo
+      const photoPromise = cameraRef.current.takePictureAsync({
+        quality: 0.8,
         exif: Platform.OS === "android",
       });
+
+      const timeoutPromise = new Promise<null>((_, reject) =>
+        setTimeout(() => reject(new Error("Camera timeout")), 5000)
+      );
+
+      const photo = await Promise.race([photoPromise, timeoutPromise]) as any;
+      
       console.log(`[CAM] takePictureAsync END | uri=${photo?.uri?.slice(0, 40)}`);
       if (photo?.uri) {
         const actions: any[] = [];
@@ -456,7 +463,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         if (actions.length > 0) {
           console.log(`[CAM] manipulateAsync START | actions=${JSON.stringify(actions)}`);
           // On fait juste la rotation/flip ici, compression différée à l'upload
-          const result = await manipulateAsync(photo.uri, actions, { compress: 1, format: SaveFormat.JPEG });
+          const result = await manipulateAsync(photo.uri, actions, { compress: 0.8, format: SaveFormat.JPEG });
           finalUri = result.uri;
           console.log("[CAM] manipulateAsync END");
         }
@@ -735,7 +742,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               <StandardCamera
                 ref={cameraRef}
                 isActive={isCapturing}
-                mode={Platform.OS === "ios" ? "video" : cameraMode === "VIDEO" ? "video" : "picture"}
+                mode={cameraMode === "VIDEO" ? "video" : "picture"}
                 facing={facing}
                 flash={flash}
                 zoom={zoom}

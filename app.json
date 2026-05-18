@@ -18,7 +18,7 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "4"
+      "buildNumber": "5"
     },
     "android": {
       "package": "com.happyour.app",
@@ -36,7 +36,12 @@
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
-        "android.permission.WRITE_EXTERNAL_STORAGE"
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO"
       ],
       "versionCode": 5
     },
@@ -91,9 +96,8 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "33fa3bd6-d343-4c58-b1ab-61baabea7903"
+        "projectId": "65222b8e-774d-4367-b67b-4f7c9799cac1"
       }
-    },
-    "owner": "killianherzerpro"
+    }
   }
 }
