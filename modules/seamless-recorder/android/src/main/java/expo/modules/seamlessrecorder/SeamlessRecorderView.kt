@@ -121,7 +121,7 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
     val lifecycle = findLifecycleOwner() ?: return
     val selector = if (facingFront) CameraSelector.DEFAULT_FRONT_CAMERA
                    else CameraSelector.DEFAULT_BACK_CAMERA
-    val preview = Preview.Builder().build().also { it.surfaceProvider = previewView.surfaceProvider }
+    val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
     val recorder = Recorder.Builder().setQualitySelector(QualitySelector.from(Quality.HD)).build()
     val vc = VideoCapture.withOutput(recorder).also { videoCapture = it }
     try {

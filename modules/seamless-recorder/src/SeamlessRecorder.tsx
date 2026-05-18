@@ -7,51 +7,54 @@ const NativeView = requireNativeViewManager('SeamlessRecorder');
 const NativeModule = requireNativeModule('SeamlessRecorder');
 
 export interface SeamlessRecorderRef {
+  /** iOS: single session, zero post-processing. Android: restarts clip per switch, concats at end. */
+  capturePhoto(): Promise<string>;
   startRecording(): Promise<void>;
-  /** Resolves with the final video URI (single file on iOS, concat'd file on Android). */
   stopRecording(): Promise<string>;
   switchCamera(): Promise<void>;
 }
 
 interface SeamlessRecorderProps {
   facing?: 'front' | 'back';
+  /** Photo flash mode (iOS only). */
+  flash?: 'off' | 'on' | 'auto';
   style?: ViewStyle;
 }
 
 const SeamlessRecorder = forwardRef<SeamlessRecorderRef, SeamlessRecorderProps>(
-  ({ facing = 'back', style }, ref) => {
+  ({ facing = 'back', flash = 'off', style }, ref) => {
     const nativeRef = useRef<React.ElementRef<typeof NativeView>>(null);
 
+    const getTag = () => {
+      const tag = findNodeHandle(nativeRef.current);
+      if (tag == null) throw new Error('SeamlessRecorder not mounted');
+      return tag;
+    };
+
     useImperativeHandle(ref, () => ({
+      capturePhoto: async (): Promise<string> => {
+        return NativeModule.capturePhoto(getTag());
+      },
+
       startRecording: async () => {
-        const tag = findNodeHandle(nativeRef.current);
-        if (tag == null) throw new Error('SeamlessRecorder not mounted');
-        return NativeModule.startRecording(tag);
+        return NativeModule.startRecording(getTag());
       },
 
       stopRecording: async (): Promise<string> => {
-        const tag = findNodeHandle(nativeRef.current);
-        if (tag == null) throw new Error('SeamlessRecorder not mounted');
-
         // iOS returns a single string URI.
         // Android returns an array of clip URIs (one per camera segment).
-        const result: string | string[] = await NativeModule.stopRecording(tag);
+        const result: string | string[] = await NativeModule.stopRecording(getTag());
         const uris = Array.isArray(result) ? result : [result];
-
         if (uris.length === 1) return uris[0];
-
-        // Multiple clips (Android camera switch) — concat with the existing native module.
         return concatVideos(uris);
       },
 
       switchCamera: async () => {
-        const tag = findNodeHandle(nativeRef.current);
-        if (tag == null) throw new Error('SeamlessRecorder not mounted');
-        return NativeModule.switchCamera(tag);
+        return NativeModule.switchCamera(getTag());
       },
     }));
 
-    return <NativeView ref={nativeRef} facing={facing} style={style} />;
+    return <NativeView ref={nativeRef} facing={facing} flash={flash} style={style} />;
   }
 );
 

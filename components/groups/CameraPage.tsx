@@ -363,37 +363,52 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       if (isRecording) stopVideoRecording(); else startVideoRecording();
       return;
     }
+    // iOS : une seule session AVFoundation — SeamlessRecorder gère la photo et la vidéo.
+    if (Platform.OS === "ios") {
+      if (capturing) return;
+      setCapturing(true);
+      try {
+        const uri = await seamlessRecorderRef.current?.capturePhoto();
+        if (uri) {
+          let finalUri = uri;
+          if (facing === "front") {
+            const result = await manipulateAsync(uri, [{ flip: FlipType.Horizontal }], { compress: 1, format: SaveFormat.JPEG });
+            finalUri = result.uri;
+          }
+          saveToSlot({ mode: "PHOTO", uri: finalUri, audioUri: null, textContent: "", note: "" });
+        }
+      } catch (e: any) {
+        console.error("Capture error:", e);
+        Alert.alert("Erreur", "Impossible de prendre la photo.");
+      } finally { setCapturing(false); }
+      return;
+    }
+
+    // Android : expo-camera
     if (!cameraRef.current) { console.warn("[CAM] handleCapture: cameraRef.current est null"); return; }
     if (isRecording) { console.warn("[CAM] handleCapture: bloqué car isRecording"); return; }
     if (capturing) { console.warn("[CAM] handleCapture: bloqué car déjà capturing"); return; }
     if (isPinching) { console.warn("[CAM] handleCapture: bloqué car isPinching"); return; }
     setCapturing(true);
-    console.log("[CAM] takePictureAsync START");
     try {
       const photo = await cameraRef.current.takePictureAsync({
         quality: 1,
-        skipProcessing: Platform.OS === "android",
-        exif: Platform.OS === "android",
+        skipProcessing: true,
+        exif: true,
       });
-      console.log(`[CAM] takePictureAsync END | uri=${photo?.uri?.slice(0, 40)}`);
       if (photo?.uri) {
         const actions: any[] = [];
-        if (Platform.OS === "android") {
-          const exif = (photo.exif as any)?.Orientation ?? 1;
-          const isFront = facing === "front";
-          if (exif === 8) { if (!isFront) actions.push({ rotate: 180 }); }
-          else if (exif === 6) { if (isFront) actions.push({ rotate: 180 }); }
-          else if (exif === 3) actions.push({ rotate: isFront ? 90 : -90 });
-          else if (exif === 1) actions.push({ rotate: isFront ? -90 : 90 });
-        }
+        const exif = (photo.exif as any)?.Orientation ?? 1;
+        const isFront = facing === "front";
+        if (exif === 8) { if (!isFront) actions.push({ rotate: 180 }); }
+        else if (exif === 6) { if (isFront) actions.push({ rotate: 180 }); }
+        else if (exif === 3) actions.push({ rotate: isFront ? 90 : -90 });
+        else if (exif === 1) actions.push({ rotate: isFront ? -90 : 90 });
         if (facing === "front") actions.push({ flip: FlipType.Horizontal });
         let finalUri = photo.uri;
         if (actions.length > 0) {
-          console.log(`[CAM] manipulateAsync START | actions=${JSON.stringify(actions)}`);
-          // On fait juste la rotation/flip ici, compression différée à l'upload
           const result = await manipulateAsync(photo.uri, actions, { compress: 1, format: SaveFormat.JPEG });
           finalUri = result.uri;
-          console.log("[CAM] manipulateAsync END");
         }
         saveToSlot({ mode: "PHOTO", uri: finalUri, audioUri: null, textContent: "", note: "" });
       }
@@ -667,17 +682,20 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         ) : (
           <View style={[styles.cameraPageContainer, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: (capturingSecond && slot1) ? NAVBAR_HEIGHT + 92 : NAVBAR_HEIGHT + 12, paddingHorizontal: 12 }]}>
             <View style={styles.cameraInner}>
-              {cameraMode === "VIDEO" ? (
-                <SeamlessRecorder
-                  ref={seamlessRecorderRef}
-                  facing={facing}
-                  style={StyleSheet.absoluteFillObject}
-                />
+              {(cameraMode === "VIDEO" || Platform.OS === "ios") ? (
+                <View style={[StyleSheet.absoluteFillObject, { borderRadius: 32, overflow: "hidden" }]}>
+                  <SeamlessRecorder
+                    ref={seamlessRecorderRef}
+                    facing={facing}
+                    flash={flash === 'torch' ? 'on' : flash as 'off' | 'on' | 'auto'}
+                    style={StyleSheet.absoluteFillObject}
+                  />
+                </View>
               ) : (
                 <StandardCamera
                   ref={cameraRef}
                   isActive={isCapturing}
-                  mode={Platform.OS === "ios" ? "video" : "picture"}
+                  mode="picture"
                   facing={facing}
                   flash={flash}
                   zoom={zoom}

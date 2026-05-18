@@ -2,16 +2,16 @@ import ExpoModulesCore
 import AVFoundation
 
 public class SeamlessRecorderView: ExpoView {
-  // MARK: - Capture session
+  // MARK: - Session
   private let session = AVCaptureSession()
   private var currentCameraPosition: AVCaptureDevice.Position = .back
   private var videoDeviceInput: AVCaptureDeviceInput?
-  private var audioDeviceInput: AVCaptureDeviceInput?
 
   private let videoOutput = AVCaptureVideoDataOutput()
   private let audioOutput = AVCaptureAudioDataOutput()
+  private let photoOutput = AVCapturePhotoOutput()
   private let sessionQueue = DispatchQueue(label: "com.happyour.seamless.session")
-  private let writerQueue = DispatchQueue(label: "com.happyour.seamless.writer")
+  private let writerQueue  = DispatchQueue(label: "com.happyour.seamless.writer")
 
   // MARK: - Asset writer
   private var assetWriter: AVAssetWriter?
@@ -21,11 +21,14 @@ public class SeamlessRecorderView: ExpoView {
   private var outputURL: URL?
   var stopPromise: Promise?
 
-  // MARK: - Timestamp normalisation
+  // MARK: - Timestamp normalisation (auto-detect gaps > 100 ms)
   private var firstVideoTimestamp: CMTime = .invalid
+  private var lastRawVideoTimestamp: CMTime = .invalid
   private var switchGapOffset: CMTime = .zero
-  private var lastWrittenVideoTimestamp: CMTime = .invalid
-  private var isSwitchPending = false
+
+  // MARK: - Photo
+  private var pendingPhotoPromise: Promise?
+  private var currentFlashMode: AVCaptureDevice.FlashMode = .off
 
   // MARK: - Preview
   private let previewLayer = AVCaptureVideoPreviewLayer()
@@ -42,10 +45,17 @@ public class SeamlessRecorderView: ExpoView {
     previewLayer.frame = bounds
   }
 
+  // Stop the session when the view leaves the screen (mode switch, unmount).
+  public override func willMove(toWindow newWindow: UIWindow?) {
+    super.willMove(toWindow: newWindow)
+    if newWindow == nil {
+      sessionQueue.async { [weak self] in self?.session.stopRunning() }
+    }
+  }
+
   // MARK: - Setup
   private func setupSession() {
     session.sessionPreset = .hd1280x720
-
     sessionQueue.async { [weak self] in
       guard let self else { return }
       self.session.beginConfiguration()
@@ -53,14 +63,14 @@ public class SeamlessRecorderView: ExpoView {
       self.addAudioInput()
       self.addOutputs()
       self.session.commitConfiguration()
-
+      // Orientation MUST be set after commitConfiguration — connections are fully established here.
+      self.setPortraitOrientation(on: self.videoOutput.connection(with: .video))
       DispatchQueue.main.async {
         self.previewLayer.session = self.session
         self.previewLayer.videoGravity = .resizeAspectFill
         self.layer.addSublayer(self.previewLayer)
         self.previewLayer.frame = self.bounds
       }
-
       self.session.startRunning()
     }
   }
@@ -68,7 +78,6 @@ public class SeamlessRecorderView: ExpoView {
   private func addCameraInput(position: AVCaptureDevice.Position) {
     guard let device = bestCamera(for: position),
           let input = try? AVCaptureDeviceInput(device: device) else { return }
-
     if session.canAddInput(input) {
       session.addInput(input)
       videoDeviceInput = input
@@ -79,57 +88,70 @@ public class SeamlessRecorderView: ExpoView {
   private func addAudioInput() {
     guard let mic = AVCaptureDevice.default(for: .audio),
           let input = try? AVCaptureDeviceInput(device: mic) else { return }
-    if session.canAddInput(input) {
-      session.addInput(input)
-      audioDeviceInput = input
-    }
+    if session.canAddInput(input) { session.addInput(input) }
   }
 
   private func addOutputs() {
     videoOutput.setSampleBufferDelegate(self, queue: writerQueue)
     videoOutput.alwaysDiscardsLateVideoFrames = true
-    if session.canAddOutput(videoOutput) {
-      session.addOutput(videoOutput)
-      videoOutput.connection(with: .video)?.videoRotationAngle = 90
-    }
+    if session.canAddOutput(videoOutput) { session.addOutput(videoOutput) }
 
     audioOutput.setSampleBufferDelegate(self, queue: writerQueue)
-    if session.canAddOutput(audioOutput) {
-      session.addOutput(audioOutput)
+    if session.canAddOutput(audioOutput) { session.addOutput(audioOutput) }
+
+    if session.canAddOutput(photoOutput) { session.addOutput(photoOutput) }
+  }
+
+  private func setPortraitOrientation(on connection: AVCaptureConnection?) {
+    guard let connection else { return }
+    if #available(iOS 17.0, *) {
+      if connection.isVideoRotationAngleSupported(90) { connection.videoRotationAngle = 90 }
+    } else {
+      if connection.isVideoOrientationSupported { connection.videoOrientation = .portrait }
     }
   }
 
   private func bestCamera(for position: AVCaptureDevice.Position) -> AVCaptureDevice? {
-    let discovery = AVCaptureDevice.DiscoverySession(
-      deviceTypes: [.builtInWideAngleCamera],
-      mediaType: .video,
-      position: position
-    )
-    return discovery.devices.first
+    AVCaptureDevice.DiscoverySession(
+      deviceTypes: [.builtInWideAngleCamera], mediaType: .video, position: position
+    ).devices.first
   }
 
-  // MARK: - Public API
+  // MARK: - Public API (called from Module)
+
   func setFacing(_ facing: String) {
     let position: AVCaptureDevice.Position = (facing == "front") ? .front : .back
-    guard position != currentCameraPosition else { return }
-    // During active recording performSwitch() owns camera changes — ignore prop updates.
-    guard !isWriting else { return }
+    guard position != currentCameraPosition, !isWriting else { return }
+    sessionQueue.async { [weak self] in self?.switchCamera(to: position) }
+  }
+
+  func setFlash(_ flash: String) {
+    currentFlashMode = flash == "on" ? .on : flash == "auto" ? .auto : .off
+  }
+
+  func capturePhoto(promise: Promise) {
     sessionQueue.async { [weak self] in
-      self?.switchCamera(to: position)
+      guard let self else { return }
+      guard self.pendingPhotoPromise == nil else {
+        promise.reject("PHOTO_ERROR", "Photo capture already in progress"); return
+      }
+      self.pendingPhotoPromise = promise
+      let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
+      if self.photoOutput.supportedFlashModes.contains(self.currentFlashMode) {
+        settings.flashMode = self.currentFlashMode
+      }
+      self.photoOutput.capturePhoto(with: settings, delegate: self)
     }
   }
 
   func startRecording() {
-    writerQueue.async { [weak self] in
-      self?.prepareWriter()
-    }
+    writerQueue.async { [weak self] in self?.prepareWriter() }
   }
 
   func stopRecording(promise: Promise) {
     writerQueue.async { [weak self] in
       guard let self, self.isWriting else {
-        promise.reject("STOP_ERROR", "Not recording")
-        return
+        promise.reject("STOP_ERROR", "Not recording"); return
       }
       self.stopPromise = promise
       self.isWriting = false
@@ -140,8 +162,7 @@ public class SeamlessRecorderView: ExpoView {
         if self.assetWriter?.status == .completed, let url = self.outputURL {
           self.stopPromise?.resolve(url.absoluteString)
         } else {
-          let err = self.assetWriter?.error?.localizedDescription ?? "Write failed"
-          self.stopPromise?.reject("STOP_ERROR", err)
+          self.stopPromise?.reject("STOP_ERROR", self.assetWriter?.error?.localizedDescription ?? "Write failed")
         }
         self.stopPromise = nil
         self.resetWriter()
@@ -151,61 +172,42 @@ public class SeamlessRecorderView: ExpoView {
 
   func performSwitch() {
     let next: AVCaptureDevice.Position = (currentCameraPosition == .back) ? .front : .back
-    sessionQueue.async { [weak self] in
-      self?.switchCamera(to: next)
-    }
+    sessionQueue.async { [weak self] in self?.switchCamera(to: next) }
   }
 
   // MARK: - Camera switch
   private func switchCamera(to position: AVCaptureDevice.Position) {
     guard let device = bestCamera(for: position),
           let newInput = try? AVCaptureDeviceInput(device: device) else { return }
-
     session.beginConfiguration()
-    if let old = videoDeviceInput {
-      session.removeInput(old)
-    }
+    if let old = videoDeviceInput { session.removeInput(old) }
     if session.canAddInput(newInput) {
       session.addInput(newInput)
       videoDeviceInput = newInput
       currentCameraPosition = position
     }
-    videoOutput.connection(with: .video)?.videoRotationAngle = 90
     session.commitConfiguration()
-
-    // Signal the writer queue to insert a gap offset on the next video frame
-    writerQueue.async { [weak self] in
-      self?.isSwitchPending = true
-    }
+    // Apply orientation AFTER commit — same reason as setupSession.
+    setPortraitOrientation(on: videoOutput.connection(with: .video))
   }
 
-  // MARK: - Writer setup
+  // MARK: - Writer
   private func prepareWriter() {
     let ts = Int(Date().timeIntervalSince1970 * 1000)
-    let url = URL(fileURLWithPath: NSTemporaryDirectory())
-      .appendingPathComponent("rec_\(ts).mp4")
+    let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("rec_\(ts).mp4")
     try? FileManager.default.removeItem(at: url)
     outputURL = url
 
     guard let writer = try? AVAssetWriter(outputURL: url, fileType: .mp4) else { return }
 
-    let videoSettings = videoOutput.recommendedVideoSettingsForAssetWriter(writingTo: .mp4) ?? [
-      AVVideoCodecKey: AVVideoCodecType.h264,
-      AVVideoWidthKey: 720,
-      AVVideoHeightKey: 1280
-    ]
-    let vInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings as? [String: Any])
+    let videoSettings = videoOutput.recommendedVideoSettingsForAssetWriter(writingTo: .mp4)
+    let fallback: [String: Any] = [AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: 720, AVVideoHeightKey: 1280]
+    let vInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings ?? fallback)
     vInput.expectsMediaDataInRealTime = true
-    // Portrait orientation already enforced at the connection level (rotation 90°),
-    // but set transform as belt-and-suspenders so players honour it correctly.
-    vInput.transform = CGAffineTransform(rotationAngle: 0)
+    vInput.transform = .identity
 
-    let aSettings: [String: Any] = [
-      AVFormatIDKey: kAudioFormatMPEG4AAC,
-      AVSampleRateKey: 44100,
-      AVNumberOfChannelsKey: 1,
-      AVEncoderBitRateKey: 64000
-    ]
+    let aSettings: [String: Any] = [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: 44100,
+                                    AVNumberOfChannelsKey: 1, AVEncoderBitRateKey: 64000]
     let aInput = AVAssetWriterInput(mediaType: .audio, outputSettings: aSettings)
     aInput.expectsMediaDataInRealTime = true
 
@@ -215,24 +217,16 @@ public class SeamlessRecorderView: ExpoView {
     assetWriter = writer
     videoWriterInput = vInput
     audioWriterInput = aInput
-
     firstVideoTimestamp = .invalid
-    lastWrittenVideoTimestamp = .invalid
+    lastRawVideoTimestamp = .invalid
     switchGapOffset = .zero
-    isSwitchPending = false
     isWriting = true
   }
 
   private func resetWriter() {
-    assetWriter = nil
-    videoWriterInput = nil
-    audioWriterInput = nil
-    firstVideoTimestamp = .invalid
-    lastWrittenVideoTimestamp = .invalid
-    switchGapOffset = .zero
-    isSwitchPending = false
-    isWriting = false
-    outputURL = nil
+    assetWriter = nil; videoWriterInput = nil; audioWriterInput = nil
+    firstVideoTimestamp = .invalid; lastRawVideoTimestamp = .invalid
+    switchGapOffset = .zero; isWriting = false; outputURL = nil
   }
 
   // MARK: - Timestamp normalisation
@@ -240,83 +234,74 @@ public class SeamlessRecorderView: ExpoView {
     let rawPTS = CMSampleBufferGetPresentationTimeStamp(buffer)
 
     if isVideo {
-      if isSwitchPending {
-        // The gap between lastWrittenVideoTimestamp and rawPTS is dead time (camera switch).
-        // We close it by accumulating the gap into switchGapOffset.
-        if CMTIME_IS_VALID(lastWrittenVideoTimestamp) {
-          let gap = CMTimeSubtract(rawPTS, lastWrittenVideoTimestamp)
-          // We want the next frame to immediately follow lastWrittenVideoTimestamp + 1 frame.
-          // Desired PTS = lastWrittenVideoTimestamp + frameDuration ≈ 1/30.
-          // Actual offset needed = rawPTS - desiredPTS = gap - 1 frame.
-          let frameDuration = CMTimeMake(value: 1, timescale: 30)
-          let extraGap = CMTimeSubtract(gap, frameDuration)
-          switchGapOffset = CMTimeAdd(switchGapOffset, extraGap)
+      // Auto-detect camera switch: any gap > 100 ms between consecutive frames
+      // is dead time (camera reconfiguration). Close it to produce seamless playback.
+      if CMTIME_IS_VALID(lastRawVideoTimestamp) {
+        let gapSeconds = CMTimeGetSeconds(CMTimeSubtract(rawPTS, lastRawVideoTimestamp))
+        if gapSeconds > 0.1 {
+          let gap = CMTimeSubtract(rawPTS, lastRawVideoTimestamp)
+          let oneFrame = CMTimeMake(value: 1, timescale: 30)
+          switchGapOffset = CMTimeAdd(switchGapOffset, CMTimeSubtract(gap, oneFrame))
         }
-        isSwitchPending = false
       }
-
-      if !CMTIME_IS_VALID(firstVideoTimestamp) {
-        firstVideoTimestamp = CMTimeSubtract(rawPTS, switchGapOffset)
-      }
+      lastRawVideoTimestamp = rawPTS
+      if !CMTIME_IS_VALID(firstVideoTimestamp) { firstVideoTimestamp = rawPTS }
     }
 
     guard CMTIME_IS_VALID(firstVideoTimestamp) else { return nil }
 
     let adjustedPTS = CMTimeSubtract(CMTimeSubtract(rawPTS, firstVideoTimestamp), switchGapOffset)
-    guard CMTIME_IS_POSITIVE_INFINITY(adjustedPTS) == false,
-          adjustedPTS.value >= 0 else { return nil }
+    let s = CMTimeGetSeconds(adjustedPTS)
+    guard s.isFinite, s >= 0 else { return nil }
 
-    let duration = CMSampleBufferGetDuration(buffer)
-    var timingInfo = CMSampleTimingInfo(
-      duration: duration,
-      presentationTimeStamp: adjustedPTS,
-      decodeTimeStamp: .invalid
-    )
-
+    var timingInfo = CMSampleTimingInfo(duration: CMSampleBufferGetDuration(buffer),
+                                        presentationTimeStamp: adjustedPTS,
+                                        decodeTimeStamp: .invalid)
     var out: CMSampleBuffer?
-    CMSampleBufferCreateCopyWithNewTiming(
-      allocator: nil,
-      sampleBuffer: buffer,
-      sampleTimingEntryCount: 1,
-      sampleTimingArray: &timingInfo,
-      sampleBufferOut: &out
-    )
-
-    if isVideo, let o = out {
-      lastWrittenVideoTimestamp = CMSampleBufferGetPresentationTimeStamp(o)
-    }
-
+    CMSampleBufferCreateCopyWithNewTiming(allocator: nil, sampleBuffer: buffer,
+                                          sampleTimingEntryCount: 1,
+                                          sampleTimingArray: &timingInfo,
+                                          sampleBufferOut: &out)
     return out
   }
 }
 
-// MARK: - AVCaptureVideoDataOutputSampleBufferDelegate
+// MARK: - Sample buffer delegates
 extension SeamlessRecorderView: AVCaptureVideoDataOutputSampleBufferDelegate,
                                 AVCaptureAudioDataOutputSampleBufferDelegate {
-
-  public func captureOutput(
-    _ output: AVCaptureOutput,
-    didOutput sampleBuffer: CMSampleBuffer,
-    from connection: AVCaptureConnection
-  ) {
+  public func captureOutput(_ output: AVCaptureOutput,
+                             didOutput sampleBuffer: CMSampleBuffer,
+                             from connection: AVCaptureConnection) {
     guard isWriting, let writer = assetWriter else { return }
-
-    let isVideo = (output is AVCaptureVideoDataOutput)
-
+    let isVideo = output is AVCaptureVideoDataOutput
     guard let normalised = normalise(sampleBuffer, isVideo: isVideo) else { return }
-
-    let adjustedPTS = CMSampleBufferGetPresentationTimeStamp(normalised)
-
-    if writer.status == .unknown {
-      writer.startWriting()
-      writer.startSession(atSourceTime: adjustedPTS)
-    }
+    let pts = CMSampleBufferGetPresentationTimeStamp(normalised)
+    if writer.status == .unknown { writer.startWriting(); writer.startSession(atSourceTime: pts) }
     guard writer.status == .writing else { return }
+    if isVideo  { videoWriterInput?.isReadyForMoreMediaData == true ? videoWriterInput?.append(normalised) : nil }
+    if !isVideo { audioWriterInput?.isReadyForMoreMediaData == true ? audioWriterInput?.append(normalised) : nil }
+  }
+}
 
-    if isVideo, let vInput = videoWriterInput, vInput.isReadyForMoreMediaData {
-      vInput.append(normalised)
-    } else if !isVideo, let aInput = audioWriterInput, aInput.isReadyForMoreMediaData {
-      aInput.append(normalised)
+// MARK: - Photo delegate
+extension SeamlessRecorderView: AVCapturePhotoCaptureDelegate {
+  public func photoOutput(_ output: AVCapturePhotoOutput,
+                           didFinishProcessingPhoto photo: AVCapturePhoto,
+                           error: Error?) {
+    guard let promise = pendingPhotoPromise else { return }
+    pendingPhotoPromise = nil
+
+    if let error { promise.reject("PHOTO_ERROR", error.localizedDescription); return }
+    guard let data = photo.fileDataRepresentation() else {
+      promise.reject("PHOTO_ERROR", "No photo data"); return
+    }
+    let url = URL(fileURLWithPath: NSTemporaryDirectory())
+      .appendingPathComponent("photo_\(Int(Date().timeIntervalSince1970 * 1000)).jpg")
+    do {
+      try data.write(to: url)
+      promise.resolve(url.absoluteString)
+    } catch {
+      promise.reject("PHOTO_ERROR", error.localizedDescription)
     }
   }
 }
