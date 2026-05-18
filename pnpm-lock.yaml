@@ -149,6 +149,9 @@ importers:
       react-native-worklets:
         specifier: 0.7.2
         version: 0.7.2(@babel/core@7.29.0)(react-native@0.83.2(@babel/core@7.29.0)(@react-native/metro-config@0.84.1(@babel/core@7.29.0))(@types/react@19.2.14)(react@19.2.0))(react@19.2.0)
+      video-concat:
+        specifier: workspace:*
+        version: link:modules/video-concat
     devDependencies:
       '@types/react':
         specifier: ~19.2.2
@@ -159,6 +162,8 @@ importers:
       typescript:
         specifier: ~5.9.2
         version: 5.9.3
+
+  modules/video-concat: {}
 
 packages:
 

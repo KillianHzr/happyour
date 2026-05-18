@@ -1,0 +1,7 @@
+{
+  "name": "video-concat",
+  "version": "1.0.0",
+  "description": "Native video concatenation module for HappyOur",
+  "main": "src/index",
+  "private": true
+}

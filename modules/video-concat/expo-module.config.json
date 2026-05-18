@@ -1,0 +1,9 @@
+{
+  "platforms": ["ios", "android"],
+  "ios": {
+    "modules": ["VideoConcatModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.videoconcat.VideoConcatModule"]
+  }
+}

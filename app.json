@@ -18,7 +18,7 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "4"
+      "buildNumber": "7"
     },
     "android": {
       "package": "com.happyour.app",
@@ -38,7 +38,7 @@
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
         "android.permission.WRITE_EXTERNAL_STORAGE"
       ],
-      "versionCode": 5
+      "versionCode": 11
     },
     "web": {
       "favicon": "./assets/favicon.png"

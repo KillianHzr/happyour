@@ -13,6 +13,7 @@ interface Props {
   onZoomChange?: (zoom: number) => void;
   onPinchingChange?: (isPinching: boolean) => void;
   onDoubleTap?: () => void;
+  onCameraReady?: () => void;
 }
 
 const StandardCamera = forwardRef<CameraView, Props>(({
@@ -24,7 +25,8 @@ const StandardCamera = forwardRef<CameraView, Props>(({
   mirror = false,
   onZoomChange,
   onPinchingChange,
-  onDoubleTap
+  onDoubleTap,
+  onCameraReady,
 }, ref) => {
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [micPermission, requestMicPermission] = useMicrophonePermissions();
@@ -153,6 +155,7 @@ const StandardCamera = forwardRef<CameraView, Props>(({
         videoQuality="1080p"
         enableTorch={false}
         autofocus="off"
+        onCameraReady={onCameraReady}
       />
     </View>
   );
