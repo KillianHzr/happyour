@@ -1,0 +1,7 @@
+{
+  "name": "seamless-recorder",
+  "version": "1.0.0",
+  "description": "Zero-processing-time video recorder with seamless camera switch for HappyOur",
+  "main": "src/index",
+  "private": true
+}

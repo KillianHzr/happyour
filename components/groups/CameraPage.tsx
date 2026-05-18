@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import Svg, { Path } from "react-native-svg";
 import { useAudioRecorder, AudioModule, RecordingPresets, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
-import { concatVideos } from "video-concat";
+import { SeamlessRecorder, type SeamlessRecorderRef } from "seamless-recorder";
 import { setCaptureData } from "../../lib/capture-store";
 import { useUpload } from "../../lib/upload-context";
 import StandardCamera from "../StandardCamera";
@@ -73,16 +73,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const audioTimer = useRef<NodeJS.Timeout | null>(null);
   const isAudioRecordingRef = useRef(false);
   const audioProgressAnim = useRef(new Animated.Value(0)).current;
-  const isWarmingUp = useRef(false);
-  const warmUpCancelled = useRef(false);
-  const warmUpPromise = useRef<Promise<any> | null>(null);
-  const pendingClipsRef = useRef<string[]>([]);
-  const cameraSwitchTargetRef = useRef<CameraType | null>(null);
-  const startVideoRecordingRef = useRef<(() => Promise<void>) | null>(null);
   const recordingSecondsRef = useRef(0);
-  const isCameraSwitchRestartRef = useRef(false);
-  const switchRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingSwitchRestartRef = useRef(false);
+  const seamlessRecorderRef = useRef<SeamlessRecorderRef>(null);
+  const stopVideoRecordingRef = useRef<() => void>(() => {});
   const lastVolumeButtonTrigger = useRef(0);
   const lastVolumeRef = useRef(0);
 
@@ -101,7 +94,6 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const [flash, setFlash] = useState<FlashMode>("off");
   const [zoom, setZoom] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
-  const [isProcessingVideo, setIsProcessingVideo] = useState(false);
   const [isPinching, setIsPinching] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [capturing, setCapturing] = useState(false);
@@ -177,36 +169,10 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   }, [cameraMode, isCapturing, capturedAudioUri]);
 
   useEffect(() => {
-    if (cameraMode !== "VIDEO" || !isActive) return;
-    warmUpCancelled.current = false;
-    const doWarmUp = async () => {
-      await new Promise(r => setTimeout(r, 300));
-      if (warmUpCancelled.current || !cameraRef.current) return;
-      isWarmingUp.current = true;
-      try {
-        const p = cameraRef.current.recordAsync({ maxDuration: 1 });
-        warmUpPromise.current = p;
-        await new Promise(r => setTimeout(r, 200));
-        if (!warmUpCancelled.current && cameraRef.current) {
-          try { cameraRef.current.stopRecording(); } catch (e) { console.warn("[CAM] warmUp stopRecording error:", e); }
-        }
-        try { await p; } catch (_) {}
-      } finally {
-        warmUpPromise.current = null;
-        isWarmingUp.current = false;
-      }
-    };
-    doWarmUp();
-    return () => { warmUpCancelled.current = true; };
-  }, [cameraMode, isActive]);
-
-  useEffect(() => {
     return () => {
-      if (switchRestartTimerRef.current !== null) {
-        clearTimeout(switchRestartTimerRef.current);
-        switchRestartTimerRef.current = null;
+      if (recordingTimer.current !== null) {
+        clearInterval(recordingTimer.current);
       }
-      pendingClipsRef.current = [];
     };
   }, []);
 
@@ -283,126 +249,44 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     setZoom(Math.min(Math.max(diff / 300, 0), 1));
   };
 
-  const concatClips = async (uris: string[]): Promise<string | null> => {
-    try {
-      return await concatVideos(uris);
-    } catch (e) {
-      console.warn("[CAM] concatVideos error:", e);
-      return null;
-    }
-  };
-
   const startVideoRecording = async () => {
-    if (!cameraRef.current || (isRecording && !isCameraSwitchRestartRef.current)) return;
-    if (cameraMode !== "VIDEO") setCameraMode("VIDEO");
-    if (isWarmingUp.current) {
-      warmUpCancelled.current = true;
-      try { cameraRef.current?.stopRecording(); } catch (e) { console.warn("[CAM] stopRecording (warmup) error:", e); }
-      if (warmUpPromise.current) { try { await warmUpPromise.current; } catch (_) {} }
-      isWarmingUp.current = false;
-    }
+    if (isRecording) return;
     setIsRecording(true);
-    if (!isCameraSwitchRestartRef.current) {
-      setRecordingSeconds(0);
-      recordingSecondsRef.current = 0;
-    }
-    isCameraSwitchRestartRef.current = false;
+    setRecordingSeconds(0);
+    recordingSecondsRef.current = 0;
     recordingTimer.current = setInterval(() => {
       setRecordingSeconds(s => {
         const next = s >= 14 ? s : s + 1;
         recordingSecondsRef.current = next;
-        if (s >= 14) stopVideoRecording();
+        if (s >= 14) stopVideoRecordingRef.current();
         return next;
       });
     }, 1000);
     try {
-      const remainingDuration = Math.max(2, 15 - recordingSecondsRef.current);
-      const video = await cameraRef.current.recordAsync({ maxDuration: remainingDuration });
-      if (video?.uri) {
-        if (cameraSwitchTargetRef.current !== null) {
-          // Un switch va suivre — on sauvegarde ce clip en attente
-          pendingClipsRef.current.push(video.uri);
-        } else {
-          // Clip final — on concat tout
-          const allClips = [...pendingClipsRef.current, video.uri];
-          pendingClipsRef.current = [];
-          if (allClips.length > 1) {
-            // Quitter le mode enregistrement et afficher le loader pendant le traitement
-            setIsRecording(false);
-            if (recordingTimer.current) clearInterval(recordingTimer.current);
-            setIsProcessingVideo(true);
-            const merged = await concatClips(allClips);
-            setIsProcessingVideo(false);
-            saveToSlot({ mode: "VIDEO", uri: merged ?? allClips[allClips.length - 1], audioUri: null, textContent: "", note: "" });
-          } else {
-            saveToSlot({ mode: "VIDEO", uri: video.uri, audioUri: null, textContent: "", note: "" });
-          }
-        }
-      }
-    } catch (e: any) {
-      pendingClipsRef.current = [];
-      cameraSwitchTargetRef.current = null;
-      pendingSwitchRestartRef.current = false;
-      console.error("Erreur recordAsync:", e);
+      await seamlessRecorderRef.current?.startRecording();
+    } catch (e) {
+      console.error("[CAM] startRecording error:", e);
+      setIsRecording(false);
+      if (recordingTimer.current) { clearInterval(recordingTimer.current); recordingTimer.current = null; }
     }
-    finally {
-      if (recordingTimer.current) clearInterval(recordingTimer.current);
-      if (cameraSwitchTargetRef.current !== null) {
-        // Garder isRecording=true pendant le switch — l'UI reste en mode enregistrement
-        const target = cameraSwitchTargetRef.current;
-        cameraSwitchTargetRef.current = null;
-        setFacing(target);
-        pendingSwitchRestartRef.current = true;
-        isCameraSwitchRestartRef.current = true;
-        switchRestartTimerRef.current = setTimeout(() => {
-          switchRestartTimerRef.current = null;
-          if (pendingSwitchRestartRef.current) {
-            pendingSwitchRestartRef.current = false;
-            startVideoRecordingRef.current?.();
-          }
-        }, Platform.OS === "ios" ? 600 : 2000);
-      } else {
-        setIsRecording(false);
-        setIsProcessingVideo(false);
-        setRecordingSeconds(0);
-        recordingSecondsRef.current = 0;
-      }
-    }
-  };
-
-  startVideoRecordingRef.current = startVideoRecording;
-
-  const handleCameraReady = () => {
-    // iOS fires onCameraReady on initial mount and other lifecycle events — rely on the timeout instead.
-    if (Platform.OS === "ios") return;
-    if (!pendingSwitchRestartRef.current) return;
-    pendingSwitchRestartRef.current = false;
-    if (switchRestartTimerRef.current) {
-      clearTimeout(switchRestartTimerRef.current);
-      switchRestartTimerRef.current = null;
-    }
-    startVideoRecordingRef.current?.();
   };
 
   const stopVideoRecording = () => {
-    if (!isRecording) return;
-    try {
-      cameraRef.current?.stopRecording();
-    } catch (e) {
-      console.warn("[CAM] stopVideoRecording error:", e);
-    }
+    if (recordingTimer.current === null && recordingSecondsRef.current === 0) return;
+    if (recordingTimer.current) { clearInterval(recordingTimer.current); recordingTimer.current = null; }
+    setIsRecording(false);
+    setRecordingSeconds(0);
+    recordingSecondsRef.current = 0;
+    seamlessRecorderRef.current?.stopRecording().then(uri => {
+      if (uri) saveToSlot({ mode: "VIDEO", uri, audioUri: null, textContent: "", note: "" });
+    }).catch(e => console.error("[CAM] stopRecording error:", e));
   };
+  stopVideoRecordingRef.current = stopVideoRecording;
 
   const handleFlipCamera = () => {
+    setFacing(prev => prev === "back" ? "front" : "back");
     if (isRecording) {
-      cameraSwitchTargetRef.current = facing === "back" ? "front" : "back";
-      try {
-        cameraRef.current?.stopRecording();
-      } catch (e) {
-        console.warn("[CAM] handleFlipCamera stopRecording error:", e);
-      }
-    } else {
-      setFacing(prev => prev === "back" ? "front" : "back");
+      seamlessRecorderRef.current?.switchCamera();
     }
   };
 
@@ -716,7 +600,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   return (
     <>
       {/* ── Camera / capture views ── */}
-      {isCapturing && !isProcessingVideo && (
+      {isCapturing && (
         cameraMode === "TEXTE" ? (
           <KeyboardAvoidingView
             style={[styles.textModeContainer, { paddingTop: Math.max(insets.top, 12) + 48 }]}
@@ -783,20 +667,28 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         ) : (
           <View style={[styles.cameraPageContainer, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: (capturingSecond && slot1) ? NAVBAR_HEIGHT + 92 : NAVBAR_HEIGHT + 12, paddingHorizontal: 12 }]}>
             <View style={styles.cameraInner}>
-              <StandardCamera
-                ref={cameraRef}
-                isActive={isCapturing}
-                mode={Platform.OS === "ios" ? "video" : cameraMode === "VIDEO" ? "video" : "picture"}
-                facing={facing}
-                flash={flash}
-                zoom={zoom}
-                mirror={cameraMode === "VIDEO" && facing === "front"}
-                onZoomChange={setZoom}
-                onPinchingChange={setIsPinching}
-                onDoubleTap={() => handleFlipCameraRef.current()}
-                onCameraReady={handleCameraReady}
-              />
-              {activeChallenge === null && (
+              {cameraMode === "VIDEO" ? (
+                <SeamlessRecorder
+                  ref={seamlessRecorderRef}
+                  facing={facing}
+                  style={StyleSheet.absoluteFillObject}
+                />
+              ) : (
+                <StandardCamera
+                  ref={cameraRef}
+                  isActive={isCapturing}
+                  mode={Platform.OS === "ios" ? "video" : "picture"}
+                  facing={facing}
+                  flash={flash}
+                  zoom={zoom}
+                  mirror={false}
+                  onZoomChange={setZoom}
+                  onPinchingChange={setIsPinching}
+                  onDoubleTap={() => handleFlipCameraRef.current()}
+                  onCameraReady={() => {}}
+                />
+              )}
+              {activeChallenge === null && cameraMode !== "VIDEO" && (
                 <TouchableOpacity
                   style={styles.flashBtn}
                   onPress={() => setFlash(prev => prev === "off" ? "on" : prev === "on" ? "auto" : "off")}
@@ -809,8 +701,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         )
       )}
 
-      {/* ── Écran traitement vidéo ── */}
-      {isProcessingVideo && (
+      {/* ── Écran traitement vidéo supprimé (SeamlessRecorder = zéro post-processing) ── */}
+      {false && (
         <View style={[styles.previewContainer, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 8, paddingHorizontal: 12 }]}>
           <View style={[styles.previewImageWrapper, { backgroundColor: "#000", justifyContent: "center", alignItems: "center", gap: 16 }]}>
             <ActivityIndicator size="large" color="#FFF" />
@@ -836,7 +728,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       )}
 
       {/* ── Camera UI overlay ── */}
-      {isCapturing && !isProcessingVideo && (
+      {isCapturing && (
         <View style={styles.fill} pointerEvents="box-none">
           {/* Challenge top area (button or active banner) */}
           {!capturingSecond && !(cameraMode === "DESSIN" && isDrawingActive) && (
