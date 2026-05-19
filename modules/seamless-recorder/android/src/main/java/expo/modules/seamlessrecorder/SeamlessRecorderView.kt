@@ -1,9 +1,14 @@
 package expo.modules.seamlessrecorder
 
 import android.content.Context
+import android.graphics.RenderEffect
+import android.graphics.Shader
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.View
+import android.widget.ImageView
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
@@ -58,11 +63,16 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
   }
   private var pendingAction: PendingAction? = null
 
-  init {
-    addView(previewView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+  private val freezeView = ImageView(context).apply {
+    scaleType = ImageView.ScaleType.CENTER_CROP
+    visibility = View.GONE
   }
 
-  // 1. LE CORRECTIF EST ICI : Force React Native à calculer la taille de la vue enfant
+  init {
+    addView(previewView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+    addView(freezeView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+  }
+
   override fun requestLayout() {
     super.requestLayout()
     post {
@@ -97,7 +107,7 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
     if (wantFront == facingFront) return
     if (isSessionActive) return
     facingFront = wantFront
-    mainHandler.post { bindCamera() }
+    mainHandler.post { bindCameraWithFreeze() }
   }
 
   fun setVideoMode(video: Boolean) {
@@ -105,7 +115,7 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
     isVideoMode = video
     mainHandler.post {
       if (!isViewAttached || cameraProvider == null) return@post
-      bindCamera()
+      bindCameraWithFreeze()
     }
   }
 
@@ -209,16 +219,29 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
     FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)
   )
 
+  private fun bindCameraWithFreeze() {
+    val bitmap = previewView.bitmap
+    if (bitmap != null) {
+      freezeView.setImageBitmap(bitmap)
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        freezeView.setRenderEffect(RenderEffect.createBlurEffect(40f, 40f, Shader.TileMode.CLAMP))
+      }
+      freezeView.visibility = View.VISIBLE
+      mainHandler.postDelayed({
+        freezeView.visibility = View.GONE
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) freezeView.setRenderEffect(null)
+      }, 700)
+    }
+    bindCamera()
+  }
+
   private fun bindCamera() {
     if (!isViewAttached) {
       Log.d("SeamlessRecorder", "bindCamera: skipped, view detached")
       return
     }
     val provider = cameraProvider ?: return
-
-    // 2. DEUXIEME CORRECTIF : Utiliser l'activité React Native comme Lifecycle principal
     val lifecycle: LifecycleOwner = (appContext.currentActivity as? LifecycleOwner) ?: ProcessLifecycleOwner.get()
-
     val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
 
     try {

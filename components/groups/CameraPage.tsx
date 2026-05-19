@@ -109,6 +109,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const [zoom, setZoom] = useState(0);
   const [torch, setTorch] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isVideoProcessing, setIsVideoProcessing] = useState(false);
   const [isPinching, setIsPinching] = useState(false);
   const [isZoomDragging, setIsZoomDragging] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
@@ -293,15 +294,17 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     if (recordingTimer.current === null && recordingSecondsRef.current === 0) return;
     if (recordingTimer.current) { clearInterval(recordingTimer.current); recordingTimer.current = null; }
     setIsRecording(false);
+    setIsVideoProcessing(true);
     setRecordingSeconds(0);
     recordingSecondsRef.current = 0;
     console.log("[CAM] stopVideoRecording");
     seamlessRecorderRef.current?.stopRecording().then(uri => {
+      setIsVideoProcessing(false);
       if (uri) {
         console.log("[CAM] video saved:", uri.slice(-30));
         saveToSlot({ mode: "VIDEO", uri, audioUri: null, textContent: "", note: "" });
       }
-    }).catch(e => console.error("[CAM] stopRecording error:", e));
+    }).catch(e => { setIsVideoProcessing(false); console.error("[CAM] stopRecording error:", e); });
   };
   stopVideoRecordingRef.current = stopVideoRecording;
 
@@ -978,6 +981,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 </TouchableOpacity>
               )}
             </View>
+          )}
+          {isVideoProcessing && (
+            <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFillObject} pointerEvents="box-none" />
           )}
         </View>
       )}
