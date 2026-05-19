@@ -299,11 +299,11 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     recordingSecondsRef.current = 0;
     console.log("[CAM] stopVideoRecording");
     seamlessRecorderRef.current?.stopRecording().then(uri => {
-      setIsVideoProcessing(false);
       if (uri) {
         console.log("[CAM] video saved:", uri.slice(-30));
         saveToSlot({ mode: "VIDEO", uri, audioUri: null, textContent: "", note: "" });
       }
+      setIsVideoProcessing(false);
     }).catch(e => { setIsVideoProcessing(false); console.error("[CAM] stopRecording error:", e); });
   };
   stopVideoRecordingRef.current = stopVideoRecording;
