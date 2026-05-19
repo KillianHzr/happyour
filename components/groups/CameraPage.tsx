@@ -169,7 +169,6 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
 
   useEffect(() => {
     const locked = slot1 !== null || isPinching || isDrawingActive || isZoomDragging || isRecording;
-    console.log(`[CAM] onScrollLock=${locked} | slot1=${!!slot1} isPinching=${isPinching} isDrawingActive=${isDrawingActive} isZoomDragging=${isZoomDragging} isRecording=${isRecording}`);
     onScrollLock(locked);
   }, [slot1, isPinching, isDrawingActive, isZoomDragging, isRecording]);
 
@@ -195,15 +194,10 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   // Reset torch when leaving VIDEO mode
   useEffect(() => { if (cameraMode !== "VIDEO") setTorch(false); }, [cameraMode]);
 
-  // ── Debug: log every render state ──
-  useEffect(() => {
-    console.log(`[CAM] render | slot1=${!!slot1} slot2=${!!slot2} capturingSecond=${capturingSecond} viewingSlot=${viewingSlot} isCapturing=${isCapturing} capturing=${capturing} isPinching=${isPinching} mode=${cameraMode} isActive=${isActive}`);
-  });
 
   // ── Slot helpers ──
 
   const saveToSlot = (data: SlotData) => {
-    console.log(`[CAM] saveToSlot | mode=${data.mode} isSecond=${capturingSecondRef.current}`);
     if (capturingSecondRef.current) {
       setSlot2(data);
       setCapturingSecond(false);
@@ -215,7 +209,6 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   };
 
   const resetAll = () => {
-    console.log("[CAM] resetAll");
     setSlot1(null);
     setSlot2(null);
     setViewingSlot(1);
@@ -234,7 +227,6 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   };
 
   const handleTrash = () => {
-    console.log(`[CAM] handleTrash | viewingSlot=${viewingSlot}`);
     if (viewingSlot === 2) {
       setSlot2(null);
       setViewingSlot(1);
@@ -284,6 +276,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       });
     }, 1000);
     try {
+      console.log("[CAM] startVideoRecording");
       await seamlessRecorderRef.current?.startRecording();
     } catch (e) {
       console.error("[CAM] startRecording error:", e);
@@ -298,8 +291,12 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     setIsRecording(false);
     setRecordingSeconds(0);
     recordingSecondsRef.current = 0;
+    console.log("[CAM] stopVideoRecording");
     seamlessRecorderRef.current?.stopRecording().then(uri => {
-      if (uri) saveToSlot({ mode: "VIDEO", uri, audioUri: null, textContent: "", note: "" });
+      if (uri) {
+        console.log("[CAM] video saved:", uri.slice(-30));
+        saveToSlot({ mode: "VIDEO", uri, audioUri: null, textContent: "", note: "" });
+      }
     }).catch(e => console.error("[CAM] stopRecording error:", e));
   };
   stopVideoRecordingRef.current = stopVideoRecording;
@@ -412,7 +409,6 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const stopAudioRecording = stopAudioRecordingDirect;
 
   const handleCapture = async () => {
-    console.log(`[CAM] handleCapture | mode=${cameraMode} slot1=${!!slot1} slot2=${!!slot2} capturingSecond=${capturingSecond} capturing=${capturing} isPinching=${isPinching} cameraRef=${!!cameraRef.current}`);
     if (cameraMode === "TEXTE") {
       if (!textModeContent.trim()) return;
       saveToSlot({ mode: "TEXTE", uri: null, audioUri: null, textContent: textModeContent.trim(), note: "" });
@@ -1288,12 +1284,25 @@ function ZoomSlider({ zoom, onZoom, onDragStart, onDragEnd }: { zoom: number; on
   const THUMB = 18;
   const barPageX = useRef(0);
   const barRef = useRef<View>(null);
+
+  // Update refs synchronously during render — safe because they're only read in event handlers
   const onZoomRef = useRef(onZoom);
   const onDragStartRef = useRef(onDragStart);
   const onDragEndRef = useRef(onDragEnd);
-  useEffect(() => { onZoomRef.current = onZoom; }, [onZoom]);
-  useEffect(() => { onDragStartRef.current = onDragStart; }, [onDragStart]);
-  useEffect(() => { onDragEndRef.current = onDragEnd; }, [onDragEnd]);
+  onZoomRef.current = onZoom;
+  onDragStartRef.current = onDragStart;
+  onDragEndRef.current = onDragEnd;
+
+  // Animated.Value drives the visual — zero setState during drag, no re-render loop
+  const animZoom = useRef(new Animated.Value(zoom)).current;
+  const localZoomRef = useRef(zoom);
+  const isDraggingRef = useRef(false);
+  const rafRef = useRef<number | null>(null);
+
+  // Sync visual from parent only when not dragging (pinch gesture, camera flip reset)
+  useEffect(() => {
+    if (!isDraggingRef.current) animZoom.setValue(zoom);
+  }, [zoom]);
 
   const pan = useRef(
     PanResponder.create({
@@ -1302,22 +1311,41 @@ function ZoomSlider({ zoom, onZoom, onDragStart, onDragEnd }: { zoom: number; on
       onStartShouldSetPanResponderCapture: () => true,
       onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: (e) => {
+        isDraggingRef.current = true;
         onDragStartRef.current?.();
-        const relX = e.nativeEvent.pageX - barPageX.current;
-        onZoomRef.current(Math.max(0, Math.min(1, relX / BAR_W)));
+        const z = Math.max(0, Math.min(1, (e.nativeEvent.pageX - barPageX.current) / BAR_W));
+        localZoomRef.current = z;
+        animZoom.setValue(z);
+        onZoomRef.current(z);
       },
       onPanResponderMove: (e) => {
-        const relX = e.nativeEvent.pageX - barPageX.current;
-        onZoomRef.current(Math.max(0, Math.min(1, relX / BAR_W)));
+        const z = Math.max(0, Math.min(1, (e.nativeEvent.pageX - barPageX.current) / BAR_W));
+        localZoomRef.current = z;
+        animZoom.setValue(z); // immediate visual update — no setState
+        if (rafRef.current === null) {
+          rafRef.current = requestAnimationFrame(() => {
+            onZoomRef.current(localZoomRef.current); // camera zoom throttled to 60fps
+            rafRef.current = null;
+          });
+        }
       },
-      onPanResponderRelease: () => { onDragEndRef.current?.(); },
-      onPanResponderTerminate: () => { onDragEndRef.current?.(); },
+      onPanResponderRelease: () => {
+        if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+        onZoomRef.current(localZoomRef.current);
+        isDraggingRef.current = false;
+        onDragEndRef.current?.();
+      },
+      onPanResponderTerminate: () => {
+        if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+        isDraggingRef.current = false;
+        onDragEndRef.current?.();
+      },
     })
   ).current;
 
+  const thumbLeft = animZoom.interpolate({ inputRange: [0, 1], outputRange: [0, BAR_W - THUMB] });
+  const fillWidth = animZoom.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
   const label = zoom < 0.005 ? '1×' : `${(1 + zoom * 4).toFixed(1)}×`;
-  const thumbLeft = zoom * (BAR_W - THUMB);
-  const fillPct = `${zoom * 100}%` as any;
 
   return (
     <View style={zoomSliderStyles.wrapper}>
@@ -1331,9 +1359,9 @@ function ZoomSlider({ zoom, onZoom, onDragStart, onDragEnd }: { zoom: number; on
         {...pan.panHandlers}
       >
         <View style={zoomSliderStyles.track}>
-          <View style={[zoomSliderStyles.fill, { width: fillPct }]} />
+          <Animated.View style={[zoomSliderStyles.fill, { width: fillWidth }]} />
         </View>
-        <View style={[zoomSliderStyles.thumb, { left: thumbLeft }]} />
+        <Animated.View style={[zoomSliderStyles.thumb, { left: thumbLeft }]} />
       </View>
     </View>
   );

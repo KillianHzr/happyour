@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.video.FallbackStrategy
 import androidx.camera.video.FileOutputOptions
 import androidx.camera.video.Quality
 import androidx.camera.video.QualitySelector
@@ -18,6 +19,7 @@ import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.core.util.Consumer
 import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
 import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.views.ExpoView
@@ -50,6 +52,7 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
   }
   private var pendingAction: PendingAction? = null
 
+
   init {
     addView(previewView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
   }
@@ -57,6 +60,15 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
   override fun onAttachedToWindow() {
     super.onAttachedToWindow()
     setupCamera()
+  }
+
+  override fun onDetachedFromWindow() {
+    super.onDetachedFromWindow()
+    mainHandler.post {
+      try { cameraProvider?.unbindAll() } catch (_: Exception) {}
+      camera = null
+      videoCapture = null
+    }
   }
 
   // ── Public API ───────────────────────────────────────────────────────────────
@@ -96,11 +108,10 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
   }
 
   fun setZoom(zoom: Double) {
-    mainHandler.post {
-      val z = zoom.toFloat().coerceIn(0f, 1f)
-      val c = camera
-      if (c != null) c.cameraControl.setLinearZoom(z) else pendingZoom = z
-    }
+    // Props are called on the main thread; setLinearZoom cancels previous pending calls internally
+    val z = zoom.toFloat().coerceIn(0f, 1f)
+    val c = camera
+    if (c != null) c.cameraControl.setLinearZoom(z) else pendingZoom = z
   }
 
   fun setTorch(on: Boolean) {
@@ -128,8 +139,9 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
   // ── Camera setup ─────────────────────────────────────────────────────────────
 
   private fun setupCamera() {
-    ProcessCameraProvider.getInstance(context).addListener({
-      cameraProvider = ProcessCameraProvider.getInstance(context).get()
+    val appCtx = context.applicationContext
+    ProcessCameraProvider.getInstance(appCtx).addListener({
+      cameraProvider = ProcessCameraProvider.getInstance(appCtx).get()
       pendingFacing?.let { facingFront = it; pendingFacing = null }
       bindCamera()
     }, ContextCompat.getMainExecutor(context))
@@ -137,15 +149,24 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
 
   private fun bindCamera() {
     val provider = cameraProvider ?: return
-    val lifecycle = findLifecycleOwner() ?: return
+    // ProcessLifecycleOwner is always valid (never null, never DESTROYED while the app runs)
+    val lifecycle: LifecycleOwner = ProcessLifecycleOwner.get()
     val selector = if (facingFront) CameraSelector.DEFAULT_FRONT_CAMERA
                    else CameraSelector.DEFAULT_BACK_CAMERA
     val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
-    val recorder = Recorder.Builder().setQualitySelector(QualitySelector.from(Quality.HD)).build()
+    val recorder = Recorder.Builder()
+      .setQualitySelector(
+        QualitySelector.fromOrderedList(
+          listOf(Quality.HD, Quality.SD, Quality.LOWEST),
+          FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)
+        )
+      )
+      .build()
     val vc = VideoCapture.withOutput(recorder).also { videoCapture = it }
     try {
       provider.unbindAll()
       camera = provider.bindToLifecycle(lifecycle, selector, preview, vc)
+      Log.d("SeamlessRecorder", "bindCamera OK facing=${if (facingFront) "front" else "back"}")
       pendingZoom?.let { camera?.cameraControl?.setLinearZoom(it); pendingZoom = null }
       pendingTorch?.let { camera?.cameraControl?.enableTorch(it); pendingTorch = null }
     } catch (e: Exception) {
@@ -156,11 +177,16 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
   // ── Recording ────────────────────────────────────────────────────────────────
 
   private fun beginClip() {
-    val vc = videoCapture ?: return
+    val vc = videoCapture ?: run {
+      Log.e("SeamlessRecorder", "beginClip: videoCapture is null — camera not ready yet")
+      return
+    }
     val file = File(context.cacheDir, "clip_${System.currentTimeMillis()}.mp4")
-    activeRecording = vc.output
-      .prepareRecording(context, FileOutputOptions.Builder(file).build())
-      .withAudioEnabled()
+    Log.d("SeamlessRecorder", "beginClip: starting clip at ${file.absolutePath}")
+    val prepared = vc.output.prepareRecording(context, FileOutputOptions.Builder(file).build())
+    val hasAudio = ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
+        android.content.pm.PackageManager.PERMISSION_GRANTED
+    activeRecording = (if (hasAudio) prepared.withAudioEnabled() else prepared)
       .start(ContextCompat.getMainExecutor(context), buildEventListener(file))
   }
 
@@ -172,7 +198,7 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
       if (!event.hasError()) {
         clipUris.add("file://${file.absolutePath}")
       } else {
-        Log.e("SeamlessRecorder", "Clip error: ${event.cause?.message}")
+        Log.e("SeamlessRecorder", "Clip error code=${event.error} cause=${event.cause?.javaClass?.simpleName} msg=${event.cause?.message}", event.cause)
       }
 
       when (val action = pendingAction) {
@@ -193,15 +219,4 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
         null -> {}
       }
     }
-
-  // ── Helpers ──────────────────────────────────────────────────────────────────
-
-  private fun findLifecycleOwner(): LifecycleOwner? {
-    var ctx: Context? = context
-    while (ctx != null) {
-      if (ctx is LifecycleOwner) return ctx
-      ctx = if (ctx is android.content.ContextWrapper) ctx.baseContext else null
-    }
-    return null
-  }
 }

@@ -38,7 +38,7 @@
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
         "android.permission.WRITE_EXTERNAL_STORAGE"
       ],
-      "versionCode": 12
+      "versionCode": 16
     },
     "web": {
       "favicon": "./assets/favicon.png"
