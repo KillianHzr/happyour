@@ -20,6 +20,23 @@ class SeamlessRecorderModule : Module() {
       Prop("torch") { view: SeamlessRecorderView, on: Boolean ->
         view.setTorch(on)
       }
+      Prop("flash") { view: SeamlessRecorderView, mode: String ->
+        view.setFlash(mode)
+      }
+      Prop("videoMode") { view: SeamlessRecorderView, video: Boolean ->
+        view.setVideoMode(video)
+      }
+    }
+
+    AsyncFunction("capturePhoto") { viewTag: Int, promise: Promise ->
+      Handler(Looper.getMainLooper()).post {
+        val view = appContext.findView<SeamlessRecorderView>(viewTag)
+        if (view == null) {
+          promise.reject("VIEW_NOT_FOUND", "SeamlessRecorderView not found for tag $viewTag", null)
+          return@post
+        }
+        view.capturePhoto(promise)
+      }
     }
 
     AsyncFunction("startRecording") { viewTag: Int, promise: Promise ->

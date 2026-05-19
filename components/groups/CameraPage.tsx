@@ -6,7 +6,7 @@ import {
 import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { BlurView } from "expo-blur";
-import { CameraView, type CameraType, type FlashMode } from "expo-camera";
+import { type CameraType, type FlashMode, useCameraPermissions } from "expo-camera";
 import { manipulateAsync, FlipType, SaveFormat } from "expo-image-manipulator";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -15,7 +15,6 @@ import { useAudioRecorder, AudioModule, RecordingPresets, useAudioPlayer, useAud
 import { SeamlessRecorder, type SeamlessRecorderRef } from "seamless-recorder";
 import { setCaptureData } from "../../lib/capture-store";
 import { useUpload } from "../../lib/upload-context";
-import StandardCamera from "../StandardCamera";
 import DrawingCanvas, { type DrawingCanvasRef } from "../DrawingCanvas";
 import { SendIcon, FeatherIcon, FlipIcon, CloseIcon, FlashIcon } from "./GroupIcons";
 import { VolumeManager } from "react-native-volume-manager";
@@ -59,13 +58,17 @@ class CameraErrorBoundary extends Component<{ children: React.ReactNode }, { has
 function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, onCaptureSent }: Props) {
   const insets = useSafeAreaInsets();
   const { startUpload, startChallengeUpload } = useUpload();
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+
+  useEffect(() => {
+    if (!cameraPermission?.granted) requestCameraPermission();
+  }, []);
 
   const [showGroupPicker, setShowGroupPicker] = useState(false);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [showChallengesModal, setShowChallengesModal] = useState(false);
   const [activeChallenge, setActiveChallenge] = useState<ActiveChallenge | null>(null);
 
-  const cameraRef = useRef<CameraView>(null);
   const drawingRef = useRef<DrawingCanvasRef>(null);
   const textInputRef = useRef<any>(null);
   const recordingTimer = useRef<NodeJS.Timeout | null>(null);
@@ -193,6 +196,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
 
   // Reset torch when leaving VIDEO mode
   useEffect(() => { if (cameraMode !== "VIDEO") setTorch(false); }, [cameraMode]);
+
 
 
   // ── Slot helpers ──
@@ -433,51 +437,16 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       if (isRecording) stopVideoRecording(); else startVideoRecording();
       return;
     }
-    // iOS : une seule session AVFoundation — SeamlessRecorder gère la photo et la vidéo.
-    if (Platform.OS === "ios") {
-      if (capturing) return;
-      setCapturing(true);
-      try {
-        const uri = await seamlessRecorderRef.current?.capturePhoto();
-        if (uri) {
-          let finalUri = uri;
-          if (facing === "front") {
-            const result = await manipulateAsync(uri, [{ flip: FlipType.Horizontal }], { compress: 1, format: SaveFormat.JPEG });
-            finalUri = result.uri;
-          }
-          saveToSlot({ mode: "PHOTO", uri: finalUri, audioUri: null, textContent: "", note: "" });
-        }
-      } catch (e: any) {
-        console.error("Capture error:", e);
-        Alert.alert("Erreur", "Impossible de prendre la photo.");
-      } finally { setCapturing(false); }
-      return;
-    }
-
-    // Android : expo-camera
-    if (!cameraRef.current) { console.warn("[CAM] handleCapture: cameraRef.current est null"); return; }
-    if (isRecording) { console.warn("[CAM] handleCapture: bloqué car isRecording"); return; }
-    if (capturing) { console.warn("[CAM] handleCapture: bloqué car déjà capturing"); return; }
-    if (isPinching) { console.warn("[CAM] handleCapture: bloqué car isPinching"); return; }
+    // SeamlessRecorder gère la photo sur iOS et Android
+    if (capturing) return;
+    if (isRecording) return;
     setCapturing(true);
     try {
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 1,
-        skipProcessing: true,
-        exif: true,
-      });
-      if (photo?.uri) {
-        const actions: any[] = [];
-        const exif = (photo.exif as any)?.Orientation ?? 1;
-        const isFront = facing === "front";
-        if (exif === 8) { if (!isFront) actions.push({ rotate: 180 }); }
-        else if (exif === 6) { if (isFront) actions.push({ rotate: 180 }); }
-        else if (exif === 3) actions.push({ rotate: isFront ? 90 : -90 });
-        else if (exif === 1) actions.push({ rotate: isFront ? -90 : 90 });
-        if (facing === "front") actions.push({ flip: FlipType.Horizontal });
-        let finalUri = photo.uri;
-        if (actions.length > 0) {
-          const result = await manipulateAsync(photo.uri, actions, { compress: 1, format: SaveFormat.JPEG });
+      const uri = await seamlessRecorderRef.current?.capturePhoto();
+      if (uri) {
+        let finalUri = uri;
+        if (facing === "front") {
+          const result = await manipulateAsync(uri, [{ flip: FlipType.Horizontal }], { compress: 1, format: SaveFormat.JPEG });
           finalUri = result.uri;
         }
         saveToSlot({ mode: "PHOTO", uri: finalUri, audioUri: null, textContent: "", note: "" });
@@ -752,49 +721,36 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         ) : (
           <View style={[styles.cameraPageContainer, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: (capturingSecond && slot1) ? NAVBAR_HEIGHT + 92 : NAVBAR_HEIGHT + 12, paddingHorizontal: 12 }]}>
             <View style={styles.cameraInner}>
-              {(cameraMode === "VIDEO" || Platform.OS === "ios") ? (
-                <>
-                  {/* Camera view clipped to rounded rect */}
-                  <View style={[StyleSheet.absoluteFillObject, { borderRadius: 32, overflow: "hidden" }]}>
+              <>
+                {/* Camera view clipped to rounded rect — only mount when permission is granted */}
+                <View style={[StyleSheet.absoluteFillObject, { borderRadius: 32, overflow: "hidden" }]}>
+                  {(cameraPermission?.granted ?? Platform.OS === "ios") && (
                     <SeamlessRecorder
                       ref={seamlessRecorderRef}
                       facing={facing}
                       flash={flash === 'torch' ? 'on' : flash as 'off' | 'on' | 'auto'}
                       zoom={zoom}
                       torch={cameraMode === "VIDEO" ? torch : false}
+                      videoMode={cameraMode === "VIDEO"}
                       style={StyleSheet.absoluteFillObject}
                     />
-                  </View>
-                  {/* Pinch-to-zoom (parent captures 2-finger before child Pressable sees them) */}
-                  <View
-                    style={StyleSheet.absoluteFillObject}
-                    onStartShouldSetResponderCapture={(e) => e.nativeEvent.touches.length >= 2}
-                    onMoveShouldSetResponderCapture={(e) => isPinchingLocalRef.current && e.nativeEvent.touches.length >= 2}
-                    onResponderGrant={handleCamGrant}
-                    onResponderMove={handleCamMove}
-                    onResponderRelease={handleCamRelease}
-                    onResponderTerminate={handleCamTerminate}
-                    onResponderTerminationRequest={() => !isPinchingLocalRef.current}
-                  >
-                    {/* Double-tap to flip — inside pinch view so 2-finger is intercepted above */}
-                    <Pressable style={StyleSheet.absoluteFillObject} onPress={handleCamDoubleTap} />
-                  </View>
-                </>
-              ) : (
-                <StandardCamera
-                  ref={cameraRef}
-                  isActive={isCapturing}
-                  mode="picture"
-                  facing={facing}
-                  flash={flash}
-                  zoom={zoom}
-                  mirror={false}
-                  onZoomChange={setZoom}
-                  onPinchingChange={setIsPinching}
-                  onDoubleTap={() => handleFlipCameraRef.current()}
-                  onCameraReady={() => {}}
-                />
-              )}
+                  )}
+                </View>
+                {/* Pinch-to-zoom (parent captures 2-finger before child Pressable sees them) */}
+                <View
+                  style={StyleSheet.absoluteFillObject}
+                  onStartShouldSetResponderCapture={(e) => e.nativeEvent.touches.length >= 2}
+                  onMoveShouldSetResponderCapture={(e) => isPinchingLocalRef.current && e.nativeEvent.touches.length >= 2}
+                  onResponderGrant={handleCamGrant}
+                  onResponderMove={handleCamMove}
+                  onResponderRelease={handleCamRelease}
+                  onResponderTerminate={handleCamTerminate}
+                  onResponderTerminationRequest={() => !isPinchingLocalRef.current}
+                >
+                  {/* Double-tap to flip — inside pinch view so 2-finger is intercepted above */}
+                  <Pressable style={StyleSheet.absoluteFillObject} onPress={handleCamDoubleTap} />
+                </View>
+              </>
               {/* Flash (photo) / Torch (video) button */}
               {activeChallenge === null && (cameraMode === "PHOTO" || cameraMode === "VIDEO") && !isRecording && (
                 <TouchableOpacity

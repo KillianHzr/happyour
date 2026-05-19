@@ -5,6 +5,8 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.FallbackStrategy
@@ -27,17 +29,23 @@ import java.io.File
 
 class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(context, appContext) {
 
-  private val previewView = PreviewView(context)
+  private val previewView = PreviewView(context).apply {
+    implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+  }
   private val mainHandler = Handler(Looper.getMainLooper())
 
   private var cameraProvider: ProcessCameraProvider? = null
   private var camera: androidx.camera.core.Camera? = null
   private var videoCapture: VideoCapture<Recorder>? = null
+  private var imageCapture: ImageCapture? = null
   private var activeRecording: Recording? = null
 
   private var pendingZoom: Float? = null
   private var pendingTorch: Boolean? = null
+  private var flashMode = ImageCapture.FLASH_MODE_OFF
+  private var isVideoMode = false
 
+  private var isViewAttached = false
   private var facingFront = false
   private var pendingFacing: Boolean? = null
 
@@ -45,13 +53,11 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
   private val clipUris = mutableListOf<String>()
   private var isSessionActive = false
 
-  // What to do once the current clip finalises
   private sealed class PendingAction {
     object Switch : PendingAction()
     class Stop(val promise: Promise) : PendingAction()
   }
   private var pendingAction: PendingAction? = null
-
 
   init {
     addView(previewView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
@@ -59,15 +65,18 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
 
   override fun onAttachedToWindow() {
     super.onAttachedToWindow()
+    isViewAttached = true
     setupCamera()
   }
 
   override fun onDetachedFromWindow() {
     super.onDetachedFromWindow()
+    isViewAttached = false
     mainHandler.post {
       try { cameraProvider?.unbindAll() } catch (_: Exception) {}
       camera = null
       videoCapture = null
+      imageCapture = null
     }
   }
 
@@ -77,10 +86,18 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
     val wantFront = (facing == "front")
     if (cameraProvider == null) { pendingFacing = wantFront; return }
     if (wantFront == facingFront) return
-    // During an active session switchCamera() owns the camera switch — ignore prop changes.
     if (isSessionActive) return
     facingFront = wantFront
     mainHandler.post { bindCamera() }
+  }
+
+  fun setVideoMode(video: Boolean) {
+    if (isVideoMode == video) return
+    isVideoMode = video
+    mainHandler.post {
+      if (!isViewAttached || cameraProvider == null || camera == null) return@post
+      if (video) switchToVideoMode() else switchToPhotoMode()
+    }
   }
 
   fun startRecording() {
@@ -108,7 +125,6 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
   }
 
   fun setZoom(zoom: Double) {
-    // Props are called on the main thread; setLinearZoom cancels previous pending calls internally
     val z = zoom.toFloat().coerceIn(0f, 1f)
     val c = camera
     if (c != null) c.cameraControl.setLinearZoom(z) else pendingZoom = z
@@ -121,6 +137,38 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
     }
   }
 
+  fun setFlash(mode: String) {
+    flashMode = when (mode) {
+      "on" -> ImageCapture.FLASH_MODE_ON
+      "auto" -> ImageCapture.FLASH_MODE_AUTO
+      else -> ImageCapture.FLASH_MODE_OFF
+    }
+    imageCapture?.flashMode = flashMode
+  }
+
+  fun capturePhoto(promise: Promise) {
+    mainHandler.post {
+      val ic = imageCapture ?: run {
+        promise.reject("CAPTURE_ERROR", "Camera not ready", null)
+        return@post
+      }
+      val file = File(context.cacheDir, "photo_${System.currentTimeMillis()}.jpg")
+      ic.takePicture(
+        ImageCapture.OutputFileOptions.Builder(file).build(),
+        ContextCompat.getMainExecutor(context),
+        object : ImageCapture.OnImageSavedCallback {
+          override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+            promise.resolve("file://${file.absolutePath}")
+          }
+          override fun onError(e: ImageCaptureException) {
+            Log.e("SeamlessRecorder", "capturePhoto failed: ${e.message}")
+            promise.reject("CAPTURE_ERROR", e.message ?: "Unknown error", null)
+          }
+        }
+      )
+    }
+  }
+
   fun switchCamera() {
     mainHandler.post {
       if (!isSessionActive) return@post
@@ -130,7 +178,6 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
         beginClip()
         return@post
       }
-      // Stop current clip; the Finalize event will switch the camera and start a new clip.
       pendingAction = PendingAction.Switch
       activeRecording?.stop()
     }
@@ -147,30 +194,82 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
     }, ContextCompat.getMainExecutor(context))
   }
 
+  private fun buildSelector() = if (facingFront) CameraSelector.DEFAULT_FRONT_CAMERA
+                                else CameraSelector.DEFAULT_BACK_CAMERA
+
+  private fun buildQualitySelector() = QualitySelector.fromOrderedList(
+    listOf(Quality.HD, Quality.SD, Quality.LOWEST),
+    FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)
+  )
+
+  // Full rebind (used on init and camera flip). Binds Preview + one output use case.
   private fun bindCamera() {
+    if (!isViewAttached) {
+      Log.d("SeamlessRecorder", "bindCamera: skipped, view detached")
+      return
+    }
     val provider = cameraProvider ?: return
-    // ProcessLifecycleOwner is always valid (never null, never DESTROYED while the app runs)
     val lifecycle: LifecycleOwner = ProcessLifecycleOwner.get()
-    val selector = if (facingFront) CameraSelector.DEFAULT_FRONT_CAMERA
-                   else CameraSelector.DEFAULT_BACK_CAMERA
     val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
-    val recorder = Recorder.Builder()
-      .setQualitySelector(
-        QualitySelector.fromOrderedList(
-          listOf(Quality.HD, Quality.SD, Quality.LOWEST),
-          FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)
-        )
-      )
-      .build()
-    val vc = VideoCapture.withOutput(recorder).also { videoCapture = it }
+
     try {
       provider.unbindAll()
-      camera = provider.bindToLifecycle(lifecycle, selector, preview, vc)
-      Log.d("SeamlessRecorder", "bindCamera OK facing=${if (facingFront) "front" else "back"}")
+      if (isVideoMode) {
+        val recorder = Recorder.Builder().setQualitySelector(buildQualitySelector()).build()
+        val vc = VideoCapture.withOutput(recorder)
+        camera = provider.bindToLifecycle(lifecycle, buildSelector(), preview, vc)
+        videoCapture = vc
+        imageCapture = null
+      } else {
+        val ic = ImageCapture.Builder().setFlashMode(flashMode).build()
+        camera = provider.bindToLifecycle(lifecycle, buildSelector(), preview, ic)
+        imageCapture = ic
+        videoCapture = null
+      }
+      Log.d("SeamlessRecorder", "bindCamera OK mode=${if (isVideoMode) "video" else "photo"} facing=${if (facingFront) "front" else "back"}")
       pendingZoom?.let { camera?.cameraControl?.setLinearZoom(it); pendingZoom = null }
       pendingTorch?.let { camera?.cameraControl?.enableTorch(it); pendingTorch = null }
     } catch (e: Exception) {
       Log.e("SeamlessRecorder", "bindCamera failed: ${e.message}")
+      camera = null
+      videoCapture = null
+      imageCapture = null
+    }
+  }
+
+  // Partial rebind — swaps output use case without closing the camera device (Preview stays bound).
+  private fun switchToVideoMode() {
+    val provider = cameraProvider ?: return
+    val lifecycle: LifecycleOwner = ProcessLifecycleOwner.get()
+    imageCapture?.let { provider.unbind(it) }
+    imageCapture = null
+    val recorder = Recorder.Builder().setQualitySelector(buildQualitySelector()).build()
+    val vc = VideoCapture.withOutput(recorder)
+    try {
+      provider.bindToLifecycle(lifecycle, buildSelector(), vc)
+      videoCapture = vc
+      Log.d("SeamlessRecorder", "switchToVideoMode OK")
+    } catch (e: Exception) {
+      Log.e("SeamlessRecorder", "switchToVideoMode failed: ${e.message}")
+      videoCapture = null
+    }
+  }
+
+  private fun switchToPhotoMode() {
+    val provider = cameraProvider ?: return
+    val lifecycle: LifecycleOwner = ProcessLifecycleOwner.get()
+    activeRecording?.stop()
+    activeRecording = null
+    videoCapture?.let { provider.unbind(it) }
+    videoCapture = null
+    val ic = ImageCapture.Builder().setFlashMode(flashMode).build()
+    try {
+      provider.bindToLifecycle(lifecycle, buildSelector(), ic)
+      imageCapture = ic
+      Log.d("SeamlessRecorder", "switchToPhotoMode OK")
+    } catch (e: Exception) {
+      Log.e("SeamlessRecorder", "switchToPhotoMode failed: ${e.message}")
+      imageCapture = null
     }
   }
 

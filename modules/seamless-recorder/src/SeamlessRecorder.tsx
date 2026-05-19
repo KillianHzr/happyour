@@ -16,17 +16,19 @@ export interface SeamlessRecorderRef {
 
 interface SeamlessRecorderProps {
   facing?: 'front' | 'back';
-  /** Photo flash mode (iOS only). */
+  /** Photo flash mode. */
   flash?: 'off' | 'on' | 'auto';
   /** Normalized zoom level 0–1. */
   zoom?: number;
   /** Video torch / flashlight. */
   torch?: boolean;
+  /** Android only: switch between ImageCapture (false) and VideoCapture (true). */
+  videoMode?: boolean;
   style?: ViewStyle;
 }
 
 const SeamlessRecorder = forwardRef<SeamlessRecorderRef, SeamlessRecorderProps>(
-  ({ facing = 'back', flash = 'off', zoom = 0, torch = false, style }, ref) => {
+  ({ facing = 'back', flash = 'off', zoom = 0, torch = false, videoMode = false, style }, ref) => {
     const nativeRef = useRef<React.ElementRef<typeof NativeView>>(null);
 
     const getTag = () => {
@@ -58,7 +60,7 @@ const SeamlessRecorder = forwardRef<SeamlessRecorderRef, SeamlessRecorderProps>(
       },
     }));
 
-    return <NativeView ref={nativeRef} facing={facing} flash={flash} zoom={zoom} torch={torch} style={style} />;
+    return <NativeView ref={nativeRef} facing={facing} flash={flash} zoom={zoom} torch={torch} videoMode={videoMode} style={style} />;
   }
 );
 
