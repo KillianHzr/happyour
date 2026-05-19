@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Modal, View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Platform } from "react-native";
 import * as FileSystem from "expo-file-system/legacy";
 import * as IntentLauncher from "expo-intent-launcher";
-import { colors, theme } from "../lib/theme";
+import { colors, theme, typography } from "../lib/theme";
 
 interface UpdateModalProps {
   visible: boolean;
@@ -80,11 +80,11 @@ export default function UpdateModal({ visible, apkUrl }: UpdateModalProps) {
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: "center", alignItems: "center", padding: 24 },
   card: { padding: 28, width: "100%", alignItems: "center" },
-  title: { fontSize: 20, fontFamily: "Inter_700Bold", marginBottom: 12, color: colors.text },
-  message: { fontSize: 15, fontFamily: "Inter_400Regular", color: colors.secondary, textAlign: "center", lineHeight: 22, marginBottom: 24 },
+  title: { fontSize: 20, fontFamily: typography.family.bold, marginBottom: 12, color: colors.text },
+  message: { fontSize: 15, fontFamily: typography.family.regular, color: colors.secondary, textAlign: "center", lineHeight: 22, marginBottom: 24 },
   progressContainer: { alignItems: "center", width: "100%" },
-  progressText: { marginTop: 12, fontSize: 14, fontFamily: "Inter_600SemiBold", color: colors.text },
+  progressText: { marginTop: 12, fontSize: 14, fontFamily: typography.family.semibold, color: colors.text },
   progressBarBg: { width: "100%", height: 8, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 4, marginTop: 12, overflow: "hidden" },
   progressBarFill: { height: "100%", backgroundColor: "#fff", borderRadius: 4 },
-  errorText: { marginTop: 16, fontSize: 14, fontFamily: "Inter_400Regular", color: "#EF4444", textAlign: "center" },
+  errorText: { marginTop: 16, fontSize: 14, fontFamily: typography.family.regular, color: "#EF4444", textAlign: "center" },
 });

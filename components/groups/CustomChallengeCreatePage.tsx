@@ -6,6 +6,7 @@ import {
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
+import { typography } from "../../lib/theme";
 import {
   addCustomChallenge, getQueuePendingCount,
   type ChallengeCapture,
@@ -258,7 +259,7 @@ const s = StyleSheet.create({
   },
   title: {
     color: "#FFF",
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 20,
   },
   scroll: {
@@ -268,7 +269,7 @@ const s = StyleSheet.create({
   },
   sectionTitle: {
     color: "rgba(255,255,255,0.55)",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 12,
     letterSpacing: 0.8,
     textTransform: "uppercase",
@@ -293,13 +294,13 @@ const s = StyleSheet.create({
   optionIcon: { fontSize: 22 },
   optionTitle: {
     color: "rgba(255,255,255,0.7)",
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 15,
   },
   optionTitleActive: { color: "#FFF" },
   optionDesc: {
     color: "rgba(255,255,255,0.4)",
-    fontFamily: "Inter_400Regular",
+    fontFamily: typography.family.regular,
     fontSize: 13,
   },
   memberList: {
@@ -332,13 +333,13 @@ const s = StyleSheet.create({
   },
   avatarLetter: {
     color: "#FFF",
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 15,
   },
   memberName: {
     flex: 1,
     color: "rgba(255,255,255,0.7)",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 15,
   },
   memberNameActive: { color: "#FFF" },
@@ -352,7 +353,7 @@ const s = StyleSheet.create({
   },
   emptyText: {
     color: "rgba(255,255,255,0.3)",
-    fontFamily: "Inter_400Regular",
+    fontFamily: typography.family.regular,
     fontSize: 14,
     textAlign: "center",
     paddingVertical: 8,
@@ -365,7 +366,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     color: "#FFF",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 16,
   },
   captureGrid: {
@@ -391,7 +392,7 @@ const s = StyleSheet.create({
   captureIcon: { fontSize: 16 },
   captureLabel: {
     color: "rgba(255,255,255,0.6)",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 13,
   },
   captureLabelActive: { color: "#FFF" },
@@ -407,7 +408,7 @@ const s = StyleSheet.create({
   },
   positionText: {
     color: "#FFF",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 14,
     textAlign: "center",
   },
@@ -422,7 +423,7 @@ const s = StyleSheet.create({
   confirmBtnDisabled: { opacity: 0.35 },
   confirmBtnText: {
     color: "#000",
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 16,
   },
 });

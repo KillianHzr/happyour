@@ -1,0 +1,15 @@
+{
+  "name": "Figma <-> GitHub Push & Pull",
+  "id": "figma-github-push-and-pull",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "editorType": ["figma"],
+  "networkAccess": {
+    "allowedDomains": [
+      "https://api.github.com",
+      "https://corsproxy.io"
+    ],
+    "reasoning": "Push variables JSON to GitHub."
+  }
+}

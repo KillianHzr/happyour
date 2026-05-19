@@ -5,7 +5,7 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { colors, theme } from "../../lib/theme";
+import { colors, theme, typography } from "../../lib/theme";
 import { CloseIcon } from "./GroupIcons";
 import Svg, { Path } from "react-native-svg";
 
@@ -274,18 +274,18 @@ const styles = StyleSheet.create({
     justifyContent: "center", alignItems: "center",
   },
   header: { paddingHorizontal: 20, marginBottom: 32, alignItems: "center" },
-  title: { fontSize: 28, fontFamily: "Inter_700Bold", color: "#FFF", textAlign: "center", marginBottom: 8 },
-  groupNameDisplay: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: "rgba(255,255,255,0.5)", textAlign: "center" },
+  title: { fontSize: 28, fontFamily: typography.family.bold, color: "#FFF", textAlign: "center", marginBottom: 8 },
+  groupNameDisplay: { fontSize: 16, fontFamily: typography.family.semibold, color: "rgba(255,255,255,0.5)", textAlign: "center" },
   
   section: { marginHorizontal: 20, marginBottom: 24 },
-  sectionLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, paddingLeft: 4 },
+  sectionLabel: { fontSize: 12, fontFamily: typography.family.semibold, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, paddingLeft: 4 },
   box: { backgroundColor: "#2C2C2E", borderRadius: 20, overflow: "hidden", paddingHorizontal: 16 },
   
   row: { flexDirection: "row", alignItems: "center", paddingVertical: 14 },
-  input: { flex: 1, color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 16, padding: 0 },
+  input: { flex: 1, color: "#FFF", fontFamily: typography.family.semibold, fontSize: 16, padding: 0 },
   
   menuItem: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 14 },
-  menuItemText: { color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 16 },
+  menuItemText: { color: "#FFF", fontFamily: typography.family.semibold, fontSize: 16 },
   dangerText: { color: "#FF3B30" },
   
   divider: { height: 1, backgroundColor: "rgba(255,255,255,0.05)" },
@@ -293,20 +293,20 @@ const styles = StyleSheet.create({
   memberRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12 },
   memberAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center", overflow: "hidden" },
   avatarImg: { width: "100%", height: "100%" },
-  memberInitial: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 14 },
-  memberName: { color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 15 },
-  meTag: { color: "rgba(255,255,255,0.4)", fontSize: 11, fontFamily: "Inter_400Regular" },
+  memberInitial: { color: "#FFF", fontFamily: typography.family.bold, fontSize: 14 },
+  memberName: { color: "#FFF", fontFamily: typography.family.semibold, fontSize: 15 },
+  meTag: { color: "rgba(255,255,255,0.4)", fontSize: 11, fontFamily: typography.family.regular },
   adminBadge: { backgroundColor: "rgba(255,255,255,0.1)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  adminBadgeText: { color: "rgba(255,255,255,0.6)", fontSize: 10, fontFamily: "Inter_700Bold" },
+  adminBadgeText: { color: "rgba(255,255,255,0.6)", fontSize: 10, fontFamily: typography.family.bold },
 
   // Subviews
   subContainer: { flex: 1, backgroundColor: colors.bg },
   content: { flex: 1, paddingHorizontal: 20, alignItems: "center" },
-  subTitle: { fontSize: 32, fontFamily: "Inter_700Bold", color: "#FFF", textAlign: "center", marginBottom: 16, letterSpacing: -1 },
-  subDescription: { fontSize: 17, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.6)", textAlign: "center", lineHeight: 26, marginBottom: 32 },
+  subTitle: { fontSize: 32, fontFamily: typography.family.bold, color: "#FFF", textAlign: "center", marginBottom: 16, letterSpacing: -1 },
+  subDescription: { fontSize: 17, fontFamily: typography.family.regular, color: "rgba(255,255,255,0.6)", textAlign: "center", lineHeight: 26, marginBottom: 32 },
   confirmBtn: { width: "100%", height: 64, borderRadius: 18, backgroundColor: "#FF3B30", justifyContent: "center", alignItems: "center", marginBottom: 12 },
-  confirmBtnText: { color: "#FFF", fontSize: 17, fontFamily: "Inter_700Bold" },
+  confirmBtnText: { color: "#FFF", fontSize: 17, fontFamily: typography.family.bold },
   cancelBtn: { width: "100%", height: 64, justifyContent: "center", alignItems: "center" },
-  cancelBtnText: { color: "rgba(255,255,255,0.4)", fontSize: 16, fontFamily: "Inter_600SemiBold" },
-  emptyText: { color: "rgba(255,255,255,0.4)", fontFamily: "Inter_400Regular", fontSize: 14, paddingVertical: 20, textAlign: "center" },
+  cancelBtnText: { color: "rgba(255,255,255,0.4)", fontSize: 16, fontFamily: typography.family.semibold },
+  emptyText: { color: "rgba(255,255,255,0.4)", fontFamily: typography.family.regular, fontSize: 14, paddingVertical: 20, textAlign: "center" },
 });

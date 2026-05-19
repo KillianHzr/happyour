@@ -4,7 +4,7 @@ import { router, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../../../lib/supabase";
 import { useAuth } from "../../../lib/auth-context";
-import { colors } from "../../../lib/theme";
+import { colors, typography } from "../../../lib/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Loader from "../../../components/Loader";
 import Svg, { Path } from "react-native-svg";
@@ -119,9 +119,9 @@ const styles = StyleSheet.create({
     width: 40, height: 40, borderWidth: 3, borderColor: "#FFF",
     borderRadius: 8, transform: [{ rotate: "45deg" }], marginBottom: 32,
   },
-  title: { color: "#FFF", fontSize: 24, fontFamily: "Inter_700Bold", textAlign: "center", marginBottom: 12 },
+  title: { color: "#FFF", fontSize: 24, fontFamily: typography.family.bold, textAlign: "center", marginBottom: 12 },
   subtitle: {
-    color: colors.secondary, fontSize: 15, fontFamily: "Inter_400Regular",
+    color: colors.secondary, fontSize: 15, fontFamily: typography.family.regular,
     textAlign: "center", lineHeight: 22, paddingHorizontal: 16, marginBottom: 48,
   },
   actions: { width: "100%", gap: 16 },
@@ -133,10 +133,10 @@ const styles = StyleSheet.create({
   },
   btnIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: "rgba(0,0,0,0.05)", justifyContent: "center", alignItems: "center" },
   btnIconDark: { backgroundColor: "rgba(255,255,255,0.1)" },
-  primaryBtnText: { fontSize: 17, fontFamily: "Inter_700Bold", color: "#000" },
-  secondaryBtnText: { fontSize: 17, fontFamily: "Inter_700Bold", color: "#FFF" },
+  primaryBtnText: { fontSize: 17, fontFamily: typography.family.bold, color: "#000" },
+  secondaryBtnText: { fontSize: 17, fontFamily: typography.family.bold, color: "#FFF" },
   logoutCard: { backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 20, overflow: "hidden" },
   logoutRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 13, gap: 12 },
   logoutIconWrap: { width: 36, height: 36, borderRadius: 10, backgroundColor: "rgba(255,59,48,0.12)", justifyContent: "center", alignItems: "center" },
-  logoutLabel: { fontSize: 16, color: "#FF3B30", fontFamily: "Inter_600SemiBold" },
+  logoutLabel: { fontSize: 16, color: "#FF3B30", fontFamily: typography.family.semibold },
 });

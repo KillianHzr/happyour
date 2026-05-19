@@ -2,7 +2,7 @@
   "expo": {
     "name": "HappyOur",
     "slug": "HappyOur",
-    "version": "1.4.0",
+    "version": "1.6.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -15,10 +15,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.jeanmiduntm.HappyOur",
       "icon": "./assets/icon.png",
-      "buildNumber": "6",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "buildNumber": "14"
     },
     "android": {
       "package": "com.happyour.app",
@@ -36,9 +36,14 @@
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
-        "android.permission.WRITE_EXTERNAL_STORAGE"
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO"
       ],
-      "versionCode": 2
+      "versionCode": 20
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -91,9 +96,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "65222b8e-774d-4367-b67b-4f7c9799cac1"
+        "projectId": "052d2842-8a82-4715-a029-68b0a3264e93"
       }
     },
-    "owner": "axel_genin"
+    "owner": "killianhzr"
   }
 }

@@ -1,0 +1,10 @@
+{
+  "platforms": ["ios", "android"],
+  "ios": {
+    "podspecPath": "seamless-recorder.podspec",
+    "modules": ["SeamlessRecorderModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.seamlessrecorder.SeamlessRecorderModule"]
+  }
+}

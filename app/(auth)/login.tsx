@@ -12,7 +12,7 @@ import { Link, router } from "expo-router";
 import { useAuth } from "../../lib/auth-context";
 import { useToast } from "../../lib/toast-context";
 import { translateError } from "../../lib/error-messages";
-import { colors, theme } from "../../lib/theme";
+import { colors, theme, typography } from "../../lib/theme";
 import Loader from "../../components/Loader";
 
 export default function LoginScreen() {
@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
   title: {
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 32,
     textAlign: "center",
     marginBottom: 8,
@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
     textTransform: "lowercase",
   },
   subtitle: {
-    fontFamily: "Inter_400Regular",
+    fontFamily: typography.family.regular,
     fontSize: 14,
     textAlign: "center",
     color: colors.secondary,
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
   input: { marginBottom: 16 },
   button: { marginTop: 12, height: 58, justifyContent: "center" },
   linkBtn: { marginTop: 32, alignItems: "center" },
-  link: { fontFamily: "Inter_400Regular", color: colors.secondary, fontSize: 13, textDecorationLine: "underline" },
+  link: { fontFamily: typography.family.regular, color: colors.secondary, fontSize: 13, textDecorationLine: "underline" },
   forgotBtn: { alignSelf: "flex-end", marginBottom: 24, marginTop: -8 },
-  forgotText: { fontFamily: "Inter_400Regular", color: colors.secondary, fontSize: 13, opacity: 0.8 },
+  forgotText: { fontFamily: typography.family.regular, color: colors.secondary, fontSize: 13, opacity: 0.8 },
 });

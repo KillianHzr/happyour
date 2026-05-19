@@ -30,7 +30,8 @@ import CustomChallengeQueuePage from "../../../components/groups/CustomChallenge
 import BottomSheet from "../../../components/BottomSheet";
 import LiveReactions from "../../../components/reveal/LiveReactions";
 import MotivationalNotificationsModal from "../../../components/MotivationalNotificationsModal";
-import { scheduleImmediateLocalNotification, scheduleFirstMomentReminder } from "../../../lib/notifications";
+import { scheduleImmediateLocalNotification, scheduleFirstMomentReminder, notifyReaction } from "../../../lib/notifications";
+import { typography } from "../../../lib/theme";
 
 const isEmoji = (str: string) => {
   const regexExp = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/gi;
@@ -181,11 +182,8 @@ export default function MainPagerScreen() {
   // ── Fetch all groups data at once ──
   const fetchAllData = useCallback(async () => {
     if (!user) return;
-    console.log("[DB FETCH] fetchAllData: Starting full sync...");
-    // Ensure the local media manifest is loaded before building PhotoEntries
     await mediaCache.load();
     try {
-      console.log("[DB FETCH] fetchAllData: Querying app_config and profiles");
       const [cfgRows, profileRes] = await Promise.all([
         supabase.from("app_config").select("key, value").in("key", ["reveal_day", "reveal_hour"]),
         supabase.from("profiles").select("username, avatar_url, email, daily_notifications_count, notification_periods").eq("id", user.id).single(),
@@ -206,7 +204,6 @@ export default function MainPagerScreen() {
       const photoStart = inRevealWindow ? weekBeforeReveal : prevRevealDate;
       const photoEnd = inRevealWindow ? prevRevealDate : currentRevealDate;
 
-      console.log("[DB FETCH] fetchAllData: Querying group_members for user", user.id);
       const { data: groupsData } = await supabase.from("group_members").select("groups(id, name, invite_code, created_at)").eq("user_id", user.id);
 
       const groups: GroupInfo[] = (groupsData ?? [])
@@ -223,10 +220,8 @@ export default function MainPagerScreen() {
         setNotifPeriods(profileRes.data.notification_periods ?? ["morning", "afternoon", "evening"]);
       }
 
-      console.log(`[DB FETCH] fetchAllData: Processing ${groups.length} groups...`);
       const dataEntries = await Promise.all(
         groups.map(async (g) => {
-          console.log(`[DB FETCH] group[${g.name}]: Querying members and photos...`);
           const [membersRes, photosRes] = await Promise.all([
             supabase.from("group_members").select("user_id, role, profiles:user_id(username, avatar_url)").eq("group_id", g.id),
             supabase.from("photos")
@@ -277,7 +272,7 @@ export default function MainPagerScreen() {
           }
 
           if (photoIds.length > 0) {
-            console.log(`[DB FETCH] group[${g.name}]: Querying reactions, views, and latest comments for ${photoIds.length} photos`);
+  ;
             const [reactionsRes, viewsRes, latestCommentsRes] = await Promise.all([
               supabase.from("reactions").select("id, photo_id, user_id, emoji").in("photo_id", photoIds),
               supabase.from("comment_views").select("photo_id, last_viewed_at").eq("user_id", user.id).in("photo_id", photoIds),
@@ -362,9 +357,8 @@ export default function MainPagerScreen() {
       );
 
       setGroupData(Object.fromEntries(dataEntries));
-      console.log("[DB FETCH] fetchAllData: Finished syncing all groups.");
     } catch (err) {
-      console.error("[DB FETCH] fetchAllData Error:", err);
+      console.error("[fetchAllData]", err);
     }
     setDataLoaded(true);
   }, [user]);
@@ -378,7 +372,6 @@ export default function MainPagerScreen() {
     const gd = groupData[activeGroupId];
     if (!gd || gd.photos.length === 0) return;
     const photoIds = gd.photos.map((p) => p.id);
-    console.log(`[DB FETCH] refreshReactions: Querying reactions for ${photoIds.length} photos in active group`);
     const { data: rawReactions } = await supabase
       .from("reactions")
       .select("id, photo_id, user_id, emoji")
@@ -467,15 +460,9 @@ export default function MainPagerScreen() {
     const channel = supabase
       .channel(`user-rt-${user.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "photos" },
-        () => {
-          console.log("[REALTIME] New photo detected, triggering full sync");
-          fetchAllDataRef.current();
-        })
+        () => { fetchAllDataRef.current(); })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "group_members" },
-        () => {
-          console.log("[REALTIME] New group member detected, triggering full sync");
-          fetchAllDataRef.current();
-        })
+        () => { fetchAllDataRef.current(); })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [user?.id]);
@@ -486,7 +473,6 @@ export default function MainPagerScreen() {
     const sub = AppState.addEventListener("change", (state) => {
       if (state === "active") {
         if (!isMounted.skipped) { isMounted.skipped = true; return; }
-        console.log("[APPSTATE] App became active, triggering full sync");
         fetchAllDataRef.current();
       }
     });
@@ -497,7 +483,6 @@ export default function MainPagerScreen() {
   useEffect(() => {
     const interval = setInterval(() => {
       if (AppState.currentState === "active" && !showReveal) {
-        console.log("[POLLING] 30s interval reached, triggering full sync");
         fetchAllDataRef.current();
       }
     }, 30_000);
@@ -541,7 +526,6 @@ export default function MainPagerScreen() {
     setShowCustomTextInput(false);
 
     if (isDeletion) {
-      console.log(`[DB WRITE] handleEmojiReact: Deleting reaction ${existing.id}`);
       
       setGroupData(prev => {
         const next = { ...prev };
@@ -564,7 +548,6 @@ export default function MainPagerScreen() {
       return;
     }
 
-    console.log(`[DB WRITE] handleEmojiReact: Upserting reaction for photo ${photoId}`);
     const reactionId = `temp-${Math.random()}`;
     const reactionObj: Reaction = {
       id: reactionId,
@@ -606,6 +589,11 @@ export default function MainPagerScreen() {
           return next;
         });
       }
+      if (activePhoto && activePhoto.user_id !== user.id) {
+        const groupName = groupData[activeGroupId]?.name ?? "";
+        notifyReaction(activePhoto.user_id, username ?? "", emoji, groupName, user.id)
+          .catch((e) => console.warn("[Notif] Reaction notif error:", e));
+      }
     } catch (e) {
       console.error("[DB WRITE] Reaction upsert error:", e);
       Alert.alert("Erreur", "Impossible d'enregistrer la réaction.");
@@ -639,7 +627,6 @@ export default function MainPagerScreen() {
     const channel = supabase
       .channel(`rt-reactions-${activeGroupId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "reactions" }, (payload) => {
-        console.log(`[REALTIME] Reaction update: ${payload.eventType}`);
         if (payload.eventType === "DELETE") {
           const old = payload.old as any;
           if (!old?.photo_id) return;
@@ -692,7 +679,6 @@ export default function MainPagerScreen() {
   // ── Group management ──
   const handleRenameGroup = async (newName: string) => {
     if (!activeGroupId || !newName.trim()) return;
-    console.log(`[DB WRITE] handleRenameGroup: Updating group ${activeGroupId}`);
     try {
       const { data, error } = await supabase
         .from("groups")
@@ -715,13 +701,10 @@ export default function MainPagerScreen() {
   const handleLeaveGroup = async () => {
     if (!user || !activeGroupId) return;
     setIsLeaving(true);
-    console.log(`[DB WRITE] handleLeaveGroup: User ${user.id} leaving group ${activeGroupId}`);
     try {
       const others = members.filter((m: any) => m.user_id !== user.id);
       
       if (others.length === 0) {
-        // DERNIER MEMBRE : On supprime le groupe entièrement
-        console.log(`[DB WRITE] handleLeaveGroup: Last member, deleting group ${activeGroupId}`);
         const { error: delErr } = await supabase.from("groups").delete().eq("id", activeGroupId);
         if (delErr) throw delErr;
       } else {
@@ -761,7 +744,6 @@ export default function MainPagerScreen() {
 
   const handleDeleteGroup = async () => {
     if (!activeGroupId) return;
-    console.log(`[DB WRITE] handleDeleteGroup: Deleting group ${activeGroupId}`);
     try {
       const { error } = await supabase.from("groups").delete().eq("id", activeGroupId);
       if (error) throw new Error(error.message);
@@ -781,7 +763,6 @@ export default function MainPagerScreen() {
 
   const handleTransferAdmin = async (newAdminId: string) => {
     if (!user || !activeGroupId) return;
-    console.log(`[DB WRITE] handleTransferAdmin: Transferring to ${newAdminId}`);
     try {
       const [r1, r2] = await Promise.all([
         supabase.from("group_members").update({ role: "admin" }).eq("group_id", activeGroupId).eq("user_id", newAdminId),
@@ -806,7 +787,6 @@ export default function MainPagerScreen() {
   const handleCreateGroup = async () => {
     if (!newGroupName.trim() || !user) return;
     setAddGroupLoading(true);
-    console.log(`[DB WRITE] handleCreateGroup: Creating group "${newGroupName}"`);
     try {
       const { data: group, error } = await supabase
         .from("groups")
@@ -832,7 +812,6 @@ export default function MainPagerScreen() {
   const handleJoinGroup = async () => {
     if (!joinCode.trim() || !user) return;
     setAddGroupLoading(true);
-    console.log(`[DB FETCH] handleJoinGroup: Finding group with code ${joinCode}`);
     try {
       const cleanCode = joinCode.trim().toUpperCase();
       const { data: group, error: groupErr } = await supabase
@@ -842,8 +821,6 @@ export default function MainPagerScreen() {
         .maybeSingle();
       if (groupErr) throw groupErr;
       if (!group) { showToast("Erreur", "Code invalide ou groupe introuvable."); return; }
-      
-      console.log(`[DB WRITE] handleJoinGroup: Joining group ${group.id}`);
       const { error: joinErr } = await supabase
         .from("group_members")
         .insert({ group_id: group.id, user_id: user.id });
@@ -866,7 +843,6 @@ export default function MainPagerScreen() {
 
   // ── Pager ──
   const jumpTo = (page: number) => {
-    console.log(`[ID] jumpTo page=${page}`);
     scrollRef.current?.scrollTo({ x: page * SCREEN_WIDTH, animated: false });
     scrollX.setValue(page * SCREEN_WIDTH);
     setCurrentPage(page);
@@ -907,8 +883,6 @@ export default function MainPagerScreen() {
   const handleCommentSeen = useCallback(async (photoId: string) => {
     if (!user || !activeGroupId) return;
     
-    console.log(`[handleCommentSeen] Optimistic update for photo ${photoId}`);
-    
     // 1. Optimistic local update (immediate feedback)
     setGroupData(prev => {
       const next = { ...prev };
@@ -930,7 +904,6 @@ export default function MainPagerScreen() {
       const photoIds = currentPhotos.map(p => p.id);
       if (photoIds.length === 0) return;
 
-      console.log(`[DB FETCH] handleCommentSeen: Global Syncing metadata for ${photoIds.length} photos`);
       const [viewsRes, latestCommentsRes] = await Promise.all([
         supabase.from("comment_views").select("photo_id, last_viewed_at").eq("user_id", user.id).in("photo_id", photoIds),
         supabase.from("comments").select("photo_id, created_at").in("photo_id", photoIds).order("created_at", { ascending: false })
@@ -981,7 +954,7 @@ export default function MainPagerScreen() {
         bounces={false} overScrollMode="never"
         scrollEnabled={scrollEnabled}
         delaysContentTouches={false}
-        onMomentumScrollEnd={(e) => { const p = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH); console.log(`[ID] onMomentumScrollEnd page=${p}`); setCurrentPage(p); }}
+        onMomentumScrollEnd={(e) => { const p = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH); setCurrentPage(p); }}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })}
         scrollEventThrottle={16}
         contentOffset={{ x: SCREEN_WIDTH, y: 0 }}
@@ -1011,7 +984,7 @@ export default function MainPagerScreen() {
             userId={user?.id ?? ""}
             isActive={currentPage === 1}
             allGroups={allGroups}
-            onScrollLock={(v) => { console.log(`[ID] setCameraScrollLocked=${v}`); setCameraScrollLocked(v); }}
+            onScrollLock={(v) => { setCameraScrollLocked(v); scrollRef.current?.setNativeProps({ scrollEnabled: !v }); }}
             onCaptureSent={() => setProfileRefreshKey(k => k + 1)}
           />
         </Animated.View>
@@ -1439,10 +1412,10 @@ const styles = StyleSheet.create({
   tabBarContainer: { position: "absolute", bottom: 0, left: 0, right: 0, height: NAVBAR_HEIGHT, overflow: "hidden", zIndex: 100, backgroundColor: "rgba(10,10,10,1)" },
   tabBarContent: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-evenly", paddingTop: 12 },
   tab: { alignItems: "center", justifyContent: "center", gap: 4, flex: 1 },
-  tabLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold", color: "rgba(255,255,255,0.4)" },
+  tabLabel: { fontSize: 10, fontFamily: typography.family.semibold, color: "rgba(255,255,255,0.4)" },
   tabLabelActive: { color: "#FFF" },
   streakBadge: { position: "absolute", top: -5, right: -8, width: 16, height: 16, borderRadius: 8, justifyContent: "center", alignItems: "center" },
-  streakBadgeText: { position: "absolute", fontSize: 8, fontFamily: "Inter_700Bold", color: "#FFF", textAlign: "center", bottom: 1 },
+  streakBadgeText: { position: "absolute", fontSize: 8, fontFamily: typography.family.bold, color: "#FFF", textAlign: "center", bottom: 1 },
 
   // Reveal overlay
   revealOverlay: { zIndex: 200, backgroundColor: "#000" },
@@ -1454,31 +1427,31 @@ const styles = StyleSheet.create({
   },
 
   // Leave confirm
-  leaveTitle: { fontSize: 20, fontFamily: "Inter_700Bold", color: "#FFF", marginBottom: 12 },
-  leaveBody: { fontSize: 15, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.55)", marginBottom: 28, lineHeight: 22 },
+  leaveTitle: { fontSize: 20, fontFamily: typography.family.bold, color: "#FFF", marginBottom: 12 },
+  leaveBody: { fontSize: 15, fontFamily: typography.family.regular, color: "rgba(255,255,255,0.55)", marginBottom: 28, lineHeight: 22 },
   leaveConfirmBtn: { backgroundColor: "#FF3B30", borderRadius: 16, paddingVertical: 15, alignItems: "center", marginBottom: 10 },
-  leaveConfirmText: { color: "#FFF", fontSize: 16, fontFamily: "Inter_700Bold" },
+  leaveConfirmText: { color: "#FFF", fontSize: 16, fontFamily: typography.family.bold },
   leaveCancelWrap: { alignItems: "center", paddingVertical: 8 },
-  leaveCancelText: { color: "rgba(255,255,255,0.35)", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  leaveCancelText: { color: "rgba(255,255,255,0.35)", fontSize: 15, fontFamily: typography.family.semibold },
 
   // Add group
-  addGroupTitle: { fontSize: 20, fontFamily: "Inter_700Bold", color: "#FFF", marginBottom: 8 },
-  addGroupSub: { fontSize: 14, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.45)", marginBottom: 24 },
+  addGroupTitle: { fontSize: 20, fontFamily: typography.family.bold, color: "#FFF", marginBottom: 8 },
+  addGroupSub: { fontSize: 14, fontFamily: typography.family.regular, color: "rgba(255,255,255,0.45)", marginBottom: 24 },
   addGroupPrimary: { backgroundColor: "#FFF", borderRadius: 16, paddingVertical: 16, alignItems: "center", marginBottom: 12 },
-  addGroupPrimaryText: { color: "#000", fontSize: 16, fontFamily: "Inter_700Bold" },
+  addGroupPrimaryText: { color: "#000", fontSize: 16, fontFamily: typography.family.bold },
   addGroupSecondary: { backgroundColor: "rgba(255,255,255,0.08)", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)", borderRadius: 16, paddingVertical: 16, alignItems: "center", marginBottom: 12 },
-  addGroupSecondaryText: { color: "#FFF", fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  addGroupSecondaryText: { color: "#FFF", fontSize: 16, fontFamily: typography.family.semibold },
   // Sheet inputs
   sheetInput: {
     backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 12,
     paddingHorizontal: 16, paddingVertical: 14, color: "#FFF",
-    fontFamily: "Inter_600SemiBold", fontSize: 16,
+    fontFamily: typography.family.semibold, fontSize: 16,
     borderWidth: 1, borderColor: "rgba(255,255,255,0.15)",
     marginBottom: 16,
   },
-  sheetCodeInput: { fontSize: 22, textAlign: "center", letterSpacing: 3, fontFamily: "Inter_700Bold" },
+  sheetCodeInput: { fontSize: 22, textAlign: "center", letterSpacing: 3, fontFamily: typography.family.bold },
   sheetCancelWrap: { alignItems: "center", paddingVertical: 8 },
-  sheetCancelText: { color: "rgba(255,255,255,0.4)", fontFamily: "Inter_600SemiBold", fontSize: 15 },
+  sheetCancelText: { color: "rgba(255,255,255,0.4)", fontFamily: typography.family.semibold, fontSize: 15 },
 
   // New Reactions UI
   emojiWheel: {
@@ -1518,13 +1491,13 @@ const styles = StyleSheet.create({
   customModalClose: { position: "absolute", top: 60, right: 20, width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", zIndex: 10 },
   customInputWrapper: { width: "100%", alignItems: "center", paddingHorizontal: 40, gap: 32 },
   customPreviewSticker: { marginBottom: 10, transform: [{ scale: 1.2 }] },
-  customTextInput: { width: "100%", color: "#FFF", fontFamily: "Inter_800ExtraBold", textAlign: "center", padding: 20, height: 90 },
+  customTextInput: { width: "100%", color: "#FFF", fontFamily: typography.family.extrabold, textAlign: "center", padding: 20, height: 90 },
   customSendBtn: { backgroundColor: "#FFF", paddingHorizontal: 32, paddingVertical: 14, borderRadius: 100 },
   customSendBtnDisabled: { opacity: 0.5 },
-  customSendText: { color: "#000", fontFamily: "Inter_700Bold", fontSize: 16 },
+  customSendText: { color: "#000", fontFamily: typography.family.bold, fontSize: 16 },
   customModalActions: { alignItems: "center", gap: 16, width: "100%" },
   customDeleteBtn: { paddingVertical: 8 },
-  customDeleteText: { color: "#FF3B30", fontFamily: "Inter_600SemiBold", fontSize: 15 },
+  customDeleteText: { color: "#FF3B30", fontFamily: typography.family.semibold, fontSize: 15 },
   customTextInputWrapper: { width: "100%", position: "relative" },
   emojiTooltip: {
     position: "absolute", bottom: "100%", alignSelf: "center", marginBottom: 8,
@@ -1534,8 +1507,8 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
   },
   emojiTooltipIcon: { fontSize: 13 },
-  emojiTooltipText: { color: "rgba(255,255,255,0.8)", fontFamily: "Inter_600SemiBold", fontSize: 13 },
+  emojiTooltipText: { color: "rgba(255,255,255,0.8)", fontFamily: typography.family.semibold, fontSize: 13 },
   historyRow: { flexDirection: "row", gap: 8, justifyContent: "center", flexWrap: "wrap" },
   historyChip: { backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7 },
-  historyChipText: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 13 },
+  historyChipText: { color: "#FFF", fontFamily: typography.family.bold, fontSize: 13 },
 });

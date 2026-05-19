@@ -56,7 +56,6 @@ async function uploadFilesToR2(
 
     // Compression différée pour les images (Photos et Dessins)
     if (isImage && !fileName.includes("_draw")) {
-       console.log(`[Upload] Compression de l'image principale: ${fileName}`);
        const result = await manipulateAsync(fileUri, [], { compress: 0.8, format: SaveFormat.JPEG });
        uploadUri = result.uri;
     }
@@ -90,7 +89,6 @@ async function uploadFilesToR2(
       let secondUploadUri = sf.fileUri;
 
       if (isSecondImage && !sf.fileName.includes("_draw")) {
-        console.log(`[Upload] Compression de la 2e image: ${sf.fileName}`);
         const result2 = await manipulateAsync(sf.fileUri, [], { compress: 0.8, format: SaveFormat.JPEG });
         secondUploadUri = result2.uri;
       }
@@ -141,13 +139,10 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
       type = "dessin";
     }
 
-    console.log(`[Upload] Nouveau moment: ${type} (ID: ${taskId})`);
     setActiveUploads((prev) => [...prev, { id: taskId, progress: 0.1, status: "uploading", type }]);
 
     (async () => {
       try {
-        console.log(`[Upload ${taskId}] 1. Récupération des infos groupe/profil...`);
-        // 1. Récupérer les noms pour la notif (en parallèle de la lecture si besoin)
         const [groupRes, profileRes] = await Promise.all([
           supabase.from("groups").select("name").eq("id", dbData.group_id).single(),
           supabase.from("profiles").select("username").eq("id", dbData.user_id).single(),
@@ -157,13 +152,9 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
         const username = profileRes.data?.username ?? "Quelqu'un";
         setActiveUploads((prev) => prev.map(t => t.id === taskId ? { ...t, progress: 0.3 } : t));
 
-        // 2. Upload vers R2 (fichier principal + 2e capture si double capture)
-        console.log(`[Upload ${taskId}] 2. Upload vers R2...`);
         const { finalPath, secondPath } = await uploadFilesToR2(fileName, fileUri, contentType, secondFile);
         setActiveUploads((prev) => prev.map(t => t.id === taskId ? { ...t, progress: 0.8 } : t));
 
-        console.log(`[Upload ${taskId}] 3. Enregistrement en BDD... secondPath=${secondPath}`);
-        // 3. Enregistrement en BDD
         const { error: dbError } = await supabase.from("photos").insert({
           group_id: dbData.group_id,
           user_id: dbData.user_id,
@@ -175,14 +166,10 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
 
         if (dbError) throw dbError;
 
-        console.log(`[Upload ${taskId}] 4. Envoi notification...`);
-        // 4. Notification + annulation reminder premier moment
         notifyNewPhoto(dbData.group_id, groupName, username, dbData.user_id);
         cancelFirstMomentReminder(dbData.group_id);
         cancelPostReminderNotification(dbData.group_id);
 
-        console.log(`[Upload ${taskId}] 5. Succès !`);
-        // Succès
         setActiveUploads((prev) => prev.map(t => t.id === taskId ? { ...t, progress: 1, status: "success" } : t));
         
         setTimeout(() => {

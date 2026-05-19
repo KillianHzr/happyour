@@ -37,9 +37,6 @@ export async function registerForPushNotifications(userId: string) {
       await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : {})
     ).data;
 
-    const deviceToken = await Notifications.getDevicePushTokenAsync();
-    console.log("APNs device token:", deviceToken.data);
-
     await supabase
       .from("profiles")
       .update({ expo_push_token: token })
@@ -73,7 +70,6 @@ export async function sendPushToTokens(
   }));
 
   const sendBatch = async (batch: typeof messages) => {
-    console.log(`[Push] Envoi de ${batch.length} notification(s) à Expo...`);
     const response = await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
       headers: {
@@ -83,7 +79,6 @@ export async function sendPushToTokens(
       body: JSON.stringify(batch),
     });
     const res = await response.json();
-    console.log("[Push] Réponse Expo:", JSON.stringify(res));
     return res;
   };
 
@@ -96,7 +91,6 @@ export async function sendPushToTokens(
       );
 
       if (isMixedExperience) {
-        console.log("[Push] Experience IDs mixtes détectés, passage en envoi individuel...");
         await Promise.all(
           messages.map(async (msg) => {
             try {
@@ -117,8 +111,6 @@ export async function sendPushToTokens(
           if (ticket.details?.error === "DeviceNotRegistered") {
             supabase.from("profiles").update({ expo_push_token: null }).eq("expo_push_token", tokens[index]).then();
           }
-        } else {
-          console.log(`[Push] Ticket OK: ${ticket.id}`);
         }
       });
     }
@@ -362,7 +354,6 @@ export async function checkGroupParticipationAndNotify(groupId: string, groupNam
     if (participationRate < 0.45) {
       const tokens = await getGroupMemberTokens(groupId);
       if (tokens.length > 0) {
-        console.log(`[Participation] Envoi rappel pour "${groupName}" (${Math.round(participationRate * 100)}% de participation)`);
         await sendPushToTokens(
           tokens,
           groupName,
@@ -405,6 +396,24 @@ export async function notifyGroupInvite(
   const token = data?.expo_push_token;
   if (!token) return;
   await sendPushToTokens([token], "Nouvelle invitation !", `Tu as ete invite a rejoindre "${groupName}"`, { type: "invite", groupName });
+}
+
+export async function notifyReaction(
+  photoOwnerId: string,
+  reactorName: string,
+  sticker: string,
+  groupName: string,
+  reactorId: string
+): Promise<void> {
+  if (photoOwnerId === reactorId) return;
+  try {
+    const { data } = await supabase.from("profiles").select("expo_push_token").eq("id", photoOwnerId).single();
+    const token = data?.expo_push_token;
+    if (!token) return;
+    await sendPushToTokens([token], groupName, `${reactorName} a réagi à ton moment ${sticker}`);
+  } catch (e) {
+    console.warn("[Notif] notifyReaction error:", e);
+  }
 }
 
 // ── First moment reminder ──

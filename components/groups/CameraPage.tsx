@@ -1,25 +1,26 @@
 import React, { useState, useRef, useEffect, Component } from "react";
 import {
   View, Text, StyleSheet, Animated, Easing, TouchableOpacity,
-  Alert, KeyboardAvoidingView, Platform, TextInput, Modal, Pressable, PanResponder,
+  Alert, KeyboardAvoidingView, Platform, TextInput, Modal, Pressable, PanResponder, ActivityIndicator,
 } from "react-native";
 import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { BlurView } from "expo-blur";
-import { CameraView, type CameraType, type FlashMode } from "expo-camera";
+import { type CameraType, type FlashMode, useCameraPermissions } from "expo-camera";
 import { manipulateAsync, FlipType, SaveFormat } from "expo-image-manipulator";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import Svg, { Path } from "react-native-svg";
 import { useAudioRecorder, AudioModule, RecordingPresets, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import { SeamlessRecorder, type SeamlessRecorderRef } from "seamless-recorder";
 import { setCaptureData } from "../../lib/capture-store";
 import { useUpload } from "../../lib/upload-context";
-import StandardCamera from "../StandardCamera";
 import DrawingCanvas, { type DrawingCanvasRef } from "../DrawingCanvas";
 import { SendIcon, FeatherIcon, FlipIcon, CloseIcon, FlashIcon } from "./GroupIcons";
 import { VolumeManager } from "react-native-volume-manager";
 import ChallengesModal from "./ChallengesModal";
 import { type ActiveChallenge } from "../../lib/challenges";
+import { typography } from "../../lib/theme";
 
 const NAVBAR_HEIGHT = 100;
 
@@ -57,13 +58,17 @@ class CameraErrorBoundary extends Component<{ children: React.ReactNode }, { has
 function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, onCaptureSent }: Props) {
   const insets = useSafeAreaInsets();
   const { startUpload, startChallengeUpload } = useUpload();
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+
+  useEffect(() => {
+    if (!cameraPermission?.granted) requestCameraPermission();
+  }, []);
 
   const [showGroupPicker, setShowGroupPicker] = useState(false);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [showChallengesModal, setShowChallengesModal] = useState(false);
   const [activeChallenge, setActiveChallenge] = useState<ActiveChallenge | null>(null);
 
-  const cameraRef = useRef<CameraView>(null);
   const drawingRef = useRef<DrawingCanvasRef>(null);
   const textInputRef = useRef<any>(null);
   const recordingTimer = useRef<NodeJS.Timeout | null>(null);
@@ -71,11 +76,22 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const audioTimer = useRef<NodeJS.Timeout | null>(null);
   const isAudioRecordingRef = useRef(false);
   const audioProgressAnim = useRef(new Animated.Value(0)).current;
-  const isWarmingUp = useRef(false);
-  const warmUpCancelled = useRef(false);
-  const warmUpPromise = useRef<Promise<any> | null>(null);
+  const recordingSecondsRef = useRef(0);
+  const seamlessRecorderRef = useRef<SeamlessRecorderRef>(null);
+  const stopVideoRecordingRef = useRef<() => void>(() => {});
   const lastVolumeButtonTrigger = useRef(0);
   const lastVolumeRef = useRef(0);
+
+  // Direct ref to onScrollLock for synchronous calls (bypass React state cycle)
+  const onScrollLockRef = useRef(onScrollLock);
+  useEffect(() => { onScrollLockRef.current = onScrollLock; }, [onScrollLock]);
+
+  // Pinch-to-zoom + double-tap refs
+  const savedZoomRef = useRef(0);
+  const prevPinchDistRef = useRef<number | null>(null);
+  const isPinchingLocalRef = useRef(false);
+  const pinchRafRef = useRef<number | null>(null);
+  const lastCameraTapRef = useRef(0);
 
   // Double-capture slots
   const [slot1, setSlot1] = useState<SlotData | null>(null);
@@ -91,8 +107,10 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const [facing, setFacing] = useState<CameraType>("back");
   const [flash, setFlash] = useState<FlashMode>("off");
   const [zoom, setZoom] = useState(0);
+  const [torch, setTorch] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isPinching, setIsPinching] = useState(false);
+  const [isZoomDragging, setIsZoomDragging] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [capturing, setCapturing] = useState(false);
   const [isEditingNote, setIsEditingNote] = useState(false);
@@ -153,10 +171,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   ).current;
 
   useEffect(() => {
-    const locked = slot1 !== null || isPinching || isDrawingActive;
-    console.log(`[CAM] onScrollLock=${locked} | slot1=${!!slot1} isPinching=${isPinching} isDrawingActive=${isDrawingActive}`);
+    const locked = slot1 !== null || isPinching || isDrawingActive || isZoomDragging || isRecording;
     onScrollLock(locked);
-  }, [slot1, isPinching, isDrawingActive]);
+  }, [slot1, isPinching, isDrawingActive, isZoomDragging, isRecording]);
 
   useEffect(() => {
     if (cameraMode === "AUDIO" && isCapturing && !capturedAudioUri) {
@@ -167,38 +184,24 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   }, [cameraMode, isCapturing, capturedAudioUri]);
 
   useEffect(() => {
-    if (cameraMode !== "VIDEO" || !isActive) return;
-    warmUpCancelled.current = false;
-    const doWarmUp = async () => {
-      await new Promise(r => setTimeout(r, 300));
-      if (warmUpCancelled.current || !cameraRef.current) return;
-      isWarmingUp.current = true;
-      try {
-        const p = cameraRef.current.recordAsync({ maxDuration: 1 });
-        warmUpPromise.current = p;
-        await new Promise(r => setTimeout(r, 200));
-        if (!warmUpCancelled.current && cameraRef.current) {
-          try { cameraRef.current.stopRecording(); } catch (e) { console.warn("[CAM] warmUp stopRecording error:", e); }
-        }
-        try { await p; } catch (_) {}
-      } finally {
-        warmUpPromise.current = null;
-        isWarmingUp.current = false;
+    return () => {
+      if (recordingTimer.current !== null) {
+        clearInterval(recordingTimer.current);
       }
     };
-    doWarmUp();
-    return () => { warmUpCancelled.current = true; };
-  }, [cameraMode, isActive]);
+  }, []);
 
-  // ── Debug: log every render state ──
-  useEffect(() => {
-    console.log(`[CAM] render | slot1=${!!slot1} slot2=${!!slot2} capturingSecond=${capturingSecond} viewingSlot=${viewingSlot} isCapturing=${isCapturing} capturing=${capturing} isPinching=${isPinching} mode=${cameraMode} isActive=${isActive}`);
-  });
+  // Keep savedZoomRef in sync when zoom changes externally (e.g. slider)
+  useEffect(() => { savedZoomRef.current = zoom; }, [zoom]);
+
+  // Reset torch when leaving VIDEO mode
+  useEffect(() => { if (cameraMode !== "VIDEO") setTorch(false); }, [cameraMode]);
+
+
 
   // ── Slot helpers ──
 
   const saveToSlot = (data: SlotData) => {
-    console.log(`[CAM] saveToSlot | mode=${data.mode} isSecond=${capturingSecondRef.current}`);
     if (capturingSecondRef.current) {
       setSlot2(data);
       setCapturingSecond(false);
@@ -210,7 +213,6 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   };
 
   const resetAll = () => {
-    console.log("[CAM] resetAll");
     setSlot1(null);
     setSlot2(null);
     setViewingSlot(1);
@@ -219,6 +221,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     setTextModeContent("");
     setIsDrawingActive(false);
     setActiveChallenge(null);
+    setZoom(0);
+    savedZoomRef.current = 0;
   };
 
   const handleSelectChallenge = (challenge: ActiveChallenge) => {
@@ -227,7 +231,6 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   };
 
   const handleTrash = () => {
-    console.log(`[CAM] handleTrash | viewingSlot=${viewingSlot}`);
     if (viewingSlot === 2) {
       setSlot2(null);
       setViewingSlot(1);
@@ -264,36 +267,104 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   };
 
   const startVideoRecording = async () => {
-    if (!cameraRef.current || isRecording) return;
-    if (cameraMode !== "VIDEO") setCameraMode("VIDEO");
-    if (isWarmingUp.current) {
-      warmUpCancelled.current = true;
-      try { cameraRef.current?.stopRecording(); } catch (e) { console.warn("[CAM] stopRecording (warmup) error:", e); }
-      if (warmUpPromise.current) { try { await warmUpPromise.current; } catch (_) {} }
-      isWarmingUp.current = false;
-    }
+    if (isRecording) return;
     setIsRecording(true);
     setRecordingSeconds(0);
+    recordingSecondsRef.current = 0;
     recordingTimer.current = setInterval(() => {
-      setRecordingSeconds(s => { if (s >= 14) { stopVideoRecording(); return s; } return s + 1; });
+      setRecordingSeconds(s => {
+        const next = s >= 14 ? s : s + 1;
+        recordingSecondsRef.current = next;
+        if (s >= 14) stopVideoRecordingRef.current();
+        return next;
+      });
     }, 1000);
     try {
-      const video = await cameraRef.current.recordAsync({ maxDuration: 15 });
-      if (video?.uri) { saveToSlot({ mode: "VIDEO", uri: video.uri, audioUri: null, textContent: "", note: "" }); }
-    } catch (e: any) { console.error("Erreur recordAsync:", e); }
-    finally {
+      console.log("[CAM] startVideoRecording");
+      await seamlessRecorderRef.current?.startRecording();
+    } catch (e) {
+      console.error("[CAM] startRecording error:", e);
       setIsRecording(false);
-      if (recordingTimer.current) clearInterval(recordingTimer.current);
-      setRecordingSeconds(0);
+      if (recordingTimer.current) { clearInterval(recordingTimer.current); recordingTimer.current = null; }
     }
   };
 
   const stopVideoRecording = () => {
-    if (!isRecording) return;
-    try {
-      cameraRef.current?.stopRecording();
-    } catch (e) {
-      console.warn("[CAM] stopVideoRecording error:", e);
+    if (recordingTimer.current === null && recordingSecondsRef.current === 0) return;
+    if (recordingTimer.current) { clearInterval(recordingTimer.current); recordingTimer.current = null; }
+    setIsRecording(false);
+    setRecordingSeconds(0);
+    recordingSecondsRef.current = 0;
+    console.log("[CAM] stopVideoRecording");
+    seamlessRecorderRef.current?.stopRecording().then(uri => {
+      if (uri) {
+        console.log("[CAM] video saved:", uri.slice(-30));
+        saveToSlot({ mode: "VIDEO", uri, audioUri: null, textContent: "", note: "" });
+      }
+    }).catch(e => console.error("[CAM] stopRecording error:", e));
+  };
+  stopVideoRecordingRef.current = stopVideoRecording;
+
+  const handleFlipCamera = () => {
+    setZoom(0);
+    savedZoomRef.current = 0;
+    setFacing(prev => prev === "back" ? "front" : "back");
+    if (isRecording) seamlessRecorderRef.current?.switchCamera();
+  };
+
+  const handleFlipCameraRef = useRef(handleFlipCamera);
+  handleFlipCameraRef.current = handleFlipCamera;
+
+  // ── Pinch-to-zoom handlers (SeamlessRecorder container) ──
+  const handleCamGrant = (e: any) => {
+    if (e.nativeEvent.touches.length >= 2) {
+      isPinchingLocalRef.current = true;
+      prevPinchDistRef.current = null;
+      setIsPinching(true);
+    }
+  };
+  const handleCamMove = (e: any) => {
+    const touches = e.nativeEvent.touches;
+    if (touches.length < 2 || !isPinchingLocalRef.current) return;
+    const dx = touches[1].pageX - touches[0].pageX;
+    const dy = touches[1].pageY - touches[0].pageY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (prevPinchDistRef.current !== null) {
+      const delta = dist - prevPinchDistRef.current;
+      const next = Math.max(0, Math.min(1, savedZoomRef.current + delta * 0.003));
+      savedZoomRef.current = next;
+      if (pinchRafRef.current === null) {
+        pinchRafRef.current = requestAnimationFrame(() => {
+          setZoom(savedZoomRef.current);
+          pinchRafRef.current = null;
+        });
+      }
+    }
+    prevPinchDistRef.current = dist;
+  };
+  const handleCamRelease = () => {
+    if (isPinchingLocalRef.current) {
+      isPinchingLocalRef.current = false;
+      prevPinchDistRef.current = null;
+      lastCameraTapRef.current = 0;
+      if (pinchRafRef.current !== null) { cancelAnimationFrame(pinchRafRef.current); pinchRafRef.current = null; }
+      setZoom(savedZoomRef.current);
+      setIsPinching(false);
+    }
+  };
+  const handleCamTerminate = () => {
+    isPinchingLocalRef.current = false;
+    prevPinchDistRef.current = null;
+    if (pinchRafRef.current !== null) { cancelAnimationFrame(pinchRafRef.current); pinchRafRef.current = null; }
+    setIsPinching(false);
+  };
+  const handleCamDoubleTap = () => {
+    const now = Date.now();
+    if (now - lastCameraTapRef.current < 350) {
+      handleFlipCameraRef.current();
+      lastCameraTapRef.current = 0;
+    } else {
+      lastCameraTapRef.current = now;
     }
   };
 
@@ -342,7 +413,6 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const stopAudioRecording = stopAudioRecordingDirect;
 
   const handleCapture = async () => {
-    console.log(`[CAM] handleCapture | mode=${cameraMode} slot1=${!!slot1} slot2=${!!slot2} capturingSecond=${capturingSecond} capturing=${capturing} isPinching=${isPinching} cameraRef=${!!cameraRef.current}`);
     if (cameraMode === "TEXTE") {
       if (!textModeContent.trim()) return;
       saveToSlot({ mode: "TEXTE", uri: null, audioUri: null, textContent: textModeContent.trim(), note: "" });
@@ -367,37 +437,17 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       if (isRecording) stopVideoRecording(); else startVideoRecording();
       return;
     }
-    if (!cameraRef.current) { console.warn("[CAM] handleCapture: cameraRef.current est null"); return; }
-    if (isRecording) { console.warn("[CAM] handleCapture: bloqué car isRecording"); return; }
-    if (capturing) { console.warn("[CAM] handleCapture: bloqué car déjà capturing"); return; }
-    if (isPinching) { console.warn("[CAM] handleCapture: bloqué car isPinching"); return; }
+    // SeamlessRecorder gère la photo sur iOS et Android
+    if (capturing) return;
+    if (isRecording) return;
     setCapturing(true);
-    console.log("[CAM] takePictureAsync START");
     try {
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 1,
-        skipProcessing: Platform.OS === "android",
-        exif: Platform.OS === "android",
-      });
-      console.log(`[CAM] takePictureAsync END | uri=${photo?.uri?.slice(0, 40)}`);
-      if (photo?.uri) {
-        const actions: any[] = [];
-        if (Platform.OS === "android") {
-          const exif = (photo.exif as any)?.Orientation ?? 1;
-          const isFront = facing === "front";
-          if (exif === 8) { if (!isFront) actions.push({ rotate: 180 }); }
-          else if (exif === 6) { if (isFront) actions.push({ rotate: 180 }); }
-          else if (exif === 3) actions.push({ rotate: isFront ? 90 : -90 });
-          else if (exif === 1) actions.push({ rotate: isFront ? -90 : 90 });
-        }
-        if (facing === "front") actions.push({ flip: FlipType.Horizontal });
-        let finalUri = photo.uri;
-        if (actions.length > 0) {
-          console.log(`[CAM] manipulateAsync START | actions=${JSON.stringify(actions)}`);
-          // On fait juste la rotation/flip ici, compression différée à l'upload
-          const result = await manipulateAsync(photo.uri, actions, { compress: 1, format: SaveFormat.JPEG });
+      const uri = await seamlessRecorderRef.current?.capturePhoto();
+      if (uri) {
+        let finalUri = uri;
+        if (facing === "front") {
+          const result = await manipulateAsync(uri, [{ flip: FlipType.Horizontal }], { compress: 1, format: SaveFormat.JPEG });
           finalUri = result.uri;
-          console.log("[CAM] manipulateAsync END");
         }
         saveToSlot({ mode: "PHOTO", uri: finalUri, audioUri: null, textContent: "", note: "" });
       }
@@ -594,7 +644,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     // TEXTE
     return (
       <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#1A1A1A", justifyContent: "center", alignItems: "center", padding: 6 }]}>
-        <Text style={{ color: "#FFF", fontSize: 9, fontFamily: "Inter_600SemiBold" }} numberOfLines={2}>{slot.textContent}</Text>
+        <Text style={{ color: "#FFF", fontSize: 9, fontFamily: typography.family.semibold }} numberOfLines={2}>{slot.textContent}</Text>
       </View>
     );
   };
@@ -671,29 +721,80 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         ) : (
           <View style={[styles.cameraPageContainer, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: (capturingSecond && slot1) ? NAVBAR_HEIGHT + 92 : NAVBAR_HEIGHT + 12, paddingHorizontal: 12 }]}>
             <View style={styles.cameraInner}>
-              <StandardCamera
-                ref={cameraRef}
-                isActive={isCapturing}
-                mode={Platform.OS === "ios" ? "video" : cameraMode === "VIDEO" ? "video" : "picture"}
-                facing={facing}
-                flash={flash}
-                zoom={zoom}
-                mirror={cameraMode === "VIDEO" && facing === "front"}
-                onZoomChange={setZoom}
-                onPinchingChange={setIsPinching}
-                onDoubleTap={() => setFacing(prev => prev === "back" ? "front" : "back")}
-              />
-              {activeChallenge === null && (
-                <TouchableOpacity
-                  style={styles.flashBtn}
-                  onPress={() => setFlash(prev => prev === "off" ? "on" : prev === "on" ? "auto" : "off")}
+              <>
+                {/* Camera view clipped to rounded rect — only mount when permission is granted */}
+                <View style={[StyleSheet.absoluteFillObject, { borderRadius: 32, overflow: "hidden" }]}>
+                  {(cameraPermission?.granted ?? Platform.OS === "ios") && (
+                    <SeamlessRecorder
+                      ref={seamlessRecorderRef}
+                      facing={facing}
+                      flash={flash === 'torch' ? 'on' : flash as 'off' | 'on' | 'auto'}
+                      zoom={zoom}
+                      torch={cameraMode === "VIDEO" ? torch : false}
+                      videoMode={cameraMode === "VIDEO"}
+                      style={StyleSheet.absoluteFillObject}
+                    />
+                  )}
+                </View>
+                {/* Pinch-to-zoom (parent captures 2-finger before child Pressable sees them) */}
+                <View
+                  style={StyleSheet.absoluteFillObject}
+                  onStartShouldSetResponderCapture={(e) => e.nativeEvent.touches.length >= 2}
+                  onMoveShouldSetResponderCapture={(e) => isPinchingLocalRef.current && e.nativeEvent.touches.length >= 2}
+                  onResponderGrant={handleCamGrant}
+                  onResponderMove={handleCamMove}
+                  onResponderRelease={handleCamRelease}
+                  onResponderTerminate={handleCamTerminate}
+                  onResponderTerminationRequest={() => !isPinchingLocalRef.current}
                 >
-                  <FlashIcon mode={flash} />
+                  {/* Double-tap to flip — inside pinch view so 2-finger is intercepted above */}
+                  <Pressable style={StyleSheet.absoluteFillObject} onPress={handleCamDoubleTap} />
+                </View>
+              </>
+              {/* Flash (photo) / Torch (video) button */}
+              {activeChallenge === null && (cameraMode === "PHOTO" || cameraMode === "VIDEO") && !isRecording && (
+                <TouchableOpacity
+                  style={[styles.flashBtn, cameraMode === "VIDEO" && torch && { backgroundColor: "rgba(255,200,0,0.35)" }]}
+                  onPress={() => {
+                    if (cameraMode === "VIDEO") setTorch(t => !t);
+                    else setFlash(prev => prev === "off" ? "on" : prev === "on" ? "auto" : "off");
+                  }}
+                >
+                  {cameraMode === "VIDEO"
+                    ? <TorchIcon active={torch} />
+                    : <FlashIcon mode={flash} />
+                  }
                 </TouchableOpacity>
               )}
             </View>
           </View>
         )
+      )}
+
+      {/* ── Écran traitement vidéo supprimé (SeamlessRecorder = zéro post-processing) ── */}
+      {false && (
+        <View style={[styles.previewContainer, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 8, paddingHorizontal: 12 }]}>
+          <View style={[styles.previewImageWrapper, { backgroundColor: "#000", justifyContent: "center", alignItems: "center", gap: 16 }]}>
+            <ActivityIndicator size="large" color="#FFF" />
+            <Text style={styles.processingText}>Traitement…</Text>
+          </View>
+          <View style={[slotBarStyles.bar, { opacity: 0.35 }]} pointerEvents="none">
+            <View style={slotBarStyles.addBtn}>
+              <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <Path d="M12 5V19" stroke="black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <Path d="M5 12H19" stroke="black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </Svg>
+              <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <Path d="M20 9H11C9.89543 9 9 9.89543 9 11V20C9 21.1046 9.89543 22 11 22H20C21.1046 22 20 21.1046 22 20V11C22 9.89543 21.1046 9 20 9Z" stroke="black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <Path d="M5 15H4C3.46957 15 2.96086 14.7893 2.58579 14.4142C2.21071 14.0391 2 13.5304 2 13V4C2 3.46957 2.21071 2.96086 2.58579 2.58579C2.96086 2.21071 3.46957 2 4 2H13C13.5304 2 14.0391 2.21071 14.4142 2.58579C14.7893 2.96086 15 3.46957 15 4V5" stroke="black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </Svg>
+            </View>
+            <View style={slotBarStyles.sendBtn}>
+              <SendIcon color="#000" />
+              <Text style={slotBarStyles.sendText}>Envoyer</Text>
+            </View>
+          </View>
+        </View>
       )}
 
       {/* ── Camera UI overlay ── */}
@@ -796,10 +897,13 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               </View>
             ) : (
               <View style={{ alignItems: "center", gap: 6 }}>
-                {(activeChallenge === null || capturingSecond) && (
+                {(cameraMode === "PHOTO" || cameraMode === "VIDEO") && (
+                  <ZoomSlider zoom={zoom} onZoom={(z) => { setZoom(z); savedZoomRef.current = z; }} onDragStart={() => { setIsZoomDragging(true); onScrollLockRef.current(true); }} onDragEnd={() => setIsZoomDragging(false)} />
+                )}
+                {(activeChallenge === null || capturingSecond) && !isRecording && !isAudioRecording && (
                   <View style={styles.modeSlider}>
                     {(["PHOTO", "VIDEO", "AUDIO", "DESSIN", "TEXTE"] as CameraMode[]).map((m) => (
-                      <TouchableOpacity key={m} onPress={() => { setCameraMode(m); if (m !== "DESSIN") setIsDrawingActive(false); }} disabled={isRecording || isAudioRecording}>
+                      <TouchableOpacity key={m} onPress={() => { setCameraMode(m); if (m !== "DESSIN") setIsDrawingActive(false); }}>
                         <Text style={[styles.modeText, cameraMode === m && styles.modeTextActive]}>{m}</Text>
                       </TouchableOpacity>
                     ))}
@@ -844,7 +948,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 </View>
               </TouchableOpacity>}
               {cameraMode !== "TEXTE" && cameraMode !== "AUDIO" && cameraMode !== "DESSIN" && (
-                <TouchableOpacity style={styles.flipBtn} onPress={() => setFacing(prev => prev === "back" ? "front" : "back")} disabled={isRecording}>
+                <TouchableOpacity style={styles.flipBtn} onPress={handleFlipCamera}>
                   <FlipIcon />
                 </TouchableOpacity>
               )}
@@ -901,7 +1005,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 </View>
               )}
               <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 32 }}>
-                <Text style={{ color: "#FFF", fontFamily: "Inter_700Bold", textAlign: "center", fontSize: previewSlot.textContent.length <= 120 ? 32 : previewSlot.textContent.length <= 260 ? 26 : previewSlot.textContent.length <= 450 ? 21 : 17 }}>
+                <Text style={{ color: "#FFF", fontFamily: typography.family.bold, textAlign: "center", fontSize: previewSlot.textContent.length <= 120 ? 32 : previewSlot.textContent.length <= 260 ? 26 : previewSlot.textContent.length <= 450 ? 21 : 17 }}>
                   {previewSlot.textContent}
                 </Text>
               </View>
@@ -1122,6 +1226,111 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   );
 }
 
+function TorchIcon({ active }: { active: boolean }) {
+  const color = active ? "#FFD60A" : "#FFF";
+  return (
+    <Svg width="22" height="22" viewBox="0 0 24 24" fill={active ? "#FFD60A" : "none"} stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+    </Svg>
+  );
+}
+
+function ZoomSlider({ zoom, onZoom, onDragStart, onDragEnd }: { zoom: number; onZoom: (z: number) => void; onDragStart?: () => void; onDragEnd?: () => void }) {
+  const BAR_W = 200;
+  const THUMB = 18;
+  const barPageX = useRef(0);
+  const barRef = useRef<View>(null);
+
+  // Update refs synchronously during render — safe because they're only read in event handlers
+  const onZoomRef = useRef(onZoom);
+  const onDragStartRef = useRef(onDragStart);
+  const onDragEndRef = useRef(onDragEnd);
+  onZoomRef.current = onZoom;
+  onDragStartRef.current = onDragStart;
+  onDragEndRef.current = onDragEnd;
+
+  // Animated.Value drives the visual — zero setState during drag, no re-render loop
+  const animZoom = useRef(new Animated.Value(zoom)).current;
+  const localZoomRef = useRef(zoom);
+  const isDraggingRef = useRef(false);
+  const rafRef = useRef<number | null>(null);
+
+  // Sync visual from parent only when not dragging (pinch gesture, camera flip reset)
+  useEffect(() => {
+    if (!isDraggingRef.current) animZoom.setValue(zoom);
+  }, [zoom]);
+
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: (e) => {
+        isDraggingRef.current = true;
+        onDragStartRef.current?.();
+        const z = Math.max(0, Math.min(1, (e.nativeEvent.pageX - barPageX.current) / BAR_W));
+        localZoomRef.current = z;
+        animZoom.setValue(z);
+        onZoomRef.current(z);
+      },
+      onPanResponderMove: (e) => {
+        const z = Math.max(0, Math.min(1, (e.nativeEvent.pageX - barPageX.current) / BAR_W));
+        localZoomRef.current = z;
+        animZoom.setValue(z); // immediate visual update — no setState
+        if (rafRef.current === null) {
+          rafRef.current = requestAnimationFrame(() => {
+            onZoomRef.current(localZoomRef.current); // camera zoom throttled to 60fps
+            rafRef.current = null;
+          });
+        }
+      },
+      onPanResponderRelease: () => {
+        if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+        onZoomRef.current(localZoomRef.current);
+        isDraggingRef.current = false;
+        onDragEndRef.current?.();
+      },
+      onPanResponderTerminate: () => {
+        if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+        isDraggingRef.current = false;
+        onDragEndRef.current?.();
+      },
+    })
+  ).current;
+
+  const thumbLeft = animZoom.interpolate({ inputRange: [0, 1], outputRange: [0, BAR_W - THUMB] });
+  const fillWidth = animZoom.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
+  const label = zoom < 0.005 ? '1×' : `${(1 + zoom * 4).toFixed(1)}×`;
+
+  return (
+    <View style={zoomSliderStyles.wrapper}>
+      <Text style={zoomSliderStyles.label}>{label}</Text>
+      <View
+        ref={barRef}
+        style={{ width: BAR_W, height: THUMB, justifyContent: "center" }}
+        onLayout={() => {
+          barRef.current?.measure((_fx, _fy, _w, _h, px) => { barPageX.current = px; });
+        }}
+        {...pan.panHandlers}
+      >
+        <View style={zoomSliderStyles.track}>
+          <Animated.View style={[zoomSliderStyles.fill, { width: fillWidth }]} />
+        </View>
+        <Animated.View style={[zoomSliderStyles.thumb, { left: thumbLeft }]} />
+      </View>
+    </View>
+  );
+}
+
+const zoomSliderStyles = StyleSheet.create({
+  wrapper: { alignItems: "center", gap: 2, paddingBottom: 4 },
+  label: { color: "#FFF", fontSize: 13, fontFamily: typography.family.medium, opacity: 0.85, minWidth: 36, textAlign: "center" },
+  track: { height: 3, backgroundColor: "rgba(255,255,255,0.25)", borderRadius: 2, marginHorizontal: 9, overflow: "hidden" },
+  fill: { height: "100%", backgroundColor: "rgba(255,255,255,0.85)", borderRadius: 2 },
+  thumb: { position: "absolute", width: 18, height: 18, borderRadius: 9, backgroundColor: "#FFF", shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 3, elevation: 3 },
+});
+
 function VideoSlotThumbnail({ uri, borderRadius = 0 }: { uri: string; borderRadius?: number }) {
   const player = useVideoPlayer(uri, p => { p.pause(); });
   return (
@@ -1202,10 +1411,10 @@ const slotBarStyles = StyleSheet.create({
   bar: { height: 72, flexDirection: "row", gap: 12, marginTop: 8 },
   addBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#FFF", borderRadius: 16 },
   sendBtn: { flex: 2, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: "#FFF", borderRadius: 16 },
-  sendText: { color: "#000", fontFamily: "Inter_700Bold", fontSize: 16 },
+  sendText: { color: "#000", fontFamily: typography.family.bold, fontSize: 16 },
   thumbBtn: { flex: 1, borderRadius: 16, overflow: "hidden" },
   badge: { position: "absolute", top: 8, right: 8, width: 18, height: 18, borderRadius: 9, backgroundColor: "#FFF", justifyContent: "center", alignItems: "center" },
-  badgeText: { color: "#000", fontFamily: "Inter_700Bold", fontSize: 10 },
+  badgeText: { color: "#000", fontFamily: typography.family.bold, fontSize: 10 },
   swapOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "center", alignItems: "center" },
 });
 
@@ -1223,23 +1432,23 @@ const styles = StyleSheet.create({
   cameraInner: { flex: 1, width: "100%" },
   flashBtn: { position: "absolute", top: 16, right: 16, width: 48, height: 48, borderRadius: 24, backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "center", alignItems: "center" },
   textModeContainer: { flex: 1, justifyContent: "flex-start", backgroundColor: "#0A0A0A", paddingHorizontal: 32 },
-  textModeInput: { color: "#FFF", fontFamily: "Inter_700Bold", textAlign: "center", width: "100%", paddingTop: 0 },
+  textModeInput: { color: "#FFF", fontFamily: typography.family.bold, textAlign: "center", width: "100%", paddingTop: 0 },
   audioModeContainer: { flex: 1, justifyContent: "center", alignItems: "center", gap: 20, backgroundColor: "#0A0A0A" },
   audioProgressBar: { position: "absolute", left: 16, right: 16, height: 3, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.15)", overflow: "hidden" },
   audioProgressFill: { height: "100%", borderRadius: 2, backgroundColor: "#A78BFA" },
   audioRecordingIndicator: { flexDirection: "row", alignItems: "center", gap: 12 },
   audioRedDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#FF3B30" },
-  audioTimerText: { color: "#FFF", fontFamily: "Inter_700Bold", fontSize: 38, letterSpacing: 2, width: 260, textAlign: "center" },
-  audioHintText: { color: "rgba(255,255,255,0.3)", fontFamily: "Inter_400Regular", fontSize: 13, letterSpacing: 0.5, marginTop: 4 },
+  audioTimerText: { color: "#FFF", fontFamily: typography.family.bold, fontSize: 38, letterSpacing: 2, width: 260, textAlign: "center" },
+  audioHintText: { color: "rgba(255,255,255,0.3)", fontFamily: typography.family.regular, fontSize: 13, letterSpacing: 0.5, marginTop: 4 },
   audioWaveformRow: { flexDirection: "row", alignItems: "center", gap: 4, height: 52 },
   audioWaveformBar: { width: 3.5, height: 44, borderRadius: 2, backgroundColor: "#FFF" },
   cameraFooter: { position: "absolute", left: 0, right: 0, alignItems: "center", gap: 24 },
   modeSlider: { flexDirection: "row", gap: 4, backgroundColor: "rgba(0,0,0,0.3)", paddingHorizontal: 20, paddingVertical: 4, borderRadius: 20, marginBottom: 12 },
-  modeText: { color: "rgba(255,255,255,0.4)", fontFamily: "Inter_700Bold", fontSize: 12, paddingVertical: 10, paddingHorizontal: 8 },
+  modeText: { color: "rgba(255,255,255,0.4)", fontFamily: typography.family.bold, fontSize: 12, paddingVertical: 10, paddingHorizontal: 8 },
   modeTextActive: { color: "#FFF" },
   drawingArea: { width: "100%", aspectRatio: 3 / 4, borderRadius: 32, overflow: "hidden", backgroundColor: "#FFF" },
   drawingIdleOverlay: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12 },
-  drawingHintText: { color: "rgba(0,0,0,0.25)", fontFamily: "Inter_400Regular", fontSize: 13, letterSpacing: 0.5 },
+  drawingHintText: { color: "rgba(0,0,0,0.25)", fontFamily: typography.family.regular, fontSize: 13, letterSpacing: 0.5 },
   drawingToolbar: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "rgba(0,0,0,0.55)", paddingHorizontal: 12, paddingVertical: 10, borderRadius: 20, marginBottom: 12 },
   drawingColorGrid: { flexDirection: "column", gap: 6 },
   drawingColorRow: { flexDirection: "row", gap: 6 },
@@ -1272,7 +1481,8 @@ const styles = StyleSheet.create({
   captureInnerAudioRecording: { backgroundColor: "#FFF", width: 28, height: 28, borderRadius: 6 },
   recordingTimer: { position: "absolute", alignSelf: "center", flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, gap: 8 },
   recordingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#FF3B30" },
-  recordingText: { color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 14 },
+  recordingText: { color: "#FFF", fontFamily: typography.family.semibold, fontSize: 14 },
+  processingText: { color: "rgba(255,255,255,0.6)", fontFamily: typography.family.semibold, fontSize: 15 },
   // Preview
   previewContainer: { flex: 1, backgroundColor: "#000", alignItems: "center" },
   previewImageWrapper: { flex: 1, width: "100%", borderRadius: 32, overflow: "hidden", backgroundColor: "#1A1A1A" },
@@ -1283,13 +1493,13 @@ const styles = StyleSheet.create({
   topSquareBtn: { width: 38, height: 38, borderRadius: 10, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center" },
   previewContent: { position: "absolute", left: 24, right: 24 },
   previewNoteBox: { backgroundColor: "rgba(0,0,0,0.5)", padding: 16, borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
-  previewNoteText: { color: "#FFF", fontSize: 16, fontFamily: "Inter_600SemiBold", textAlign: "center" },
+  previewNoteText: { color: "#FFF", fontSize: 16, fontFamily: typography.family.semibold, textAlign: "center" },
   addNoteBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, padding: 16, borderRadius: 16, backgroundColor: "rgba(0,0,0,0.4)", borderStyle: "dashed", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
-  addNoteBtnText: { color: "rgba(255,255,255,0.6)", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  addNoteBtnText: { color: "rgba(255,255,255,0.6)", fontSize: 15, fontFamily: typography.family.semibold },
   noteEditorContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: 40 },
-  largeNoteInput: { width: "100%", color: "#FFF", fontSize: 28, fontFamily: "Inter_700Bold", textAlign: "center", marginBottom: 40 },
+  largeNoteInput: { width: "100%", color: "#FFF", fontSize: 28, fontFamily: typography.family.bold, textAlign: "center", marginBottom: 40 },
   doneNoteBtn: { backgroundColor: "#FFF", paddingHorizontal: 32, paddingVertical: 14, borderRadius: 100 },
-  doneNoteText: { color: "#000", fontFamily: "Inter_700Bold", fontSize: 16 },
+  doneNoteText: { color: "#000", fontFamily: typography.family.bold, fontSize: 16 },
   // Audio preview
   audioPreviewPlayer: { flexDirection: "row", alignItems: "center", gap: 14, marginTop: 32, paddingHorizontal: 24, width: "100%" },
   audioPreviewPlayBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
@@ -1297,7 +1507,7 @@ const styles = StyleSheet.create({
   audioPreviewTrack: { height: 3, backgroundColor: "rgba(255,255,255,0.22)", borderRadius: 2 },
   audioPreviewFill: { height: 3, backgroundColor: "#FFF", borderRadius: 2 },
   audioPreviewThumb: { position: "absolute", width: 13, height: 13, borderRadius: 7, backgroundColor: "#FFF", marginLeft: -6, top: 14 - 5 },
-  audioPreviewTime: { fontSize: 11, color: "rgba(255,255,255,0.5)", fontFamily: "Inter_400Regular" },
+  audioPreviewTime: { fontSize: 11, color: "rgba(255,255,255,0.5)", fontFamily: typography.family.regular },
   // Barre full-width de switch/envoi pendant la 2e capture
   capturingSecondBar: { position: "absolute", left: 12, right: 12, height: 72, flexDirection: "row", gap: 12 },
   capturingSecondThumb: { flex: 1, borderRadius: 16, overflow: "hidden" },
@@ -1330,7 +1540,7 @@ const challengeStyles = StyleSheet.create({
   },
   challengeBtnText: {
     color: "#000",
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 14,
   },
   bannerRow: {
@@ -1366,13 +1576,13 @@ const challengeStyles = StyleSheet.create({
   },
   bannerText: {
     color: "#FFF",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 13,
     lineHeight: 18,
   },
   bannerProposerText: {
     color: "rgba(255,200,80,0.75)",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 10,
     marginTop: 2,
   },
@@ -1381,15 +1591,15 @@ const challengeStyles = StyleSheet.create({
 const pickerStyles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.78)", justifyContent: "center", alignItems: "center", padding: 28 },
   card: { backgroundColor: "#1C1C1E", borderRadius: 20, padding: 24, width: "100%" },
-  title: { fontSize: 18, fontFamily: "Inter_700Bold", color: "#FFF", marginBottom: 20 },
+  title: { fontSize: 18, fontFamily: typography.family.bold, color: "#FFF", marginBottom: 20 },
   row: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(255,255,255,0.08)" },
   checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: "rgba(255,255,255,0.3)", justifyContent: "center", alignItems: "center" },
   checkboxOn: { backgroundColor: "#FFF", borderColor: "#FFF" },
-  groupName: { color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 16, flex: 1 },
+  groupName: { color: "#FFF", fontFamily: typography.family.semibold, fontSize: 16, flex: 1 },
   sendBtn: { backgroundColor: "#FFF", borderRadius: 14, paddingVertical: 14, alignItems: "center", marginTop: 20, marginBottom: 8 },
-  sendBtnText: { color: "#000", fontSize: 16, fontFamily: "Inter_700Bold" },
+  sendBtnText: { color: "#000", fontSize: 16, fontFamily: typography.family.bold },
   cancelWrap: { alignItems: "center", paddingVertical: 8 },
-  cancelText: { color: "rgba(255,255,255,0.4)", fontFamily: "Inter_600SemiBold", fontSize: 15 },
+  cancelText: { color: "rgba(255,255,255,0.4)", fontFamily: typography.family.semibold, fontSize: 15 },
 });
 
 export default function CameraPage(props: Props) {

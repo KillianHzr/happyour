@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Animated, Easing } from "react-native";
-import { colors } from "../lib/theme";
+import { colors, typography } from "../lib/theme";
 
 interface SplashScreenProps {
   onFinish: () => void;
@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
     transform: [{ rotate: "45deg" }],
   },
   title: {
-    fontFamily: "Inter_700Bold",
+    fontFamily: typography.family.bold,
     fontSize: 28,
     color: colors.text,
     letterSpacing: -0.5,

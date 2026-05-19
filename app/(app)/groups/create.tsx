@@ -5,7 +5,7 @@ import { useAuth } from "../../../lib/auth-context";
 import { useToast } from "../../../lib/toast-context";
 import { translateError } from "../../../lib/error-messages";
 import { supabase } from "../../../lib/supabase";
-import { colors, theme } from "../../../lib/theme";
+import { colors, theme, typography } from "../../../lib/theme";
 
 const MAX_GROUPS = 3;
 
@@ -73,6 +73,6 @@ export default function CreateGroupScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 32, paddingTop: 80, backgroundColor: colors.bg },
-  title: { fontFamily: "Inter_700Bold", fontSize: 28, marginBottom: 24, color: colors.text },
+  title: { fontFamily: typography.family.bold, fontSize: 28, marginBottom: 24, color: colors.text },
   input: { marginBottom: 16 },
 });

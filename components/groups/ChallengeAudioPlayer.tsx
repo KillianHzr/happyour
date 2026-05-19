@@ -2,6 +2,7 @@ import { useRef, useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, PanResponder, StyleSheet } from "react-native";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import Svg, { Path } from "react-native-svg";
+import { typography } from "../../lib/theme";
 
 const WAVE_HEIGHTS = [18, 32, 48, 36, 60, 80, 52, 68, 42, 62, 88, 72, 50, 38, 68, 82, 58, 44, 28, 52, 72, 56, 78, 46, 36, 62, 50, 66, 42, 28];
 const SPEEDS = [0.5, 1, 1.5, 2];
@@ -152,12 +153,12 @@ const s = StyleSheet.create({
   playerRow: { flexDirection: "row", alignItems: "center", gap: 14, alignSelf: "stretch" },
   playBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
   speedBtn: { width: 40, height: 28, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
-  speedText: { color: "#FFF", fontFamily: "Inter_600SemiBold", fontSize: 12 },
+  speedText: { color: "#FFF", fontFamily: typography.family.semibold, fontSize: 12 },
   progressWrapper: { flex: 1, gap: 4 },
   seekHitArea: { paddingVertical: 14, justifyContent: "center" },
   seekTrack: { height: 3, backgroundColor: "rgba(255,255,255,0.22)", borderRadius: 2 },
   seekFill: { height: 3, backgroundColor: "#FFF", borderRadius: 2 },
   seekThumb: { position: "absolute", width: 13, height: 13, borderRadius: 7, backgroundColor: "#FFF", marginLeft: -6, top: 14 - 5 },
   timesRow: { flexDirection: "row", justifyContent: "space-between" },
-  timeText: { fontSize: 11, color: "rgba(255,255,255,0.5)", fontFamily: "Inter_400Regular" },
+  timeText: { fontSize: 11, color: "rgba(255,255,255,0.5)", fontFamily: typography.family.regular },
 });

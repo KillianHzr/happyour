@@ -24,6 +24,7 @@ import PhotoFeed from "../PhotoFeed";
 import type { PhotoEntry, Reaction } from "../PhotoFeed";
 import MotivationalNotificationsModal from "../MotivationalNotificationsModal";
 import DeleteAccountModal from "../DeleteAccountModal";
+import { typography } from "../../lib/theme";
 
 const MONTH_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 
@@ -710,7 +711,7 @@ export default function ProfilePage({
                         <View key={w.id} style={phStyles.winnerThumb}>
                           {w.image_path === "text_mode" ? (
                             <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 6 }}>
-                              <Text style={{ color: "#FFF", fontSize: 9, textAlign: "center", fontFamily: "Inter_600SemiBold" }} numberOfLines={4}>{w.note}</Text>
+                              <Text style={{ color: "#FFF", fontSize: 9, textAlign: "center", fontFamily: typography.family.semibold }} numberOfLines={4}>{w.note}</Text>
                             </View>
                           ) : (
                             <Image source={{ uri: w.url }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
@@ -963,14 +964,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#E5E5E5", overflow: "hidden",
     justifyContent: "center", alignItems: "center",
   },
-  profileAvatarInitial: { fontFamily: "Inter_700Bold", fontSize: 22, color: "#333" },
-  profileCardName: { fontFamily: "Inter_700Bold", fontSize: 18, color: "#FFF", marginBottom: 4 },
+  profileAvatarInitial: { fontFamily: typography.family.bold, fontSize: 22, color: "#333" },
+  profileCardName: { fontFamily: typography.family.bold, fontSize: 18, color: "#FFF", marginBottom: 4 },
   editChip: {
     flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start",
     paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10,
     backgroundColor: "rgba(255,255,255,0.1)",
   },
-  editChipText: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: "rgba(255,255,255,0.6)" },
+  editChipText: { fontSize: 12, fontFamily: typography.family.semibold, color: "rgba(255,255,255,0.6)" },
   avatarEditBadge: {
     position: "absolute", bottom: 0, right: 0,
     width: 22, height: 22, borderRadius: 11,
@@ -994,8 +995,8 @@ const styles = StyleSheet.create({
   },
   streakCircleBlue: { backgroundColor: "rgba(74,158,255,0.15)", borderColor: "rgba(74,158,255,0.5)" },
   streakTextCol: { alignItems: "center", justifyContent: "center" },
-  streakLabel: { fontFamily: "Inter_600SemiBold", fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 2 },
-  streakValue: { fontFamily: "Inter_700Bold", fontSize: 20, color: "#FFF" },
+  streakLabel: { fontFamily: typography.family.semibold, fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 2 },
+  streakValue: { fontFamily: typography.family.bold, fontSize: 20, color: "#FFF" },
 
   // Calendar
   calendarSection: { marginHorizontal: 20, marginBottom: 24 },
@@ -1003,10 +1004,10 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center",
     justifyContent: "space-between", marginBottom: 14,
   },
-  calendarTitle: { fontFamily: "Inter_700Bold", fontSize: 18, color: "#FFF" },
+  calendarTitle: { fontFamily: typography.family.bold, fontSize: 18, color: "#FFF" },
   monthNav: { flexDirection: "row", alignItems: "center", gap: 4 },
   monthNavBtn: { width: 32, height: 32, justifyContent: "center", alignItems: "center" },
-  monthName: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: "rgba(255,255,255,0.7)", minWidth: 120, textAlign: "center" },
+  monthName: { fontFamily: typography.family.semibold, fontSize: 14, color: "rgba(255,255,255,0.7)", minWidth: 120, textAlign: "center" },
 
   weekList: { gap: 8 },
   weekRow: {
@@ -1018,12 +1019,12 @@ const styles = StyleSheet.create({
   weekRowEmpty: { backgroundColor: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.1)" },
   weekRowFuture: { backgroundColor: "transparent", borderColor: "rgba(255,255,255,0.08)" },
   weekFlameSlot: { width: 22, marginRight: 8, alignItems: "center" },
-  weekLabelActive: { flex: 1, fontFamily: "Inter_600SemiBold", fontSize: 13, color: "#FFF" },
-  weekLabelEmpty: { flex: 1, fontFamily: "Inter_400Regular", fontSize: 13, color: "rgba(255,255,255,0.5)", textDecorationLine: "line-through" },
-  weekLabelFuture: { flex: 1, fontFamily: "Inter_400Regular", fontSize: 13, color: "rgba(255,255,255,0.45)" },
+  weekLabelActive: { flex: 1, fontFamily: typography.family.semibold, fontSize: 13, color: "#FFF" },
+  weekLabelEmpty: { flex: 1, fontFamily: typography.family.regular, fontSize: 13, color: "rgba(255,255,255,0.5)", textDecorationLine: "line-through" },
+  weekLabelFuture: { flex: 1, fontFamily: typography.family.regular, fontSize: 13, color: "rgba(255,255,255,0.45)" },
   weekRight: { flexDirection: "row", alignItems: "center", gap: 2 },
-  weekCount: { fontFamily: "Inter_700Bold", fontSize: 13, color: "rgba(255,255,255,0.5)" },
-  weekStatus: { fontFamily: "Inter_400Regular", fontSize: 12, color: "rgba(255,255,255,0.35)" },
+  weekCount: { fontFamily: typography.family.bold, fontSize: 13, color: "rgba(255,255,255,0.5)" },
+  weekStatus: { fontFamily: typography.family.regular, fontSize: 12, color: "rgba(255,255,255,0.35)" },
 
   // Random button
   randomBtn: {
@@ -1032,17 +1033,17 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: "rgba(255,255,255,0.12)",
     marginHorizontal: 20, marginBottom: 32, padding: 18,
   },
-  randomBtnText: { fontFamily: "Inter_700Bold", fontSize: 16, color: "#FFF" },
+  randomBtnText: { fontFamily: typography.family.bold, fontSize: 16, color: "#FFF" },
 
   // Settings
   settingsSection: { paddingHorizontal: 20, paddingBottom: 20 },
-  settingsSectionLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, paddingLeft: 4 },
+  settingsSectionLabel: { fontSize: 12, fontFamily: typography.family.semibold, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, paddingLeft: 4 },
   settingsCard: { backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 20, overflow: "hidden" },
   settingsDivider: { height: 1, backgroundColor: "rgba(255,255,255,0.05)", marginLeft: 60 },
   settingsRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 13, gap: 12 },
   settingsIconWrap: { width: 36, height: 36, borderRadius: 10, justifyContent: "center", alignItems: "center" },
-  settingsLabel: { fontSize: 16, color: "#FFF", fontFamily: "Inter_600SemiBold" },
-  settingsSubValue: { fontSize: 13, color: "rgba(255,255,255,0.38)", fontFamily: "Inter_400Regular" },
+  settingsLabel: { fontSize: 16, color: "#FFF", fontFamily: typography.family.semibold },
+  settingsSubValue: { fontSize: 13, color: "rgba(255,255,255,0.38)", fontFamily: typography.family.regular },
 
   // Loading
   loadingOverlay: {
@@ -1066,7 +1067,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 6,
     zIndex: 20,
   },
-  weekLabelPillText: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: "rgba(255,255,255,0.85)" },
+  weekLabelPillText: { fontFamily: typography.family.semibold, fontSize: 12, color: "rgba(255,255,255,0.85)" },
 
   shuffleBtn: {
     flexDirection: "row", alignItems: "center", gap: 10,
@@ -1074,7 +1075,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20, paddingVertical: 12,
     borderWidth: 1, borderColor: "rgba(255,255,255,0.2)",
   },
-  shuffleBtnText: { fontFamily: "Inter_700Bold", fontSize: 15, color: "#FFF" },
+  shuffleBtnText: { fontFamily: typography.family.bold, fontSize: 15, color: "#FFF" },
   randomLoadingOverlay: {
     position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
     justifyContent: "center", alignItems: "center",
@@ -1083,12 +1084,12 @@ const styles = StyleSheet.create({
   // Edit username sheet
   editSheet: { backgroundColor: "#161616", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 44 },
   editSheetHandle: { width: 36, height: 4, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 2, alignSelf: "center", marginBottom: 24 },
-  editSheetTitle: { fontSize: 20, fontFamily: "Inter_700Bold", color: "#FFF", marginBottom: 20 },
-  editSheetInput: { backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 16, paddingHorizontal: 16, paddingVertical: 15, fontSize: 17, color: "#FFF", fontFamily: "Inter_400Regular", marginBottom: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
+  editSheetTitle: { fontSize: 20, fontFamily: typography.family.bold, color: "#FFF", marginBottom: 20 },
+  editSheetInput: { backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 16, paddingHorizontal: 16, paddingVertical: 15, fontSize: 17, color: "#FFF", fontFamily: typography.family.regular, marginBottom: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
   editSheetBtn: { backgroundColor: "#FFF", borderRadius: 16, paddingVertical: 15, alignItems: "center", marginBottom: 10 },
-  editSheetBtnText: { color: "#000", fontSize: 16, fontFamily: "Inter_700Bold" },
+  editSheetBtnText: { color: "#000", fontSize: 16, fontFamily: typography.family.bold },
   editSheetCancel: { paddingVertical: 12, alignItems: "center" },
-  editSheetCancelText: { color: "rgba(255,255,255,0.35)", fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  editSheetCancelText: { color: "rgba(255,255,255,0.35)", fontSize: 15, fontFamily: typography.family.semibold },
 });
 
 const phStyles = StyleSheet.create({
@@ -1102,13 +1103,13 @@ const phStyles = StyleSheet.create({
   },
   challengeWeek: {
     color: "rgba(255,255,255,0.4)",
-    fontFamily: "Inter_400Regular",
+    fontFamily: typography.family.regular,
     fontSize: 11,
     marginBottom: 4,
   },
   challengePrompt: {
     color: "#FFF",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 14,
     lineHeight: 19,
   },
@@ -1130,12 +1131,12 @@ const phStyles = StyleSheet.create({
   },
   winnerLabelText: {
     color: "#FFF",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: typography.family.semibold,
     fontSize: 9,
   },
   noVotes: {
     color: "rgba(255,255,255,0.3)",
-    fontFamily: "Inter_400Regular",
+    fontFamily: typography.family.regular,
     fontSize: 12,
     marginTop: 6,
   },
