@@ -50,6 +50,7 @@ type Props = {
   onDebugShowCurrentChallenges?: () => void;
   onDebugOpenCreateCustom?: () => void;
   onDebugOpenQueueCustom?: () => void;
+  onGoToCamera?: () => void;
 };
 
 function getStrokeWidth(count: number): number {
@@ -120,7 +121,7 @@ export default function VaultPage({
   unlocked, currentUserPostedThisWeek, onOpenReveal, onOpenSettings, onLeaveGroup, onRemoveMember,
   groupId, vaultChallenges, onRefresh, refreshing, onSimulateReveal, onDebugNotifReveal, onDebugNotifPhoto, onDebugNotifInvite,
   onDebugResetChallenges, onDebugResetMyResponse, onDebugShowCurrentChallenges,
-  onDebugOpenCreateCustom, onDebugOpenQueueCustom,
+  onDebugOpenCreateCustom, onDebugOpenQueueCustom, onGoToCamera,
 }: Props) {
   const insets = useSafeAreaInsets();
   const { text: timeLeft } = useCountdown(revealDate);
@@ -323,60 +324,68 @@ export default function VaultPage({
                 <LockIcon />
                 <Text style={styles.revealLockedTitle}>Reveal verrouillé</Text>
                 <Text style={styles.revealLockedHint}>Tu n'as pas partagé de moment cette semaine</Text>
+                {onGoToCamera && (
+                  <TouchableOpacity 
+                    style={styles.postFirstBtn} 
+                    onPress={onGoToCamera}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.postFirstBtnText}>Poster mon moment !</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )
           ) : (
-            <View style={[styles.revealCard, { opacity: 0.6 }]}>
-              <Text style={styles.revealEmoji}>😔</Text>
-              <Text style={styles.revealTitle}>Personne n'a partagé de moment</Text>
-              <Text style={styles.revealEmptyHint}>Poste le premier moment dans ton groupe</Text>
+            <View style={styles.revealCard}>
+              <View style={{ opacity: 0.6, alignItems: 'center' }}>
+                <Text style={styles.revealEmoji}>😔</Text>
+                <Text style={styles.revealTitle}>Personne n'a partagé de moment</Text>
+                <Text style={styles.revealEmptyHint}>Poste le premier moment pour le prochain reveal</Text>
+              </View>
+              {onGoToCamera && (
+                <TouchableOpacity 
+                  style={styles.postFirstBtn} 
+                  onPress={onGoToCamera}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.postFirstBtnText}>Poste pour le prochain reveal !</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )
         ) : (
-          <>
-            <View style={[styles.statsCard, strokeWidth > 0 && { borderWidth: strokeWidth }, !currentUserPostedThisWeek && { overflow: "hidden", borderColor: "rgba(255,166,0,0.35)" }]}>
-              {!currentUserPostedThisWeek && (
-                <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                  <Svg style={StyleSheet.absoluteFill}>
-                    {Array.from({ length: 30 }).map((_, i) => (
-                      <Path key={i} d={`M${i * 22} 0 L${i * 22 - 200} 200`} stroke="rgba(255,166,0,0.09)" strokeWidth="11" />
-                    ))}
-                  </Svg>
-                  <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(255,166,0,0.06)" }]} />
-                </View>
-              )}
+          currentUserPostedThisWeek ? (
+            <View style={[styles.statsCard, strokeWidth > 0 && { borderWidth: strokeWidth }]}>
               <View style={styles.statsRow}>
                 <View style={styles.statBlock}>
-                  {currentUserPostedThisWeek ? (
-                    <>
-                      <Text style={styles.statNumber}>{photoCount}</Text>
-                      <Text style={styles.statLabelText}>TOTAL</Text>
-                    </>
-                  ) : (
-                    <View style={styles.statLockWrap}>
-                      <Svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                        <Path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="#FFA600" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                        <Path d="M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z" stroke="#FFA600" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                      </Svg>
-                    </View>
-                  )}
+                  <Text style={styles.statNumber}>{photoCount}</Text>
+                  <Text style={styles.statLabelText}>TOTAL</Text>
                 </View>
                 <View style={styles.statSeparator} />
                 <View style={[styles.statBlock, { flex: 2, alignItems: "flex-start", paddingLeft: 16 }]}>
-                  {currentUserPostedThisWeek ? (
-                    <>
-                      <Text style={styles.statHint}>Déverrouillage dans</Text>
-                      <Text style={styles.statCountdown}>{timeLeft}</Text>
-                    </>
-                  ) : (
-                    <Text style={styles.postReminderText}>
-                      {"Poste au moins un moment pour accéder\nau reveal du "}<Text style={styles.postReminderBold}>{formatRevealDeadline(revealDate)}</Text>
-                    </Text>
-                  )}
+                  <Text style={styles.statHint}>Déverrouillage dans</Text>
+                  <Text style={styles.statCountdown}>{timeLeft}</Text>
                 </View>
               </View>
             </View>
-          </>
+          ) : (
+            <View style={styles.revealLockedCard}>
+              <LockIcon />
+              <Text style={styles.revealLockedTitle}>Reveal verrouillé</Text>
+              <Text style={styles.revealLockedHint}>
+                {"Poste au moins un moment pour accéder\nau reveal du "}<Text style={{ fontFamily: typography.family.bold, color: "#FFF" }}>{formatRevealDeadline(revealDate)}</Text>
+              </Text>
+              {onGoToCamera && (
+                <TouchableOpacity 
+                  style={styles.postFirstBtn} 
+                  onPress={onGoToCamera}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.postFirstBtnText}>Poster mon moment !</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )
         )}
 
         {/* Challenge results (visible after reveal ends) */}
@@ -1122,6 +1131,20 @@ const styles = StyleSheet.create({
   revealExpiryRed: { backgroundColor: "rgba(200,30,30,0.2)" },
   revealExpiryText: { fontFamily: typography.family.semibold, fontSize: 12, color: "rgba(255,255,255,0.55)" },
   revealExpiryTextRed: { color: "#C81E1E" },
+
+  postFirstBtn: { 
+    marginTop: 20,
+    backgroundColor: "#FFF", 
+    borderRadius: 14, 
+    paddingVertical: 12, 
+    paddingHorizontal: 24,
+    alignItems: "center" 
+  },
+  postFirstBtnText: { 
+    color: "#000", 
+    fontSize: 15, 
+    fontFamily: typography.family.bold 
+  },
 
   // Post reminder (inside statsCard)
   postReminderText: { fontFamily: typography.family.regular, fontSize: 13, color: "#FFA600", lineHeight: 18, textAlign: "center" },

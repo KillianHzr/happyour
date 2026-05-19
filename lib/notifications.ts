@@ -178,13 +178,40 @@ export async function cancelAllRecapNotifications() {
         n.identifier.startsWith("recap_") ||
         n.identifier.startsWith("countdown_") ||
         n.identifier.startsWith("reactions_") ||
-        n.identifier.startsWith("post_reminder_")
+        n.identifier.startsWith("post_reminder_") ||
+        n.identifier.startsWith("challenge_24h_")
       ) {
         await Notifications.cancelScheduledNotificationAsync(n.identifier);
       }
     }
   } catch (e) {
     console.warn("cancelAllRecapNotifications error:", e);
+  }
+}
+
+export async function scheduleChallenge24hReminder(
+  groupId: string,
+  groupName: string,
+  deadline: Date
+) {
+  if (!Notifications) return;
+  const now = new Date();
+  const twentyFourHoursBefore = new Date(deadline.getTime() - 24 * 3600 * 1000);
+  const secondsUntil = Math.floor((twentyFourHoursBefore.getTime() - now.getTime()) / 1000);
+  if (secondsUntil <= 0) return;
+  try {
+    await Notifications.scheduleNotificationAsync({
+      identifier: `challenge_24h_${groupId}_${deadline.getTime()}`,
+      content: {
+        title: groupName,
+        body: "Plus que 24H pour participer au défis",
+        data: { type: "new_photo", groupId },
+        channelId: "default",
+      },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: secondsUntil },
+    });
+  } catch (e) {
+    console.warn("scheduleChallenge24hReminder error:", e);
   }
 }
 
@@ -303,6 +330,16 @@ export async function scheduleAllRecaps(userId: string) {
       await scheduleReactionsReminder(m.group_id, groupName, sunday);
       await schedulePostReminderNotification(m.group_id, groupName, sunday);
       
+      // Challenges reminders (24h before end of period)
+      // Period 1: Ends Wednesday midnight (Thursday 00:00)
+      const p1Deadline = new Date(sunday);
+      p1Deadline.setDate(p1Deadline.getDate() - 3);
+      p1Deadline.setHours(0, 0, 0, 0); 
+      await scheduleChallenge24hReminder(m.group_id, groupName, p1Deadline);
+      
+      // Period 2: Ends Sunday 20:00
+      await scheduleChallenge24hReminder(m.group_id, groupName, sunday);
+
       // Vérification asynchrone de la participation (après 2 jours)
       checkGroupParticipationAndNotify(m.group_id, groupName);
     }

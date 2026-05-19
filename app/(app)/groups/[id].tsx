@@ -1092,6 +1092,7 @@ export default function MainPagerScreen() {
             } : undefined}
             onDebugOpenCreateCustom={__DEV__ ? () => setShowCustomChallengeCreate(true) : undefined}
             onDebugOpenQueueCustom={__DEV__ ? () => setShowCustomChallengeQueue(true) : undefined}
+            onGoToCamera={() => jumpTo(1)}
           />
         </View>
       </Animated.ScrollView>
