@@ -49,7 +49,6 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
   private var facingFront = false
   private var pendingFacing: Boolean? = null
 
-  // Clip URIs accumulated across camera switches for this recording session
   private val clipUris = mutableListOf<String>()
   private var isSessionActive = false
 
@@ -61,6 +60,18 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
 
   init {
     addView(previewView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+  }
+
+  // 1. LE CORRECTIF EST ICI : Force React Native à calculer la taille de la vue enfant
+  override fun requestLayout() {
+    super.requestLayout()
+    post {
+      measure(
+        MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY),
+        MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY)
+      )
+      layout(left, top, right, bottom)
+    }
   }
 
   override fun onAttachedToWindow() {
@@ -80,8 +91,6 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
     }
   }
 
-  // ── Public API ───────────────────────────────────────────────────────────────
-
   fun setFacing(facing: String) {
     val wantFront = (facing == "front")
     if (cameraProvider == null) { pendingFacing = wantFront; return }
@@ -96,10 +105,6 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
     isVideoMode = video
     mainHandler.post {
       if (!isViewAttached || cameraProvider == null) return@post
-      // Full rebind instead of partial — partial rebind causes a double-reset race on CameraX's
-      // internal camera thread (unbind fires async reset, then bindToLifecycle fires while that
-      // reset is still in progress), leaving the capture session in a cancelled/timeout state
-      // that makes the Recorder fail with ERROR_RECORDER_ERROR code=8 (null cause).
       bindCamera()
     }
   }
@@ -187,8 +192,6 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
     }
   }
 
-  // ── Camera setup ─────────────────────────────────────────────────────────────
-
   private fun setupCamera() {
     val appCtx = context.applicationContext
     ProcessCameraProvider.getInstance(appCtx).addListener({
@@ -206,14 +209,16 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
     FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)
   )
 
-  // Full rebind (used on init and camera flip). Binds Preview + one output use case.
   private fun bindCamera() {
     if (!isViewAttached) {
       Log.d("SeamlessRecorder", "bindCamera: skipped, view detached")
       return
     }
     val provider = cameraProvider ?: return
-    val lifecycle: LifecycleOwner = ProcessLifecycleOwner.get()
+
+    // 2. DEUXIEME CORRECTIF : Utiliser l'activité React Native comme Lifecycle principal
+    val lifecycle: LifecycleOwner = (appContext.currentActivity as? LifecycleOwner) ?: ProcessLifecycleOwner.get()
+
     val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
 
     try {
@@ -230,7 +235,7 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
         imageCapture = ic
         videoCapture = null
       }
-      Log.d("SeamlessRecorder", "bindCamera OK mode=${if (isVideoMode) "video" else "photo"} facing=${if (facingFront) "front" else "back"}")
+      Log.d("SeamlessRecorder", "bindCamera OK mode=${if (isVideoMode) "video" else "photo"}")
       pendingZoom?.let { camera?.cameraControl?.setLinearZoom(it); pendingZoom = null }
       pendingTorch?.let { camera?.cameraControl?.enableTorch(it); pendingTorch = null }
     } catch (e: Exception) {
@@ -241,15 +246,9 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
     }
   }
 
-  // ── Recording ────────────────────────────────────────────────────────────────
-
   private fun beginClip() {
-    val vc = videoCapture ?: run {
-      Log.e("SeamlessRecorder", "beginClip: videoCapture is null — camera not ready yet")
-      return
-    }
+    val vc = videoCapture ?: return
     val file = File(context.cacheDir, "clip_${System.currentTimeMillis()}.mp4")
-    Log.d("SeamlessRecorder", "beginClip: starting clip at ${file.absolutePath}")
     val prepared = vc.output.prepareRecording(context, FileOutputOptions.Builder(file).build())
     val hasAudio = ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
         android.content.pm.PackageManager.PERMISSION_GRANTED
