@@ -95,8 +95,12 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
     if (isVideoMode == video) return
     isVideoMode = video
     mainHandler.post {
-      if (!isViewAttached || cameraProvider == null || camera == null) return@post
-      if (video) switchToVideoMode() else switchToPhotoMode()
+      if (!isViewAttached || cameraProvider == null) return@post
+      // Full rebind instead of partial — partial rebind causes a double-reset race on CameraX's
+      // internal camera thread (unbind fires async reset, then bindToLifecycle fires while that
+      // reset is still in progress), leaving the capture session in a cancelled/timeout state
+      // that makes the Recorder fail with ERROR_RECORDER_ERROR code=8 (null cause).
+      bindCamera()
     }
   }
 
@@ -233,42 +237,6 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
       Log.e("SeamlessRecorder", "bindCamera failed: ${e.message}")
       camera = null
       videoCapture = null
-      imageCapture = null
-    }
-  }
-
-  // Partial rebind — swaps output use case without closing the camera device (Preview stays bound).
-  private fun switchToVideoMode() {
-    val provider = cameraProvider ?: return
-    val lifecycle: LifecycleOwner = ProcessLifecycleOwner.get()
-    imageCapture?.let { provider.unbind(it) }
-    imageCapture = null
-    val recorder = Recorder.Builder().setQualitySelector(buildQualitySelector()).build()
-    val vc = VideoCapture.withOutput(recorder)
-    try {
-      provider.bindToLifecycle(lifecycle, buildSelector(), vc)
-      videoCapture = vc
-      Log.d("SeamlessRecorder", "switchToVideoMode OK")
-    } catch (e: Exception) {
-      Log.e("SeamlessRecorder", "switchToVideoMode failed: ${e.message}")
-      videoCapture = null
-    }
-  }
-
-  private fun switchToPhotoMode() {
-    val provider = cameraProvider ?: return
-    val lifecycle: LifecycleOwner = ProcessLifecycleOwner.get()
-    activeRecording?.stop()
-    activeRecording = null
-    videoCapture?.let { provider.unbind(it) }
-    videoCapture = null
-    val ic = ImageCapture.Builder().setFlashMode(flashMode).build()
-    try {
-      provider.bindToLifecycle(lifecycle, buildSelector(), ic)
-      imageCapture = ic
-      Log.d("SeamlessRecorder", "switchToPhotoMode OK")
-    } catch (e: Exception) {
-      Log.e("SeamlessRecorder", "switchToPhotoMode failed: ${e.message}")
       imageCapture = null
     }
   }
