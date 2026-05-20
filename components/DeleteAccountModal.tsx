@@ -13,7 +13,7 @@ import Svg, { Path } from "react-native-svg";
 import { useAuth } from "../lib/auth-context";
 import { useToast } from "../lib/toast-context";
 import { supabase } from "../lib/supabase";
-import { colors, theme, typography } from "../lib/theme";
+import { colors, radii, theme, typography } from "../lib/theme";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -102,7 +102,7 @@ export default function DeleteAccountModal({ visible, onClose }: Props) {
               onPress={handleDeleteAccount}
               disabled={loading}
             >
-              {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.deleteBtnText}>Supprimer définitivement</Text>}
+              {loading ? <ActivityIndicator color={colors.white} /> : <Text style={styles.deleteBtnText}>Supprimer définitivement</Text>}
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -130,7 +130,7 @@ export default function DeleteAccountModal({ visible, onClose }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#000",
+    backgroundColor: colors.black,
   },
   content: {
     flex: 1,
@@ -144,22 +144,22 @@ const styles = StyleSheet.create({
   iconCircle: {
     width: 100,
     height: 100,
-    borderRadius: 50,
+    borderRadius: radii.xl,
     backgroundColor: "rgba(255, 59, 48, 0.1)",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 32,
   },
   title: {
-    fontSize: 32,
+    fontSize: typography.size.subtitle,
     fontFamily: typography.family.bold,
-    color: "#FFF",
+    color: colors.white,
     textAlign: "center",
     marginBottom: 16,
     letterSpacing: -1,
   },
   description: {
-    fontSize: 17,
+    fontSize: typography.size.lg,
     fontFamily: typography.family.regular,
     color: "rgba(255,255,255,0.6)",
     textAlign: "center",
@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
   },
   warningBox: {
     backgroundColor: "rgba(255, 59, 48, 0.1)",
-    borderRadius: 16,
+    borderRadius: radii.lg,
     padding: 16,
     borderWidth: 1,
     borderColor: "rgba(255, 59, 48, 0.2)",
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
   },
   warningBoxText: {
     color: "#FF453A",
-    fontSize: 14,
+    fontSize: typography.size.sm,
     fontFamily: typography.family.semibold,
     textAlign: "center",
     lineHeight: 20,
@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
   btn: {
     width: "100%",
     height: 64,
-    borderRadius: 18,
+    borderRadius: radii.lg,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -197,8 +197,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FF3B30",
   },
   deleteBtnText: {
-    color: "#FFF",
-    fontSize: 17,
+    color: colors.white,
+    fontSize: typography.size.lg,
     fontFamily: typography.family.bold,
   },
   logoutBtn: {
@@ -207,8 +207,8 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.15)",
   },
   logoutBtnText: {
-    color: "#FFF",
-    fontSize: 17,
+    color: colors.white,
+    fontSize: typography.size.lg,
     fontFamily: typography.family.semibold,
   },
   cancelBtn: {
@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
   },
   cancelBtnText: {
     color: "rgba(255,255,255,0.4)",
-    fontSize: 16,
+    fontSize: typography.size.md,
     fontFamily: typography.family.semibold,
   },
 });

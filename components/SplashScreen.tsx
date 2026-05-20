@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Animated, Easing } from "react-native";
-import { colors, typography } from "../lib/theme";
+import { colors, radii, typography } from "../lib/theme";
 
 interface SplashScreenProps {
   onFinish: () => void;
@@ -79,18 +79,18 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderWidth: 3,
-    borderColor: "#fff",
-    borderRadius: 8,
+    borderColor: colors.white,
+    borderRadius: radii.sm,
     marginBottom: 20,
     transform: [{ rotate: "45deg" }],
   },
   title: {
     fontFamily: typography.family.bold,
-    fontSize: 28,
+    fontSize: typography.size.xxl,
     color: colors.text,
     letterSpacing: -0.5,
     textTransform: "lowercase",
   },
   dots: { flexDirection: "row", marginTop: 60, gap: 12 },
-  dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: "#fff" },
+  dot: { width: 4, height: 4, borderRadius: radii.xs, backgroundColor: colors.white },
 });

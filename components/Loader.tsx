@@ -46,7 +46,7 @@ const styles = StyleSheet.create({
   ring: {
     borderWidth: 2,
     borderColor: "transparent",
-    borderTopColor: "#FFFFFF",
+    borderTopColor: colors.white,
     borderRightColor: "rgba(255,255,255,0.1)",
   },
 });

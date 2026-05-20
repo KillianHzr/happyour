@@ -2,7 +2,7 @@ import { useRef, useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, PanResponder, StyleSheet } from "react-native";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import Svg, { Path } from "react-native-svg";
-import { typography } from "../../lib/theme";
+import { colors, radii, typography } from "../../lib/theme";
 
 const WAVE_HEIGHTS = [18, 32, 48, 36, 60, 80, 52, 68, 42, 62, 88, 72, 50, 38, 68, 82, 58, 44, 28, 52, 72, 56, 78, 46, 36, 62, 50, 66, 42, 28];
 const SPEEDS = [0.5, 1, 1.5, 2];
@@ -110,7 +110,7 @@ export default function ChallengeAudioPlayer({ url }: { url: string }) {
       </View>
       <View style={s.playerRow}>
         <TouchableOpacity onPress={togglePlay} style={s.playBtn} activeOpacity={0.8}>
-          <Svg width="26" height="26" viewBox="0 0 24 24" fill="#FFF">
+          <Svg width="26" height="26" viewBox="0 0 24 24" fill={colors.white}>
             {status.playing
               ? <Path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
               : <Path d="M8 5v14l11-7z" />
@@ -149,16 +149,16 @@ export default function ChallengeAudioPlayer({ url }: { url: string }) {
 
 const s = StyleSheet.create({
   waveContainer: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 3 },
-  waveBar: { width: 3, borderRadius: 2, backgroundColor: "#FFF" },
+  waveBar: { width: 3, borderRadius: radii.xs, backgroundColor: colors.white },
   playerRow: { flexDirection: "row", alignItems: "center", gap: 14, alignSelf: "stretch" },
-  playBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
-  speedBtn: { width: 40, height: 28, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
-  speedText: { color: "#FFF", fontFamily: typography.family.semibold, fontSize: 12 },
+  playBtn: { width: 52, height: 52, borderRadius: radii.full, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
+  speedBtn: { width: 40, height: 28, borderRadius: radii.sm, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
+  speedText: { color: colors.white, fontFamily: typography.family.semibold, fontSize: typography.size.xs },
   progressWrapper: { flex: 1, gap: 4 },
   seekHitArea: { paddingVertical: 14, justifyContent: "center" },
-  seekTrack: { height: 3, backgroundColor: "rgba(255,255,255,0.22)", borderRadius: 2 },
-  seekFill: { height: 3, backgroundColor: "#FFF", borderRadius: 2 },
-  seekThumb: { position: "absolute", width: 13, height: 13, borderRadius: 7, backgroundColor: "#FFF", marginLeft: -6, top: 14 - 5 },
+  seekTrack: { height: 3, backgroundColor: "rgba(255,255,255,0.22)", borderRadius: radii.xs },
+  seekFill: { height: 3, backgroundColor: colors.white, borderRadius: radii.xs },
+  seekThumb: { position: "absolute", width: 13, height: 13, borderRadius: radii.sm, backgroundColor: colors.white, marginLeft: -6, top: 14 - 5 },
   timesRow: { flexDirection: "row", justifyContent: "space-between" },
-  timeText: { fontSize: 11, color: "rgba(255,255,255,0.5)", fontFamily: typography.family.regular },
+  timeText: { fontSize: typography.size.xs, color: "rgba(255,255,255,0.5)", fontFamily: typography.family.regular },
 });

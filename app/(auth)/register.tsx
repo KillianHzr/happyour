@@ -12,7 +12,7 @@ import { Link, router } from "expo-router";
 import { useAuth } from "../../lib/auth-context";
 import { useToast } from "../../lib/toast-context";
 import { translateError } from "../../lib/error-messages";
-import { colors, theme, typography } from "../../lib/theme";
+import { colors, radii, theme, typography } from "../../lib/theme";
 import Loader from "../../components/Loader";
 
 export default function RegisterScreen() {
@@ -97,15 +97,15 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderWidth: 2,
-    borderColor: "#fff",
-    borderRadius: 6,
+    borderColor: colors.white,
+    borderRadius: radii.xs,
     marginBottom: 24,
     transform: [{ rotate: "45deg" }],
     alignSelf: "center",
   },
   title: {
     fontFamily: typography.family.bold,
-    fontSize: 32,
+    fontSize: typography.size.subtitle,
     textAlign: "center",
     marginBottom: 8,
     color: colors.text,
@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontFamily: typography.family.regular,
-    fontSize: 14,
+    fontSize: typography.size.sm,
     textAlign: "center",
     color: colors.secondary,
     marginBottom: 48,
@@ -125,5 +125,5 @@ const styles = StyleSheet.create({
   input: { marginBottom: 16 },
   button: { marginTop: 12, height: 58, justifyContent: "center" },
   linkBtn: { marginTop: 32, alignItems: "center" },
-  link: { fontFamily: typography.family.regular, color: colors.secondary, fontSize: 13, textDecorationLine: "underline" },
+  link: { fontFamily: typography.family.regular, color: colors.secondary, fontSize: typography.size.xs, textDecorationLine: "underline" },
 });

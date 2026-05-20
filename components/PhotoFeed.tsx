@@ -29,7 +29,7 @@ import { VideoMoment } from "./organisms/VideoMoment";
 import { RevealIntroPage } from "./organisms/RevealIntroPage";
 import { CrownRevealPage } from "./organisms/CrownRevealPage";
 import { AnimatedPageWrapper } from "./molecules/AnimatedPageWrapper";
-import { typography } from "../lib/theme";
+import { colors, radii, typography } from "../lib/theme";
 
 export { PhotoEntry, Reaction };
 
@@ -335,7 +335,7 @@ export default function PhotoFeed({
             <Svg width="12" height="12" viewBox="0 0 24 24" fill="none" style={{ marginRight: 5 }}>
               <Path 
                 d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" 
-                stroke={revealMsLeft < 4 * 3600000 ? "#FFF" : "rgba(255,255,255,0.7)"} 
+                stroke={revealMsLeft < 4 * 3600000 ? colors.white : "rgba(255,255,255,0.7)"} 
                 strokeWidth="2" 
                 strokeLinecap="round" 
               />
@@ -361,25 +361,25 @@ export default function PhotoFeed({
 }
 
 const styles = StyleSheet.create({
-  list: { flex: 1, backgroundColor: "#000" },
+  list: { flex: 1, backgroundColor: colors.black },
   fullscreenPage: { 
     width: SCREEN_WIDTH, 
     height: SCREEN_HEIGHT, 
     justifyContent: "center", 
     alignItems: "center", 
-    backgroundColor: "#000", 
+    backgroundColor: colors.black, 
     paddingHorizontal: 12 
   },
   separatorDay: { 
     fontFamily: typography.family.bold, 
-    fontSize: 48, 
-    color: "#FFF", 
+    fontSize: typography.size.title, 
+    color: colors.white, 
     textAlign: "center", 
     letterSpacing: -2 
   },
   separatorDate: { 
     fontFamily: typography.family.semibold, 
-    fontSize: 14, 
+    fontSize: typography.size.sm, 
     color: "rgba(255,255,255,0.4)", 
     textTransform: "uppercase", 
     marginTop: 8 
@@ -388,26 +388,26 @@ const styles = StyleSheet.create({
     width: 32, 
     height: 32, 
     borderWidth: 2, 
-    borderColor: "#FFF", 
-    borderRadius: 6, 
+    borderColor: colors.white, 
+    borderRadius: radii.xs, 
     marginBottom: 24, 
     transform: [{ rotate: "45deg" }] 
   },
   endTitle: { 
     fontFamily: typography.family.bold, 
-    fontSize: 24, 
-    color: "#FFF" 
+    fontSize: typography.size.xxl, 
+    color: colors.white 
   },
   endSubtitle: { 
     fontFamily: typography.family.regular, 
-    fontSize: 14, 
+    fontSize: typography.size.sm, 
     color: "rgba(255,255,255,0.4)", 
     marginTop: 8 
   },
   countdownText: { 
     fontFamily: typography.family.bold, 
-    fontSize: 32, 
-    color: "#FFF", 
+    fontSize: typography.size.subtitle, 
+    color: colors.white, 
     marginTop: 12, 
     letterSpacing: 2 
   },
@@ -424,7 +424,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 20,
+    borderRadius: radii.lg,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.15)',
   },
@@ -434,10 +434,10 @@ const styles = StyleSheet.create({
   },
   revealCountdownText: {
     color: 'rgba(255,255,255,0.7)',
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 12,
+    fontFamily: typography.family.semibold,
+    fontSize: typography.size.xs,
   },
   revealCountdownTextRed: {
-    color: '#FFF',
+    color: colors.white,
   },
 });

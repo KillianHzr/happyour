@@ -6,7 +6,7 @@ import { getChallengePrompt, type ChallengeWithData, type ChallengeResponse } fr
 import Svg, { Path } from "react-native-svg";
 import { r2Storage } from "../../lib/r2";
 import ChallengeAudioPlayer from "./ChallengeAudioPlayer";
-import { typography } from "../../lib/theme";
+import { colors, radii, typography } from "../../lib/theme";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -35,7 +35,7 @@ function ResponseThumb({ r }: { r: ChallengeResponse }) {
   if (type === "text") {
     return (
       <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#1A1A1A", justifyContent: "center", alignItems: "center", padding: 6 }]}>
-        <Text style={{ color: "#FFF", fontSize: 9, fontFamily: typography.family.semibold, textAlign: "center" }} numberOfLines={4}>
+        <Text style={{ color: colors.white, fontSize: typography.size.xs, fontFamily: typography.family.semibold, textAlign: "center" }} numberOfLines={4}>
           {r.note}
         </Text>
       </View>
@@ -46,11 +46,11 @@ function ResponseThumb({ r }: { r: ChallengeResponse }) {
       <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#111", justifyContent: "center", alignItems: "center", gap: 5 }]}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
           {MINI_WAVE.map((h, i) => (
-            <View key={i} style={{ width: 2.5, height: h, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.55)" }} />
+            <View key={i} style={{ width: 2.5, height: h, borderRadius: radii.xs, backgroundColor: "rgba(255,255,255,0.55)" }} />
           ))}
         </View>
-        <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" }}>
-          <Svg width="9" height="9" viewBox="0 0 24 24" fill="#FFF">
+        <View style={{ width: 22, height: 22, borderRadius: radii.md, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" }}>
+          <Svg width="9" height="9" viewBox="0 0 24 24" fill={colors.white}>
             <Path d="M8 5v14l11-7z" />
           </Svg>
         </View>
@@ -67,7 +67,7 @@ function ModalMedia({ imagePath, url, note }: { imagePath: string | null; url: s
   if (type === "text") {
     return (
       <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#111", justifyContent: "center", alignItems: "center", padding: 28 }]}>
-        <Text style={{ color: "#FFF", fontFamily: typography.family.semibold, fontSize: 20, textAlign: "center", lineHeight: 28 }}>
+        <Text style={{ color: colors.white, fontFamily: typography.family.semibold, fontSize: typography.size.xl, textAlign: "center", lineHeight: 28 }}>
           {note ?? ""}
         </Text>
       </View>
@@ -235,12 +235,12 @@ export default function ChallengeVotePage({
               <View style={cvStyles.modalTopBar}>
                 <TouchableOpacity style={cvStyles.modalCloseBtn} onPress={() => setSelected(null)} activeOpacity={0.7}>
                   <Svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                    <Path d="M18 6L6 18M6 6l12 12" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" />
+                    <Path d="M18 6L6 18M6 6l12 12" stroke={colors.white} strokeWidth="2.5" strokeLinecap="round" />
                   </Svg>
                 </TouchableOpacity>
                 {hasSecond && (
                   <TouchableOpacity style={cvStyles.swapBtn} onPress={() => setSwapped(v => !v)} activeOpacity={0.7}>
-                    <Svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <Svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={colors.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <Path d="M7 16V4m0 0L3 8m4-4l4 4" /><Path d="M17 8v12m0 0l4-4m-4 4l-4-4" />
                     </Svg>
                     <Text style={cvStyles.swapBtnText}>{swapped ? "Voir 1ère capture" : "Voir 2ème capture"}</Text>
@@ -299,18 +299,18 @@ const cvStyles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.12)",
     paddingHorizontal: 12,
     paddingVertical: 5,
-    borderRadius: 20,
+    borderRadius: radii.lg,
   },
   defiPillText: {
-    color: "#FFF",
+    color: colors.white,
     fontFamily: typography.family.bold,
-    fontSize: 12,
+    fontSize: typography.size.xs,
     letterSpacing: 0.8,
   },
   proposerChip: {
     alignSelf: "flex-start",
     backgroundColor: "rgba(255,200,80,0.12)",
-    borderRadius: 14,
+    borderRadius: radii.md,
     paddingHorizontal: 10,
     paddingVertical: 4,
     marginBottom: 10,
@@ -320,18 +320,18 @@ const cvStyles = StyleSheet.create({
   proposerChipText: {
     color: "rgba(255,200,80,0.85)",
     fontFamily: typography.family.semibold,
-    fontSize: 11,
+    fontSize: typography.size.xs,
   },
   periodLabel: {
     color: "rgba(255,255,255,0.4)",
     fontFamily: typography.family.regular,
-    fontSize: 12,
+    fontSize: typography.size.xs,
     letterSpacing: 0.5,
   },
   prompt: {
-    color: "#FFF",
+    color: colors.white,
     fontFamily: typography.family.bold,
-    fontSize: 18,
+    fontSize: typography.size.lg,
     lineHeight: 24,
     marginBottom: 14,
   },
@@ -340,14 +340,14 @@ const cvStyles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     backgroundColor: "rgba(255,255,255,0.06)",
-    borderRadius: 16,
+    borderRadius: radii.lg,
     padding: 12,
     marginBottom: 18,
   },
   targetAvatar: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radii.lg,
   },
   avatarFallback: {
     backgroundColor: "rgba(255,255,255,0.12)",
@@ -355,32 +355,32 @@ const cvStyles = StyleSheet.create({
     alignItems: "center",
   },
   avatarLetter: {
-    color: "#FFF",
+    color: colors.white,
     fontFamily: typography.family.bold,
-    fontSize: 14,
+    fontSize: typography.size.sm,
   },
   targetLabel: {
     color: "rgba(255,255,255,0.4)",
     fontFamily: typography.family.regular,
-    fontSize: 11,
+    fontSize: typography.size.xs,
     letterSpacing: 0.5,
   },
   targetName: {
-    color: "#FFF",
+    color: colors.white,
     fontFamily: typography.family.semibold,
-    fontSize: 14,
+    fontSize: typography.size.sm,
   },
   targetThumb: {
     width: 48,
     height: 48,
-    borderRadius: 10,
+    borderRadius: radii.sm,
     overflow: "hidden",
     backgroundColor: "#1A1A1A",
   },
   responsesLabel: {
     color: "rgba(255,255,255,0.4)",
     fontFamily: typography.family.semibold,
-    fontSize: 11,
+    fontSize: typography.size.xs,
     letterSpacing: 0.8,
     textTransform: "uppercase",
     marginBottom: 10,
@@ -392,7 +392,7 @@ const cvStyles = StyleSheet.create({
   },
   responseCard: {
     width: CARD_SIZE,
-    borderRadius: 12,
+    borderRadius: radii.md,
     overflow: "hidden",
     backgroundColor: "#1A1A1A",
     borderWidth: 2,
@@ -412,15 +412,15 @@ const cvStyles = StyleSheet.create({
     right: 6,
     width: 22,
     height: 22,
-    borderRadius: 11,
+    borderRadius: radii.md,
     backgroundColor: "rgba(52,199,89,0.85)",
     justifyContent: "center",
     alignItems: "center",
   },
   votedBadgeText: {
-    color: "#FFF",
+    color: colors.white,
     fontFamily: typography.family.bold,
-    fontSize: 11,
+    fontSize: typography.size.xs,
   },
   dualCaptureDot: {
     position: "absolute",
@@ -428,13 +428,13 @@ const cvStyles = StyleSheet.create({
     right: 6,
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: radii.xs,
     backgroundColor: "rgba(255,255,255,0.7)",
   },
   hint: {
     color: "rgba(255,255,255,0.35)",
     fontFamily: typography.family.regular,
-    fontSize: 12,
+    fontSize: typography.size.xs,
     textAlign: "center",
     marginTop: 14,
   },
@@ -456,7 +456,7 @@ const cvStyles = StyleSheet.create({
   modalCloseBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radii.lg,
     backgroundColor: "rgba(255,255,255,0.12)",
     justifyContent: "center",
     alignItems: "center",
@@ -468,23 +468,23 @@ const cvStyles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.1)",
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: radii.lg,
   },
   swapBtnText: {
     color: "rgba(255,255,255,0.8)",
     fontFamily: typography.family.semibold,
-    fontSize: 12,
+    fontSize: typography.size.xs,
   },
   modalMedia: {
     flex: 1,
-    borderRadius: 20,
+    borderRadius: radii.lg,
     overflow: "hidden",
     backgroundColor: "#111",
     marginBottom: 12,
   },
   noteBox: {
     backgroundColor: "rgba(255,255,255,0.07)",
-    borderRadius: 12,
+    borderRadius: radii.md,
     paddingHorizontal: 14,
     paddingVertical: 10,
     marginBottom: 12,
@@ -492,24 +492,24 @@ const cvStyles = StyleSheet.create({
   noteText: {
     color: "rgba(255,255,255,0.75)",
     fontFamily: typography.family.regular,
-    fontSize: 14,
+    fontSize: typography.size.sm,
     textAlign: "center",
     lineHeight: 20,
   },
   voteBtn: {
-    backgroundColor: "#FFF",
-    borderRadius: 16,
+    backgroundColor: colors.white,
+    borderRadius: radii.lg,
     paddingVertical: 15,
     alignItems: "center",
   },
   voteBtnText: {
-    color: "#000",
+    color: colors.black,
     fontFamily: typography.family.bold,
-    fontSize: 15,
+    fontSize: typography.size.sm,
   },
   voteBtnVoted: {
     backgroundColor: "rgba(52,199,89,0.15)",
-    borderRadius: 16,
+    borderRadius: radii.lg,
     paddingVertical: 15,
     alignItems: "center",
     borderWidth: 1,
@@ -518,6 +518,6 @@ const cvStyles = StyleSheet.create({
   voteBtnVotedText: {
     color: "#34C759",
     fontFamily: typography.family.bold,
-    fontSize: 15,
+    fontSize: typography.size.sm,
   },
 });

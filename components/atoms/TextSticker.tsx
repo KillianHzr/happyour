@@ -1,7 +1,7 @@
 import React from "react";
 import { View } from "react-native";
 import { Svg, Text as SvgText } from "react-native-svg";
-import { typography } from "../../lib/theme";
+import { colors, typography } from "../../lib/theme";
 
 interface TextStickerProps {
   text: string;
@@ -34,7 +34,7 @@ export const TextSticker = ({ text, fontSize = 42 }: TextStickerProps) => {
           {displayValue}
         </SvgText>
         <SvgText
-          fill="black"
+          fill={colors.black}
           fontSize={fontSize}
           fontWeight="bold"
           fontFamily={typography.family.bold}

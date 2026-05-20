@@ -1,6 +1,8 @@
 import React, { useState, useRef } from "react";
 import { View, StyleSheet, ActivityIndicator } from "react-native";
 import { Image } from "expo-image";
+import { radii } from "../../lib/theme";
+
 
 interface PhotoImageProps {
   url: string;
@@ -31,7 +33,7 @@ export const PhotoImage = ({ url, fallback_url, isDrawing }: PhotoImageProps) =>
         )}
         <Image
           source={{ uri: src }}
-          style={{ width: "100%", aspectRatio: 3 / 4, borderRadius: 24 }}
+          style={{ width: "100%", aspectRatio: 3 / 4, borderRadius: radii.xl }}
           contentFit="fill"
           onLoad={() => setLoaded(true)}
           onError={() => { if (fallback_url) setUseFallback(true); }}

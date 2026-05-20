@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, Modal, Pressable, TouchableOpacity, ActivityIndicator } from "react-native";
-import { typography } from "../../lib/theme";
+import { colors, radii, typography } from "../../lib/theme";
 
 type Props = {
   visible: boolean;
@@ -24,7 +24,7 @@ export default function LeaveGroupModal({ visible, onClose, onConfirm, isAdmin, 
           </Text>
           <TouchableOpacity style={styles.confirmBtn} onPress={onConfirm} disabled={isLeaving}>
             {isLeaving
-              ? <ActivityIndicator color="#FFF" />
+              ? <ActivityIndicator color={colors.white} />
               : <Text style={styles.confirmText}>Quitter le groupe</Text>}
           </TouchableOpacity>
           <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
@@ -38,12 +38,12 @@ export default function LeaveGroupModal({ visible, onClose, onConfirm, isAdmin, 
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "flex-end" },
-  sheet: { backgroundColor: "#161616", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 44 },
-  handle: { width: 36, height: 4, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 2, alignSelf: "center", marginBottom: 24 },
-  title: { fontSize: 20, fontFamily: typography.family.bold, color: "#FFF", marginBottom: 12 },
-  body: { fontSize: 15, fontFamily: typography.family.regular, color: "rgba(255,255,255,0.55)", marginBottom: 28, lineHeight: 22 },
-  confirmBtn: { backgroundColor: "#FF3B30", borderRadius: 16, paddingVertical: 15, alignItems: "center", marginBottom: 10 },
-  confirmText: { color: "#FFF", fontSize: 16, fontFamily: typography.family.bold },
+  sheet: { backgroundColor: "#161616", borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, padding: 24, paddingBottom: 44 },
+  handle: { width: 36, height: 4, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: radii.xs, alignSelf: "center", marginBottom: 24 },
+  title: { fontSize: typography.size.xl, fontFamily: typography.family.bold, color: colors.white, marginBottom: 12 },
+  body: { fontSize: typography.size.sm, fontFamily: typography.family.regular, color: "rgba(255,255,255,0.55)", marginBottom: 28, lineHeight: 22 },
+  confirmBtn: { backgroundColor: "#FF3B30", borderRadius: radii.lg, paddingVertical: 15, alignItems: "center", marginBottom: 10 },
+  confirmText: { color: colors.white, fontSize: typography.size.md, fontFamily: typography.family.bold },
   cancelBtn: { paddingVertical: 12, alignItems: "center" },
-  cancelText: { color: "rgba(255,255,255,0.35)", fontSize: 15, fontFamily: typography.family.semibold },
+  cancelText: { color: "rgba(255,255,255,0.35)", fontSize: typography.size.sm, fontFamily: typography.family.semibold },
 });

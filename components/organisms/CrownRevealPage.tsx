@@ -4,7 +4,7 @@ import { Svg, Path } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { UserAvatar } from "../atoms/Avatar";
 import { PhotoEntry } from "../../lib/feed-types";
-import { colors, spacing, typography } from "../../lib/theme";
+import { colors, radii, spacing, typography } from "../../lib/theme";
 
 const NAVBAR_HEIGHT = 100;
 
@@ -46,7 +46,7 @@ export const CrownRevealPage = ({ winner, durationMs, currentUserId, userDuratio
         </Svg>
         <Text style={styles.crownRevealTitle}>Couronne de la semaine</Text>
         <View style={styles.crownRevealAvatarWrap}>
-          <View style={{ borderWidth: 3, borderColor: colors.gold, borderRadius: 44 }}>
+          <View style={{ borderWidth: 3, borderColor: colors.gold, borderRadius: radii.full }}>
             <UserAvatar avatar_url={winner.avatar_url} username={winner.username} size={80} />
           </View>
         </View>
@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
   },
   personalStatsLabel: {
     fontFamily: typography.family.bold,
-    fontSize: 11,
+    fontSize: typography.size.xs,
     color: "rgba(255,255,255,0.3)",
     letterSpacing: 1.5,
     textTransform: "uppercase",
@@ -134,13 +134,13 @@ const styles = StyleSheet.create({
   },
   personalDuration: {
     fontFamily: typography.family.bold,
-    fontSize: 24,
-    color: "#FFF",
+    fontSize: typography.size.xxl,
+    color: colors.white,
     marginBottom: 4,
   },
   personalDurationLabel: {
     fontFamily: typography.family.regular,
-    fontSize: 12,
+    fontSize: typography.size.xs,
     color: "rgba(255,255,255,0.4)",
   },
 });

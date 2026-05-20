@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { Image } from "expo-image";
-import { colors, theme, typography } from "../lib/theme";
+import { colors, radii, theme, typography } from "../lib/theme";
 
 type Props = {
   totalCount: number;
@@ -19,7 +19,7 @@ const VaultIcon = ({ count }: { count: number }) => {
   const iconProps = {
     width: 80,
     height: 80,
-    color: "#FFFFFF", // This will be used as currentColor in the SVGs
+    color: colors.white, // This will be used as currentColor in the SVGs
   };
 
   if (count >= 15) {
@@ -114,11 +114,11 @@ const styles = StyleSheet.create({
   },
   lastPosterWrap: { alignItems: "center", marginBottom: 24 },
   crownWrap: { marginBottom: -8, zIndex: 1 },
-  lastPosterAvatar: { width: 56, height: 56, borderRadius: 28, borderWidth: 2, borderColor: "rgba(255,215,0,0.7)" },
-  lastPosterAvatarFallback: { backgroundColor: "#FFF", justifyContent: "center", alignItems: "center" },
-  lastPosterInitial: { fontFamily: typography.family.bold, fontSize: 22, color: "#000" },
-  lastPosterName: { fontFamily: typography.family.semibold, fontSize: 13, color: "rgba(255,255,255,0.7)", marginTop: 8 },
-  lastPosterHint: { fontFamily: typography.family.regular, fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 4, textAlign: "center" },
+  lastPosterAvatar: { width: 56, height: 56, borderRadius: radii.full, borderWidth: 2, borderColor: "rgba(255,215,0,0.7)" },
+  lastPosterAvatarFallback: { backgroundColor: colors.white, justifyContent: "center", alignItems: "center" },
+  lastPosterInitial: { fontFamily: typography.family.bold, fontSize: typography.size.xl, color: colors.black },
+  lastPosterName: { fontFamily: typography.family.semibold, fontSize: typography.size.xs, color: "rgba(255,255,255,0.7)", marginTop: 8 },
+  lastPosterHint: { fontFamily: typography.family.regular, fontSize: typography.size.xs, color: "rgba(255,255,255,0.4)", marginTop: 4, textAlign: "center" },
   statsRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -133,13 +133,13 @@ const styles = StyleSheet.create({
   },
   count: { 
     fontFamily: typography.family.bold, 
-    fontSize: 48, 
+    fontSize: typography.size.title, 
     color: colors.text,
     letterSpacing: -1,
   },
   label: { 
     fontFamily: typography.family.semibold, 
-    fontSize: 11, 
+    fontSize: typography.size.xs, 
     color: colors.secondary, 
     textTransform: "uppercase",
     letterSpacing: 1,
@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
   },
   description: {
     fontFamily: typography.family.regular,
-    fontSize: 14,
+    fontSize: typography.size.sm,
     color: colors.secondary,
     opacity: 0.6,
   },
@@ -164,7 +164,7 @@ const styles = StyleSheet.create({
   },
   countdownTitle: {
     fontFamily: typography.family.semibold,
-    fontSize: 10,
+    fontSize: typography.size.xs,
     color: colors.secondary,
     textTransform: "uppercase",
     letterSpacing: 1,
@@ -172,8 +172,8 @@ const styles = StyleSheet.create({
   },
   countdownValue: {
     fontFamily: typography.family.bold,
-    fontSize: 24,
-    color: "#FFF",
+    fontSize: typography.size.xxl,
+    color: colors.white,
     letterSpacing: 1,
   },
 });

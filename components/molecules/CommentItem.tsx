@@ -2,7 +2,7 @@ import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { UserAvatar } from "../atoms/Avatar";
 import { TrashIcon } from "../atoms/TrashIcon";
-import { colors, spacing, radii, typography } from "../../lib/theme";
+import { colors, radii, spacing, typography } from "../../lib/theme";
 
 export interface Comment {
   id: string;
@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
   avatarContainer: {
     width: 38,
     height: 38,
-    borderRadius: 19,
+    borderRadius: radii.lg,
     overflow: "hidden",
     borderWidth: 1,
     borderColor: colors.glassBorder,

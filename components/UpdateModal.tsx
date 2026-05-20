@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Modal, View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Platform } from "react-native";
 import * as FileSystem from "expo-file-system/legacy";
 import * as IntentLauncher from "expo-intent-launcher";
-import { colors, theme, typography } from "../lib/theme";
+import { colors, radii, theme, typography } from "../lib/theme";
 
 interface UpdateModalProps {
   visible: boolean;
@@ -59,7 +59,7 @@ export default function UpdateModal({ visible, apkUrl }: UpdateModalProps) {
           </Text>
           {downloading ? (
             <View style={styles.progressContainer}>
-              <ActivityIndicator size="large" color="#fff" />
+              <ActivityIndicator size="large" color={colors.white} />
               <Text style={styles.progressText}>Téléchargement… {progress}%</Text>
               <View style={styles.progressBarBg}>
                 <View style={[styles.progressBarFill, { width: `${progress}%` }]} />
@@ -80,11 +80,11 @@ export default function UpdateModal({ visible, apkUrl }: UpdateModalProps) {
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: "center", alignItems: "center", padding: 24 },
   card: { padding: 28, width: "100%", alignItems: "center" },
-  title: { fontSize: 20, fontFamily: typography.family.bold, marginBottom: 12, color: colors.text },
-  message: { fontSize: 15, fontFamily: typography.family.regular, color: colors.secondary, textAlign: "center", lineHeight: 22, marginBottom: 24 },
+  title: { fontSize: typography.size.xl, fontFamily: typography.family.bold, marginBottom: 12, color: colors.text },
+  message: { fontSize: typography.size.sm, fontFamily: typography.family.regular, color: colors.secondary, textAlign: "center", lineHeight: 22, marginBottom: 24 },
   progressContainer: { alignItems: "center", width: "100%" },
-  progressText: { marginTop: 12, fontSize: 14, fontFamily: typography.family.semibold, color: colors.text },
-  progressBarBg: { width: "100%", height: 8, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 4, marginTop: 12, overflow: "hidden" },
-  progressBarFill: { height: "100%", backgroundColor: "#fff", borderRadius: 4 },
-  errorText: { marginTop: 16, fontSize: 14, fontFamily: typography.family.regular, color: "#EF4444", textAlign: "center" },
+  progressText: { marginTop: 12, fontSize: typography.size.sm, fontFamily: typography.family.semibold, color: colors.text },
+  progressBarBg: { width: "100%", height: 8, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: radii.xs, marginTop: 12, overflow: "hidden" },
+  progressBarFill: { height: "100%", backgroundColor: colors.white, borderRadius: radii.xs },
+  errorText: { marginTop: 16, fontSize: typography.size.sm, fontFamily: typography.family.regular, color: "#EF4444", textAlign: "center" },
 });

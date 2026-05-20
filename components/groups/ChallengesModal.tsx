@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import Svg, { Path } from "react-native-svg";
 import { supabase } from "../../lib/supabase";
-import { typography } from "../../lib/theme";
+import { colors, radii, typography } from "../../lib/theme";
 import {
   getCurrentChallengePeriod, getChallengeWeekStart,
   fetchOrGenerateChallenge, getChallengePrompt,
@@ -196,7 +196,7 @@ export default function ChallengesModal({ visible, onClose, allGroups, currentUs
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.backBtn}>
             <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <Path d="M19 12H5M12 5l-7 7 7 7" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              <Path d="M19 12H5M12 5l-7 7 7 7" stroke={colors.white} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
@@ -304,7 +304,7 @@ export default function ChallengesModal({ visible, onClose, allGroups, currentUs
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#000",
+    backgroundColor: colors.black,
   },
   header: {
     flexDirection: "row",
@@ -323,14 +323,14 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   title: {
-    color: "#FFF",
+    color: colors.white,
     fontFamily: typography.family.bold,
-    fontSize: 22,
+    fontSize: typography.size.xl,
   },
   subtitle: {
     color: "rgba(255,255,255,0.45)",
     fontFamily: typography.family.regular,
-    fontSize: 13,
+    fontSize: typography.size.xs,
     marginTop: 1,
   },
   scrollContent: {
@@ -344,13 +344,13 @@ const styles = StyleSheet.create({
   groupName: {
     color: "rgba(255,255,255,0.5)",
     fontFamily: typography.family.semibold,
-    fontSize: 12,
+    fontSize: typography.size.xs,
     letterSpacing: 0.8,
     textTransform: "uppercase",
   },
   card: {
     backgroundColor: "rgba(255,255,255,0.07)",
-    borderRadius: 18,
+    borderRadius: radii.lg,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     padding: 16,
@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
   avatar: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: radii.xl,
   },
   avatarFallback: {
     backgroundColor: "rgba(255,255,255,0.1)",
@@ -374,14 +374,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   avatarLetter: {
-    color: "#FFF",
+    color: colors.white,
     fontFamily: typography.family.bold,
-    fontSize: 18,
+    fontSize: typography.size.lg,
   },
   promptText: {
-    color: "#FFF",
+    color: colors.white,
     fontFamily: typography.family.semibold,
-    fontSize: 15,
+    fontSize: typography.size.sm,
     lineHeight: 21,
   },
   badgeRow: {
@@ -395,17 +395,17 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.08)",
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 20,
+    borderRadius: radii.lg,
   },
   captureBadgeText: {
     color: "rgba(255,255,255,0.7)",
     fontFamily: typography.family.semibold,
-    fontSize: 12,
+    fontSize: typography.size.xs,
   },
   doneTag: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: radii.md,
     backgroundColor: "rgba(52,199,89,0.2)",
     justifyContent: "center",
     alignItems: "center",
@@ -413,24 +413,24 @@ const styles = StyleSheet.create({
   doneTagText: {
     color: "#34C759",
     fontFamily: typography.family.bold,
-    fontSize: 14,
+    fontSize: typography.size.sm,
   },
   gapTag: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: radii.md,
     backgroundColor: "rgba(255,255,255,0.06)",
   },
   gapTagText: {
     color: "rgba(255,255,255,0.4)",
     fontFamily: typography.family.semibold,
-    fontSize: 11,
+    fontSize: typography.size.xs,
   },
   proposerBadge: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "rgba(255,200,80,0.12)",
-    borderRadius: 20,
+    borderRadius: radii.lg,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderWidth: 1,
@@ -439,12 +439,12 @@ const styles = StyleSheet.create({
   proposerBadgeText: {
     color: "rgba(255,200,80,0.85)",
     fontFamily: typography.family.semibold,
-    fontSize: 11,
+    fontSize: typography.size.xs,
   },
   noThemeText: {
     color: "rgba(255,255,255,0.3)",
     fontFamily: typography.family.regular,
-    fontSize: 14,
+    fontSize: typography.size.sm,
     textAlign: "center",
     paddingVertical: 4,
   },

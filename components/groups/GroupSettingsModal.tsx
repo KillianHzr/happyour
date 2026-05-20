@@ -5,7 +5,7 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { colors, theme, typography } from "../../lib/theme";
+import { colors, radii, theme, typography } from "../../lib/theme";
 import { CloseIcon } from "./GroupIcons";
 import Svg, { Path } from "react-native-svg";
 
@@ -109,7 +109,7 @@ export default function GroupSettingsModal({
                 placeholder="Nom du groupe"
                 placeholderTextColor="rgba(255,255,255,0.3)"
               />
-              {loading && <ActivityIndicator size="small" color="#FFF" style={{ marginLeft: 8 }} />}
+              {loading && <ActivityIndicator size="small" color={colors.white} style={{ marginLeft: 8 }} />}
             </View>
             
             <View style={styles.divider} />
@@ -212,7 +212,7 @@ export default function GroupSettingsModal({
                           : <Text style={styles.memberInitial}>{m.username[0]?.toUpperCase()}</Text>}
                       </View>
                       <Text style={styles.memberName}>{m.username}</Text>
-                      {transferringId === m.user_id ? <ActivityIndicator size="small" color="#FFF" /> : <ChevronRight />}
+                      {transferringId === m.user_id ? <ActivityIndicator size="small" color={colors.white} /> : <ChevronRight />}
                     </TouchableOpacity>
                     {i < otherMembers.length - 1 && <View style={styles.divider} />}
                   </View>
@@ -237,7 +237,7 @@ export default function GroupSettingsModal({
           <View style={{ flex: 1 }} />
           
           <TouchableOpacity style={[styles.confirmBtn, loading && { opacity: 0.7 }]} onPress={onConfirm} disabled={loading}>
-            {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.confirmBtnText}>{btnText}</Text>}
+            {loading ? <ActivityIndicator color={colors.white} /> : <Text style={styles.confirmBtnText}>{btnText}</Text>}
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.cancelBtn} onPress={() => setSubView(null)}>
@@ -269,44 +269,44 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   closeBtn: {
     position: "absolute", right: 20, zIndex: 100,
-    width: 44, height: 44, borderRadius: 22,
+    width: 44, height: 44, borderRadius: radii.xl,
     backgroundColor: "rgba(255,255,255,0.1)",
     justifyContent: "center", alignItems: "center",
   },
   header: { paddingHorizontal: 20, marginBottom: 32, alignItems: "center" },
-  title: { fontSize: 28, fontFamily: typography.family.bold, color: "#FFF", textAlign: "center", marginBottom: 8 },
-  groupNameDisplay: { fontSize: 16, fontFamily: typography.family.semibold, color: "rgba(255,255,255,0.5)", textAlign: "center" },
+  title: { fontSize: typography.size.xxl, fontFamily: typography.family.bold, color: colors.white, textAlign: "center", marginBottom: 8 },
+  groupNameDisplay: { fontSize: typography.size.md, fontFamily: typography.family.semibold, color: "rgba(255,255,255,0.5)", textAlign: "center" },
   
   section: { marginHorizontal: 20, marginBottom: 24 },
-  sectionLabel: { fontSize: 12, fontFamily: typography.family.semibold, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, paddingLeft: 4 },
-  box: { backgroundColor: "#2C2C2E", borderRadius: 20, overflow: "hidden", paddingHorizontal: 16 },
+  sectionLabel: { fontSize: typography.size.xs, fontFamily: typography.family.semibold, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, paddingLeft: 4 },
+  box: { backgroundColor: "#2C2C2E", borderRadius: radii.lg, overflow: "hidden", paddingHorizontal: 16 },
   
   row: { flexDirection: "row", alignItems: "center", paddingVertical: 14 },
-  input: { flex: 1, color: "#FFF", fontFamily: typography.family.semibold, fontSize: 16, padding: 0 },
+  input: { flex: 1, color: colors.white, fontFamily: typography.family.semibold, fontSize: typography.size.md, padding: 0 },
   
   menuItem: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 14 },
-  menuItemText: { color: "#FFF", fontFamily: typography.family.semibold, fontSize: 16 },
+  menuItemText: { color: colors.white, fontFamily: typography.family.semibold, fontSize: typography.size.md },
   dangerText: { color: "#FF3B30" },
   
   divider: { height: 1, backgroundColor: "rgba(255,255,255,0.05)" },
   
   memberRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12 },
-  memberAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center", overflow: "hidden" },
+  memberAvatar: { width: 36, height: 36, borderRadius: radii.lg, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center", overflow: "hidden" },
   avatarImg: { width: "100%", height: "100%" },
-  memberInitial: { color: "#FFF", fontFamily: typography.family.bold, fontSize: 14 },
-  memberName: { color: "#FFF", fontFamily: typography.family.semibold, fontSize: 15 },
-  meTag: { color: "rgba(255,255,255,0.4)", fontSize: 11, fontFamily: typography.family.regular },
-  adminBadge: { backgroundColor: "rgba(255,255,255,0.1)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-  adminBadgeText: { color: "rgba(255,255,255,0.6)", fontSize: 10, fontFamily: typography.family.bold },
+  memberInitial: { color: colors.white, fontFamily: typography.family.bold, fontSize: typography.size.sm },
+  memberName: { color: colors.white, fontFamily: typography.family.semibold, fontSize: typography.size.sm },
+  meTag: { color: "rgba(255,255,255,0.4)", fontSize: typography.size.xs, fontFamily: typography.family.regular },
+  adminBadge: { backgroundColor: "rgba(255,255,255,0.1)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: radii.xs },
+  adminBadgeText: { color: "rgba(255,255,255,0.6)", fontSize: typography.size.xs, fontFamily: typography.family.bold },
 
   // Subviews
   subContainer: { flex: 1, backgroundColor: colors.bg },
   content: { flex: 1, paddingHorizontal: 20, alignItems: "center" },
-  subTitle: { fontSize: 32, fontFamily: typography.family.bold, color: "#FFF", textAlign: "center", marginBottom: 16, letterSpacing: -1 },
-  subDescription: { fontSize: 17, fontFamily: typography.family.regular, color: "rgba(255,255,255,0.6)", textAlign: "center", lineHeight: 26, marginBottom: 32 },
-  confirmBtn: { width: "100%", height: 64, borderRadius: 18, backgroundColor: "#FF3B30", justifyContent: "center", alignItems: "center", marginBottom: 12 },
-  confirmBtnText: { color: "#FFF", fontSize: 17, fontFamily: typography.family.bold },
+  subTitle: { fontSize: typography.size.subtitle, fontFamily: typography.family.bold, color: colors.white, textAlign: "center", marginBottom: 16, letterSpacing: -1 },
+  subDescription: { fontSize: typography.size.lg, fontFamily: typography.family.regular, color: "rgba(255,255,255,0.6)", textAlign: "center", lineHeight: 26, marginBottom: 32 },
+  confirmBtn: { width: "100%", height: 64, borderRadius: radii.lg, backgroundColor: "#FF3B30", justifyContent: "center", alignItems: "center", marginBottom: 12 },
+  confirmBtnText: { color: colors.white, fontSize: typography.size.lg, fontFamily: typography.family.bold },
   cancelBtn: { width: "100%", height: 64, justifyContent: "center", alignItems: "center" },
-  cancelBtnText: { color: "rgba(255,255,255,0.4)", fontSize: 16, fontFamily: typography.family.semibold },
-  emptyText: { color: "rgba(255,255,255,0.4)", fontFamily: typography.family.regular, fontSize: 14, paddingVertical: 20, textAlign: "center" },
+  cancelBtnText: { color: "rgba(255,255,255,0.4)", fontSize: typography.size.md, fontFamily: typography.family.semibold },
+  emptyText: { color: "rgba(255,255,255,0.4)", fontFamily: typography.family.regular, fontSize: typography.size.sm, paddingVertical: 20, textAlign: "center" },
 });

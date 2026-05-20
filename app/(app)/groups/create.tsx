@@ -73,6 +73,6 @@ export default function CreateGroupScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 32, paddingTop: 80, backgroundColor: colors.bg },
-  title: { fontFamily: typography.family.bold, fontSize: 28, marginBottom: 24, color: colors.text },
+  title: { fontFamily: typography.family.bold, fontSize: typography.size.xxl, marginBottom: 24, color: colors.text },
   input: { marginBottom: 16 },
 });

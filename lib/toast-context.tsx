@@ -10,6 +10,9 @@ import {
 import { BlurView } from "expo-blur";
 import Svg, { Path, Circle } from "react-native-svg";
 import { useUpload } from "./upload-context";
+import { colors, radii, typography } from "./theme";
+
+
 
 type ToastType = "success" | "error" | "info";
 
@@ -219,12 +222,12 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 20,
+    borderRadius: radii.lg,
     overflow: "hidden",
     padding: 14,
     borderWidth: 1,
     borderColor: "rgba(0,0,0,0.06)",
-    shadowColor: "#000",
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.12,
     shadowRadius: 16,
@@ -233,7 +236,7 @@ const styles = StyleSheet.create({
   iconWrapper: {
     width: 34,
     height: 34,
-    borderRadius: 17,
+    borderRadius: radii.lg,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
@@ -244,23 +247,23 @@ const styles = StyleSheet.create({
   },
   title: {
     color: "#111",
-    fontSize: 14,
-    fontFamily: "Inter_700Bold",
+    fontSize: typography.size.sm,
+    fontFamily: typography.family.bold,
   },
   message: {
     color: "rgba(0,0,0,0.5)",
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontSize: typography.size.xs,
+    fontFamily: typography.family.regular,
   },
   progressTrack: {
     height: 3,
     backgroundColor: "rgba(0,0,0,0.08)",
-    borderRadius: 2,
+    borderRadius: radii.xs,
     overflow: "hidden",
   },
   progressThumb: {
     height: "100%",
     backgroundColor: "#111",
-    borderRadius: 2,
+    borderRadius: radii.xs,
   },
 });

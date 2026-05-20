@@ -20,7 +20,7 @@ import { SendIcon, FeatherIcon, FlipIcon, CloseIcon, FlashIcon } from "./GroupIc
 import { VolumeManager } from "react-native-volume-manager";
 import ChallengesModal from "./ChallengesModal";
 import { type ActiveChallenge } from "../../lib/challenges";
-import { typography } from "../../lib/theme";
+import { colors, radii, typography } from "../../lib/theme";
 
 const NAVBAR_HEIGHT = 100;
 
@@ -101,7 +101,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const capturingSecondRef = useRef(false);
 
   const [cameraMode, setCameraMode] = useState<CameraMode>("PHOTO");
-  const [drawingColor, setDrawingColor] = useState("#000000");
+  const [drawingColor, setDrawingColor] = useState(colors.black);
   const [drawingStrokeWidth, setDrawingStrokeWidth] = useState(6);
   const [isDrawingActive, setIsDrawingActive] = useState(false);
   const [facing, setFacing] = useState<CameraType>("back");
@@ -637,7 +637,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     if (slot.mode === "AUDIO") {
       return (
         <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#1A1A1A", justifyContent: "center", alignItems: "center" }]}>
-          <Svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <Svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={colors.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <Path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
             <Path d="M19 10v2a7 7 0 0 1-14 0v-2" /><Path d="M12 19v4" /><Path d="M8 23h8" />
           </Svg>
@@ -647,7 +647,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     // TEXTE
     return (
       <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#1A1A1A", justifyContent: "center", alignItems: "center", padding: 6 }]}>
-        <Text style={{ color: "#FFF", fontSize: 9, fontFamily: typography.family.semibold }} numberOfLines={2}>{slot.textContent}</Text>
+        <Text style={{ color: colors.white, fontSize: typography.size.xs, fontFamily: typography.family.semibold }} numberOfLines={2}>{slot.textContent}</Text>
       </View>
     );
   };
@@ -713,7 +713,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               </>
             ) : (
               <TouchableOpacity style={styles.audioIdleTouchable} onPress={startAudioRecording} activeOpacity={0.7}>
-                <Svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
+                <Svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke={colors.white} strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
                   <Path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
                   <Path d="M19 10v2a7 7 0 0 1-14 0v-2" /><Path d="M12 19v4" /><Path d="M8 23h8" />
                 </Svg>
@@ -726,7 +726,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
             <View style={styles.cameraInner}>
               <>
                 {/* Camera view clipped to rounded rect — only mount when permission is granted */}
-                <View style={[StyleSheet.absoluteFillObject, { borderRadius: 32, overflow: "hidden" }]}>
+                <View style={[StyleSheet.absoluteFillObject, { borderRadius: radii.xl, overflow: "hidden" }]}>
                   {(cameraPermission?.granted ?? Platform.OS === "ios") && (
                     <SeamlessRecorder
                       ref={seamlessRecorderRef}
@@ -777,23 +777,23 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       {/* ── Écran traitement vidéo supprimé (SeamlessRecorder = zéro post-processing) ── */}
       {false && (
         <View style={[styles.previewContainer, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 8, paddingHorizontal: 12 }]}>
-          <View style={[styles.previewImageWrapper, { backgroundColor: "#000", justifyContent: "center", alignItems: "center", gap: 16 }]}>
-            <ActivityIndicator size="large" color="#FFF" />
+          <View style={[styles.previewImageWrapper, { backgroundColor: colors.black, justifyContent: "center", alignItems: "center", gap: 16 }]}>
+            <ActivityIndicator size="large" color={colors.white} />
             <Text style={styles.processingText}>Traitement…</Text>
           </View>
           <View style={[slotBarStyles.bar, { opacity: 0.35 }]} pointerEvents="none">
             <View style={slotBarStyles.addBtn}>
               <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                <Path d="M12 5V19" stroke="black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <Path d="M5 12H19" stroke="black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <Path d="M12 5V19" stroke={colors.black} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <Path d="M5 12H19" stroke={colors.black} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </Svg>
               <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                <Path d="M20 9H11C9.89543 9 9 9.89543 9 11V20C9 21.1046 9.89543 22 11 22H20C21.1046 22 20 21.1046 22 20V11C22 9.89543 21.1046 9 20 9Z" stroke="black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <Path d="M5 15H4C3.46957 15 2.96086 14.7893 2.58579 14.4142C2.21071 14.0391 2 13.5304 2 13V4C2 3.46957 2.21071 2.96086 2.58579 2.58579C2.96086 2.21071 3.46957 2 4 2H13C13.5304 2 14.0391 2.21071 14.4142 2.58579C14.7893 2.96086 15 3.46957 15 4V5" stroke="black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <Path d="M20 9H11C9.89543 9 9 9.89543 9 11V20C9 21.1046 9.89543 22 11 22H20C21.1046 22 20 21.1046 22 20V11C22 9.89543 21.1046 9 20 9Z" stroke={colors.black} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <Path d="M5 15H4C3.46957 15 2.96086 14.7893 2.58579 14.4142C2.21071 14.0391 2 13.5304 2 13V4C2 3.46957 2.21071 2.96086 2.58579 2.58579C2.96086 2.21071 3.46957 2 4 2H13C13.5304 2 14.0391 2.21071 14.4142 2.58579C14.7893 2.96086 15 3.46957 15 4V5" stroke={colors.black} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </Svg>
             </View>
             <View style={slotBarStyles.sendBtn}>
-              <SendIcon color="#000" />
+              <SendIcon color={colors.black} />
               <Text style={slotBarStyles.sendText}>Envoyer</Text>
             </View>
           </View>
@@ -813,7 +813,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                     onPress={() => setShowChallengesModal(true)}
                     activeOpacity={0.8}
                   >
-                    <Svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <Svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={colors.black} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <Path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
                       <Path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
                       <Path d="M4 22h16" />
@@ -834,7 +834,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                     activeOpacity={0.7}
                   >
                     <Svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                      <Path d="M18 6L6 18M6 6l12 12" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" />
+                      <Path d="M18 6L6 18M6 6l12 12" stroke={colors.white} strokeWidth="2.5" strokeLinecap="round" />
                     </Svg>
                   </TouchableOpacity>
                   <View style={challengeStyles.bannerTextWrapper}>
@@ -868,13 +868,13 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
             {cameraMode === "DESSIN" && isDrawingActive ? (
               <View style={styles.drawingToolbar}>
                 <TouchableOpacity style={[styles.drawingUndoBtn, !canUndo && styles.drawingUndoBtnDisabled]} onPress={() => drawingRef.current?.undo()} disabled={!canUndo}>
-                  <Svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={canUndo ? "#FFF" : "rgba(255,255,255,0.25)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <Svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={canUndo ? colors.white : "rgba(255,255,255,0.25)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <Path d="M1 4v6h6" /><Path d="M3.51 15a9 9 0 1 0 .49-3.51L1 10" />
                   </Svg>
                 </TouchableOpacity>
                 <View style={styles.drawingColorGrid}>
                   {[
-                    ["#000000","#FFFFFF","#FF3B30","#FF9F0A","#FFD60A"],
+                    [colors.black,colors.white,"#FF3B30","#FF9F0A","#FFD60A"],
                     ["#30D158","#0A84FF","#BF5AF2","#FF2D92","#FF6B35"],
                     ["#5AC8FA","#34C759","#A2845E","#8E8E93","#1C1C1E"],
                   ].map((row, ri) => (
@@ -893,7 +893,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                   </View>
                 </View>
                 <TouchableOpacity style={[styles.drawingUndoBtn, !canRedo && styles.drawingUndoBtnDisabled]} onPress={() => drawingRef.current?.redo()} disabled={!canRedo}>
-                  <Svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={canRedo ? "#FFF" : "rgba(255,255,255,0.25)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <Svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={canRedo ? colors.white : "rgba(255,255,255,0.25)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <Path d="M23 4v6h-6" /><Path d="M20.49 15a9 9 0 1 1-.49-3.51L23 10" />
                   </Svg>
                 </TouchableOpacity>
@@ -927,27 +927,27 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               >
                 <View style={[styles.captureInner, (cameraMode === "VIDEO" || isRecording) && styles.captureInnerVideo, isRecording && styles.captureInnerRecording, cameraMode === "AUDIO" && styles.captureInnerAudio, isAudioRecording && styles.captureInnerAudioRecording, (cameraMode === "TEXTE" && !!textModeContent.trim() || (cameraMode === "DESSIN" && isDrawingActive && canUndo)) && styles.captureInnerValid, (cameraMode === "TEXTE" && !textModeContent.trim() || (cameraMode === "DESSIN" && isDrawingActive && !canUndo)) && styles.captureInnerDimmed]}>
                   {cameraMode === "TEXTE" && (
-                    <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={textModeContent.trim() ? "#FFF" : "rgba(255,255,255,0.3)"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={textModeContent.trim() ? colors.white : "rgba(255,255,255,0.3)"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <Path d="M20 6L9 17l-5-5" />
                     </Svg>
                   )}
                   {cameraMode === "DESSIN" && !isDrawingActive && (
-                    <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={colors.black} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <Path d="M12 20h9" /><Path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
                     </Svg>
                   )}
                   {cameraMode === "DESSIN" && isDrawingActive && (
-                    <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={colors.white} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <Path d="M20 6L9 17l-5-5" />
                     </Svg>
                   )}
                   {cameraMode === "AUDIO" && !isAudioRecording && (
-                    <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={colors.black} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <Path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
                       <Path d="M19 10v2a7 7 0 0 1-14 0v-2" /><Path d="M12 19v4" /><Path d="M8 23h8" />
                     </Svg>
                   )}
-                  {isAudioRecording && <View style={{ width: 22, height: 22, borderRadius: 5, backgroundColor: "#000" }} />}
+                  {isAudioRecording && <View style={{ width: 22, height: 22, borderRadius: radii.xs, backgroundColor: colors.black }} />}
                 </View>
               </TouchableOpacity>}
               {cameraMode !== "TEXTE" && cameraMode !== "AUDIO" && cameraMode !== "DESSIN" && (
@@ -969,14 +969,14 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 {renderSlotThumbnail(slot1)}
                 <View style={[slotBarStyles.badge, { top: 6, right: 6 }]}><Text style={slotBarStyles.badgeText}>1</Text></View>
                 <View style={slotBarStyles.swapOverlay}>
-                  <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={colors.white} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                     <Path d="M7 16V4m0 0L3 8m4-4l4 4" /><Path d="M17 8v12m0 0l4-4m-4 4l-4-4" />
                   </Svg>
                 </View>
               </TouchableOpacity>
               {cameraMode === "TEXTE" && slot2 && (
                 <TouchableOpacity style={slotBarStyles.sendBtn} onPress={openGroupPicker}>
-                  <SendIcon color="#000" />
+                  <SendIcon color={colors.black} />
                   <Text style={slotBarStyles.sendText}>Envoyer</Text>
                 </TouchableOpacity>
               )}
@@ -998,7 +998,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                   <View style={challengeStyles.bannerRow}>
                     <TouchableOpacity style={challengeStyles.bannerClose} onPress={() => setActiveChallenge(null)} activeOpacity={0.7}>
                       <Svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                        <Path d="M18 6L6 18M6 6l12 12" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" />
+                        <Path d="M18 6L6 18M6 6l12 12" stroke={colors.white} strokeWidth="2.5" strokeLinecap="round" />
                       </Svg>
                     </TouchableOpacity>
                     <View style={challengeStyles.bannerTextWrapper}>
@@ -1011,7 +1011,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 </View>
               )}
               <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 32 }}>
-                <Text style={{ color: "#FFF", fontFamily: typography.family.bold, textAlign: "center", fontSize: previewSlot.textContent.length <= 120 ? 32 : previewSlot.textContent.length <= 260 ? 26 : previewSlot.textContent.length <= 450 ? 21 : 17 }}>
+                <Text style={{ color: colors.white, fontFamily: typography.family.bold, textAlign: "center", fontSize: previewSlot.textContent.length <= 120 ? 32 : previewSlot.textContent.length <= 260 ? 26 : previewSlot.textContent.length <= 450 ? 21 : 17 }}>
                   {previewSlot.textContent}
                 </Text>
               </View>
@@ -1034,13 +1034,13 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               )}
             </View>
           ) : (
-            <View style={[styles.previewImageWrapper, previewSlot.mode === "DESSIN" && { backgroundColor: "#000" }]}>
+            <View style={[styles.previewImageWrapper, previewSlot.mode === "DESSIN" && { backgroundColor: colors.black }]}>
               {activeChallenge !== null && (
                 <View style={challengeStyles.previewBannerOverlay} pointerEvents="box-none">
                   <View style={challengeStyles.bannerRow}>
                     <TouchableOpacity style={challengeStyles.bannerClose} onPress={() => setActiveChallenge(null)} activeOpacity={0.7}>
                       <Svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                        <Path d="M18 6L6 18M6 6l12 12" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" />
+                        <Path d="M18 6L6 18M6 6l12 12" stroke={colors.white} strokeWidth="2.5" strokeLinecap="round" />
                       </Svg>
                     </TouchableOpacity>
                     <View style={challengeStyles.bannerTextWrapper}>
@@ -1105,7 +1105,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 <View style={challengeStyles.bannerRow}>
                   <TouchableOpacity style={challengeStyles.bannerClose} onPress={() => setActiveChallenge(null)} activeOpacity={0.7}>
                     <Svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                      <Path d="M18 6L6 18M6 6l12 12" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" />
+                      <Path d="M18 6L6 18M6 6l12 12" stroke={colors.white} strokeWidth="2.5" strokeLinecap="round" />
                     </Svg>
                   </TouchableOpacity>
                   <View style={challengeStyles.bannerTextWrapper}>
@@ -1124,7 +1124,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
             </View>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }} pointerEvents="none">
               {[18,32,48,36,60,80,52,68,42,62,88,72,50,38,68,82,58,44,28,52].map((h, i) => (
-                <View key={i} style={{ width: 3, height: h, borderRadius: 2, backgroundColor: "#FFF", opacity: audioPreviewStatus.currentTime > 0 && audioPreviewStatus.duration > 0 && (audioPreviewStatus.currentTime / audioPreviewStatus.duration) > i / 20 ? 0.9 : 0.25 }} />
+                <View key={i} style={{ width: 3, height: h, borderRadius: radii.xs, backgroundColor: colors.white, opacity: audioPreviewStatus.currentTime > 0 && audioPreviewStatus.duration > 0 && (audioPreviewStatus.currentTime / audioPreviewStatus.duration) > i / 20 ? 0.9 : 0.25 }} />
               ))}
             </View>
             <View style={styles.audioPreviewPlayer}>
@@ -1138,7 +1138,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                   }
                 }}
               >
-                <Svg width="28" height="28" viewBox="0 0 24 24" fill="#FFF">
+                <Svg width="28" height="28" viewBox="0 0 24 24" fill={colors.white}>
                   {audioPreviewStatus.playing ? <Path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /> : <Path d="M8 5v14l11-7z" />}
                 </Svg>
               </TouchableOpacity>
@@ -1211,7 +1211,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                   <View style={[pickerStyles.checkbox, selected && pickerStyles.checkboxOn]}>
                     {selected && (
                       <Svg width="11" height="11" viewBox="0 0 24 24" fill="none">
-                        <Path d="M20 6L9 17L4 12" stroke="#000" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
+                        <Path d="M20 6L9 17L4 12" stroke={colors.black} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
                       </Svg>
                     )}
                   </View>
@@ -1233,7 +1233,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
 }
 
 function TorchIcon({ active }: { active: boolean }) {
-  const color = active ? "#FFD60A" : "#FFF";
+  const color = active ? "#FFD60A" : colors.white;
   return (
     <Svg width="22" height="22" viewBox="0 0 24 24" fill={active ? "#FFD60A" : "none"} stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <Path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
@@ -1331,10 +1331,10 @@ function ZoomSlider({ zoom, onZoom, onDragStart, onDragEnd }: { zoom: number; on
 
 const zoomSliderStyles = StyleSheet.create({
   wrapper: { alignItems: "center", gap: 2, paddingBottom: 4 },
-  label: { color: "#FFF", fontSize: 13, fontFamily: typography.family.medium, opacity: 0.85, minWidth: 36, textAlign: "center" },
-  track: { height: 3, backgroundColor: "rgba(255,255,255,0.25)", borderRadius: 2, marginHorizontal: 9, overflow: "hidden" },
-  fill: { height: "100%", backgroundColor: "rgba(255,255,255,0.85)", borderRadius: 2 },
-  thumb: { position: "absolute", width: 18, height: 18, borderRadius: 9, backgroundColor: "#FFF", shadowColor: "#000", shadowOpacity: 0.25, shadowRadius: 3, elevation: 3 },
+  label: { color: colors.white, fontSize: typography.size.xs, fontFamily: typography.family.medium, opacity: 0.85, minWidth: 36, textAlign: "center" },
+  track: { height: 3, backgroundColor: "rgba(255,255,255,0.25)", borderRadius: radii.xs, marginHorizontal: 9, overflow: "hidden" },
+  fill: { height: "100%", backgroundColor: "rgba(255,255,255,0.85)", borderRadius: radii.xs },
+  thumb: { position: "absolute", width: 18, height: 18, borderRadius: radii.full, backgroundColor: colors.white, shadowColor: colors.black, shadowOpacity: 0.25, shadowRadius: 3, elevation: 3 },
 });
 
 function VideoSlotThumbnail({ uri, borderRadius = 0 }: { uri: string; borderRadius?: number }) {
@@ -1366,16 +1366,16 @@ function SlotBar({ isSlot1Preview, isSlot1WithSlot2, isSlot2Preview, slot1, slot
         <>
           <TouchableOpacity style={slotBarStyles.addBtn} onPress={onAddSecond}>
             <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-              <Path d="M12 5V19" stroke="black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <Path d="M5 12H19" stroke="black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <Path d="M12 5V19" stroke={colors.black} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <Path d="M5 12H19" stroke={colors.black} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </Svg>
             <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-              <Path d="M20 9H11C9.89543 9 9 9.89543 9 11V20C9 21.1046 9.89543 22 11 22H20C21.1046 22 20 21.1046 22 20V11C22 9.89543 21.1046 9 20 9Z" stroke="black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <Path d="M5 15H4C3.46957 15 2.96086 14.7893 2.58579 14.4142C2.21071 14.0391 2 13.5304 2 13V4C2 3.46957 2.21071 2.96086 2.58579 2.58579C2.96086 2.21071 3.46957 2 4 2H13C13.5304 2 14.0391 2.21071 14.4142 2.58579C14.7893 2.96086 15 3.46957 15 4V5" stroke="black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <Path d="M20 9H11C9.89543 9 9 9.89543 9 11V20C9 21.1046 9.89543 22 11 22H20C21.1046 22 20 21.1046 22 20V11C22 9.89543 21.1046 9 20 9Z" stroke={colors.black} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <Path d="M5 15H4C3.46957 15 2.96086 14.7893 2.58579 14.4142C2.21071 14.0391 2 13.5304 2 13V4C2 3.46957 2.21071 2.96086 2.58579 2.58579C2.96086 2.21071 3.46957 2 4 2H13C13.5304 2 14.0391 2.21071 14.4142 2.58579C14.7893 2.96086 15 3.46957 15 4V5" stroke={colors.black} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </Svg>
           </TouchableOpacity>
           <TouchableOpacity style={slotBarStyles.sendBtn} onPress={onSend}>
-            <SendIcon color="#000" />
+            <SendIcon color={colors.black} />
             <Text style={slotBarStyles.sendText}>Envoyer</Text>
           </TouchableOpacity>
         </>
@@ -1387,7 +1387,7 @@ function SlotBar({ isSlot1Preview, isSlot1WithSlot2, isSlot2Preview, slot1, slot
             <View style={slotBarStyles.badge}><Text style={slotBarStyles.badgeText}>2</Text></View>
           </TouchableOpacity>
           <TouchableOpacity style={slotBarStyles.sendBtn} onPress={onSend}>
-            <SendIcon color="#000" />
+            <SendIcon color={colors.black} />
             <Text style={slotBarStyles.sendText}>Envoyer</Text>
           </TouchableOpacity>
         </>
@@ -1398,13 +1398,13 @@ function SlotBar({ isSlot1Preview, isSlot1WithSlot2, isSlot2Preview, slot1, slot
             {renderSlotThumbnail(slot1!)}
             <View style={[slotBarStyles.badge, { right: 8 }]}><Text style={slotBarStyles.badgeText}>1</Text></View>
             <View style={slotBarStyles.swapOverlay}>
-              <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={colors.white} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <Path d="M7 16V4m0 0L3 8m4-4l4 4" /><Path d="M17 8v12m0 0l4-4m-4 4l-4-4" />
               </Svg>
             </View>
           </TouchableOpacity>
           <TouchableOpacity style={slotBarStyles.sendBtn} onPress={onSend}>
-            <SendIcon color="#000" />
+            <SendIcon color={colors.black} />
             <Text style={slotBarStyles.sendText}>Envoyer</Text>
           </TouchableOpacity>
         </>
@@ -1415,18 +1415,18 @@ function SlotBar({ isSlot1Preview, isSlot1WithSlot2, isSlot2Preview, slot1, slot
 
 const slotBarStyles = StyleSheet.create({
   bar: { height: 72, flexDirection: "row", gap: 12, marginTop: 8 },
-  addBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#FFF", borderRadius: 16 },
-  sendBtn: { flex: 2, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: "#FFF", borderRadius: 16 },
-  sendText: { color: "#000", fontFamily: typography.family.bold, fontSize: 16 },
-  thumbBtn: { flex: 1, borderRadius: 16, overflow: "hidden" },
-  badge: { position: "absolute", top: 8, right: 8, width: 18, height: 18, borderRadius: 9, backgroundColor: "#FFF", justifyContent: "center", alignItems: "center" },
-  badgeText: { color: "#000", fontFamily: typography.family.bold, fontSize: 10 },
+  addBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.white, borderRadius: radii.lg },
+  sendBtn: { flex: 2, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: colors.white, borderRadius: radii.lg },
+  sendText: { color: colors.black, fontFamily: typography.family.bold, fontSize: typography.size.md },
+  thumbBtn: { flex: 1, borderRadius: radii.lg, overflow: "hidden" },
+  badge: { position: "absolute", top: 8, right: 8, width: 18, height: 18, borderRadius: radii.full, backgroundColor: colors.white, justifyContent: "center", alignItems: "center" },
+  badgeText: { color: colors.black, fontFamily: typography.family.bold, fontSize: typography.size.xs },
   swapOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "center", alignItems: "center" },
 });
 
 function TrashIcon() {
   return (
-    <Svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <Svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={colors.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <Path d="M3 6h18" /><Path d="M19 6l-1 14H6L5 6" /><Path d="M8 6V4h8v2" />
     </Svg>
   );
@@ -1434,89 +1434,89 @@ function TrashIcon() {
 
 const styles = StyleSheet.create({
   fill: { ...StyleSheet.absoluteFillObject },
-  cameraPageContainer: { flex: 1, backgroundColor: "#000", alignItems: "center" },
+  cameraPageContainer: { flex: 1, backgroundColor: colors.black, alignItems: "center" },
   cameraInner: { flex: 1, width: "100%" },
-  flashBtn: { position: "absolute", top: 16, right: 16, width: 48, height: 48, borderRadius: 24, backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "center", alignItems: "center" },
+  flashBtn: { position: "absolute", top: 16, right: 16, width: 48, height: 48, borderRadius: radii.xl, backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "center", alignItems: "center" },
   textModeContainer: { flex: 1, justifyContent: "flex-start", backgroundColor: "#0A0A0A", paddingHorizontal: 32 },
-  textModeInput: { color: "#FFF", fontFamily: typography.family.bold, textAlign: "center", width: "100%", paddingTop: 0 },
+  textModeInput: { color: colors.white, fontFamily: typography.family.bold, textAlign: "center", width: "100%", paddingTop: 0 },
   audioModeContainer: { flex: 1, justifyContent: "center", alignItems: "center", gap: 20, backgroundColor: "#0A0A0A" },
-  audioProgressBar: { position: "absolute", left: 16, right: 16, height: 3, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.15)", overflow: "hidden" },
-  audioProgressFill: { height: "100%", borderRadius: 2, backgroundColor: "#A78BFA" },
+  audioProgressBar: { position: "absolute", left: 16, right: 16, height: 3, borderRadius: radii.xs, backgroundColor: "rgba(255,255,255,0.15)", overflow: "hidden" },
+  audioProgressFill: { height: "100%", borderRadius: radii.xs, backgroundColor: "#A78BFA" },
   audioRecordingIndicator: { flexDirection: "row", alignItems: "center", gap: 12 },
-  audioRedDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#FF3B30" },
-  audioTimerText: { color: "#FFF", fontFamily: typography.family.bold, fontSize: 38, letterSpacing: 2, width: 260, textAlign: "center" },
-  audioHintText: { color: "rgba(255,255,255,0.3)", fontFamily: typography.family.regular, fontSize: 13, letterSpacing: 0.5, marginTop: 4 },
+  audioRedDot: { width: 10, height: 10, borderRadius: radii.full, backgroundColor: "#FF3B30" },
+  audioTimerText: { color: colors.white, fontFamily: typography.family.bold, fontSize: typography.size.subtitle, letterSpacing: 2, width: 260, textAlign: "center" },
+  audioHintText: { color: "rgba(255,255,255,0.3)", fontFamily: typography.family.regular, fontSize: typography.size.xs, letterSpacing: 0.5, marginTop: 4 },
   audioWaveformRow: { flexDirection: "row", alignItems: "center", gap: 4, height: 52 },
-  audioWaveformBar: { width: 3.5, height: 44, borderRadius: 2, backgroundColor: "#FFF" },
+  audioWaveformBar: { width: 3.5, height: 44, borderRadius: radii.xs, backgroundColor: colors.white },
   cameraFooter: { position: "absolute", left: 0, right: 0, alignItems: "center", gap: 24 },
-  modeSlider: { flexDirection: "row", gap: 4, backgroundColor: "rgba(0,0,0,0.3)", paddingHorizontal: 20, paddingVertical: 4, borderRadius: 20, marginBottom: 12 },
-  modeText: { color: "rgba(255,255,255,0.4)", fontFamily: typography.family.bold, fontSize: 12, paddingVertical: 10, paddingHorizontal: 8 },
-  modeTextActive: { color: "#FFF" },
-  drawingArea: { width: "100%", aspectRatio: 3 / 4, borderRadius: 32, overflow: "hidden", backgroundColor: "#FFF" },
+  modeSlider: { flexDirection: "row", gap: 4, backgroundColor: "rgba(0,0,0,0.3)", paddingHorizontal: 20, paddingVertical: 4, borderRadius: radii.lg, marginBottom: 12 },
+  modeText: { color: "rgba(255,255,255,0.4)", fontFamily: typography.family.bold, fontSize: typography.size.xs, paddingVertical: 10, paddingHorizontal: 8 },
+  modeTextActive: { color: colors.white },
+  drawingArea: { width: "100%", aspectRatio: 3 / 4, borderRadius: radii.xl, overflow: "hidden", backgroundColor: colors.white },
   drawingIdleOverlay: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12 },
-  drawingHintText: { color: "rgba(0,0,0,0.25)", fontFamily: typography.family.regular, fontSize: 13, letterSpacing: 0.5 },
-  drawingToolbar: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "rgba(0,0,0,0.55)", paddingHorizontal: 12, paddingVertical: 10, borderRadius: 20, marginBottom: 12 },
+  drawingHintText: { color: "rgba(0,0,0,0.25)", fontFamily: typography.family.regular, fontSize: typography.size.xs, letterSpacing: 0.5 },
+  drawingToolbar: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "rgba(0,0,0,0.55)", paddingHorizontal: 12, paddingVertical: 10, borderRadius: radii.lg, marginBottom: 12 },
   drawingColorGrid: { flexDirection: "column", gap: 6 },
   drawingColorRow: { flexDirection: "row", gap: 6 },
-  drawingColorDot: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.5)" },
-  drawingColorDotActive: { transform: [{ scale: 1.35 }], borderColor: "#FFF", shadowColor: "#FFF", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.7, shadowRadius: 5, elevation: 6 },
+  drawingColorDot: { width: 22, height: 22, borderRadius: radii.md, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.5)" },
+  drawingColorDotActive: { transform: [{ scale: 1.35 }], borderColor: colors.white, shadowColor: colors.white, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.7, shadowRadius: 5, elevation: 6 },
   drawingBrushRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 16, marginTop: 4 },
   drawingBrushBtn: { width: 36, height: 36, justifyContent: "center", alignItems: "center" },
   drawingBrushDot: { borderWidth: 1.5, borderColor: "rgba(255,255,255,0.5)", opacity: 0.7 },
-  drawingBrushDotActive: { opacity: 1, borderColor: "#FFF", shadowColor: "#FFF", shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 4, elevation: 5 },
-  drawingUndoBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
+  drawingBrushDotActive: { opacity: 1, borderColor: colors.white, shadowColor: colors.white, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 4, elevation: 5 },
+  drawingUndoBtn: { width: 32, height: 32, borderRadius: radii.lg, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
   drawingUndoBtnDisabled: { backgroundColor: "rgba(255,255,255,0.06)" },
-  drawingCancelBtn: { position: "absolute", left: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
+  drawingCancelBtn: { position: "absolute", left: 20, width: 40, height: 40, borderRadius: radii.lg, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
   audioIdleTouchable: { flex: 1, justifyContent: "center", alignItems: "center", gap: 20 },
   captureRow: { flexDirection: "row", alignItems: "center", gap: 32 },
   sideControlPlaceholder: { width: 48 },
-  flipBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center" },
-  captureBtn: { width: 84, height: 84, borderRadius: 42, borderWidth: 5, borderColor: "#FFF", justifyContent: "center", alignItems: "center" },
+  flipBtn: { width: 48, height: 48, borderRadius: radii.xl, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center" },
+  captureBtn: { width: 84, height: 84, borderRadius: radii.full, borderWidth: 5, borderColor: colors.white, justifyContent: "center", alignItems: "center" },
   captureBtnVideo: { borderColor: "rgba(255,59,48,0.5)" },
   captureBtnRecording: { borderColor: "#FF3B30" },
   captureBtnAudio: { borderColor: "rgba(255,255,255,0.4)" },
-  captureBtnAudioRecording: { borderColor: "#FFF" },
+  captureBtnAudioRecording: { borderColor: colors.white },
   captureBtnValid: { borderColor: "#34C759" },
   captureInnerValid: { backgroundColor: "#34C759" },
   captureBtnDimmed: { borderColor: "rgba(255,255,255,0.2)" },
   captureInnerDimmed: { backgroundColor: "rgba(255,255,255,0.15)" },
-  captureInner: { width: 66, height: 66, borderRadius: 33, backgroundColor: "#FFF", justifyContent: "center", alignItems: "center" },
+  captureInner: { width: 66, height: 66, borderRadius: radii.full, backgroundColor: colors.white, justifyContent: "center", alignItems: "center" },
   captureInnerVideo: { backgroundColor: "#FF3B30" },
-  captureInnerRecording: { width: 30, height: 30, borderRadius: 6 },
-  captureInnerAudio: { backgroundColor: "#FFF" },
-  captureInnerAudioRecording: { backgroundColor: "#FFF", width: 28, height: 28, borderRadius: 6 },
-  recordingTimer: { position: "absolute", alignSelf: "center", flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, gap: 8 },
-  recordingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#FF3B30" },
-  recordingText: { color: "#FFF", fontFamily: typography.family.semibold, fontSize: 14 },
-  processingText: { color: "rgba(255,255,255,0.6)", fontFamily: typography.family.semibold, fontSize: 15 },
+  captureInnerRecording: { width: 30, height: 30, borderRadius: radii.xs },
+  captureInnerAudio: { backgroundColor: colors.white },
+  captureInnerAudioRecording: { backgroundColor: colors.white, width: 28, height: 28, borderRadius: radii.xs },
+  recordingTimer: { position: "absolute", alignSelf: "center", flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 16, paddingVertical: 8, borderRadius: radii.lg, gap: 8 },
+  recordingDot: { width: 10, height: 10, borderRadius: radii.full, backgroundColor: "#FF3B30" },
+  recordingText: { color: colors.white, fontFamily: typography.family.semibold, fontSize: typography.size.sm },
+  processingText: { color: "rgba(255,255,255,0.6)", fontFamily: typography.family.semibold, fontSize: typography.size.sm },
   // Preview
-  previewContainer: { flex: 1, backgroundColor: "#000", alignItems: "center" },
-  previewImageWrapper: { flex: 1, width: "100%", borderRadius: 32, overflow: "hidden", backgroundColor: "#1A1A1A" },
+  previewContainer: { flex: 1, backgroundColor: colors.black, alignItems: "center" },
+  previewImageWrapper: { flex: 1, width: "100%", borderRadius: radii.xl, overflow: "hidden", backgroundColor: "#1A1A1A" },
   previewImage: { width: "100%", height: "100%" },
   drawingPreviewCenter: { ...StyleSheet.absoluteFillObject, justifyContent: "flex-start", alignItems: "center" },
-  drawingPreviewImage: { width: "100%", aspectRatio: 3 / 4, borderRadius: 28, overflow: "hidden", backgroundColor: "#FFF" },
+  drawingPreviewImage: { width: "100%", aspectRatio: 3 / 4, borderRadius: radii.xl, overflow: "hidden", backgroundColor: colors.white },
   previewTopBtns: { position: "absolute", top: 16, left: 16, right: 16, flexDirection: "row", justifyContent: "space-between" },
-  topSquareBtn: { width: 38, height: 38, borderRadius: 10, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center" },
+  topSquareBtn: { width: 38, height: 38, borderRadius: radii.sm, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center" },
   previewContent: { position: "absolute", left: 24, right: 24 },
-  previewNoteBox: { backgroundColor: "rgba(0,0,0,0.5)", padding: 16, borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
-  previewNoteText: { color: "#FFF", fontSize: 16, fontFamily: typography.family.semibold, textAlign: "center" },
-  addNoteBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, padding: 16, borderRadius: 16, backgroundColor: "rgba(0,0,0,0.4)", borderStyle: "dashed", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
-  addNoteBtnText: { color: "rgba(255,255,255,0.6)", fontSize: 15, fontFamily: typography.family.semibold },
+  previewNoteBox: { backgroundColor: "rgba(0,0,0,0.5)", padding: 16, borderRadius: radii.lg, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
+  previewNoteText: { color: colors.white, fontSize: typography.size.md, fontFamily: typography.family.semibold, textAlign: "center" },
+  addNoteBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, padding: 16, borderRadius: radii.lg, backgroundColor: "rgba(0,0,0,0.4)", borderStyle: "dashed", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
+  addNoteBtnText: { color: "rgba(255,255,255,0.6)", fontSize: typography.size.sm, fontFamily: typography.family.semibold },
   noteEditorContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: 40 },
-  largeNoteInput: { width: "100%", color: "#FFF", fontSize: 28, fontFamily: typography.family.bold, textAlign: "center", marginBottom: 40 },
-  doneNoteBtn: { backgroundColor: "#FFF", paddingHorizontal: 32, paddingVertical: 14, borderRadius: 100 },
-  doneNoteText: { color: "#000", fontFamily: typography.family.bold, fontSize: 16 },
+  largeNoteInput: { width: "100%", color: colors.white, fontSize: typography.size.xxl, fontFamily: typography.family.bold, textAlign: "center", marginBottom: 40 },
+  doneNoteBtn: { backgroundColor: colors.white, paddingHorizontal: 32, paddingVertical: 14, borderRadius: radii.xl },
+  doneNoteText: { color: colors.black, fontFamily: typography.family.bold, fontSize: typography.size.md },
   // Audio preview
   audioPreviewPlayer: { flexDirection: "row", alignItems: "center", gap: 14, marginTop: 32, paddingHorizontal: 24, width: "100%" },
-  audioPreviewPlayBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
+  audioPreviewPlayBtn: { width: 52, height: 52, borderRadius: radii.full, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
   audioPreviewSeekHitArea: { paddingVertical: 14, justifyContent: "center" },
-  audioPreviewTrack: { height: 3, backgroundColor: "rgba(255,255,255,0.22)", borderRadius: 2 },
-  audioPreviewFill: { height: 3, backgroundColor: "#FFF", borderRadius: 2 },
-  audioPreviewThumb: { position: "absolute", width: 13, height: 13, borderRadius: 7, backgroundColor: "#FFF", marginLeft: -6, top: 14 - 5 },
-  audioPreviewTime: { fontSize: 11, color: "rgba(255,255,255,0.5)", fontFamily: typography.family.regular },
+  audioPreviewTrack: { height: 3, backgroundColor: "rgba(255,255,255,0.22)", borderRadius: radii.xs },
+  audioPreviewFill: { height: 3, backgroundColor: colors.white, borderRadius: radii.xs },
+  audioPreviewThumb: { position: "absolute", width: 13, height: 13, borderRadius: radii.sm, backgroundColor: colors.white, marginLeft: -6, top: 14 - 5 },
+  audioPreviewTime: { fontSize: typography.size.xs, color: "rgba(255,255,255,0.5)", fontFamily: typography.family.regular },
   // Barre full-width de switch/envoi pendant la 2e capture
   capturingSecondBar: { position: "absolute", left: 12, right: 12, height: 72, flexDirection: "row", gap: 12 },
-  capturingSecondThumb: { flex: 1, borderRadius: 16, overflow: "hidden" },
+  capturingSecondThumb: { flex: 1, borderRadius: radii.lg, overflow: "hidden" },
 });
 
 const challengeStyles = StyleSheet.create({
@@ -1528,35 +1528,35 @@ const challengeStyles = StyleSheet.create({
     alignItems: "center",
   },
   btnWrapper: {
-    backgroundColor: "#000",
+    backgroundColor: colors.black,
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
+    borderBottomLeftRadius: radii.xl,
+    borderBottomRightRadius: radii.xl,
     padding: 8,
   },
   challengeBtn: {
-    backgroundColor: "#FFF",
+    backgroundColor: colors.white,
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: 24,
+    borderRadius: radii.xl,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
   },
   challengeBtnText: {
-    color: "#000",
+    color: colors.black,
     fontFamily: typography.family.bold,
-    fontSize: 14,
+    fontSize: typography.size.sm,
   },
   bannerRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
     width: "100%",
-    backgroundColor: "#000",
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
+    backgroundColor: colors.black,
+    borderBottomLeftRadius: radii.xl,
+    borderBottomRightRadius: radii.xl,
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 14,
@@ -1571,7 +1571,7 @@ const challengeStyles = StyleSheet.create({
   bannerClose: {
     width: 30,
     height: 30,
-    borderRadius: 15,
+    borderRadius: radii.lg,
     backgroundColor: "rgba(255,255,255,0.15)",
     justifyContent: "center",
     alignItems: "center",
@@ -1581,31 +1581,31 @@ const challengeStyles = StyleSheet.create({
     flex: 1,
   },
   bannerText: {
-    color: "#FFF",
+    color: colors.white,
     fontFamily: typography.family.semibold,
-    fontSize: 13,
+    fontSize: typography.size.xs,
     lineHeight: 18,
   },
   bannerProposerText: {
     color: "rgba(255,200,80,0.75)",
     fontFamily: typography.family.semibold,
-    fontSize: 10,
+    fontSize: typography.size.xs,
     marginTop: 2,
   },
 });
 
 const pickerStyles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.78)", justifyContent: "center", alignItems: "center", padding: 28 },
-  card: { backgroundColor: "#1C1C1E", borderRadius: 20, padding: 24, width: "100%" },
-  title: { fontSize: 18, fontFamily: typography.family.bold, color: "#FFF", marginBottom: 20 },
+  card: { backgroundColor: "#1C1C1E", borderRadius: radii.lg, padding: 24, width: "100%" },
+  title: { fontSize: typography.size.lg, fontFamily: typography.family.bold, color: colors.white, marginBottom: 20 },
   row: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(255,255,255,0.08)" },
-  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: "rgba(255,255,255,0.3)", justifyContent: "center", alignItems: "center" },
-  checkboxOn: { backgroundColor: "#FFF", borderColor: "#FFF" },
-  groupName: { color: "#FFF", fontFamily: typography.family.semibold, fontSize: 16, flex: 1 },
-  sendBtn: { backgroundColor: "#FFF", borderRadius: 14, paddingVertical: 14, alignItems: "center", marginTop: 20, marginBottom: 8 },
-  sendBtnText: { color: "#000", fontSize: 16, fontFamily: typography.family.bold },
+  checkbox: { width: 22, height: 22, borderRadius: radii.xs, borderWidth: 2, borderColor: "rgba(255,255,255,0.3)", justifyContent: "center", alignItems: "center" },
+  checkboxOn: { backgroundColor: colors.white, borderColor: colors.white },
+  groupName: { color: colors.white, fontFamily: typography.family.semibold, fontSize: typography.size.md, flex: 1 },
+  sendBtn: { backgroundColor: colors.white, borderRadius: radii.md, paddingVertical: 14, alignItems: "center", marginTop: 20, marginBottom: 8 },
+  sendBtnText: { color: colors.black, fontSize: typography.size.md, fontFamily: typography.family.bold },
   cancelWrap: { alignItems: "center", paddingVertical: 8 },
-  cancelText: { color: "rgba(255,255,255,0.4)", fontFamily: typography.family.semibold, fontSize: 15 },
+  cancelText: { color: "rgba(255,255,255,0.4)", fontFamily: typography.family.semibold, fontSize: typography.size.sm },
 });
 
 export default function CameraPage(props: Props) {

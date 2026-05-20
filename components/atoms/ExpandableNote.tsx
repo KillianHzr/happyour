@@ -35,13 +35,13 @@ const styles = StyleSheet.create({
   momentNote: { 
     color: "rgba(255,255,255,0.75)", 
     fontFamily: typography.family.regular, 
-    fontSize: 12, 
+    fontSize: typography.size.xs, 
     marginTop: 3 
   },
   noteExpand: { 
     color: "rgba(255,255,255,0.45)", 
     fontFamily: typography.family.semibold, 
-    fontSize: 12, 
+    fontSize: typography.size.xs, 
     marginTop: 2 
   },
 });
