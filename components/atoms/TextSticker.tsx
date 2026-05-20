@@ -1,7 +1,7 @@
 import React from "react";
 import { View } from "react-native";
 import { Svg, Text as SvgText, Defs, Mask, Rect } from "react-native-svg";
-import { typography } from "../../lib/theme";
+import { colors, typography } from "../../lib/theme";
 
 interface TextStickerProps {
   text: string;
@@ -12,7 +12,7 @@ interface TextStickerProps {
 export const TextSticker = ({
   text,
   fontSize = 42,
-  backgroundColor = "#E6005C"
+  backgroundColor = colors.brand
 }: TextStickerProps) => {
   const displayValue = (text || "—").toUpperCase();
 
@@ -27,13 +27,13 @@ export const TextSticker = ({
       <Defs>
         <Mask id="knockoutMask">
           {/* White defines the shape of the pink rectangle */}
-          <Rect width={width} height={height} fill="#FFFFFF" />
+          <Rect width={width} height={height} fill={colors.white} />
 
           {/* Black cuts the text out of that shape */}
           <SvgText
-            fill="#000000"
+            fill={colors.black}
             fontSize={fontSize}
-            fontWeight="900"
+            fontWeight={String(typography.weight.black)}
             fontFamily={typography.family.bold}
             x={xCenter}
             y={yCenter}
