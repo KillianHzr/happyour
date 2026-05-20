@@ -6,7 +6,7 @@ import {
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
-import { typography } from "../../lib/theme";
+import { colors, radii, typography } from "../../lib/theme";
 import {
   addCustomChallenge, getQueuePendingCount,
   type ChallengeCapture,
@@ -106,13 +106,13 @@ export default function CustomChallengeCreatePage({
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
       <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: "#000" }}
+        style={{ flex: 1, backgroundColor: colors.black }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <View style={[s.header, { paddingTop: insets.top + 8 }]}>
           <TouchableOpacity style={s.backBtn} onPress={onClose}>
             <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <Path d="M18 6L6 18M6 6l12 12" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" />
+              <Path d="M18 6L6 18M6 6l12 12" stroke={colors.white} strokeWidth="2.5" strokeLinecap="round" />
             </Svg>
           </TouchableOpacity>
           <Text style={s.title}>Défi custom</Text>
@@ -169,7 +169,7 @@ export default function CustomChallengeCreatePage({
                       {targetUserId === m.user_id && (
                         <View style={s.checkmark}>
                           <Svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                            <Path d="M20 6L9 17l-5-5" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                            <Path d="M20 6L9 17l-5-5" stroke={colors.black} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                           </Svg>
                         </View>
                       )}
@@ -230,7 +230,7 @@ export default function CustomChallengeCreatePage({
             activeOpacity={0.8}
           >
             {loading ? (
-              <ActivityIndicator color="#000" size="small" />
+              <ActivityIndicator color={colors.black} size="small" />
             ) : (
               <Text style={s.confirmBtnText}>Ajouter à la file</Text>
             )}
@@ -258,9 +258,9 @@ const s = StyleSheet.create({
     alignItems: "center",
   },
   title: {
-    color: "#FFF",
+    color: colors.white,
     fontFamily: typography.family.bold,
-    fontSize: 20,
+    fontSize: typography.size.xl,
   },
   scroll: {
     paddingHorizontal: 20,
@@ -270,7 +270,7 @@ const s = StyleSheet.create({
   sectionTitle: {
     color: "rgba(255,255,255,0.55)",
     fontFamily: typography.family.semibold,
-    fontSize: 12,
+    fontSize: typography.size.xs,
     letterSpacing: 0.8,
     textTransform: "uppercase",
     marginTop: 20,
@@ -281,7 +281,7 @@ const s = StyleSheet.create({
   },
   optionCard: {
     backgroundColor: "rgba(255,255,255,0.06)",
-    borderRadius: 16,
+    borderRadius: radii.lg,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     padding: 16,
@@ -291,17 +291,17 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.12)",
     borderColor: "rgba(255,255,255,0.4)",
   },
-  optionIcon: { fontSize: 22 },
+  optionIcon: { fontSize: typography.size.xl },
   optionTitle: {
     color: "rgba(255,255,255,0.7)",
     fontFamily: typography.family.bold,
-    fontSize: 15,
+    fontSize: typography.size.sm,
   },
-  optionTitleActive: { color: "#FFF" },
+  optionTitleActive: { color: colors.white },
   optionDesc: {
     color: "rgba(255,255,255,0.4)",
     fontFamily: typography.family.regular,
-    fontSize: 13,
+    fontSize: typography.size.xs,
   },
   memberList: {
     gap: 8,
@@ -311,7 +311,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     gap: 12,
     backgroundColor: "rgba(255,255,255,0.06)",
-    borderRadius: 14,
+    borderRadius: radii.md,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
     paddingHorizontal: 14,
@@ -324,7 +324,7 @@ const s = StyleSheet.create({
   memberAvatar: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radii.lg,
   },
   avatarFallback: {
     backgroundColor: "rgba(255,255,255,0.12)",
@@ -332,42 +332,42 @@ const s = StyleSheet.create({
     alignItems: "center",
   },
   avatarLetter: {
-    color: "#FFF",
+    color: colors.white,
     fontFamily: typography.family.bold,
-    fontSize: 15,
+    fontSize: typography.size.sm,
   },
   memberName: {
     flex: 1,
     color: "rgba(255,255,255,0.7)",
     fontFamily: typography.family.semibold,
-    fontSize: 15,
+    fontSize: typography.size.sm,
   },
-  memberNameActive: { color: "#FFF" },
+  memberNameActive: { color: colors.white },
   checkmark: {
     width: 24,
     height: 24,
-    borderRadius: 12,
-    backgroundColor: "#FFF",
+    borderRadius: radii.md,
+    backgroundColor: colors.white,
     justifyContent: "center",
     alignItems: "center",
   },
   emptyText: {
     color: "rgba(255,255,255,0.3)",
     fontFamily: typography.family.regular,
-    fontSize: 14,
+    fontSize: typography.size.sm,
     textAlign: "center",
     paddingVertical: 8,
   },
   themeInput: {
     backgroundColor: "rgba(255,255,255,0.07)",
-    borderRadius: 14,
+    borderRadius: radii.md,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.15)",
     paddingHorizontal: 16,
     paddingVertical: 14,
-    color: "#FFF",
+    color: colors.white,
     fontFamily: typography.family.semibold,
-    fontSize: 16,
+    fontSize: typography.size.md,
   },
   captureGrid: {
     flexDirection: "row",
@@ -379,7 +379,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     backgroundColor: "rgba(255,255,255,0.07)",
-    borderRadius: 20,
+    borderRadius: radii.lg,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
     paddingHorizontal: 14,
@@ -389,17 +389,17 @@ const s = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.18)",
     borderColor: "rgba(255,255,255,0.5)",
   },
-  captureIcon: { fontSize: 16 },
+  captureIcon: { fontSize: typography.size.md },
   captureLabel: {
     color: "rgba(255,255,255,0.6)",
     fontFamily: typography.family.semibold,
-    fontSize: 13,
+    fontSize: typography.size.xs,
   },
-  captureLabelActive: { color: "#FFF" },
+  captureLabelActive: { color: colors.white },
   positionBox: {
     marginTop: 20,
     backgroundColor: "rgba(255,255,255,0.06)",
-    borderRadius: 14,
+    borderRadius: radii.md,
     paddingHorizontal: 16,
     paddingVertical: 14,
     alignItems: "center",
@@ -407,23 +407,23 @@ const s = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.1)",
   },
   positionText: {
-    color: "#FFF",
+    color: colors.white,
     fontFamily: typography.family.semibold,
-    fontSize: 14,
+    fontSize: typography.size.sm,
     textAlign: "center",
   },
   confirmBtn: {
     marginTop: 24,
-    backgroundColor: "#FFF",
-    borderRadius: 16,
+    backgroundColor: colors.white,
+    borderRadius: radii.lg,
     paddingVertical: 16,
     alignItems: "center",
     justifyContent: "center",
   },
   confirmBtnDisabled: { opacity: 0.35 },
   confirmBtnText: {
-    color: "#000",
+    color: colors.black,
     fontFamily: typography.family.bold,
-    fontSize: 16,
+    fontSize: typography.size.md,
   },
 });

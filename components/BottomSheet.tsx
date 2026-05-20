@@ -4,6 +4,8 @@ import {
   Pressable, View, Easing, KeyboardAvoidingView, Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { radii } from "../lib/theme";
+
 
 type Props = {
   visible: boolean;
@@ -139,8 +141,8 @@ const styles = StyleSheet.create({
   },
   sheet: {
     backgroundColor: "#161616",
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
     paddingHorizontal: 24,
   },
   // Tall tap/drag target around the handle bar
@@ -152,6 +154,6 @@ const styles = StyleSheet.create({
   handle: {
     width: 36, height: 4,
     backgroundColor: "rgba(255,255,255,0.25)",
-    borderRadius: 2,
+    borderRadius: radii.xs,
   },
 });

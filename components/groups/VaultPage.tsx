@@ -12,7 +12,7 @@ import BottomSheet from "../BottomSheet";
 import { getChallengePrompt, getWinnerResponseIds, type ChallengeWithData, type ChallengeResponse } from "../../lib/challenges";
 import { r2Storage } from "../../lib/r2";
 import ChallengeAudioPlayer from "./ChallengeAudioPlayer";
-import { typography } from "../../lib/theme";
+import { colors, radii, typography } from "../../lib/theme";
 
 type GroupInfo = { id: string; name: string; invite_code: string };
 type MemberInfo = { user_id: string; username: string; avatar_url?: string | null; role?: string };
@@ -104,8 +104,8 @@ const LockIcon = () => (
 
 const GearIcon = () => (
   <Svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-    <Path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="#FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    <Path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" stroke="#FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    <Path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke={colors.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    <Path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" stroke={colors.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
   </Svg>
 );
 
@@ -227,7 +227,7 @@ export default function VaultPage({
         <View style={[styles.avatarWrap, { width: size, height: size, borderRadius: size / 2 }, m.role === "admin" && styles.avatarAdmin]}>
           {m.avatar_url
             ? <Image source={{ uri: m.avatar_url }} style={{ width: "100%", height: "100%", borderRadius: size / 2 }} />
-            : <Text style={{ color: "#FFF", fontFamily: typography.family.bold, fontSize: size * 0.38 }}>{m.username[0]?.toUpperCase()}</Text>}
+            : <Text style={{ color: colors.white, fontFamily: typography.family.bold, fontSize: size * 0.38 }}>{m.username[0]?.toUpperCase()}</Text>}
         </View>
         {hasCrown && (
           <View style={styles.crownWrap}>
@@ -373,7 +373,7 @@ export default function VaultPage({
               <LockIcon />
               <Text style={styles.revealLockedTitle}>Reveal verrouillé</Text>
               <Text style={styles.revealLockedHint}>
-                {"Poste au moins un moment pour accéder\nau reveal du "}<Text style={{ fontFamily: typography.family.bold, color: "#FFF" }}>{formatRevealDeadline(revealDate)}</Text>
+                {"Poste au moins un moment pour accéder\nau reveal du "}<Text style={{ fontFamily: typography.family.bold, color: colors.white }}>{formatRevealDeadline(revealDate)}</Text>
               </Text>
               {onGoToCamera && (
                 <TouchableOpacity 
@@ -560,7 +560,7 @@ function VcThumbContent({ r }: { r: ChallengeResponse }) {
   if (type === "text") {
     return (
       <View style={[vcStyles.thumb, { backgroundColor: "#1A1A1A", justifyContent: "center", alignItems: "center", padding: 6 }]}>
-        <Text style={{ color: "#FFF", fontSize: 10, textAlign: "center", fontFamily: typography.family.semibold }} numberOfLines={4}>
+        <Text style={{ color: colors.white, fontSize: typography.size.xs, textAlign: "center", fontFamily: typography.family.semibold }} numberOfLines={4}>
           {r.note}
         </Text>
       </View>
@@ -571,11 +571,11 @@ function VcThumbContent({ r }: { r: ChallengeResponse }) {
       <View style={[vcStyles.thumb, { backgroundColor: "#111", justifyContent: "center", alignItems: "center", gap: 4 }]}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
           {VC_MINI_WAVE.map((h, i) => (
-            <View key={i} style={{ width: 2.5, height: h, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.55)" }} />
+            <View key={i} style={{ width: 2.5, height: h, borderRadius: radii.xs, backgroundColor: "rgba(255,255,255,0.55)" }} />
           ))}
         </View>
-        <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.12)", justifyContent: "center", alignItems: "center" }}>
-          <Svg width="8" height="8" viewBox="0 0 24 24" fill="#FFF">
+        <View style={{ width: 20, height: 20, borderRadius: radii.sm, backgroundColor: "rgba(255,255,255,0.12)", justifyContent: "center", alignItems: "center" }}>
+          <Svg width="8" height="8" viewBox="0 0 24 24" fill={colors.white}>
             <Path d="M8 5v14l11-7z" />
           </Svg>
         </View>
@@ -591,7 +591,7 @@ function VcModalMedia({ imagePath, url, note }: { imagePath: string | null; url:
   if (type === "text") {
     return (
       <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#111", justifyContent: "center", alignItems: "center", padding: 28 }]}>
-        <Text style={{ color: "#FFF", fontFamily: typography.family.semibold, fontSize: 20, textAlign: "center", lineHeight: 28 }}>
+        <Text style={{ color: colors.white, fontFamily: typography.family.semibold, fontSize: typography.size.xl, textAlign: "center", lineHeight: 28 }}>
           {note ?? ""}
         </Text>
       </View>
@@ -739,7 +739,7 @@ function VaultChallengeCard({
                 winnerResponses.slice(0, 2).map((r) => (
                   <TouchableOpacity key={r.id} style={vcStyles.thumbWrap} onPress={() => openResponse(r, data)} activeOpacity={0.8}>
                     <VcThumbContent r={r} />
-                    <View style={vcStyles.winnerBadge}><Text style={{ fontSize: 11 }}>🏆</Text></View>
+                    <View style={vcStyles.winnerBadge}><Text style={{ fontSize: typography.size.xs }}>🏆</Text></View>
                     <View style={vcStyles.targetLabel}>
                       <Text style={vcStyles.targetLabelText}>{r.username}</Text>
                     </View>
@@ -765,7 +765,7 @@ function VaultChallengeCard({
               <View style={vcStyles.modalTopBar}>
                 <TouchableOpacity style={vcStyles.modalCloseBtn} onPress={() => setSelected(null)} activeOpacity={0.7}>
                   <Svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                    <Path d="M18 6L6 18M6 6l12 12" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" />
+                    <Path d="M18 6L6 18M6 6l12 12" stroke={colors.white} strokeWidth="2.5" strokeLinecap="round" />
                   </Svg>
                 </TouchableOpacity>
                 <View style={vcStyles.modalAuthorRow}>
@@ -780,7 +780,7 @@ function VaultChallengeCard({
                 </View>
                 {hasSecond && (
                   <TouchableOpacity style={vcStyles.swapBtn} onPress={() => setSwapped(v => !v)} activeOpacity={0.7}>
-                    <Svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <Svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={colors.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <Path d="M7 16V4m0 0L3 8m4-4l4 4" /><Path d="M17 8v12m0 0l4-4m-4 4l-4-4" />
                     </Svg>
                     <Text style={vcStyles.swapBtnText}>{swapped ? "1ère" : "2ème"}</Text>
@@ -811,7 +811,7 @@ function VaultChallengeCard({
                           <Image source={{ uri: v.avatar_url }} style={vcStyles.voterAvatar} contentFit="cover" />
                         ) : (
                           <View style={[vcStyles.voterAvatar, vcStyles.avatarFallback]}>
-                            <Text style={{ color: "#FFF", fontFamily: typography.family.bold, fontSize: 10 }}>{v.username[0]?.toUpperCase()}</Text>
+                            <Text style={{ color: colors.white, fontFamily: typography.family.bold, fontSize: typography.size.xs }}>{v.username[0]?.toUpperCase()}</Text>
                           </View>
                         )}
                         <Text style={vcStyles.voterName}>{v.username}</Text>
@@ -831,7 +831,7 @@ function VaultChallengeCard({
 const vcStyles = StyleSheet.create({
   card: {
     backgroundColor: "#2C2C2E",
-    borderRadius: 16,
+    borderRadius: radii.lg,
     padding: 16,
     marginBottom: 20,
     borderWidth: 1,
@@ -844,9 +844,9 @@ const vcStyles = StyleSheet.create({
     gap: 8,
   },
   headerText: {
-    color: "#FFF",
+    color: colors.white,
     fontFamily: typography.family.bold,
-    fontSize: 15,
+    fontSize: typography.size.sm,
   },
   period: {
     gap: 8,
@@ -857,20 +857,20 @@ const vcStyles = StyleSheet.create({
   periodLabel: {
     color: "rgba(255,255,255,0.4)",
     fontFamily: typography.family.semibold,
-    fontSize: 11,
+    fontSize: typography.size.xs,
     letterSpacing: 0.5,
     textTransform: "uppercase",
   },
   prompt: {
-    color: "#FFF",
+    color: colors.white,
     fontFamily: typography.family.semibold,
-    fontSize: 14,
+    fontSize: typography.size.sm,
     lineHeight: 19,
   },
   proposerChip: {
     alignSelf: "flex-start",
     backgroundColor: "rgba(255,200,80,0.1)",
-    borderRadius: 12,
+    borderRadius: radii.md,
     paddingHorizontal: 8,
     paddingVertical: 3,
     marginBottom: 6,
@@ -880,7 +880,7 @@ const vcStyles = StyleSheet.create({
   proposerChipText: {
     color: "rgba(255,200,80,0.8)",
     fontFamily: typography.family.semibold,
-    fontSize: 10,
+    fontSize: typography.size.xs,
   },
   row: {
     flexDirection: "row",
@@ -889,7 +889,7 @@ const vcStyles = StyleSheet.create({
   thumbWrap: {
     width: 90,
     height: 90,
-    borderRadius: 12,
+    borderRadius: radii.md,
     overflow: "hidden",
     backgroundColor: "#1A1A1A",
   },
@@ -905,7 +905,7 @@ const vcStyles = StyleSheet.create({
   thumbName: {
     color: "rgba(255,255,255,0.6)",
     fontFamily: typography.family.semibold,
-    fontSize: 11,
+    fontSize: typography.size.xs,
   },
   avatarOverlay: {
     position: "absolute",
@@ -915,14 +915,14 @@ const vcStyles = StyleSheet.create({
   avatarSmall: {
     width: 22,
     height: 22,
-    borderRadius: 11,
+    borderRadius: radii.md,
     borderWidth: 1.5,
-    borderColor: "#000",
+    borderColor: colors.black,
   },
   avatarCenter: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radii.lg,
   },
   avatarFallback: {
     backgroundColor: "rgba(255,255,255,0.12)",
@@ -930,9 +930,9 @@ const vcStyles = StyleSheet.create({
     alignItems: "center",
   },
   avatarLetter: {
-    color: "#FFF",
+    color: colors.white,
     fontFamily: typography.family.bold,
-    fontSize: 12,
+    fontSize: typography.size.xs,
   },
   targetLabel: {
     position: "absolute",
@@ -944,9 +944,9 @@ const vcStyles = StyleSheet.create({
     alignItems: "center",
   },
   targetLabelText: {
-    color: "#FFF",
+    color: colors.white,
     fontFamily: typography.family.semibold,
-    fontSize: 10,
+    fontSize: typography.size.xs,
   },
   winnerBadge: {
     position: "absolute",
@@ -954,7 +954,7 @@ const vcStyles = StyleSheet.create({
     right: 6,
     width: 22,
     height: 22,
-    borderRadius: 11,
+    borderRadius: radii.md,
     backgroundColor: "rgba(0,0,0,0.6)",
     justifyContent: "center",
     alignItems: "center",
@@ -962,7 +962,7 @@ const vcStyles = StyleSheet.create({
   emptyText: {
     color: "rgba(255,255,255,0.3)",
     fontFamily: typography.family.regular,
-    fontSize: 11,
+    fontSize: typography.size.xs,
     textAlign: "center",
   },
   dualDot: {
@@ -992,7 +992,7 @@ const vcStyles = StyleSheet.create({
   modalCloseBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radii.lg,
     backgroundColor: "rgba(255,255,255,0.12)",
     justifyContent: "center",
     alignItems: "center",
@@ -1006,12 +1006,12 @@ const vcStyles = StyleSheet.create({
   modalAvatar: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: radii.md,
   },
   modalAuthorName: {
-    color: "#FFF",
+    color: colors.white,
     fontFamily: typography.family.semibold,
-    fontSize: 14,
+    fontSize: typography.size.sm,
   },
   swapBtn: {
     flexDirection: "row",
@@ -1020,23 +1020,23 @@ const vcStyles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.1)",
     paddingHorizontal: 10,
     paddingVertical: 7,
-    borderRadius: 16,
+    borderRadius: radii.lg,
   },
   swapBtnText: {
     color: "rgba(255,255,255,0.8)",
     fontFamily: typography.family.semibold,
-    fontSize: 12,
+    fontSize: typography.size.xs,
   },
   modalMedia: {
     flex: 1,
-    borderRadius: 20,
+    borderRadius: radii.lg,
     overflow: "hidden",
     backgroundColor: "#111",
     marginBottom: 12,
   },
   noteBox: {
     backgroundColor: "rgba(255,255,255,0.07)",
-    borderRadius: 12,
+    borderRadius: radii.md,
     paddingHorizontal: 14,
     paddingVertical: 10,
     marginBottom: 12,
@@ -1044,7 +1044,7 @@ const vcStyles = StyleSheet.create({
   noteText: {
     color: "rgba(255,255,255,0.75)",
     fontFamily: typography.family.regular,
-    fontSize: 14,
+    fontSize: typography.size.sm,
     textAlign: "center",
     lineHeight: 20,
   },
@@ -1054,7 +1054,7 @@ const vcStyles = StyleSheet.create({
   votersLabel: {
     color: "rgba(255,255,255,0.4)",
     fontFamily: typography.family.semibold,
-    fontSize: 11,
+    fontSize: typography.size.xs,
     letterSpacing: 0.5,
     textTransform: "uppercase",
   },
@@ -1068,127 +1068,127 @@ const vcStyles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     backgroundColor: "rgba(255,255,255,0.08)",
-    borderRadius: 20,
+    borderRadius: radii.lg,
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
   voterAvatar: {
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: radii.sm,
   },
   voterName: {
     color: "rgba(255,255,255,0.8)",
     fontFamily: typography.family.semibold,
-    fontSize: 12,
+    fontSize: typography.size.xs,
   },
 });
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#000" },
+  container: { flex: 1, backgroundColor: colors.black },
 
   // Switcher
-  switcherContainer: { backgroundColor: "#000", paddingHorizontal: 24, paddingBottom: 16 },
+  switcherContainer: { backgroundColor: colors.black, paddingHorizontal: 24, paddingBottom: 16 },
   switcherSegment: {
     flexDirection: "row", height: 40,
     borderWidth: 1, borderColor: "rgba(255,255,255,0.2)",
-    borderRadius: 10, overflow: "hidden",
+    borderRadius: radii.sm, overflow: "hidden",
   },
   switcherSlot: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 6 },
   slotBorderLeft: { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: "rgba(255,255,255,0.2)" },
-  slotActive: { backgroundColor: "#FFF" },
-  slotText: { color: "rgba(255,255,255,0.55)", fontFamily: typography.family.semibold, fontSize: 13 },
-  slotTextActive: { color: "#000" },
-  slotAddText: { color: "rgba(255,255,255,0.85)", fontFamily: typography.family.semibold, fontSize: 20, lineHeight: 22 },
+  slotActive: { backgroundColor: colors.white },
+  slotText: { color: "rgba(255,255,255,0.55)", fontFamily: typography.family.semibold, fontSize: typography.size.xs },
+  slotTextActive: { color: colors.black },
+  slotAddText: { color: "rgba(255,255,255,0.85)", fontFamily: typography.family.semibold, fontSize: typography.size.xl, lineHeight: 22 },
 
   // Content
   scrollContent: { paddingHorizontal: 24, paddingTop: 14 },
 
   // Group header
   groupHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
-  groupTitle: { fontFamily: typography.family.bold, fontSize: 28, color: "#FFF", letterSpacing: -1, flex: 1, marginRight: 12 },
-  iconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center" },
-  leaveBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: "rgba(255,59,48,0.12)", borderWidth: 1, borderColor: "rgba(255,59,48,0.3)" },
-  leaveBtnText: { color: "#FF3B30", fontFamily: typography.family.semibold, fontSize: 13 },
+  groupTitle: { fontFamily: typography.family.bold, fontSize: typography.size.xxl, color: colors.white, letterSpacing: -1, flex: 1, marginRight: 12 },
+  iconBtn: { width: 40, height: 40, borderRadius: radii.lg, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center" },
+  leaveBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: radii.sm, backgroundColor: "rgba(255,59,48,0.12)", borderWidth: 1, borderColor: "rgba(255,59,48,0.3)" },
+  leaveBtnText: { color: "#FF3B30", fontFamily: typography.family.semibold, fontSize: typography.size.xs },
 
   // Stats card
-  statsCard: { backgroundColor: "#2C2C2E", borderRadius: 16, padding: 20, marginBottom: 28, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
+  statsCard: { backgroundColor: "#2C2C2E", borderRadius: radii.lg, padding: 20, marginBottom: 28, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
   statsRow: { flexDirection: "row", alignItems: "center" },
   statBlock: { flex: 1, alignItems: "center" },
-  statNumber: { fontFamily: typography.family.bold, fontSize: 42, color: "#FFF", letterSpacing: -2 },
-  statLabelText: { fontFamily: typography.family.semibold, fontSize: 10, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: 1, marginTop: -2 },
+  statNumber: { fontFamily: typography.family.bold, fontSize: typography.size.title, color: colors.white, letterSpacing: -2 },
+  statLabelText: { fontFamily: typography.family.semibold, fontSize: typography.size.xs, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: 1, marginTop: -2 },
   statSeparator: { width: 1, height: 44, backgroundColor: "rgba(255,255,255,0.12)" },
   statLockWrap: { height: 56, justifyContent: "center", alignItems: "center" },
-  statHint: { fontFamily: typography.family.regular, fontSize: 11, color: "rgba(255,255,255,0.45)", marginBottom: 3 },
-  statCountdown: { fontFamily: typography.family.bold, fontSize: 19, color: "#FFF", letterSpacing: 0.5 },
+  statHint: { fontFamily: typography.family.regular, fontSize: typography.size.xs, color: "rgba(255,255,255,0.45)", marginBottom: 3 },
+  statCountdown: { fontFamily: typography.family.bold, fontSize: typography.size.xl, color: colors.white, letterSpacing: 0.5 },
 
   // Reveal card
-  revealCard: { backgroundColor: "#2C2C2E", borderRadius: 16, paddingVertical: 32, alignItems: "center", marginBottom: 28, gap: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
-  revealEmoji: { fontSize: 42 },
-  revealTitle: { fontFamily: typography.family.bold, fontSize: 22, color: "#FFF", textAlign: "center" },
-  revealEmptyHint: { fontFamily: typography.family.regular, fontSize: 13, color: "rgba(255,255,255,0.35)", textAlign: "center", paddingHorizontal: 24, marginTop: 4 },
-  revealExpiry: { marginTop: 4, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.1)" },
+  revealCard: { backgroundColor: "#2C2C2E", borderRadius: radii.lg, paddingVertical: 32, alignItems: "center", marginBottom: 28, gap: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
+  revealEmoji: { fontSize: typography.size.title },
+  revealTitle: { fontFamily: typography.family.bold, fontSize: typography.size.xl, color: colors.white, textAlign: "center" },
+  revealEmptyHint: { fontFamily: typography.family.regular, fontSize: typography.size.xs, color: "rgba(255,255,255,0.35)", textAlign: "center", paddingHorizontal: 24, marginTop: 4 },
+  revealExpiry: { marginTop: 4, paddingHorizontal: 12, paddingVertical: 4, borderRadius: radii.md, backgroundColor: "rgba(255,255,255,0.1)" },
   revealExpiryRed: { backgroundColor: "rgba(200,30,30,0.2)" },
-  revealExpiryText: { fontFamily: typography.family.semibold, fontSize: 12, color: "rgba(255,255,255,0.55)" },
+  revealExpiryText: { fontFamily: typography.family.semibold, fontSize: typography.size.xs, color: "rgba(255,255,255,0.55)" },
   revealExpiryTextRed: { color: "#C81E1E" },
 
   postFirstBtn: { 
     marginTop: 20,
-    backgroundColor: "#FFF", 
-    borderRadius: 14, 
+    backgroundColor: colors.white, 
+    borderRadius: radii.md, 
     paddingVertical: 12, 
     paddingHorizontal: 24,
     alignItems: "center" 
   },
   postFirstBtnText: { 
-    color: "#000", 
-    fontSize: 15, 
+    color: colors.black, 
+    fontSize: typography.size.sm, 
     fontFamily: typography.family.bold 
   },
 
   // Post reminder (inside statsCard)
-  postReminderText: { fontFamily: typography.family.regular, fontSize: 13, color: "#FFA600", lineHeight: 18, textAlign: "center" },
+  postReminderText: { fontFamily: typography.family.regular, fontSize: typography.size.xs, color: "#FFA600", lineHeight: 18, textAlign: "center" },
   postReminderBold: { fontFamily: typography.family.bold, color: "#FFA600" },
 
   // Reveal locked card
   revealLockedCard: {
-    backgroundColor: "#2C2C2E", borderRadius: 16, paddingVertical: 32, alignItems: "center",
+    backgroundColor: "#2C2C2E", borderRadius: radii.lg, paddingVertical: 32, alignItems: "center",
     marginBottom: 28, gap: 10, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
   },
-  revealLockedTitle: { fontFamily: typography.family.bold, fontSize: 20, color: "rgba(255,255,255,0.55)", textAlign: "center" },
-  revealLockedHint: { fontFamily: typography.family.regular, fontSize: 13, color: "rgba(255,255,255,0.35)", textAlign: "center", paddingHorizontal: 24 },
+  revealLockedTitle: { fontFamily: typography.family.bold, fontSize: typography.size.xl, color: "rgba(255,255,255,0.55)", textAlign: "center" },
+  revealLockedHint: { fontFamily: typography.family.regular, fontSize: typography.size.xs, color: "rgba(255,255,255,0.35)", textAlign: "center", paddingHorizontal: 24 },
 
   // Participants
-  sectionTitle: { fontFamily: typography.family.bold, fontSize: 16, color: "#FFF", marginBottom: 14, marginTop: 4 },
+  sectionTitle: { fontFamily: typography.family.bold, fontSize: typography.size.md, color: colors.white, marginBottom: 14, marginTop: 4 },
   participantsRow: { flexDirection: "row", gap: 14, marginBottom: 28, alignItems: "flex-start" },
   avatarWrap: { backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center", overflow: "hidden" },
   avatarAdmin: { borderWidth: 2, borderColor: "#FF3B30" },
   crownWrap: { position: "absolute", top: -8, left: 0, right: 0, alignItems: "center", zIndex: 1 },
-  memberLabel: { fontFamily: typography.family.regular, fontSize: 11, color: "rgba(255,255,255,0.55)", textAlign: "center" },
-  seeMoreCircle: { width: 48, height: 48, borderRadius: 24, backgroundColor: "rgba(255,255,255,0.12)", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
-  seeMoreCount: { color: "#FFF", fontFamily: typography.family.semibold, fontSize: 13 },
+  memberLabel: { fontFamily: typography.family.regular, fontSize: typography.size.xs, color: "rgba(255,255,255,0.55)", textAlign: "center" },
+  seeMoreCircle: { width: 48, height: 48, borderRadius: radii.xl, backgroundColor: "rgba(255,255,255,0.12)", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
+  seeMoreCount: { color: colors.white, fontFamily: typography.family.semibold, fontSize: typography.size.xs },
 
   // Access
-  accessCard: { backgroundColor: "#111", borderRadius: 16, overflow: "hidden", marginBottom: 28, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(255,255,255,0.1)" },
+  accessCard: { backgroundColor: "#111", borderRadius: radii.lg, overflow: "hidden", marginBottom: 28, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(255,255,255,0.1)" },
   accessRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, gap: 8 },
-  accessLabel: { fontFamily: typography.family.semibold, fontSize: 13, color: "rgba(255,255,255,0.35)", width: 34 },
-  accessValue: { fontFamily: typography.family.semibold, fontSize: 13, color: "#FFF", flex: 1 },
+  accessLabel: { fontFamily: typography.family.semibold, fontSize: typography.size.xs, color: "rgba(255,255,255,0.35)", width: 34 },
+  accessValue: { fontFamily: typography.family.semibold, fontSize: typography.size.xs, color: colors.white, flex: 1 },
   accessDivider: { height: StyleSheet.hairlineWidth, backgroundColor: "rgba(255,255,255,0.08)", marginHorizontal: 16 },
-  copyBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: "rgba(255,255,255,0.1)" },
-  copyBtnText: { fontFamily: typography.family.semibold, fontSize: 12, color: "#FFF" },
+  copyBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: radii.sm, backgroundColor: "rgba(255,255,255,0.1)" },
+  copyBtnText: { fontFamily: typography.family.semibold, fontSize: typography.size.xs, color: colors.white },
 
   // Members / remove sheets
-  membersTitle: { fontFamily: typography.family.bold, fontSize: 18, color: "#FFF", marginBottom: 20 },
+  membersTitle: { fontFamily: typography.family.bold, fontSize: typography.size.lg, color: colors.white, marginBottom: 20 },
   membersGrid: { flexDirection: "row", flexWrap: "wrap", gap: 20 },
   membersGridItem: {},
-  removeBody: { color: "rgba(255,255,255,0.55)", fontFamily: typography.family.regular, fontSize: 14, marginBottom: 24, lineHeight: 20 },
-  removeUsername: { color: "#FFF", fontFamily: typography.family.semibold },
-  removeBtn: { backgroundColor: "#FF3B30", borderRadius: 14, paddingVertical: 14, alignItems: "center", marginBottom: 10 },
-  removeBtnText: { color: "#FFF", fontSize: 15, fontFamily: typography.family.bold },
+  removeBody: { color: "rgba(255,255,255,0.55)", fontFamily: typography.family.regular, fontSize: typography.size.sm, marginBottom: 24, lineHeight: 20 },
+  removeUsername: { color: colors.white, fontFamily: typography.family.semibold },
+  removeBtn: { backgroundColor: "#FF3B30", borderRadius: radii.md, paddingVertical: 14, alignItems: "center", marginBottom: 10 },
+  removeBtnText: { color: colors.white, fontSize: typography.size.sm, fontFamily: typography.family.bold },
   removeCancelWrap: { alignItems: "center", paddingVertical: 8 },
-  removeCancelText: { color: "rgba(255,255,255,0.4)", fontFamily: typography.family.semibold, fontSize: 15 },
+  removeCancelText: { color: "rgba(255,255,255,0.4)", fontFamily: typography.family.semibold, fontSize: typography.size.sm },
 
   // Debug
-  debugBtn: { paddingVertical: 12, borderRadius: 12, backgroundColor: "rgba(255,200,0,0.15)", borderWidth: 1, borderColor: "rgba(255,200,0,0.4)", alignItems: "center" },
-  debugBtnText: { color: "#FFD700", fontFamily: typography.family.semibold, fontSize: 14 },
+  debugBtn: { paddingVertical: 12, borderRadius: radii.md, backgroundColor: "rgba(255,200,0,0.15)", borderWidth: 1, borderColor: "rgba(255,200,0,0.4)", alignItems: "center" },
+  debugBtnText: { color: "#FFD700", fontFamily: typography.family.semibold, fontSize: typography.size.sm },
 });

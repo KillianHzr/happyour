@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Image } from "expo-image";
 import { Svg, Path } from "react-native-svg";
 import { r2Storage } from "../../lib/r2";
-import { colors, spacing, radii, typography } from "../../lib/theme";
+import { colors, radii, spacing, typography } from "../../lib/theme";
 
 interface SecondCaptureThumbnailProps {
   secondPath: string;
@@ -92,7 +92,7 @@ export const SecondCaptureThumbnail = ({ secondPath, secondNote, onPress }: Seco
       {/* Swap indicator */}
       <View style={styles.secondThumbOverlay}>
         <Svg width="8" height="8" viewBox="0 0 20 18" fill="none">
-          <Path d="M1 13L5 17M5 17L9 13M5 17L5 1M19 5L15 1M15 1L11 5M15 1L15 17" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+          <Path d="M1 13L5 17M5 17L9 13M5 17L5 1M19 5L15 1M15 1L11 5M15 1L15 17" stroke={colors.white} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
         </Svg>
       </View>
     </TouchableOpacity>
@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
   secondThumbPlayBadge: { 
     width: 22, 
     height: 22, 
-    borderRadius: 11, 
+    borderRadius: radii.md, 
     backgroundColor: colors.glass,
     justifyContent: "center", 
     alignItems: "center", 
@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
   secondThumbPlayCircle: { 
     width: 28, 
     height: 28, 
-    borderRadius: 14, 
+    borderRadius: radii.md, 
     backgroundColor: colors.overlay,
     justifyContent: "center", 
     alignItems: "center", 

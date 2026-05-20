@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
   },
   revealIntroTitle: { 
     fontFamily: typography.family.bold, 
-    fontSize: 58, 
+    fontSize: typography.size.title, 
     color: colors.white, 
     letterSpacing: -1.5, 
     lineHeight: 62, 

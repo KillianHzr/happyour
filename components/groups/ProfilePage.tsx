@@ -24,7 +24,7 @@ import PhotoFeed from "../PhotoFeed";
 import type { PhotoEntry, Reaction } from "../PhotoFeed";
 import MotivationalNotificationsModal from "../MotivationalNotificationsModal";
 import DeleteAccountModal from "../DeleteAccountModal";
-import { typography } from "../../lib/theme";
+import { colors, radii, typography } from "../../lib/theme";
 
 const MONTH_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 
@@ -108,17 +108,17 @@ const FlameIcon = ({ size = 18, color = "#FFA600" }: { size?: number; color?: st
 
 const RandomIcon = () => (
   <Svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-    <Path d="M16.92 12.9964L20.42 9.49639C20.791 9.08488 20.9964 8.55047 20.9964 7.99639C20.9964 7.44231 20.791 6.90789 20.42 6.49639L15.42 1.57639C15.0085 1.20535 14.4741 1 13.92 1C13.3659 1 12.8315 1.20535 12.42 1.57639L9 4.99639M5 16.9964H5.01M9 12.9964H9.01M14 4.99639H14.01M17 7.99639H17.01M3 8.99639H11C12.1046 8.99639 13 9.89182 13 10.9964V18.9964C13 20.101 12.1046 20.9964 11 20.9964H3C1.89543 20.9964 1 20.101 1 18.9964V10.9964C1 9.89182 1.89543 8.99639 3 8.99639Z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <Path d="M16.92 12.9964L20.42 9.49639C20.791 9.08488 20.9964 8.55047 20.9964 7.99639C20.9964 7.44231 20.791 6.90789 20.42 6.49639L15.42 1.57639C15.0085 1.20535 14.4741 1 13.92 1C13.3659 1 12.8315 1.20535 12.42 1.57639L9 4.99639M5 16.9964H5.01M9 12.9964H9.01M14 4.99639H14.01M17 7.99639H17.01M3 8.99639H11C12.1046 8.99639 13 9.89182 13 10.9964V18.9964C13 20.101 12.1046 20.9964 11 20.9964H3C1.89543 20.9964 1 20.101 1 18.9964V10.9964C1 9.89182 1.89543 8.99639 3 8.99639Z" stroke={colors.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
   </Svg>
 );
 
-const ChevronLeft = ({ color = "#FFF" }: { color?: string }) => (
+const ChevronLeft = ({ color = colors.white }: { color?: string }) => (
   <Svg width="20" height="20" viewBox="0 0 24 24" fill="none">
     <Path d="M15 18l-6-6 6-6" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
   </Svg>
 );
 
-const ChevronRight = ({ color = "#FFF" }: { color?: string }) => (
+const ChevronRight = ({ color = colors.white }: { color?: string }) => (
   <Svg width="20" height="20" viewBox="0 0 24 24" fill="none">
     <Path d="M9 18l6-6-6-6" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
   </Svg>
@@ -126,7 +126,7 @@ const ChevronRight = ({ color = "#FFF" }: { color?: string }) => (
 
 const BackArrow = () => (
   <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-    <Path d="M19 12H5M12 5l-7 7 7 7" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <Path d="M19 12H5M12 5l-7 7 7 7" stroke={colors.white} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
   </Svg>
 );
 
@@ -563,10 +563,10 @@ export default function ProfilePage({
               {avatarUrl
                 ? <Image source={{ uri: avatarUrl }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
                 : <Text style={styles.profileAvatarInitial}>{(username?.[0] ?? "?").toUpperCase()}</Text>}
-              {uploading && <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, justifyContent: "center", alignItems: "center" }}><ActivityIndicator color="#000" /></View>}
+              {uploading && <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, justifyContent: "center", alignItems: "center" }}><ActivityIndicator color={colors.black} /></View>}
             </View>
             <View style={styles.avatarEditBadge}>
-              <Svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <Svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={colors.white} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
                 <Path d="M12 13m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0"/>
               </Svg>
@@ -686,7 +686,7 @@ export default function ProfilePage({
             </TouchableOpacity>
             <TouchableOpacity style={[styles.randomBtn, { marginHorizontal: 20, marginBottom: 0 }]} onPress={openRandom} disabled={randomBusy} activeOpacity={0.8}>
               {loadingRandom
-                ? <ActivityIndicator color="#FFF" size="small" />
+                ? <ActivityIndicator color={colors.white} size="small" />
                 : <><RandomIcon /><Text style={styles.randomBtnText}>Moment aléatoire</Text></>}
             </TouchableOpacity>
           </View>
@@ -711,7 +711,7 @@ export default function ProfilePage({
                         <View key={w.id} style={phStyles.winnerThumb}>
                           {w.image_path === "text_mode" ? (
                             <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 6 }}>
-                              <Text style={{ color: "#FFF", fontSize: 9, textAlign: "center", fontFamily: typography.family.semibold }} numberOfLines={4}>{w.note}</Text>
+                              <Text style={{ color: colors.white, fontSize: typography.size.xs, textAlign: "center", fontFamily: typography.family.semibold }} numberOfLines={4}>{w.note}</Text>
                             </View>
                           ) : (
                             <Image source={{ uri: w.url }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
@@ -752,7 +752,7 @@ export default function ProfilePage({
 
             <TouchableOpacity style={styles.settingsRow} onPress={() => setShowNotifModal(true)}>
               <View style={[styles.settingsIconWrap, { backgroundColor: "rgba(255,255,255,0.08)" }]}>
-                <Svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <Svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={colors.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <Path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0" />
                 </Svg>
               </View>
@@ -794,13 +794,13 @@ export default function ProfilePage({
       {/* ── Loading overlay (week) ── */}
       {loadingWeek && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator color="#FFF" size="large" />
+          <ActivityIndicator color={colors.white} size="large" />
         </View>
       )}
 
       {/* ── Week reveal modal ── */}
       <Modal visible={showWeekReveal} animationType="slide" onRequestClose={() => setShowWeekReveal(false)}>
-        <View style={{ flex: 1, backgroundColor: "#000" }}>
+        <View style={{ flex: 1, backgroundColor: colors.black }}>
           <TouchableOpacity
             style={[styles.modalBackBtn, { top: insets.top + 12 }]}
             onPress={() => setShowWeekReveal(false)}
@@ -830,7 +830,7 @@ export default function ProfilePage({
 
       {/* ── Random moment modal ── */}
       <Modal visible={showRandomReveal} animationType="slide" onRequestClose={() => setShowRandomReveal(false)}>
-        <View style={{ flex: 1, backgroundColor: "#000" }}>
+        <View style={{ flex: 1, backgroundColor: colors.black }}>
           <TouchableOpacity
             style={[styles.modalBackBtn, { top: insets.top + 12 }]}
             onPress={() => setShowRandomReveal(false)}
@@ -898,7 +898,7 @@ export default function ProfilePage({
               editable={!savingUsername}
             />
             <TouchableOpacity style={styles.editSheetBtn} onPress={saveUsername} disabled={savingUsername}>
-              {savingUsername ? <ActivityIndicator color="#000" /> : <Text style={styles.editSheetBtnText}>Valider</Text>}
+              {savingUsername ? <ActivityIndicator color={colors.black} /> : <Text style={styles.editSheetBtnText}>Valider</Text>}
             </TouchableOpacity>
             <TouchableOpacity style={styles.editSheetCancel} onPress={() => setIsEditingUsername(false)}>
               <Text style={styles.editSheetCancelText}>Annuler</Text>
@@ -928,18 +928,18 @@ export default function ProfilePage({
           activeOpacity={1}
           onPress={() => setShowRandomInfo(false)}
         >
-          <View style={{ backgroundColor: '#2C2C2E', borderRadius: 24, padding: 24, width: '100%', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}>
-            <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 20 }}>
+          <View style={{ backgroundColor: '#2C2C2E', borderRadius: radii.xl, padding: 24, width: '100%', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}>
+            <View style={{ width: 48, height: 48, borderRadius: radii.xl, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 20 }}>
               <InfoIcon />
             </View>
-            <Text style={{ color: '#FFF', fontFamily: 'Inter_600SemiBold', fontSize: 16, textAlign: 'center', lineHeight: 24, marginBottom: 24 }}>
+            <Text style={{ color: colors.white, fontFamily: typography.family.semibold, fontSize: typography.size.md, textAlign: 'center', lineHeight: 24, marginBottom: 24 }}>
               Seuls les moments publiés depuis plus d'un mois apparaîtront dans la sélection aléatoire.
             </Text>
             <TouchableOpacity 
-              style={{ backgroundColor: '#FFF', borderRadius: 16, paddingVertical: 14, width: '100%', alignItems: 'center' }}
+              style={{ backgroundColor: colors.white, borderRadius: radii.lg, paddingVertical: 14, width: '100%', alignItems: 'center' }}
               onPress={() => setShowRandomInfo(false)}
             >
-              <Text style={{ color: '#000', fontFamily: 'Inter_700Bold', fontSize: 16 }}>Compris</Text>
+              <Text style={{ color: colors.black, fontFamily: typography.family.bold, fontSize: typography.size.md }}>Compris</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -954,27 +954,27 @@ const styles = StyleSheet.create({
   // Profile card
   profileCard: {
     flexDirection: "row", alignItems: "center", gap: 16,
-    backgroundColor: "#2C2C2E", borderRadius: 20,
+    backgroundColor: "#2C2C2E", borderRadius: radii.lg,
     marginHorizontal: 20, marginBottom: 12,
     padding: 16,
   },
   profileAvatarBtn: { width: 56, height: 56 },
   profileAvatar: {
-    width: 56, height: 56, borderRadius: 28,
+    width: 56, height: 56, borderRadius: radii.full,
     backgroundColor: "#E5E5E5", overflow: "hidden",
     justifyContent: "center", alignItems: "center",
   },
-  profileAvatarInitial: { fontFamily: typography.family.bold, fontSize: 22, color: "#333" },
-  profileCardName: { fontFamily: typography.family.bold, fontSize: 18, color: "#FFF", marginBottom: 4 },
+  profileAvatarInitial: { fontFamily: typography.family.bold, fontSize: typography.size.xl, color: "#333" },
+  profileCardName: { fontFamily: typography.family.bold, fontSize: typography.size.lg, color: colors.white, marginBottom: 4 },
   editChip: {
     flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start",
-    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10,
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: radii.sm,
     backgroundColor: "rgba(255,255,255,0.1)",
   },
-  editChipText: { fontSize: 12, fontFamily: typography.family.semibold, color: "rgba(255,255,255,0.6)" },
+  editChipText: { fontSize: typography.size.xs, fontFamily: typography.family.semibold, color: "rgba(255,255,255,0.6)" },
   avatarEditBadge: {
     position: "absolute", bottom: 0, right: 0,
-    width: 22, height: 22, borderRadius: 11,
+    width: 22, height: 22, borderRadius: radii.md,
     backgroundColor: "#3A3A3C", borderWidth: 1.5, borderColor: "#2C2C2E",
     justifyContent: "center", alignItems: "center",
   },
@@ -982,21 +982,21 @@ const styles = StyleSheet.create({
   // Streak card
   streakCard: {
     flexDirection: "row", alignItems: "center",
-    backgroundColor: "#000", borderRadius: 20, borderWidth: 1, borderColor: "rgba(255,255,255,0.38)",
+    backgroundColor: colors.black, borderRadius: radii.lg, borderWidth: 1, borderColor: "rgba(255,255,255,0.38)",
     marginHorizontal: 20, marginBottom: 24,
     padding: 16,
   },
   streakHalf: { flex: 1, flexDirection: "row", alignItems: "center", gap: 12, justifyContent: "center" },
   streakDivider: { width: 1, height: 40, backgroundColor: "rgba(255,255,255,0.38)", marginHorizontal: 4 },
   streakCircle: {
-    width: 44, height: 44, borderRadius: 22,
+    width: 44, height: 44, borderRadius: radii.xl,
     backgroundColor: "rgba(255,166,0,0.15)", justifyContent: "center", alignItems: "center",
     borderWidth: 1.5, borderColor: "rgba(255,166,0,0.5)",
   },
   streakCircleBlue: { backgroundColor: "rgba(74,158,255,0.15)", borderColor: "rgba(74,158,255,0.5)" },
   streakTextCol: { alignItems: "center", justifyContent: "center" },
-  streakLabel: { fontFamily: typography.family.semibold, fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 2 },
-  streakValue: { fontFamily: typography.family.bold, fontSize: 20, color: "#FFF" },
+  streakLabel: { fontFamily: typography.family.semibold, fontSize: typography.size.xs, color: "rgba(255,255,255,0.5)", marginBottom: 2 },
+  streakValue: { fontFamily: typography.family.bold, fontSize: typography.size.xl, color: colors.white },
 
   // Calendar
   calendarSection: { marginHorizontal: 20, marginBottom: 24 },
@@ -1004,46 +1004,46 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center",
     justifyContent: "space-between", marginBottom: 14,
   },
-  calendarTitle: { fontFamily: typography.family.bold, fontSize: 18, color: "#FFF" },
+  calendarTitle: { fontFamily: typography.family.bold, fontSize: typography.size.lg, color: colors.white },
   monthNav: { flexDirection: "row", alignItems: "center", gap: 4 },
   monthNavBtn: { width: 32, height: 32, justifyContent: "center", alignItems: "center" },
-  monthName: { fontFamily: typography.family.semibold, fontSize: 14, color: "rgba(255,255,255,0.7)", minWidth: 120, textAlign: "center" },
+  monthName: { fontFamily: typography.family.semibold, fontSize: typography.size.sm, color: "rgba(255,255,255,0.7)", minWidth: 120, textAlign: "center" },
 
   weekList: { gap: 8 },
   weekRow: {
     flexDirection: "row", alignItems: "center",
-    borderRadius: 14, paddingVertical: 13, paddingHorizontal: 14,
+    borderRadius: radii.md, paddingVertical: 13, paddingHorizontal: 14,
     borderWidth: 1,
   },
   weekRowActive: { backgroundColor: "rgba(255,255,255,0.07)", borderColor: "rgba(255,255,255,0.15)" },
   weekRowEmpty: { backgroundColor: "rgba(255,255,255,0.03)", borderColor: "rgba(255,255,255,0.1)" },
   weekRowFuture: { backgroundColor: "transparent", borderColor: "rgba(255,255,255,0.08)" },
   weekFlameSlot: { width: 22, marginRight: 8, alignItems: "center" },
-  weekLabelActive: { flex: 1, fontFamily: typography.family.semibold, fontSize: 13, color: "#FFF" },
-  weekLabelEmpty: { flex: 1, fontFamily: typography.family.regular, fontSize: 13, color: "rgba(255,255,255,0.5)", textDecorationLine: "line-through" },
-  weekLabelFuture: { flex: 1, fontFamily: typography.family.regular, fontSize: 13, color: "rgba(255,255,255,0.45)" },
+  weekLabelActive: { flex: 1, fontFamily: typography.family.semibold, fontSize: typography.size.xs, color: colors.white },
+  weekLabelEmpty: { flex: 1, fontFamily: typography.family.regular, fontSize: typography.size.xs, color: "rgba(255,255,255,0.5)", textDecorationLine: "line-through" },
+  weekLabelFuture: { flex: 1, fontFamily: typography.family.regular, fontSize: typography.size.xs, color: "rgba(255,255,255,0.45)" },
   weekRight: { flexDirection: "row", alignItems: "center", gap: 2 },
-  weekCount: { fontFamily: typography.family.bold, fontSize: 13, color: "rgba(255,255,255,0.5)" },
-  weekStatus: { fontFamily: typography.family.regular, fontSize: 12, color: "rgba(255,255,255,0.35)" },
+  weekCount: { fontFamily: typography.family.bold, fontSize: typography.size.xs, color: "rgba(255,255,255,0.5)" },
+  weekStatus: { fontFamily: typography.family.regular, fontSize: typography.size.xs, color: "rgba(255,255,255,0.35)" },
 
   // Random button
   randomBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12,
-    backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.08)", borderRadius: radii.lg,
     borderWidth: 1, borderColor: "rgba(255,255,255,0.12)",
     marginHorizontal: 20, marginBottom: 32, padding: 18,
   },
-  randomBtnText: { fontFamily: typography.family.bold, fontSize: 16, color: "#FFF" },
+  randomBtnText: { fontFamily: typography.family.bold, fontSize: typography.size.md, color: colors.white },
 
   // Settings
   settingsSection: { paddingHorizontal: 20, paddingBottom: 20 },
-  settingsSectionLabel: { fontSize: 12, fontFamily: typography.family.semibold, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, paddingLeft: 4 },
-  settingsCard: { backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 20, overflow: "hidden" },
+  settingsSectionLabel: { fontSize: typography.size.xs, fontFamily: typography.family.semibold, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, paddingLeft: 4 },
+  settingsCard: { backgroundColor: "rgba(255,255,255,0.06)", borderRadius: radii.lg, overflow: "hidden" },
   settingsDivider: { height: 1, backgroundColor: "rgba(255,255,255,0.05)", marginLeft: 60 },
   settingsRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 13, gap: 12 },
-  settingsIconWrap: { width: 36, height: 36, borderRadius: 10, justifyContent: "center", alignItems: "center" },
-  settingsLabel: { fontSize: 16, color: "#FFF", fontFamily: typography.family.semibold },
-  settingsSubValue: { fontSize: 13, color: "rgba(255,255,255,0.38)", fontFamily: typography.family.regular },
+  settingsIconWrap: { width: 36, height: 36, borderRadius: radii.sm, justifyContent: "center", alignItems: "center" },
+  settingsLabel: { fontSize: typography.size.md, color: colors.white, fontFamily: typography.family.semibold },
+  settingsSubValue: { fontSize: typography.size.xs, color: "rgba(255,255,255,0.38)", fontFamily: typography.family.regular },
 
   // Loading
   loadingOverlay: {
@@ -1055,7 +1055,7 @@ const styles = StyleSheet.create({
   // Modal back button
   modalBackBtn: {
     position: "absolute", left: 20, zIndex: 20,
-    width: 44, height: 44, borderRadius: 22,
+    width: 44, height: 44, borderRadius: radii.xl,
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center", alignItems: "center",
   },
@@ -1063,39 +1063,39 @@ const styles = StyleSheet.create({
   // Shuffle button
   weekLabelPill: {
     position: "absolute", alignSelf: "center",
-    backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 20,
+    backgroundColor: "rgba(0,0,0,0.55)", borderRadius: radii.lg,
     paddingHorizontal: 14, paddingVertical: 6,
     zIndex: 20,
   },
-  weekLabelPillText: { fontFamily: typography.family.semibold, fontSize: 12, color: "rgba(255,255,255,0.85)" },
+  weekLabelPillText: { fontFamily: typography.family.semibold, fontSize: typography.size.xs, color: "rgba(255,255,255,0.85)" },
 
   shuffleBtn: {
     flexDirection: "row", alignItems: "center", gap: 10,
-    backgroundColor: "rgba(0,0,0,0.7)", borderRadius: 30,
+    backgroundColor: "rgba(0,0,0,0.7)", borderRadius: radii.xl,
     paddingHorizontal: 20, paddingVertical: 12,
     borderWidth: 1, borderColor: "rgba(255,255,255,0.2)",
   },
-  shuffleBtnText: { fontFamily: typography.family.bold, fontSize: 15, color: "#FFF" },
+  shuffleBtnText: { fontFamily: typography.family.bold, fontSize: typography.size.sm, color: colors.white },
   randomLoadingOverlay: {
     position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
     justifyContent: "center", alignItems: "center",
   },
 
   // Edit username sheet
-  editSheet: { backgroundColor: "#161616", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 44 },
-  editSheetHandle: { width: 36, height: 4, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 2, alignSelf: "center", marginBottom: 24 },
-  editSheetTitle: { fontSize: 20, fontFamily: typography.family.bold, color: "#FFF", marginBottom: 20 },
-  editSheetInput: { backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 16, paddingHorizontal: 16, paddingVertical: 15, fontSize: 17, color: "#FFF", fontFamily: typography.family.regular, marginBottom: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
-  editSheetBtn: { backgroundColor: "#FFF", borderRadius: 16, paddingVertical: 15, alignItems: "center", marginBottom: 10 },
-  editSheetBtnText: { color: "#000", fontSize: 16, fontFamily: typography.family.bold },
+  editSheet: { backgroundColor: "#161616", borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, padding: 24, paddingBottom: 44 },
+  editSheetHandle: { width: 36, height: 4, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: radii.xs, alignSelf: "center", marginBottom: 24 },
+  editSheetTitle: { fontSize: typography.size.xl, fontFamily: typography.family.bold, color: colors.white, marginBottom: 20 },
+  editSheetInput: { backgroundColor: "rgba(255,255,255,0.08)", borderRadius: radii.lg, paddingHorizontal: 16, paddingVertical: 15, fontSize: typography.size.lg, color: colors.white, fontFamily: typography.family.regular, marginBottom: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
+  editSheetBtn: { backgroundColor: colors.white, borderRadius: radii.lg, paddingVertical: 15, alignItems: "center", marginBottom: 10 },
+  editSheetBtnText: { color: colors.black, fontSize: typography.size.md, fontFamily: typography.family.bold },
   editSheetCancel: { paddingVertical: 12, alignItems: "center" },
-  editSheetCancelText: { color: "rgba(255,255,255,0.35)", fontSize: 15, fontFamily: typography.family.semibold },
+  editSheetCancelText: { color: "rgba(255,255,255,0.35)", fontSize: typography.size.sm, fontFamily: typography.family.semibold },
 });
 
 const phStyles = StyleSheet.create({
   challengeCard: {
     backgroundColor: "rgba(255,255,255,0.06)",
-    borderRadius: 14,
+    borderRadius: radii.md,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
@@ -1104,19 +1104,19 @@ const phStyles = StyleSheet.create({
   challengeWeek: {
     color: "rgba(255,255,255,0.4)",
     fontFamily: typography.family.regular,
-    fontSize: 11,
+    fontSize: typography.size.xs,
     marginBottom: 4,
   },
   challengePrompt: {
-    color: "#FFF",
+    color: colors.white,
     fontFamily: typography.family.semibold,
-    fontSize: 14,
+    fontSize: typography.size.sm,
     lineHeight: 19,
   },
   winnerThumb: {
     width: 80,
     height: 80,
-    borderRadius: 10,
+    borderRadius: radii.sm,
     overflow: "hidden",
     backgroundColor: "#1A1A1A",
   },
@@ -1130,14 +1130,14 @@ const phStyles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   winnerLabelText: {
-    color: "#FFF",
+    color: colors.white,
     fontFamily: typography.family.semibold,
-    fontSize: 9,
+    fontSize: typography.size.xs,
   },
   noVotes: {
     color: "rgba(255,255,255,0.3)",
     fontFamily: typography.family.regular,
-    fontSize: 12,
+    fontSize: typography.size.xs,
     marginTop: 6,
   },
 });

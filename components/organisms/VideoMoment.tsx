@@ -12,7 +12,7 @@ import { SecondCaptureThumbnail } from "../molecules/SecondCaptureThumbnail";
 import { AuthorInfo } from "../molecules/AuthorInfo";
 import { ReactionsRow } from "../molecules/ReactionsRow";
 import { r2Storage } from "../../lib/r2";
-import { colors, spacing, radii, typography } from "../../lib/theme";
+import { colors, radii, spacing, typography } from "../../lib/theme";
 import { PhotoEntry, Reaction } from "../../lib/feed-types";
 
 interface VideoMomentProps {
@@ -242,7 +242,7 @@ const styles = StyleSheet.create({
     left: spacing.md + 2, 
     zIndex: 5, 
     backgroundColor: "rgba(0,0,0,0.58)", 
-    borderRadius: 10, 
+    borderRadius: radii.sm, 
     paddingHorizontal: spacing.sm + 2, 
     paddingVertical: spacing.xs + 1, 
     borderWidth: 1, 
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
   pauseCircle: { 
     width: 64, 
     height: 64, 
-    borderRadius: 32, 
+    borderRadius: radii.xl, 
     backgroundColor: colors.overlay, 
     justifyContent: "center", 
     alignItems: "center" 

@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
 import Accelerometer from "expo-sensors/build/Accelerometer";
 import Svg, { Path } from "react-native-svg";
-import { typography } from "../../lib/theme";
+import { colors, radii, typography } from "../../lib/theme";
 
 // ─── shake detection tunables ─────────────────────────────────────────────────
 // Strategy: count X-axis direction reversals (left→right or right→left).
@@ -393,7 +393,7 @@ const styles = StyleSheet.create({
   avatar: {
     width: 34,
     height: 34,
-    borderRadius: 17,
+    borderRadius: radii.lg,
     borderWidth: 1.5,
     borderColor: "rgba(255,255,255,0.5)",
   },
@@ -403,9 +403,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   avatarInitial: {
-    color: "#FFF",
+    color: colors.white,
     fontFamily: typography.family.bold,
-    fontSize: 14,
+    fontSize: typography.size.sm,
   },
   bigWaveContainer: {
     justifyContent: "center",
@@ -415,15 +415,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     backgroundColor: "rgba(0,0,0,0.55)",
-    borderRadius: 28,
+    borderRadius: radii.xl,
     paddingHorizontal: 32,
     paddingVertical: 24,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
   },
   bigWaveLabel: {
-    color: "#FFF",
-    fontSize: 28,
+    color: colors.white,
+    fontSize: typography.size.xxl,
     fontFamily: typography.family.bold,
     letterSpacing: 0.5,
   },

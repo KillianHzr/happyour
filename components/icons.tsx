@@ -1,11 +1,13 @@
 import { View, StyleSheet } from "react-native";
+import { colors } from "../lib/theme";
+
 
 type IconProps = {
   size?: number;
   color?: string;
 };
 
-export function ProfileIcon({ size = 22, color = "#fff" }: IconProps) {
+export function ProfileIcon({ size = 22, color = colors.white }: IconProps) {
   const head = size * 0.32;
   const bodyW = size * 0.7;
   const bodyH = size * 0.28;
@@ -38,7 +40,7 @@ export function ProfileIcon({ size = 22, color = "#fff" }: IconProps) {
   );
 }
 
-export function VaultIcon({ size = 22, color = "#fff" }: IconProps) {
+export function VaultIcon({ size = 22, color = colors.white }: IconProps) {
   const bw = size * 0.08;
   const bodyW = size * 0.72;
   const bodyH = size * 0.5;
@@ -84,7 +86,7 @@ export function VaultIcon({ size = 22, color = "#fff" }: IconProps) {
   );
 }
 
-export function MomentIcon({ size = 22, color = "#fff" }: IconProps) {
+export function MomentIcon({ size = 22, color = colors.white }: IconProps) {
   const outerSize = size;
   const bw = size * 0.08;
   const plusSize = size * 0.5;

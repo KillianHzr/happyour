@@ -27,7 +27,7 @@ import { useAuth } from "../lib/auth-context";
 import { CloseIcon } from "./atoms/CloseIcon";
 import { CommentItem, Comment } from "./molecules/CommentItem";
 import { CommentInput } from "./molecules/CommentInput";
-import { typography } from "../lib/theme";
+import { colors, radii, typography } from "../lib/theme";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const MODAL_HEIGHT = SCREEN_HEIGHT * 0.75;
@@ -287,7 +287,7 @@ export default function CommentModal({ visible, onClose, onSeen, photoId, photoO
 
                 {loading ? (
                   <View style={styles.loaderContainer}>
-                    <ActivityIndicator size="large" color="#FFF" />
+                    <ActivityIndicator size="large" color={colors.white} />
                   </View>
                 ) : (
                   <FlatList
@@ -357,8 +357,8 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: -SCREEN_HEIGHT,
     backgroundColor: "rgba(25,25,25,0.75)",
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
     overflow: "hidden",
   },
   dragArea: {
@@ -371,7 +371,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 4,
     backgroundColor: "rgba(255,255,255,0.25)",
-    borderRadius: 2,
+    borderRadius: radii.xs,
     marginBottom: 8,
   },
   header: {
@@ -385,8 +385,8 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: typography.family.bold,
-    fontSize: 16,
-    color: "#FFF",
+    fontSize: typography.size.md,
+    color: colors.white,
     letterSpacing: 0.5,
   },
   closeBtn: {
@@ -411,8 +411,8 @@ const styles = StyleSheet.create({
     marginTop: 60,
   },
   emptyText: {
-    fontFamily: "Inter_500Medium",
-    fontSize: 15,
+    fontFamily: typography.family.medium,
+    fontSize: typography.size.sm,
     color: "rgba(255,255,255,0.3)",
   },
   inputArea: {
@@ -426,11 +426,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 14,
     backgroundColor: "rgba(255,255,255,0.05)",
-    borderRadius: 16,
+    borderRadius: radii.lg,
   },
   alreadySharedText: {
     fontFamily: typography.family.semibold,
-    fontSize: 14,
+    fontSize: typography.size.sm,
     color: "rgba(255,255,255,0.4)",
   },
 });

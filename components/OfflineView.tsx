@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { colors, typography } from "../lib/theme";
+import { colors, radii, typography } from "../lib/theme";
 
 export default function OfflineView() {
   return (
@@ -27,22 +27,22 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderWidth: 2,
-    borderColor: "#fff",
-    borderRadius: 6,
+    borderColor: colors.white,
+    borderRadius: radii.xs,
     marginBottom: 24,
     transform: [{ rotate: "45deg" }],
     opacity: 0.3,
   },
   title: {
     fontFamily: typography.family.bold,
-    fontSize: 24,
+    fontSize: typography.size.xxl,
     color: colors.text,
     marginBottom: 8,
     textAlign: "center",
   },
   subtitle: {
     fontFamily: typography.family.regular,
-    fontSize: 14,
+    fontSize: typography.size.sm,
     color: colors.secondary,
     textAlign: "center",
     lineHeight: 20,

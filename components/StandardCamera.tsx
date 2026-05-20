@@ -1,7 +1,7 @@
 import React, { forwardRef, useEffect, useRef, useState } from "react";
 import { View, StyleSheet, Text, TouchableOpacity, Dimensions } from "react-native";
 import { CameraView, useCameraPermissions, useMicrophonePermissions, FlashMode, CameraType } from "expo-camera";
-import { typography } from "../lib/theme";
+import { colors, radii, typography } from "../lib/theme";
 
 interface Props {
   isActive?: boolean;
@@ -165,16 +165,16 @@ StandardCamera.displayName = "StandardCamera";
 export default StandardCamera;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#000" },
+  container: { flex: 1, backgroundColor: colors.black },
   cameraWrapper: {
     flex: 1,
     width: '100%',
-    backgroundColor: "#000",
-    borderRadius: 32,
+    backgroundColor: colors.black,
+    borderRadius: radii.xl,
     overflow: "hidden",
   },
   center: { justifyContent: "center", alignItems: "center", padding: 40 },
-  errorText: { color: "#FFF", textAlign: "center", marginBottom: 20, fontFamily: typography.family.regular },
-  button: { backgroundColor: "#FFF", paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
-  buttonText: { color: "#000", fontFamily: typography.family.bold },
+  errorText: { color: colors.white, textAlign: "center", marginBottom: 20, fontFamily: typography.family.regular },
+  button: { backgroundColor: colors.white, paddingHorizontal: 24, paddingVertical: 12, borderRadius: radii.md },
+  buttonText: { color: colors.black, fontFamily: typography.family.bold },
 });

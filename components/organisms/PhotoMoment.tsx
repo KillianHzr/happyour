@@ -13,7 +13,7 @@ import { AuthorInfo } from "../molecules/AuthorInfo";
 import { ReactionsRow } from "../molecules/ReactionsRow";
 import { AudioPlayerView } from "../molecules/AudioPlayerView";
 import { r2Storage } from "../../lib/r2";
-import { colors, spacing, radii, typography } from "../../lib/theme";
+import { colors, radii, spacing, typography } from "../../lib/theme";
 
 import { PhotoEntry, Reaction } from "../../lib/feed-types";
 
@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
     left: spacing.md + 2, 
     zIndex: 5, 
     backgroundColor: "rgba(0,0,0,0.58)", 
-    borderRadius: 10, 
+    borderRadius: radii.sm, 
     paddingHorizontal: spacing.sm + 2, 
     paddingVertical: spacing.xs + 1, 
     borderWidth: 1, 

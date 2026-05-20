@@ -28,7 +28,7 @@ export default function ProfileRedirect() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: "center", alignItems: "center" }}>
-      <ActivityIndicator color="#FFF" />
+      <ActivityIndicator color={colors.white} />
     </View>
   );
 }

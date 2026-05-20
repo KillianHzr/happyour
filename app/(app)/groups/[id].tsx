@@ -31,7 +31,7 @@ import BottomSheet from "../../../components/BottomSheet";
 import LiveReactions from "../../../components/reveal/LiveReactions";
 import MotivationalNotificationsModal from "../../../components/MotivationalNotificationsModal";
 import { scheduleImmediateLocalNotification, scheduleFirstMomentReminder, notifyReaction } from "../../../lib/notifications";
-import { typography } from "../../../lib/theme";
+import { colors, radii, typography } from "../../../lib/theme";
 
 const isEmoji = (str: string) => {
   const regexExp = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/gi;
@@ -1073,7 +1073,7 @@ export default function MainPagerScreen() {
           <View style={styles.tabBarContent}>
             <TouchableOpacity style={styles.tab} onPress={() => jumpTo(0)}>
               <View style={{ position: "relative" }}>
-                <ProfileIcon color={currentPage === 0 ? "#FFF" : "rgba(255,255,255,0.4)"} size={24} />
+                <ProfileIcon color={currentPage === 0 ? colors.white : "rgba(255,255,255,0.4)"} size={24} />
                 {streakDays > 0 && (
                   <View style={styles.streakBadge}>
                     <Svg width="10" height="13" viewBox="0 0 16 21" fill="none">
@@ -1086,11 +1086,11 @@ export default function MainPagerScreen() {
               <Text style={[styles.tabLabel, currentPage === 0 && styles.tabLabelActive]}>Profil</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.tab} onPress={() => jumpTo(1)}>
-              <MomentIcon color={currentPage === 1 ? "#FFF" : "rgba(255,255,255,0.4)"} size={28} />
+              <MomentIcon color={currentPage === 1 ? colors.white : "rgba(255,255,255,0.4)"} size={28} />
               <Text style={[styles.tabLabel, currentPage === 1 && styles.tabLabelActive]}>Moment</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.tab} onPress={() => jumpTo(2)}>
-              <VaultIcon color={currentPage === 2 ? "#FFF" : "rgba(255,255,255,0.4)"} size={24} />
+              <VaultIcon color={currentPage === 2 ? colors.white : "rgba(255,255,255,0.4)"} size={24} />
               <Text style={[styles.tabLabel, currentPage === 2 && styles.tabLabelActive]}>Coffre</Text>
             </TouchableOpacity>
           </View>
@@ -1105,7 +1105,7 @@ export default function MainPagerScreen() {
             onPress={() => setShowReveal(false)}
           >
             <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <Path d="M19 12H5M12 5l-7 7 7 7" stroke="#FFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              <Path d="M19 12H5M12 5l-7 7 7 7" stroke={colors.white} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
           </TouchableOpacity>
           <PhotoFeed
@@ -1169,7 +1169,7 @@ export default function MainPagerScreen() {
                       onPress={openCustomTextInput} 
                       style={[styles.wheelBtn, isCustomText && styles.wheelBtnActive]}
                     >
-                      <Svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="2.5">
+                      <Svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={colors.white} strokeWidth="2.5">
                         <Path d="M12 19l7-7 3 3-7 7-3-3zM18 13l-1.5-1.5M14 17l-1.5-1.5M10 21l-1.5-1.5" />
                         <Path d="M3 21h4.5l10.5-10.5-4.5-4.5L3 16.5V21z" strokeLinecap="round" strokeLinejoin="round" />
                       </Svg>
@@ -1417,55 +1417,55 @@ export default function MainPagerScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#000" },
-  loaderWrap: { flex: 1, backgroundColor: "#000", justifyContent: "center", alignItems: "center" },
+  container: { flex: 1, backgroundColor: colors.black },
+  loaderWrap: { flex: 1, backgroundColor: colors.black, justifyContent: "center", alignItems: "center" },
   pager: { flex: 1 },
-  page: { width: SCREEN_WIDTH, height: "100%", backgroundColor: "#000" },
+  page: { width: SCREEN_WIDTH, height: "100%", backgroundColor: colors.black },
 
   // Navbar
   tabBarContainer: { position: "absolute", bottom: 0, left: 0, right: 0, height: NAVBAR_HEIGHT, overflow: "hidden", zIndex: 100, backgroundColor: "rgba(10,10,10,1)" },
   tabBarContent: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-evenly", paddingTop: 12 },
   tab: { alignItems: "center", justifyContent: "center", gap: 4, flex: 1 },
-  tabLabel: { fontSize: 10, fontFamily: typography.family.semibold, color: "rgba(255,255,255,0.4)" },
-  tabLabelActive: { color: "#FFF" },
-  streakBadge: { position: "absolute", top: -5, right: -8, width: 16, height: 16, borderRadius: 8, justifyContent: "center", alignItems: "center" },
-  streakBadgeText: { position: "absolute", fontSize: 8, fontFamily: typography.family.bold, color: "#FFF", textAlign: "center", bottom: 1 },
+  tabLabel: { fontSize: typography.size.xs, fontFamily: typography.family.semibold, color: "rgba(255,255,255,0.4)" },
+  tabLabelActive: { color: colors.white },
+  streakBadge: { position: "absolute", top: -5, right: -8, width: 16, height: 16, borderRadius: radii.sm, justifyContent: "center", alignItems: "center" },
+  streakBadgeText: { position: "absolute", fontSize: typography.size.xs, fontFamily: typography.family.bold, color: colors.white, textAlign: "center", bottom: 1 },
 
   // Reveal overlay
-  revealOverlay: { zIndex: 200, backgroundColor: "#000" },
+  revealOverlay: { zIndex: 200, backgroundColor: colors.black },
   revealBackBtn: {
     position: "absolute", left: 16, zIndex: 201,
-    width: 40, height: 40, borderRadius: 20,
+    width: 40, height: 40, borderRadius: radii.lg,
     backgroundColor: "rgba(0,0,0,0.6)",
     justifyContent: "center", alignItems: "center",
   },
 
   // Leave confirm
-  leaveTitle: { fontSize: 20, fontFamily: typography.family.bold, color: "#FFF", marginBottom: 12 },
-  leaveBody: { fontSize: 15, fontFamily: typography.family.regular, color: "rgba(255,255,255,0.55)", marginBottom: 28, lineHeight: 22 },
-  leaveConfirmBtn: { backgroundColor: "#FF3B30", borderRadius: 16, paddingVertical: 15, alignItems: "center", marginBottom: 10 },
-  leaveConfirmText: { color: "#FFF", fontSize: 16, fontFamily: typography.family.bold },
+  leaveTitle: { fontSize: typography.size.xl, fontFamily: typography.family.bold, color: colors.white, marginBottom: 12 },
+  leaveBody: { fontSize: typography.size.sm, fontFamily: typography.family.regular, color: "rgba(255,255,255,0.55)", marginBottom: 28, lineHeight: 22 },
+  leaveConfirmBtn: { backgroundColor: "#FF3B30", borderRadius: radii.lg, paddingVertical: 15, alignItems: "center", marginBottom: 10 },
+  leaveConfirmText: { color: colors.white, fontSize: typography.size.md, fontFamily: typography.family.bold },
   leaveCancelWrap: { alignItems: "center", paddingVertical: 8 },
-  leaveCancelText: { color: "rgba(255,255,255,0.35)", fontSize: 15, fontFamily: typography.family.semibold },
+  leaveCancelText: { color: "rgba(255,255,255,0.35)", fontSize: typography.size.sm, fontFamily: typography.family.semibold },
 
   // Add group
-  addGroupTitle: { fontSize: 20, fontFamily: typography.family.bold, color: "#FFF", marginBottom: 8 },
-  addGroupSub: { fontSize: 14, fontFamily: typography.family.regular, color: "rgba(255,255,255,0.45)", marginBottom: 24 },
-  addGroupPrimary: { backgroundColor: "#FFF", borderRadius: 16, paddingVertical: 16, alignItems: "center", marginBottom: 12 },
-  addGroupPrimaryText: { color: "#000", fontSize: 16, fontFamily: typography.family.bold },
-  addGroupSecondary: { backgroundColor: "rgba(255,255,255,0.08)", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)", borderRadius: 16, paddingVertical: 16, alignItems: "center", marginBottom: 12 },
-  addGroupSecondaryText: { color: "#FFF", fontSize: 16, fontFamily: typography.family.semibold },
+  addGroupTitle: { fontSize: typography.size.xl, fontFamily: typography.family.bold, color: colors.white, marginBottom: 8 },
+  addGroupSub: { fontSize: typography.size.sm, fontFamily: typography.family.regular, color: "rgba(255,255,255,0.45)", marginBottom: 24 },
+  addGroupPrimary: { backgroundColor: colors.white, borderRadius: radii.lg, paddingVertical: 16, alignItems: "center", marginBottom: 12 },
+  addGroupPrimaryText: { color: colors.black, fontSize: typography.size.md, fontFamily: typography.family.bold },
+  addGroupSecondary: { backgroundColor: "rgba(255,255,255,0.08)", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)", borderRadius: radii.lg, paddingVertical: 16, alignItems: "center", marginBottom: 12 },
+  addGroupSecondaryText: { color: colors.white, fontSize: typography.size.md, fontFamily: typography.family.semibold },
   // Sheet inputs
   sheetInput: {
-    backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 12,
-    paddingHorizontal: 16, paddingVertical: 14, color: "#FFF",
-    fontFamily: typography.family.semibold, fontSize: 16,
+    backgroundColor: "rgba(255,255,255,0.08)", borderRadius: radii.md,
+    paddingHorizontal: 16, paddingVertical: 14, color: colors.white,
+    fontFamily: typography.family.semibold, fontSize: typography.size.md,
     borderWidth: 1, borderColor: "rgba(255,255,255,0.15)",
     marginBottom: 16,
   },
-  sheetCodeInput: { fontSize: 22, textAlign: "center", letterSpacing: 3, fontFamily: typography.family.bold },
+  sheetCodeInput: { fontSize: typography.size.xl, textAlign: "center", letterSpacing: 3, fontFamily: typography.family.bold },
   sheetCancelWrap: { alignItems: "center", paddingVertical: 8 },
-  sheetCancelText: { color: "rgba(255,255,255,0.4)", fontFamily: typography.family.semibold, fontSize: 15 },
+  sheetCancelText: { color: "rgba(255,255,255,0.4)", fontFamily: typography.family.semibold, fontSize: typography.size.sm },
 
   // New Reactions UI
   emojiWheel: {
@@ -1473,14 +1473,14 @@ const styles = StyleSheet.create({
     right: 24, // Match the padding of the momentOverlay
     bottom: NAVBAR_HEIGHT + 140, // Elevated further to ensure it sits above the + button
     backgroundColor: "rgba(255,255,255,0.05)",
-    borderRadius: 35,
+    borderRadius: radii.xl,
     padding: 8,
     gap: 10,
     alignItems: "center",
     borderWidth: 1.5,
     borderColor: "rgba(255,255,255,0.25)",
     elevation: 12,
-    shadowColor: "#000",
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
     shadowRadius: 12,
@@ -1489,7 +1489,7 @@ const styles = StyleSheet.create({
   wheelBtn: {
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: radii.full,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "rgba(255,255,255,0.12)",
@@ -1499,30 +1499,30 @@ const styles = StyleSheet.create({
     borderColor: "#FFF065",
     borderWidth: 2.5,
   },
-  wheelEmoji: { fontSize: 28 },
+  wheelEmoji: { fontSize: typography.size.xxl },
   
   customModalContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  customModalClose: { position: "absolute", top: 60, right: 20, width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", zIndex: 10 },
+  customModalClose: { position: "absolute", top: 60, right: 20, width: 44, height: 44, borderRadius: radii.xl, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", zIndex: 10 },
   customInputWrapper: { width: "100%", alignItems: "center", paddingHorizontal: 40, gap: 32 },
   customPreviewSticker: { marginBottom: 10, transform: [{ scale: 1.2 }] },
-  customTextInput: { width: "100%", color: "#FFF", fontFamily: typography.family.extrabold, textAlign: "center", padding: 20, height: 90 },
-  customSendBtn: { backgroundColor: "#FFF", paddingHorizontal: 32, paddingVertical: 14, borderRadius: 100 },
+  customTextInput: { width: "100%", color: colors.white, fontFamily: typography.family.extrabold, textAlign: "center", padding: 20, height: 90 },
+  customSendBtn: { backgroundColor: colors.white, paddingHorizontal: 32, paddingVertical: 14, borderRadius: radii.xl },
   customSendBtnDisabled: { opacity: 0.5 },
-  customSendText: { color: "#000", fontFamily: typography.family.bold, fontSize: 16 },
+  customSendText: { color: colors.black, fontFamily: typography.family.bold, fontSize: typography.size.md },
   customModalActions: { alignItems: "center", gap: 16, width: "100%" },
   customDeleteBtn: { paddingVertical: 8 },
-  customDeleteText: { color: "#FF3B30", fontFamily: typography.family.semibold, fontSize: 15 },
+  customDeleteText: { color: "#FF3B30", fontFamily: typography.family.semibold, fontSize: typography.size.sm },
   customTextInputWrapper: { width: "100%", position: "relative" },
   emojiTooltip: {
     position: "absolute", bottom: "100%", alignSelf: "center", marginBottom: 8,
     flexDirection: "row", alignItems: "center", gap: 6,
-    backgroundColor: "rgba(28,28,30,0.95)", borderRadius: 20,
+    backgroundColor: "rgba(28,28,30,0.95)", borderRadius: radii.lg,
     paddingHorizontal: 14, paddingVertical: 8,
     borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
   },
-  emojiTooltipIcon: { fontSize: 13 },
-  emojiTooltipText: { color: "rgba(255,255,255,0.8)", fontFamily: typography.family.semibold, fontSize: 13 },
+  emojiTooltipIcon: { fontSize: typography.size.xs },
+  emojiTooltipText: { color: "rgba(255,255,255,0.8)", fontFamily: typography.family.semibold, fontSize: typography.size.xs },
   historyRow: { flexDirection: "row", gap: 8, justifyContent: "center", flexWrap: "wrap" },
-  historyChip: { backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7 },
-  historyChipText: { color: "#FFF", fontFamily: typography.family.bold, fontSize: 13 },
+  historyChip: { backgroundColor: "rgba(255,255,255,0.15)", borderRadius: radii.lg, paddingHorizontal: 14, paddingVertical: 7 },
+  historyChipText: { color: colors.white, fontFamily: typography.family.bold, fontSize: typography.size.xs },
 });

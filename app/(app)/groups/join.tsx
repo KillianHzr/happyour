@@ -101,9 +101,9 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { flex: 1, paddingHorizontal: 24 },
   backBtn: { marginBottom: 32 },
-  backText: { color: colors.secondary, fontFamily: typography.family.semibold, fontSize: 16 },
-  title: { fontFamily: typography.family.bold, fontSize: 32, color: "#FFF", marginBottom: 12, letterSpacing: -1 },
-  subtitle: { fontFamily: typography.family.regular, fontSize: 16, color: colors.secondary, lineHeight: 24, marginBottom: 40 },
-  input: { fontSize: 24, fontFamily: typography.family.bold, textAlign: "center", letterSpacing: 2 },
+  backText: { color: colors.secondary, fontFamily: typography.family.semibold, fontSize: typography.size.md },
+  title: { fontFamily: typography.family.bold, fontSize: typography.size.subtitle, color: colors.white, marginBottom: 12, letterSpacing: -1 },
+  subtitle: { fontFamily: typography.family.regular, fontSize: typography.size.md, color: colors.secondary, lineHeight: 24, marginBottom: 40 },
+  input: { fontSize: typography.size.xxl, fontFamily: typography.family.bold, textAlign: "center", letterSpacing: 2 },
   button: { marginTop: 24 },
 });
