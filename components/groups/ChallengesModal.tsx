@@ -212,22 +212,6 @@ export default function ChallengesModal({ visible, onClose, allGroups, currentUs
             )}
           </View>
         </View>
-        {__DEV__ && (
-          <View style={styles.devRow}>
-            <Text style={styles.devLabel}>PÉRIODE (DEV)</Text>
-            {(["auto", 1, 2] as const).map((v) => (
-              <TouchableOpacity
-                key={String(v)}
-                style={[styles.devPill, devPeriodOverride === v && styles.devPillActive]}
-                onPress={() => setDevPeriodOverride(v)}
-              >
-                <Text style={[styles.devPillText, devPeriodOverride === v && styles.devPillTextActive]}>
-                  {v === "auto" ? "Auto" : `P${v}`}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
 
         <ScrollView
           style={{ flex: 1 }}
@@ -463,41 +447,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: "center",
     paddingVertical: 4,
-  },
-  devRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,200,0,0.15)",
-    backgroundColor: "rgba(255,200,0,0.04)",
-  },
-  devLabel: {
-    color: "rgba(255,200,0,0.6)",
-    fontFamily: typography.family.bold,
-    fontSize: 10,
-    letterSpacing: 0.8,
-    marginRight: 4,
-  },
-  devPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255,200,0,0.3)",
-  },
-  devPillActive: {
-    backgroundColor: "rgba(255,200,0,0.25)",
-    borderColor: "rgba(255,200,0,0.7)",
-  },
-  devPillText: {
-    color: "rgba(255,200,0,0.5)",
-    fontFamily: typography.family.semibold,
-    fontSize: 12,
-  },
-  devPillTextActive: {
-    color: "#FFD700",
   },
 });

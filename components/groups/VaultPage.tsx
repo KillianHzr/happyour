@@ -50,6 +50,7 @@ type Props = {
   onDebugShowCurrentChallenges?: () => void;
   onDebugOpenCreateCustom?: () => void;
   onDebugOpenQueueCustom?: () => void;
+  onGoToCamera?: () => void;
 };
 
 function getStrokeWidth(count: number): number {
@@ -120,7 +121,7 @@ export default function VaultPage({
   unlocked, currentUserPostedThisWeek, onOpenReveal, onOpenSettings, onLeaveGroup, onRemoveMember,
   groupId, vaultChallenges, onRefresh, refreshing, onSimulateReveal, onDebugNotifReveal, onDebugNotifPhoto, onDebugNotifInvite,
   onDebugResetChallenges, onDebugResetMyResponse, onDebugShowCurrentChallenges,
-  onDebugOpenCreateCustom, onDebugOpenQueueCustom,
+  onDebugOpenCreateCustom, onDebugOpenQueueCustom, onGoToCamera,
 }: Props) {
   const insets = useSafeAreaInsets();
   const { text: timeLeft } = useCountdown(revealDate);
@@ -132,6 +133,7 @@ export default function VaultPage({
   const [removing, setRemoving] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [showDebugModal, setShowDebugModal] = useState(false);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
   const prevActiveId = useRef(activeGroupId);
@@ -322,59 +324,68 @@ export default function VaultPage({
                 <LockIcon />
                 <Text style={styles.revealLockedTitle}>Reveal verrouillé</Text>
                 <Text style={styles.revealLockedHint}>Tu n'as pas partagé de moment cette semaine</Text>
+                {onGoToCamera && (
+                  <TouchableOpacity 
+                    style={styles.postFirstBtn} 
+                    onPress={onGoToCamera}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.postFirstBtnText}>Poster mon moment !</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )
           ) : (
-            <View style={[styles.revealCard, { opacity: 0.6 }]}>
-              <Text style={styles.revealEmoji}>😔</Text>
-              <Text style={styles.revealTitle}>Personne n'a partagé de moment</Text>
+            <View style={styles.revealCard}>
+              <View style={{ opacity: 0.6, alignItems: 'center' }}>
+                <Text style={styles.revealEmoji}>😔</Text>
+                <Text style={styles.revealTitle}>Personne n'a partagé de moment</Text>
+                <Text style={styles.revealEmptyHint}>Poste le premier moment pour le prochain reveal</Text>
+              </View>
+              {onGoToCamera && (
+                <TouchableOpacity 
+                  style={styles.postFirstBtn} 
+                  onPress={onGoToCamera}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.postFirstBtnText}>Poste pour le prochain reveal !</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )
         ) : (
-          <>
-            <View style={[styles.statsCard, strokeWidth > 0 && { borderWidth: strokeWidth }, !currentUserPostedThisWeek && { overflow: "hidden", borderColor: "rgba(255,166,0,0.35)" }]}>
-              {!currentUserPostedThisWeek && (
-                <View style={StyleSheet.absoluteFill} pointerEvents="none">
-                  <Svg style={StyleSheet.absoluteFill}>
-                    {Array.from({ length: 30 }).map((_, i) => (
-                      <Path key={i} d={`M${i * 22} 0 L${i * 22 - 200} 200`} stroke="rgba(255,166,0,0.09)" strokeWidth="11" />
-                    ))}
-                  </Svg>
-                  <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(255,166,0,0.06)" }]} />
-                </View>
-              )}
+          currentUserPostedThisWeek ? (
+            <View style={[styles.statsCard, strokeWidth > 0 && { borderWidth: strokeWidth }]}>
               <View style={styles.statsRow}>
                 <View style={styles.statBlock}>
-                  {currentUserPostedThisWeek ? (
-                    <>
-                      <Text style={styles.statNumber}>{photoCount}</Text>
-                      <Text style={styles.statLabelText}>TOTAL</Text>
-                    </>
-                  ) : (
-                    <View style={styles.statLockWrap}>
-                      <Svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                        <Path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="#FFA600" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                        <Path d="M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z" stroke="#FFA600" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                      </Svg>
-                    </View>
-                  )}
+                  <Text style={styles.statNumber}>{photoCount}</Text>
+                  <Text style={styles.statLabelText}>TOTAL</Text>
                 </View>
                 <View style={styles.statSeparator} />
                 <View style={[styles.statBlock, { flex: 2, alignItems: "flex-start", paddingLeft: 16 }]}>
-                  {currentUserPostedThisWeek ? (
-                    <>
-                      <Text style={styles.statHint}>Déverrouillage dans</Text>
-                      <Text style={styles.statCountdown}>{timeLeft}</Text>
-                    </>
-                  ) : (
-                    <Text style={styles.postReminderText}>
-                      {"Poste au moins un moment pour accéder\nau reveal du "}<Text style={styles.postReminderBold}>{formatRevealDeadline(revealDate)}</Text>
-                    </Text>
-                  )}
+                  <Text style={styles.statHint}>Déverrouillage dans</Text>
+                  <Text style={styles.statCountdown}>{timeLeft}</Text>
                 </View>
               </View>
             </View>
-          </>
+          ) : (
+            <View style={styles.revealLockedCard}>
+              <LockIcon />
+              <Text style={styles.revealLockedTitle}>Reveal verrouillé</Text>
+              <Text style={styles.revealLockedHint}>
+                {"Poste au moins un moment pour accéder\nau reveal du "}<Text style={{ fontFamily: typography.family.bold, color: "#FFF" }}>{formatRevealDeadline(revealDate)}</Text>
+              </Text>
+              {onGoToCamera && (
+                <TouchableOpacity 
+                  style={styles.postFirstBtn} 
+                  onPress={onGoToCamera}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.postFirstBtnText}>Poster mon moment !</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )
         )}
 
         {/* Challenge results (visible after reveal ends) */}
@@ -383,7 +394,13 @@ export default function VaultPage({
         )}
 
         {/* Participants */}
-        <Text style={styles.sectionTitle}>Participants</Text>
+        <TouchableOpacity 
+          onPress={onSimulateReveal} 
+          activeOpacity={1}
+          style={{ paddingVertical: 10, marginTop: -10 }} // Larger hit area
+        >
+          <Text style={styles.sectionTitle}>Participants</Text>
+        </TouchableOpacity>
         <View style={styles.participantsRow}>
           {displayedMembers.map((m) => (
             <View key={m.user_id}>{renderAvatar(m, crownUserId === m.user_id)}</View>
@@ -399,7 +416,9 @@ export default function VaultPage({
         </View>
 
         {/* Access */}
-        <Text style={styles.sectionTitle}>Accès</Text>
+        <TouchableOpacity onPress={() => setShowDebugModal(true)} activeOpacity={1}>
+          <Text style={styles.sectionTitle}>Accès</Text>
+        </TouchableOpacity>
         <View style={styles.accessCard}>
           <View style={styles.accessRow}>
             <Text style={styles.accessLabel}>code</Text>
@@ -417,57 +436,6 @@ export default function VaultPage({
             </TouchableOpacity>
           </View>
         </View>
-
-        {/* DEV tools */}
-        {__DEV__ && (
-          <View style={{ gap: 8, marginTop: 8 }}>
-            {onSimulateReveal && (
-              <TouchableOpacity style={styles.debugBtn} onPress={onSimulateReveal}>
-                <Text style={styles.debugBtnText}>🔓 Simuler reveal (DEV)</Text>
-              </TouchableOpacity>
-            )}
-            {onDebugNotifReveal && (
-              <TouchableOpacity style={styles.debugBtn} onPress={onDebugNotifReveal}>
-                <Text style={styles.debugBtnText}>🔔 Debug Reveal (DEV)</Text>
-              </TouchableOpacity>
-            )}
-            {onDebugNotifPhoto && (
-              <TouchableOpacity style={styles.debugBtn} onPress={onDebugNotifPhoto}>
-                <Text style={styles.debugBtnText}>🔔 Debug Photo (DEV)</Text>
-              </TouchableOpacity>
-            )}
-            {onDebugNotifInvite && (
-              <TouchableOpacity style={styles.debugBtn} onPress={onDebugNotifInvite}>
-                <Text style={styles.debugBtnText}>🔔 Debug Invite (DEV)</Text>
-              </TouchableOpacity>
-            )}
-            {onDebugResetChallenges && (
-              <TouchableOpacity style={styles.debugBtn} onPress={onDebugResetChallenges}>
-                <Text style={styles.debugBtnText}>🗑️ Reset défis semaine (DEV)</Text>
-              </TouchableOpacity>
-            )}
-            {onDebugResetMyResponse && (
-              <TouchableOpacity style={styles.debugBtn} onPress={onDebugResetMyResponse}>
-                <Text style={styles.debugBtnText}>↩️ Reset ma réponse défi (DEV)</Text>
-              </TouchableOpacity>
-            )}
-            {onDebugShowCurrentChallenges && (
-              <TouchableOpacity style={styles.debugBtn} onPress={onDebugShowCurrentChallenges}>
-                <Text style={styles.debugBtnText}>📅 Défis semaine actuelle (DEV)</Text>
-              </TouchableOpacity>
-            )}
-            {onDebugOpenCreateCustom && (
-              <TouchableOpacity style={styles.debugBtn} onPress={onDebugOpenCreateCustom}>
-                <Text style={styles.debugBtnText}>🎯 Créer défi custom (DEV)</Text>
-              </TouchableOpacity>
-            )}
-            {onDebugOpenQueueCustom && (
-              <TouchableOpacity style={styles.debugBtn} onPress={onDebugOpenQueueCustom}>
-                <Text style={styles.debugBtnText}>📋 Ma file custom (DEV)</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
       </ScrollView>
       </Animated.View>
 
@@ -517,6 +485,61 @@ export default function VaultPage({
             ))}
           </View>
         </ScrollView>
+      </BottomSheet>
+
+      {/* ── Debug Modal ── */}
+      <BottomSheet visible={showDebugModal} onClose={() => setShowDebugModal(false)}>
+        <Text style={styles.membersTitle}>Debug Tools (DEV)</Text>
+        <View style={{ gap: 10, paddingBottom: 20 }}>
+          {onSimulateReveal && (
+            <TouchableOpacity style={styles.debugBtn} onPress={onSimulateReveal}>
+              <Text style={styles.debugBtnText}>🔓 Simuler reveal</Text>
+            </TouchableOpacity>
+          )}
+          {onDebugNotifReveal && (
+            <TouchableOpacity style={styles.debugBtn} onPress={onDebugNotifReveal}>
+              <Text style={styles.debugBtnText}>🔔 Debug Reveal Notif</Text>
+            </TouchableOpacity>
+          )}
+          {onDebugNotifPhoto && (
+            <TouchableOpacity style={styles.debugBtn} onPress={onDebugNotifPhoto}>
+              <Text style={styles.debugBtnText}>🔔 Debug Photo Notif</Text>
+            </TouchableOpacity>
+          )}
+          {onDebugNotifInvite && (
+            <TouchableOpacity style={styles.debugBtn} onPress={onDebugNotifInvite}>
+              <Text style={styles.debugBtnText}>🔔 Debug Invite Notif</Text>
+            </TouchableOpacity>
+          )}
+          {onDebugResetChallenges && (
+            <TouchableOpacity style={styles.debugBtn} onPress={onDebugResetChallenges}>
+              <Text style={styles.debugBtnText}>🗑️ Reset défis semaine</Text>
+            </TouchableOpacity>
+          )}
+          {onDebugResetMyResponse && (
+            <TouchableOpacity style={styles.debugBtn} onPress={onDebugResetMyResponse}>
+              <Text style={styles.debugBtnText}>↩️ Reset ma réponse défi</Text>
+            </TouchableOpacity>
+          )}
+          {onDebugShowCurrentChallenges && (
+            <TouchableOpacity style={styles.debugBtn} onPress={onDebugShowCurrentChallenges}>
+              <Text style={styles.debugBtnText}>📅 Défis semaine actuelle</Text>
+            </TouchableOpacity>
+          )}
+          {onDebugOpenCreateCustom && (
+            <TouchableOpacity style={styles.debugBtn} onPress={onDebugOpenCreateCustom}>
+              <Text style={styles.debugBtnText}>🎯 Créer défi custom</Text>
+            </TouchableOpacity>
+          )}
+          {onDebugOpenQueueCustom && (
+            <TouchableOpacity style={styles.debugBtn} onPress={onDebugOpenQueueCustom}>
+              <Text style={styles.debugBtnText}>📋 Ma file custom</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        <TouchableOpacity onPress={() => setShowDebugModal(false)} style={styles.removeCancelWrap}>
+          <Text style={styles.removeCancelText}>Fermer</Text>
+        </TouchableOpacity>
       </BottomSheet>
     </View>
   );
@@ -1103,10 +1126,25 @@ const styles = StyleSheet.create({
   revealCard: { backgroundColor: "#2C2C2E", borderRadius: 16, paddingVertical: 32, alignItems: "center", marginBottom: 28, gap: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
   revealEmoji: { fontSize: 42 },
   revealTitle: { fontFamily: typography.family.bold, fontSize: 22, color: "#FFF", textAlign: "center" },
+  revealEmptyHint: { fontFamily: typography.family.regular, fontSize: 13, color: "rgba(255,255,255,0.35)", textAlign: "center", paddingHorizontal: 24, marginTop: 4 },
   revealExpiry: { marginTop: 4, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.1)" },
   revealExpiryRed: { backgroundColor: "rgba(200,30,30,0.2)" },
   revealExpiryText: { fontFamily: typography.family.semibold, fontSize: 12, color: "rgba(255,255,255,0.55)" },
   revealExpiryTextRed: { color: "#C81E1E" },
+
+  postFirstBtn: { 
+    marginTop: 20,
+    backgroundColor: "#FFF", 
+    borderRadius: 14, 
+    paddingVertical: 12, 
+    paddingHorizontal: 24,
+    alignItems: "center" 
+  },
+  postFirstBtnText: { 
+    color: "#000", 
+    fontSize: 15, 
+    fontFamily: typography.family.bold 
+  },
 
   // Post reminder (inside statsCard)
   postReminderText: { fontFamily: typography.family.regular, fontSize: 13, color: "#FFA600", lineHeight: 18, textAlign: "center" },
