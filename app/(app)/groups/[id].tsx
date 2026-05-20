@@ -118,6 +118,7 @@ export default function MainPagerScreen() {
   const [newGroupName, setNewGroupName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [addGroupLoading, setAddGroupLoading] = useState(false);
+  const lastSyncRef = useRef<number>(0);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
 
@@ -170,7 +171,7 @@ export default function MainPagerScreen() {
   const unlocked = inCurrentRevealWindow || inPrevRevealWindow || (__DEV__ && debugUnlocked);
   const lockedRevealDate = now >= revealDate ? nextRevealDate : revealDate;
   const currentUserRespondedToChallenge = activeData?.currentUserRespondedToChallenge ?? false;
-  const currentUserPostedThisWeek = photos.some(p => p.user_id === user?.id) || currentUserRespondedToChallenge;
+  const currentUserPostedThisWeek = photos.some(p => p.user_id === user?.id) || currentUserRespondedToChallenge || (__DEV__ && debugUnlocked);
 
   useEffect(() => {
     if (onboarding === "true" && allGroups.length <= 1) {
@@ -180,8 +181,20 @@ export default function MainPagerScreen() {
   }, [onboarding, allGroups.length]);
 
   // ── Fetch all groups data at once ──
-  const fetchAllData = useCallback(async () => {
+  const fetchAllData = useCallback(async (options?: { force?: boolean }) => {
     if (!user) return;
+
+    // Cooldown de 45s pour éviter les syncs excessifs (ex: retour de caméra)
+    // Sauf si c'est un refresh forcé (manuel ou upload terminé)
+    const nowTs = Date.now();
+    if (!options?.force && nowTs - lastSyncRef.current < 45_000) {
+      console.log("[DB FETCH] fetchAllData: Cooldown active, skipping sync...");
+      return;
+    }
+
+    console.log("[DB FETCH] fetchAllData: Starting full sync...");
+    lastSyncRef.current = nowTs;
+    // Ensure the local media manifest is loaded before building PhotoEntries
     await mediaCache.load();
     try {
       const [cfgRows, profileRes] = await Promise.all([
@@ -447,7 +460,7 @@ export default function MainPagerScreen() {
 
   useEffect(() => {
     const hasJustFinished = activeUploads.some((u) => u.status === "success");
-    if (hasJustFinished) fetchAllData();
+    if (hasJustFinished) fetchAllData({ force: true });
   }, [activeUploads, fetchAllData]);
 
   // Keep a ref so the real-time callback always reads the latest reveal config
@@ -485,7 +498,7 @@ export default function MainPagerScreen() {
       if (AppState.currentState === "active" && !showReveal) {
         fetchAllDataRef.current();
       }
-    }, 30_000);
+    }, 120_000);
     return () => clearInterval(interval);
   }, [showReveal]);
 
@@ -1020,7 +1033,7 @@ export default function MainPagerScreen() {
             refreshing={refreshing}
             onRefresh={async () => {
               setRefreshing(true);
-              await fetchAllData();
+              await fetchAllData({ force: true });
               setRefreshing(false);
             }}
             onSimulateReveal={__DEV__ ? () => setDebugUnlocked(true) : undefined}
@@ -1048,6 +1061,7 @@ export default function MainPagerScreen() {
             } : undefined}
             onDebugOpenCreateCustom={__DEV__ ? () => setShowCustomChallengeCreate(true) : undefined}
             onDebugOpenQueueCustom={__DEV__ ? () => setShowCustomChallengeQueue(true) : undefined}
+            onGoToCamera={() => jumpTo(1)}
           />
         </View>
       </Animated.ScrollView>
