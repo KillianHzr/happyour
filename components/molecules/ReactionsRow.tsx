@@ -37,9 +37,14 @@ export const ReactionsRow = ({ reactions, currentUserId, photoId, crownWinnerId,
         return (
           <TouchableOpacity
             key={id}
-            style={[styles.reactionBubble, iMine && styles.reactionBubbleMine, isCrownReaction && styles.reactionBubbleCrown]}
+            style={[
+              styles.reactionBubble, 
+              iMine && styles.reactionBubbleMine, 
+              isCrownReaction && styles.reactionBubbleCrown,
+              !emojiDetected && styles.stickerReactionBubble
+            ]}
             onPress={() => onOpenPicker?.(photoId)}
-            activeOpacity={0.75}
+            activeOpacity={0.85}
           >
             <View style={styles.reactionAvatarStack}>
               {users.slice(0, 2).map((r, i) => (
@@ -107,5 +112,11 @@ const styles = StyleSheet.create({
     fontFamily: typography.family.bold, 
     fontSize: typography.size.xs, 
     marginLeft: 2 
+  },
+  stickerReactionBubble: {
+    backgroundColor: "transparent",
+    borderWidth: 0,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
   },
 });

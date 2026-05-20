@@ -18,7 +18,7 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "15"
+      "buildNumber": "16"
     },
     "android": {
       "package": "com.happyour.app",
@@ -43,7 +43,7 @@
         "android.permission.READ_MEDIA_VIDEO",
         "android.permission.READ_MEDIA_AUDIO"
       ],
-      "versionCode": 29
+      "versionCode": 30
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -96,9 +96,8 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "052d2842-8a82-4715-a029-68b0a3264e93"
+        "projectId": "65222b8e-774d-4367-b67b-4f7c9799cac1"
       }
-    },
-    "owner": "killianhzr"
+    }
   }
 }

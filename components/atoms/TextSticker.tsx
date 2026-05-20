@@ -1,50 +1,56 @@
 import React from "react";
-import { View } from "react-native";
-import { Svg, Text as SvgText } from "react-native-svg";
+import { Svg, Text as SvgText, Defs, Mask, Rect } from "react-native-svg";
 import { typography } from "../../lib/theme";
 
 interface TextStickerProps {
   text: string;
   fontSize?: number;
+  backgroundColor?: string;
 }
 
-export const TextSticker = ({ text, fontSize = 42 }: TextStickerProps) => {
+export const TextSticker = ({ 
+  text, 
+  fontSize = 42, 
+  backgroundColor = "#E6005C" 
+}: TextStickerProps) => {
   const displayValue = (text || "—").toUpperCase();
-  const scale = fontSize / 42;
-  const height = scale * 80;
-  const width = (displayValue.length * fontSize * 0.85) + (20 * scale);
-  const y = scale * 55;
-  const strokeWidth = 5;
+  
+  // Extremely tight width/height calculations
+  const height = fontSize * 1.05;
+  const width = (displayValue.length * fontSize * 0.6) + 8;
+  const xCenter = width / 2;
+  const yCenter = height / 2;
 
   return (
-    <View style={{ height, width, justifyContent: 'center', alignItems: 'center' }}>
-      <Svg height={height} width={width} overflow="visible">
-        <SvgText
-          fill="none"
-          stroke="#FFF065"
-          strokeWidth={strokeWidth}
-          strokeLinejoin="round"
-          fontSize={fontSize}
-          fontWeight="bold"
-          fontFamily={typography.family.bold}
-          x="50%"
-          y={y}
-          textAnchor="middle"
-        >
-          {displayValue}
-        </SvgText>
-        <SvgText
-          fill="black"
-          fontSize={fontSize}
-          fontWeight="bold"
-          fontFamily={typography.family.bold}
-          x="50%"
-          y={y}
-          textAnchor="middle"
-        >
-          {displayValue}
-        </SvgText>
-      </Svg>
-    </View>
+    <Svg height={height} width={width} viewBox={`0 0 ${width} ${height}`}>
+      <Defs>
+        <Mask id="knockoutMask">
+          {/* White defines the shape of the pink rectangle */}
+          <Rect width={width} height={height} fill="#FFFFFF" />
+          
+          {/* Black cuts the text out of that shape */}
+          <SvgText
+            fill="#000000" 
+            fontSize={fontSize}
+            fontWeight="900"
+            fontFamily={typography.family.bold}
+            x={xCenter}
+            y={yCenter}
+            textAnchor="middle"
+            alignmentBaseline="central"
+          >
+            {displayValue}
+          </SvgText>
+        </Mask>
+      </Defs>
+
+      {/* The pink rectangle with the text hole cut out */}
+      <Rect
+        width={width}
+        height={height}
+        fill={backgroundColor}
+        mask="url(#knockoutMask)"
+      />
+    </Svg>
   );
 };
