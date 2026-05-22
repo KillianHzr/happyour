@@ -20,6 +20,12 @@ type SecondFile = {
   note?: string | null; // texte de la 2e capture si text_mode
 } | null;
 
+type CaptionAudioFile = {
+  fileName: string;
+  fileUri: string;
+  contentType: string;
+} | null;
+
 type UploadContextType = {
   activeUploads: UploadTask[];
   startUpload: (
@@ -27,7 +33,8 @@ type UploadContextType = {
     fileUri: string | null,
     contentType: string | null,
     dbData: { group_id: string; user_id: string; note: string | null },
-    secondFile?: SecondFile
+    secondFile?: SecondFile,
+    captionAudioFile?: CaptionAudioFile
   ) => void;
   startChallengeUpload: (
     challengeId: string,
@@ -44,8 +51,9 @@ async function uploadFilesToR2(
   fileName: string | null,
   fileUri: string | null,
   contentType: string | null,
-  secondFile: SecondFile | undefined
-): Promise<{ finalPath: string; secondPath: string | null }> {
+  secondFile: SecondFile | undefined,
+  captionAudioFile?: { fileName: string; fileUri: string; contentType: string } | null
+): Promise<{ finalPath: string; secondPath: string | null; captionAudioPath: string | null }> {
   let finalPath = "text_mode";
   if (fileName && fileUri && contentType) {
     const isVideo = contentType.includes("video") || fileName.endsWith(".mp4");
@@ -110,7 +118,19 @@ async function uploadFilesToR2(
     }
   }
 
-  return { finalPath, secondPath };
+  let captionAudioPath: string | null = null;
+  if (captionAudioFile && captionAudioFile.fileName && captionAudioFile.fileUri) {
+    const presignedUrl3 = await r2Storage.getPresignedUploadUrl(captionAudioFile.fileName, captionAudioFile.contentType);
+    const uploadResult3 = await FileSystem.uploadAsync(presignedUrl3, captionAudioFile.fileUri, {
+      httpMethod: "PUT",
+      headers: { "Content-Type": captionAudioFile.contentType },
+    });
+    if (uploadResult3.status >= 200 && uploadResult3.status < 300) {
+      captionAudioPath = captionAudioFile.fileName;
+    }
+  }
+
+  return { finalPath, secondPath, captionAudioPath };
 }
 
 const UploadContext = createContext<UploadContextType | undefined>(undefined);
@@ -123,7 +143,8 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
     fileUri: string | null,
     contentType: string | null,
     dbData: { group_id: string; user_id: string; note: string | null },
-    secondFile?: SecondFile
+    secondFile?: SecondFile,
+    captionAudioFile?: CaptionAudioFile
   ) => {
     const taskId = Math.random().toString(36).substring(7);
     
@@ -152,7 +173,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
         const username = profileRes.data?.username ?? "Quelqu'un";
         setActiveUploads((prev) => prev.map(t => t.id === taskId ? { ...t, progress: 0.3 } : t));
 
-        const { finalPath, secondPath } = await uploadFilesToR2(fileName, fileUri, contentType, secondFile);
+        const { finalPath, secondPath, captionAudioPath } = await uploadFilesToR2(fileName, fileUri, contentType, secondFile, captionAudioFile);
         setActiveUploads((prev) => prev.map(t => t.id === taskId ? { ...t, progress: 0.8 } : t));
 
         const { error: dbError } = await supabase.from("photos").insert({
@@ -161,7 +182,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
           image_path: finalPath,
           note: dbData.note,
           ...(secondPath !== null ? { second_image_path: secondPath } : {}),
-          ...(secondPath === "text_mode" && secondFile?.note ? { second_note: secondFile.note } : {}),
+          ...(captionAudioPath !== null ? { audio_note_path: captionAudioPath } : {}),
         });
 
         if (dbError) throw dbError;
@@ -224,7 +245,6 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
           note: dbData.note,
           is_target_response: isTargetResponse,
           ...(secondPath !== null ? { second_image_path: secondPath } : {}),
-          ...(secondPath === "text_mode" && secondFile?.note ? { second_note: secondFile.note } : {}),
         });
 
         if (dbError) throw dbError;

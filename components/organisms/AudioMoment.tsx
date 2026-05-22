@@ -4,6 +4,7 @@ import Reanimated, { useSharedValue, useAnimatedStyle, withTiming } from "react-
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import { useVideoPlayer, VideoView } from "expo-video";
 import { colors, spacing, radii, typography } from "../../lib/theme";
 
 import { PhotoImage } from "../atoms/PhotoImage";
@@ -13,17 +14,7 @@ import { AuthorInfo } from "../molecules/AuthorInfo";
 import { ReactionsRow } from "../molecules/ReactionsRow";
 import { AudioPlayerView } from "../molecules/AudioPlayerView";
 import { r2Storage } from "../../lib/r2";
-import { PhotoEntry, Reaction } from "../../lib/feed-types";
-
-interface AudioMomentProps {
-  moment: PhotoEntry;
-  currentUserId?: string;
-  crownWinnerId?: string | null;
-  onOpenPicker?: (photoId: string) => void;
-  onOpenComments?: (photoId: string, ownerId: string) => void;
-  isVisible?: boolean;
-  onScrollLock?: (locked: boolean) => void;
-}
+import { PhotoEntry } from "../../lib/feed-types";
 
 const NAVBAR_HEIGHT = 100;
 
@@ -48,12 +39,33 @@ export const AudioMoment = ({
   }));
 
   const hasSecond = !!moment.second_image_path;
-  const player = useAudioPlayer(!swapped ? moment.url : "");
+  
+  // Players
+  const primaryAudioUrl = moment.audio_note_path ? r2Storage.getPublicUrl(moment.audio_note_path) : moment.url;
+  const secondaryUrl = hasSecond ? (moment.second_image_path === "text_mode" ? "" : r2Storage.getPublicUrl(moment.second_image_path!)) : "";
+  
+  const isPrimaryAudio = moment.image_path.endsWith(".m4a");
+  const isSecondaryAudio = hasSecond && moment.second_image_path!.endsWith(".m4a");
+  const isSecondaryVideo = hasSecond && moment.second_image_path!.endsWith(".mp4");
+  const isPrimaryVideo = moment.image_path.endsWith(".mp4");
+
+  const player = useAudioPlayer(!swapped ? primaryAudioUrl : (isSecondaryAudio ? secondaryUrl : ""));
   const status = useAudioPlayerStatus(player);
 
+  const videoPlayer = useVideoPlayer((!swapped && isPrimaryVideo) ? moment.url : (swapped && isSecondaryVideo ? secondaryUrl : null), (p) => {
+    p.loop = true;
+  });
+
   useEffect(() => { 
-    if (!isVisible) player.pause(); 
-  }, [isVisible]);
+    if (!isVisible) {
+      player.pause();
+      videoPlayer.pause();
+    } else if (!swapped && isPrimaryVideo) {
+      videoPlayer.play();
+    } else if (swapped && isSecondaryVideo) {
+      videoPlayer.play();
+    }
+  }, [isVisible, swapped, isPrimaryVideo, isSecondaryVideo]);
 
   const handlePressIn = () => {
     holdTimer.current = setTimeout(() => {
@@ -70,30 +82,40 @@ export const AudioMoment = ({
   };
 
   const renderContent = () => {
-    if (swapped && hasSecond) {
-      const secondPath = moment.second_image_path!;
-      const secondIsText = secondPath === "text_mode";
-      const secondIsDrawing = secondPath.includes("_draw");
-      const secondUrl = secondIsText ? "" : r2Storage.getPublicUrl(secondPath);
-      const secondNote = moment.second_note;
-      const textLen = secondNote?.length ?? 0;
+    const path = swapped && hasSecond ? moment.second_image_path! : moment.image_path;
+    const url = swapped && hasSecond ? secondaryUrl : moment.url;
+    
+    if (path === "text_mode") {
+      const textLen = moment.second_note?.length ?? 0;
       const fontSize = textLen <= 40 ? 32 : textLen <= 100 ? 26 : textLen <= 200 ? 21 : textLen <= 300 ? 17 : 15;
-      
-      if (secondIsText) {
-        return (
-          <View style={styles.textMomentBg}>
-            <View style={styles.quoteContainer}>
-              <Text style={[styles.textMomentContent, { fontSize, lineHeight: Math.round(fontSize * 1.4) }]}>
-                {secondNote}
-              </Text>
-            </View>
+      return (
+        <View style={styles.textMomentBg}>
+          <View style={styles.quoteContainer}>
+            <Text style={[styles.textMomentContent, { fontSize, lineHeight: Math.round(fontSize * 1.4) }]}>
+              {moment.second_note}
+            </Text>
           </View>
-        );
-      }
-      return <PhotoImage url={secondUrl} isDrawing={secondIsDrawing} />;
+        </View>
+      );
     }
-    return <AudioPlayerView player={player} status={status} onScrollLock={onScrollLock} />;
+
+    const isAudio = path.endsWith(".m4a");
+    const isVideo = path.endsWith(".mp4");
+    const isDrawing = path.includes("_draw");
+
+    if (isAudio) {
+      return <AudioPlayerView player={player} status={status} onScrollLock={onScrollLock} />;
+    }
+
+    if (isVideo) {
+      return <VideoView player={videoPlayer} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />;
+    }
+
+    return <PhotoImage url={url} isDrawing={isDrawing} />;
   };
+
+  const isAudioCaption = !!moment.audio_note_path;
+  const showAudioPlayerInOverlay = (isPrimaryAudio || isAudioCaption) && !swapped;
 
   const overlayNote = swapped && hasSecond ? moment.second_note : moment.note;
   const paddingTopBottom = Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 12) / 2);
@@ -115,7 +137,7 @@ export const AudioMoment = ({
             )}
             {swapped && hasSecond && moment.second_image_path !== "text_mode" && (
               <Reanimated.View style={[styles.downloadBtnContainer, animatedUiStyle]}>
-                <DownloadButton url={r2Storage.getPublicUrl(moment.second_image_path!)} filename={`${moment.id}_2`} />
+                <DownloadButton url={secondaryUrl} filename={`${moment.id}_2`} />
               </Reanimated.View>
             )}
             <Reanimated.View style={[styles.momentOverlay, animatedUiStyle]} pointerEvents="box-none">
@@ -129,6 +151,9 @@ export const AudioMoment = ({
                 username={moment.username}
                 created_at={moment.created_at}
                 note={overlayNote}
+                audioPlayer={showAudioPlayerInOverlay ? player : undefined}
+                audioStatus={showAudioPlayerInOverlay ? status : undefined}
+                onScrollLock={showAudioPlayerInOverlay ? onScrollLock : undefined}
                 isCrown={crownWinnerId === moment.user_id}
                 isOwn={isOwn}
                 hasNewComments={moment.hasNewComments}
@@ -158,6 +183,16 @@ export const AudioMoment = ({
     </View>
   );
 };
+
+interface AudioMomentProps {
+  moment: PhotoEntry;
+  currentUserId?: string;
+  crownWinnerId?: string | null;
+  onOpenPicker?: (photoId: string) => void;
+  onOpenComments?: (photoId: string, ownerId: string) => void;
+  isVisible?: boolean;
+  onScrollLock?: (locked: boolean) => void;
+}
 
 const styles = StyleSheet.create({
   fullscreenPage: { 

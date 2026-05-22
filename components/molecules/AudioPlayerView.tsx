@@ -133,7 +133,7 @@ export const AudioPlayerView = ({ player, status, onScrollLock }: AudioPlayerVie
 const styles = StyleSheet.create({
   container: { 
     ...StyleSheet.absoluteFillObject, 
-    backgroundColor: colors.black, 
+    backgroundColor: "transparent", 
     justifyContent: "center", 
     alignItems: "center", 
     gap: spacing.xl, 

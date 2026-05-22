@@ -21,6 +21,7 @@ import { VolumeManager } from "react-native-volume-manager";
 import ChallengesModal from "./ChallengesModal";
 import { type ActiveChallenge } from "../../lib/challenges";
 import { colors, radii, typography } from "../../lib/theme";
+import { AudioCaptionPlayer } from "../molecules/AudioCaptionPlayer";
 
 const NAVBAR_HEIGHT = 100;
 
@@ -32,6 +33,7 @@ type SlotData = {
   audioUri: string | null;
   textContent: string;
   note: string;
+  captionAudioUri?: string | null;
 };
 
 type GroupInfo = { id: string; name: string };
@@ -120,6 +122,10 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   const [audioSeconds, setAudioSeconds] = useState(0);
+  const [isCaptionRecording, setIsCaptionRecording] = useState(false);
+  const isCaptionRecordingRef = useRef(false);
+  const [captionAudioSeconds, setCaptionAudioSeconds] = useState(0);
+  const captionAudioTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Derived state
   const isCapturing = slot1 === null || capturingSecond;
@@ -142,6 +148,11 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   ).current;
 
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  
+  const captionAudioUri = slot1?.captionAudioUri ?? null;
+  const captionAudioPlayer = useAudioPlayer(captionAudioUri);
+  const captionAudioStatus = useAudioPlayerStatus(captionAudioPlayer);
+
   const audioPreviewPlayer = useAudioPlayer(capturedAudioUri || null);
   const audioPreviewStatus = useAudioPlayerStatus(audioPreviewPlayer);
   const audioPreviewSeekRef = useRef<any>(null);
@@ -372,38 +383,58 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   };
 
   const startAudioRecording = async () => {
-    const perm = await AudioModule.requestRecordingPermissionsAsync();
-    if (!perm.granted) { Alert.alert("Permission refusée", "L'accès au micro est requis."); return; }
+    if (isAudioRecordingRef.current) return;
+    isAudioRecordingRef.current = true;
     try {
-      try { await audioRecorder.stop(); } catch (_) {}
-      await audioRecorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
+      const perm = await AudioModule.requestRecordingPermissionsAsync();
+      if (!perm.granted) { 
+        isAudioRecordingRef.current = false;
+        Alert.alert("Permission refusée", "L'accès au micro est requis."); 
+        return; 
+      }
+
       await AudioModule.setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await audioRecorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
+      
+      // Delay to ensure native activity/audio state is ready on Android
+      if (Platform.OS === "android") await new Promise(resolve => setTimeout(resolve, 150));
+      
+      // Check if we were stopped in the meantime
+      if (!isAudioRecordingRef.current) {
+        await audioRecorder.stop().catch(() => {});
+        return;
+      }
+
       await audioRecorder.record();
+      setIsAudioRecording(true);
+      setAudioSeconds(0);
+      audioProgressAnim.setValue(0);
+      Animated.timing(audioProgressAnim, { toValue: 1, duration: 30000, easing: Easing.linear, useNativeDriver: false }).start();
+      audioTimer.current = setInterval(() => setAudioSeconds(s => s + 1), 1000);
+      setTimeout(() => { if (isAudioRecordingRef.current) stopAudioRecordingDirect(); }, 30000);
+      audioWaveAnims.forEach(({ anim, duration, delay }) => {
+        Animated.loop(Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(anim, { toValue: 1, duration, useNativeDriver: true }),
+          Animated.timing(anim, { toValue: 0.15, duration, useNativeDriver: true }),
+        ])).start();
+      });
     } catch (e: any) {
       console.error("Erreur startAudioRecording:", e);
+      isAudioRecordingRef.current = false;
+      setIsAudioRecording(false);
       Alert.alert("Erreur", `Impossible de démarrer l'enregistrement : ${e.message || e.toString()}`);
-      return;
     }
-    isAudioRecordingRef.current = true;
-    setIsAudioRecording(true);
-    setAudioSeconds(0);
-    audioProgressAnim.setValue(0);
-    Animated.timing(audioProgressAnim, { toValue: 1, duration: 30000, easing: Easing.linear, useNativeDriver: false }).start();
-    audioTimer.current = setInterval(() => setAudioSeconds(s => s + 1), 1000);
-    setTimeout(() => { if (isAudioRecordingRef.current) stopAudioRecordingDirect(); }, 30000);
-    audioWaveAnims.forEach(({ anim, duration, delay }) => {
-      Animated.loop(Animated.sequence([
-        Animated.delay(delay),
-        Animated.timing(anim, { toValue: 1, duration, useNativeDriver: true }),
-        Animated.timing(anim, { toValue: 0.15, duration, useNativeDriver: true }),
-      ])).start();
-    });
   };
 
   const stopAudioRecordingDirect = async () => {
-    if (!isAudioRecordingRef.current) return;
+    if (!isAudioRecordingRef.current && !isAudioRecording) return;
     isAudioRecordingRef.current = false;
-    try { await audioRecorder.stop(); } catch (_) {}
+    try { 
+      await audioRecorder.stop(); 
+    } catch (e) {
+      console.error("Error stopping recording:", e);
+    }
     if (audioTimer.current) { clearInterval(audioTimer.current); audioTimer.current = null; }
     audioProgressAnim.stopAnimation();
     audioWaveAnims.forEach(({ anim }) => { anim.stopAnimation(); anim.setValue(0.15); });
@@ -414,6 +445,62 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   };
 
   const stopAudioRecording = stopAudioRecordingDirect;
+
+  const startCaptionAudioRecording = async () => {
+    if (isCaptionRecordingRef.current) return;
+    isCaptionRecordingRef.current = true;
+    try {
+      const perm = await AudioModule.requestRecordingPermissionsAsync();
+      if (!perm.granted) { 
+        isCaptionRecordingRef.current = false;
+        Alert.alert("Permission refusée", "L'accès au micro est requis."); 
+        return; 
+      }
+
+      await AudioModule.setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await audioRecorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
+      
+      // Delay for Android activity sync
+      if (Platform.OS === "android") await new Promise(resolve => setTimeout(resolve, 150));
+
+      if (!isCaptionRecordingRef.current) {
+        await audioRecorder.stop().catch(() => {});
+        return;
+      }
+
+      await audioRecorder.record();
+      setIsCaptionRecording(true);
+      setCaptionAudioSeconds(0);
+      captionAudioTimer.current = setInterval(() => setCaptionAudioSeconds(s => s + 1), 1000);
+      audioWaveAnims.forEach(({ anim, duration, delay }) => {
+        Animated.loop(Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(anim, { toValue: 1, duration, useNativeDriver: true }),
+          Animated.timing(anim, { toValue: 0.15, duration, useNativeDriver: true }),
+        ])).start();
+      });
+    } catch (e: any) {
+      console.error("Erreur startCaptionAudioRecording:", e);
+      isCaptionRecordingRef.current = false;
+      setIsCaptionRecording(false);
+    }
+  };
+
+  const stopCaptionAudioRecording = async () => {
+    if (!isCaptionRecordingRef.current && !isCaptionRecording) return;
+    isCaptionRecordingRef.current = false;
+    try { 
+      await audioRecorder.stop(); 
+    } catch (e) {
+      console.error("Error stopping caption recording:", e);
+    }
+    if (captionAudioTimer.current) { clearInterval(captionAudioTimer.current); captionAudioTimer.current = null; }
+    audioWaveAnims.forEach(({ anim }) => { anim.stopAnimation(); anim.setValue(0.15); });
+    setIsCaptionRecording(false);
+    if (audioRecorder.uri) {
+      setSlot1(prev => prev ? { ...prev, captionAudioUri: audioRecorder.uri } : prev);
+    }
+  };
 
   const handleCapture = async () => {
     if (cameraMode === "TEXTE") {
@@ -588,11 +675,21 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
 
       const dbData = { group_id: gId, user_id: userId, note: dbNote };
 
+      // Caption Audio
+      let captionAudioFile = null;
+      if (slot1.captionAudioUri) {
+        captionAudioFile = {
+          fileName: `${gId}/${userId}_${ts + i}_caption.m4a`,
+          fileUri: slot1.captionAudioUri,
+          contentType: "audio/m4a"
+        };
+      }
+
       // Secondary file (slot2)
       let secondFile = null;
       if (slot2) {
         if (slot2.mode === "TEXTE") {
-          secondFile = { fileName: null, fileUri: null, contentType: null, note: slot2.textContent };
+          secondFile = { fileName: null, fileUri: null, contentType: null };
         } else if (slot2.mode === "AUDIO" && slot2.audioUri) {
           secondFile = { fileName: `${gId}/${userId}_${ts + i + 1000}.m4a`, fileUri: slot2.audioUri, contentType: "audio/m4a" };
         } else if (slot2.mode === "VIDEO" && slot2.uri) {
@@ -612,7 +709,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
           activeChallenge.isTarget
         );
       } else {
-        startUpload(fileName, fileUri, contentType, dbData, secondFile);
+        startUpload(fileName, fileUri, contentType, dbData, secondFile, captionAudioFile);
       }
     });
     onCaptureSent?.();
@@ -1021,14 +1118,56 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               </View>
               {viewingSlot === 1 && (
                 <View style={[styles.previewContent, { bottom: 24 }]}>
-                  {slot1!.note ? (
-                    <Pressable style={styles.previewNoteBox} onPress={() => setIsEditingNote(true)}>
-                      <Text style={styles.previewNoteText}>{slot1!.note}</Text>
-                    </Pressable>
-                  ) : (
-                    <TouchableOpacity style={styles.addNoteBtn} onPress={() => setIsEditingNote(true)}>
-                      <FeatherIcon /><Text style={styles.addNoteBtnText}>Ajouter une légende...</Text>
-                    </TouchableOpacity>
+                  {activeChallenge === null && (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                      <View style={{ flex: 1 }}>
+                        {slot1!.captionAudioUri && (
+                          <View style={[styles.captionAudioContainer, { alignSelf: "stretch", flex: 1 }]}>
+                            <AudioCaptionPlayer 
+                              player={captionAudioPlayer} 
+                              status={captionAudioStatus} 
+                              showVocalLabel 
+                              onRemove={() => setSlot1(prev => prev ? { ...prev, captionAudioUri: null } : prev)} 
+                            />
+                          </View>
+                        )}                        {slot1!.note ? (
+                          <Pressable style={styles.previewNoteBox} onPress={() => setIsEditingNote(true)}>
+                            <Text style={styles.previewNoteText}>{slot1!.note}</Text>
+                          </Pressable>
+                        ) : (
+                          !slot1!.captionAudioUri && (
+                            <TouchableOpacity style={styles.addNoteBtn} onPress={() => setIsEditingNote(true)}>
+                              <FeatherIcon /><Text style={styles.addNoteBtnText}>Ajouter une légende...</Text>
+                            </TouchableOpacity>
+                          )
+                        )}
+                      </View>
+
+                      {!slot1!.captionAudioUri && (
+                        <TouchableOpacity
+                          style={[styles.captionRecordBtn, isCaptionRecording && styles.captionRecordBtnActive]}
+                          onPressIn={startCaptionAudioRecording}
+                          onPressOut={stopCaptionAudioRecording}
+                          activeOpacity={0.8}
+                        >
+                          <Svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={colors.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <Path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                            <Path d="M19 10v2a7 7 0 0 1-14 0v-2" /><Path d="M12 19v4" /><Path d="M8 23h8" />
+                          </Svg>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  )}
+
+                  {isCaptionRecording && (
+                    <View style={styles.captionRecordingOverlay}>
+                      <View style={styles.audioWaveformRow} pointerEvents="none">
+                        {audioWaveAnims.map(({ anim }, i) => (
+                          <Animated.View key={i} style={[styles.audioWaveformBar, { transform: [{ scaleY: anim }], backgroundColor: colors.white }]} />
+                        ))}
+                      </View>
+                      <Text style={styles.captionRecordingText}>{captionAudioSeconds}s</Text>
+                    </View>
                   )}
                 </View>
               )}
@@ -1069,14 +1208,56 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               </View>
               {viewingSlot === 1 && (
                 <View style={[styles.previewContent, { bottom: 24 }]}>
-                  {slot1!.note ? (
-                    <Pressable style={styles.previewNoteBox} onPress={() => setIsEditingNote(true)}>
-                      <Text style={styles.previewNoteText}>{slot1!.note}</Text>
-                    </Pressable>
-                  ) : (
-                    <TouchableOpacity style={styles.addNoteBtn} onPress={() => setIsEditingNote(true)}>
-                      <FeatherIcon /><Text style={styles.addNoteBtnText}>Ajouter une légende...</Text>
-                    </TouchableOpacity>
+                  {activeChallenge === null && (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                      <View style={{ flex: 1 }}>
+                        {slot1!.captionAudioUri && (
+                          <View style={[styles.captionAudioContainer, { alignSelf: "stretch", flex: 1 }]}>
+                            <AudioCaptionPlayer 
+                              player={captionAudioPlayer} 
+                              status={captionAudioStatus} 
+                              showVocalLabel 
+                              onRemove={() => setSlot1(prev => prev ? { ...prev, captionAudioUri: null } : prev)} 
+                            />
+                          </View>
+                        )}                        {slot1!.note ? (
+                          <Pressable style={styles.previewNoteBox} onPress={() => setIsEditingNote(true)}>
+                            <Text style={styles.previewNoteText}>{slot1!.note}</Text>
+                          </Pressable>
+                        ) : (
+                          !slot1!.captionAudioUri && (
+                            <TouchableOpacity style={styles.addNoteBtn} onPress={() => setIsEditingNote(true)}>
+                              <FeatherIcon /><Text style={styles.addNoteBtnText}>Ajouter une légende...</Text>
+                            </TouchableOpacity>
+                          )
+                        )}
+                      </View>
+
+                      {!slot1!.captionAudioUri && (
+                        <TouchableOpacity
+                          style={[styles.captionRecordBtn, isCaptionRecording && styles.captionRecordBtnActive]}
+                          onPressIn={startCaptionAudioRecording}
+                          onPressOut={stopCaptionAudioRecording}
+                          activeOpacity={0.8}
+                        >
+                          <Svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={colors.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <Path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                            <Path d="M19 10v2a7 7 0 0 1-14 0v-2" /><Path d="M12 19v4" /><Path d="M8 23h8" />
+                          </Svg>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  )}
+
+                  {isCaptionRecording && (
+                    <View style={styles.captionRecordingOverlay}>
+                      <View style={styles.audioWaveformRow} pointerEvents="none">
+                        {audioWaveAnims.map(({ anim }, i) => (
+                          <Animated.View key={i} style={[styles.audioWaveformBar, { transform: [{ scaleY: anim }], backgroundColor: colors.white }]} />
+                        ))}
+                      </View>
+                      <Text style={styles.captionRecordingText}>{captionAudioSeconds}s</Text>
+                    </View>
                   )}
                 </View>
               )}
@@ -1517,6 +1698,12 @@ const styles = StyleSheet.create({
   // Barre full-width de switch/envoi pendant la 2e capture
   capturingSecondBar: { position: "absolute", left: 12, right: 12, height: 72, flexDirection: "row", gap: 12 },
   capturingSecondThumb: { flex: 1, borderRadius: radii.lg, overflow: "hidden" },
+  // Caption Audio
+  captionRecordBtn: { width: 52, height: 52, borderRadius: radii.full, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
+  captionRecordBtnActive: { backgroundColor: "#FF3B30", borderColor: "#FF3B30", transform: [{ scale: 1.2 }] },
+  captionRecordingOverlay: { position: "absolute", bottom: 80, left: 0, right: 0, alignItems: "center", gap: 10 },
+  captionRecordingText: { color: colors.white, fontFamily: typography.family.bold, fontSize: typography.size.sm },
+  captionAudioContainer: { marginBottom: 12 },
 });
 
 const challengeStyles = StyleSheet.create({

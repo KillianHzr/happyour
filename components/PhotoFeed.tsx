@@ -257,7 +257,7 @@ export default function PhotoFeed({
       );
     } else {
       const moment = item.data;
-      const isAudio = moment.image_path.endsWith(".m4a");
+      const isAudio = moment.image_path.endsWith(".m4a") || !!moment.audio_note_path;
       const isVideo = moment.image_path.endsWith(".mp4");
 
       if (isAudio) {

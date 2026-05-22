@@ -6,11 +6,17 @@ import { CommentIcon } from "../atoms/CommentIcon";
 import { PlusIcon } from "../atoms/PlusIcon";
 import { colors, spacing, radii, typography } from "../../lib/theme";
 
+import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import { AudioCaptionPlayer } from "./AudioCaptionPlayer";
+
 interface AuthorInfoProps {
   avatar_url?: string | null;
   username: string;
   created_at: string;
   note?: string | null;
+  audioPlayer?: ReturnType<typeof useAudioPlayer>;
+  audioStatus?: ReturnType<typeof useAudioPlayerStatus>;
+  onScrollLock?: (locked: boolean) => void;
   isCrown: boolean;
   isOwn: boolean;
   hasNewComments?: boolean;
@@ -30,21 +36,38 @@ export const AuthorInfo = ({
   username,
   created_at,
   note,
+  audioPlayer,
+  audioStatus,
+  onScrollLock,
   isCrown,
   isOwn,
   hasNewComments,
   onOpenComments,
   onOpenPicker,
 }: AuthorInfoProps) => {
+  const hasAudio = !!(audioPlayer && audioStatus);
+
   return (
-    <View style={styles.authorInfo}>
+    <View style={[styles.authorInfo, hasAudio && { alignItems: "center" }]}>
       <CrownedAvatar avatar_url={avatar_url} username={username} size={36} isCrown={isCrown} />
-      <View style={{ flex: 1 }}>
-        <View style={styles.usernameLine}>
-          <Text style={styles.username}>{username}</Text>
-          <Text style={styles.momentTime}>{formatTime(created_at)}</Text>
-        </View>
-        {note && <ExpandableNote text={note} maxLines={2} />}
+      <View style={{ flex: 1, gap: 4 }}>
+        {!hasAudio && (
+          <View style={styles.usernameLine}>
+            <Text style={styles.username}>{username}</Text>
+            <Text style={styles.momentTime}>{formatTime(created_at)}</Text>
+          </View>
+        )}
+        {hasAudio ? (
+          <View style={{ gap: 2 }}>
+            <View style={[styles.usernameLine, { marginBottom: 2 }]}>
+              <Text style={styles.username}>{username}</Text>
+              <Text style={styles.momentTime}>{formatTime(created_at)}</Text>
+            </View>
+            <AudioCaptionPlayer player={audioPlayer!} status={audioStatus!} onScrollLock={onScrollLock} />
+          </View>
+        ) : (
+          note && <ExpandableNote text={note} maxLines={2} />
+        )}
       </View>
       <View style={styles.actionsColumn}>
         {!isOwn && (

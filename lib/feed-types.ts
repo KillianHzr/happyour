@@ -16,7 +16,7 @@ export type PhotoEntry = {
   avatar_url?: string | null;
   image_path: string;
   second_image_path?: string | null;
-  second_note?: string | null;
+  audio_note_path?: string | null;
   user_id: string;
   reactions: Reaction[];
   groupName?: string | null;
