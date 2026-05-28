@@ -17,6 +17,8 @@ export type PhotoEntry = {
   image_path: string;
   second_image_path?: string | null;
   audio_note_path?: string | null;
+  waveform?: number[] | null;
+  caption_waveform?: number[] | null;
   user_id: string;
   reactions: Reaction[];
   groupName?: string | null;

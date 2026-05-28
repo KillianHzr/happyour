@@ -4,6 +4,11 @@ import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import Svg, { Path } from "react-native-svg";
 import { colors, radii, typography } from "../../lib/theme";
 
+interface ChallengeAudioPlayerProps {
+  url: string;
+  waveform?: number[];
+}
+
 const WAVE_HEIGHTS = [18, 32, 48, 36, 60, 80, 52, 68, 42, 62, 88, 72, 50, 38, 68, 82, 58, 44, 28, 52, 72, 56, 78, 46, 36, 62, 50, 66, 42, 28];
 const SPEEDS = [0.5, 1, 1.5, 2];
 
@@ -14,7 +19,22 @@ function fmtAudio(s: number): string {
   return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
-export default function ChallengeAudioPlayer({ url }: { url: string }) {
+function compressWaveform(data: number[], maxBars: number): number[] {
+  if (!data || data.length === 0) return [];
+  if (data.length <= maxBars) return data;
+  const result: number[] = [];
+  const chunkSize = data.length / maxBars;
+  for (let i = 0; i < maxBars; i++) {
+    const start = Math.floor(i * chunkSize);
+    const end = Math.floor((i + 1) * chunkSize);
+    const slice = data.slice(start, end);
+    const avg = slice.reduce((sum, val) => sum + val, 0) / (slice.length || 1);
+    result.push(avg);
+  }
+  return result;
+}
+
+export default function ChallengeAudioPlayer({ url, waveform }: ChallengeAudioPlayerProps) {
   const player = useAudioPlayer(url);
   const status = useAudioPlayerStatus(player);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
@@ -101,64 +121,65 @@ export default function ChallengeAudioPlayer({ url }: { url: string }) {
     })
   ).current;
 
+  // Use provided waveform or fallback to hardcoded
+  const bars = waveform && waveform.length > 0 
+    ? compressWaveform(waveform, 40).map(v => Math.max(4, v * 80)) 
+    : WAVE_HEIGHTS;
+
   return (
-    <View style={[StyleSheet.absoluteFill, { backgroundColor: "#0A0A0A", justifyContent: "center", alignItems: "center", gap: 24, paddingHorizontal: 16 }]}>
-      <View style={s.waveContainer} pointerEvents="none">
-        {WAVE_HEIGHTS.map((h, i) => (
-          <View key={i} style={[s.waveBar, { height: h, opacity: progress > i / WAVE_HEIGHTS.length ? 0.9 : 0.25 }]} />
+    <View style={styles.card}>
+      <View style={styles.waveRow}>
+        {bars.map((h, i) => (
+          <View key={i} style={[styles.bar, { height: h, opacity: progress > i / bars.length ? 0.9 : 0.25 }]} />
         ))}
       </View>
-      <View style={s.playerRow}>
-        <TouchableOpacity onPress={togglePlay} style={s.playBtn} activeOpacity={0.8}>
-          <Svg width="26" height="26" viewBox="0 0 24 24" fill={colors.white}>
-            {status.playing
-              ? <Path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-              : <Path d="M8 5v14l11-7z" />
-            }
+
+      <View style={styles.controls}>
+        <TouchableOpacity style={styles.playBtn} onPress={togglePlay} activeOpacity={0.8}>
+          <Svg width="20" height="20" viewBox="0 0 24 24" fill={colors.white}>
+            {status.playing ? <Path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /> : <Path d="M8 5v14l11-7z" />}
           </Svg>
         </TouchableOpacity>
-        <TouchableOpacity onPress={cycleSpeed} style={s.speedBtn} activeOpacity={0.8}>
-          <Text style={s.speedText}>
-            {playbackSpeed === 0.5 ? "×0.5" : playbackSpeed === 1 ? "×1" : playbackSpeed === 1.5 ? "×1.5" : "×2"}
-          </Text>
-        </TouchableOpacity>
-        <View style={s.progressWrapper}>
+
+        <View style={styles.sliderContainer}>
           <View
-            style={s.seekHitArea}
-            onLayout={(e) => { seekWidthRef.current = e.nativeEvent.layout.width; }}
+            style={styles.seekHitArea}
+            onLayout={(e) => { seekWidthRef.current = e.nativeEvent.layout.width || 1; }}
             {...seekPan.panHandlers}
           >
-            <View style={s.seekTrack}>
-              <View ref={fillRef} style={[s.seekFill, { width: `${progress * 100}%` as any }]} />
+            <View style={styles.track}>
+              <View ref={fillRef} style={[styles.fill, { width: `${progress * 100}%` }]} />
             </View>
-            <View
-              ref={thumbRef}
-              style={[s.seekThumb, { left: `${Math.min(progress * 100, 100)}%` as any }]}
-              pointerEvents="none"
-            />
-          </View>
-          <View style={s.timesRow}>
-            <Text style={s.timeText}>{fmtAudio(status.currentTime)}</Text>
-            <Text style={s.timeText}>{fmtAudio(status.duration)}</Text>
+            <View ref={thumbRef} style={[styles.thumb, { left: `${Math.min(progress * 100, 100)}%` }]} pointerEvents="none" />
           </View>
         </View>
+
+        <TouchableOpacity style={styles.speedBtn} onPress={cycleSpeed}>
+          <Text style={styles.speedText}>{playbackSpeed}x</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.times}>
+        <Text style={styles.timeText}>{fmtAudio(status.currentTime)}</Text>
+        <Text style={styles.timeText}>{fmtAudio(status.duration)}</Text>
       </View>
     </View>
   );
 }
 
-const s = StyleSheet.create({
-  waveContainer: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 3 },
-  waveBar: { width: 3, borderRadius: radii.xs, backgroundColor: colors.white },
-  playerRow: { flexDirection: "row", alignItems: "center", gap: 14, alignSelf: "stretch" },
-  playBtn: { width: 52, height: 52, borderRadius: radii.full, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
-  speedBtn: { width: 40, height: 28, borderRadius: radii.sm, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
-  speedText: { color: colors.white, fontFamily: typography.family.semibold, fontSize: typography.size.xs },
-  progressWrapper: { flex: 1, gap: 4 },
+const styles = StyleSheet.create({
+  card: { backgroundColor: "rgba(255,255,255,0.06)", borderRadius: radii.xl, padding: 16, gap: 12 },
+  waveRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 3.5, height: 90 },
+  bar: { width: 3.5, borderRadius: radii.xs, backgroundColor: colors.white },
+  controls: { flexDirection: "row", alignItems: "center", gap: 12 },
+  playBtn: { width: 40, height: 40, borderRadius: radii.full, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
+  sliderContainer: { flex: 1 },
   seekHitArea: { paddingVertical: 14, justifyContent: "center" },
-  seekTrack: { height: 3, backgroundColor: "rgba(255,255,255,0.22)", borderRadius: radii.xs },
-  seekFill: { height: 3, backgroundColor: colors.white, borderRadius: radii.xs },
-  seekThumb: { position: "absolute", width: 13, height: 13, borderRadius: radii.sm, backgroundColor: colors.white, marginLeft: -6, top: 14 - 5 },
-  timesRow: { flexDirection: "row", justifyContent: "space-between" },
-  timeText: { fontSize: typography.size.xs, color: "rgba(255,255,255,0.5)", fontFamily: typography.family.regular },
+  track: { height: 4, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: radii.xs, overflow: "hidden" },
+  fill: { height: "100%", backgroundColor: colors.white, borderRadius: radii.xs },
+  thumb: { position: "absolute", width: 14, height: 14, borderRadius: radii.full, backgroundColor: colors.white, marginLeft: -7 },
+  speedBtn: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: radii.sm, backgroundColor: "rgba(255,255,255,0.1)" },
+  speedText: { color: colors.white, fontSize: typography.size.xs, fontFamily: typography.family.bold },
+  times: { flexDirection: "row", justifyContent: "space-between" },
+  timeText: { fontSize: typography.size.xs, color: colors.textMuted, fontFamily: typography.family.regular },
 });

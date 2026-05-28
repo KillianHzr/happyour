@@ -11,7 +11,7 @@ import { manipulateAsync, FlipType, SaveFormat } from "expo-image-manipulator";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import Svg, { Path } from "react-native-svg";
-import { useAudioRecorder, AudioModule, RecordingPresets, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import { useAudioRecorder, AudioModule, RecordingPresets, useAudioPlayer, useAudioPlayerStatus, useAudioRecorderState } from "expo-audio";
 import { SeamlessRecorder, type SeamlessRecorderRef } from "seamless-recorder";
 import { setCaptureData } from "../../lib/capture-store";
 import { useUpload } from "../../lib/upload-context";
@@ -31,9 +31,11 @@ type SlotData = {
   mode: CameraMode;
   uri: string | null;
   audioUri: string | null;
+  waveform?: number[];
   textContent: string;
   note: string;
   captionAudioUri?: string | null;
+  captionWaveform?: number[];
 };
 
 type GroupInfo = { id: string; name: string };
@@ -55,6 +57,21 @@ class CameraErrorBoundary extends Component<{ children: React.ReactNode }, { has
     if (this.state.hasError) return null;
     return this.props.children;
   }
+}
+
+function compressWaveform(data: number[], maxBars: number): number[] {
+  if (!data || data.length === 0) return [];
+  if (data.length <= maxBars) return data;
+  const result: number[] = [];
+  const chunkSize = data.length / maxBars;
+  for (let i = 0; i < maxBars; i++) {
+    const start = Math.floor(i * chunkSize);
+    const end = Math.floor((i + 1) * chunkSize);
+    const slice = data.slice(start, end);
+    const avg = slice.reduce((sum, val) => sum + val, 0) / (slice.length || 1);
+    result.push(avg);
+  }
+  return result;
 }
 
 function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, onCaptureSent }: Props) {
@@ -147,8 +164,32 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     }))
   ).current;
 
-  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const audioRecorder = useAudioRecorder({
+    ...RecordingPresets.HIGH_QUALITY,
+    isMeteringEnabled: true,
+  });
   
+  const recorderState = useAudioRecorderState(audioRecorder, 120);
+
+  const [recordedWaveform, setRecordedWaveform] = useState<number[]>([]);
+  const [captionWaveform, setCaptionWaveform] = useState<number[]>([]);
+
+  // 3.2s limit (approx 28 samples at 110ms-120ms interval logic seen in effects)
+  const liveWaveform = (isCaptionRecording ? captionWaveform : recordedWaveform).slice(-28);
+
+  // Collect metering data
+  useEffect(() => {
+    if (isAudioRecording && recorderState.metering !== undefined) {
+      // Normalize metering (-160 to 0) to (0 to 1)
+      const normalized = Math.max(0.1, (recorderState.metering + 160) / 160);
+      setRecordedWaveform(prev => [...prev, normalized]);
+    }
+    if (isCaptionRecording && recorderState.metering !== undefined) {
+      const normalized = Math.max(0.1, (recorderState.metering + 160) / 160);
+      setCaptionWaveform(prev => [...prev, normalized]);
+    }
+  }, [recorderState.metering, isAudioRecording, isCaptionRecording]);
+
   const captionAudioUri = slot1?.captionAudioUri ?? null;
   const captionAudioPlayer = useAudioPlayer(captionAudioUri);
   const captionAudioStatus = useAudioPlayerStatus(captionAudioPlayer);
@@ -170,13 +211,12 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       onStartShouldSetPanResponderCapture: () => true,
       onMoveShouldSetPanResponderCapture: () => true,
       onPanResponderGrant: (evt) => {
-        const relX = evt.nativeEvent.pageX - audioPreviewSeekLayoutRef.current.pageX;
-        const ratio = Math.max(0, Math.min(1, relX / audioPreviewSeekLayoutRef.current.width));
+        const ratio = Math.max(0, Math.min(1, evt.nativeEvent.locationX / Math.max(1, audioPreviewSeekLayoutRef.current.width)));
         audioPreviewPlayerRef.current.seekTo(ratio * audioPreviewDurationRef.current);
       },
       onPanResponderMove: (evt) => {
-        const relX = evt.nativeEvent.pageX - audioPreviewSeekLayoutRef.current.pageX;
-        const ratio = Math.max(0, Math.min(1, relX / audioPreviewSeekLayoutRef.current.width));
+        const relX = evt.nativeEvent.pageX - (evt.nativeEvent.pageX - evt.nativeEvent.locationX);
+        const ratio = Math.max(0, Math.min(1, relX / Math.max(1, audioPreviewSeekLayoutRef.current.width)));
         audioPreviewPlayerRef.current.seekTo(ratio * audioPreviewDurationRef.current);
       },
     })
@@ -406,6 +446,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       }
 
       await audioRecorder.record();
+      setRecordedWaveform([]);
       setIsAudioRecording(true);
       setAudioSeconds(0);
       audioProgressAnim.setValue(0);
@@ -440,7 +481,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     audioWaveAnims.forEach(({ anim }) => { anim.stopAnimation(); anim.setValue(0.15); });
     setIsAudioRecording(false);
     if (audioRecorder.uri) {
-      saveToSlot({ mode: "AUDIO", uri: null, audioUri: audioRecorder.uri, textContent: "", note: "" });
+      saveToSlot({ mode: "AUDIO", uri: null, audioUri: audioRecorder.uri, textContent: "", note: "", waveform: recordedWaveform });
     }
   };
 
@@ -469,6 +510,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       }
 
       await audioRecorder.record();
+      setCaptionWaveform([]);
       setIsCaptionRecording(true);
       setCaptionAudioSeconds(0);
       captionAudioTimer.current = setInterval(() => setCaptionAudioSeconds(s => s + 1), 1000);
@@ -498,8 +540,21 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     audioWaveAnims.forEach(({ anim }) => { anim.stopAnimation(); anim.setValue(0.15); });
     setIsCaptionRecording(false);
     if (audioRecorder.uri) {
-      setSlot1(prev => prev ? { ...prev, captionAudioUri: audioRecorder.uri } : prev);
+      setSlot1(prev => prev ? { ...prev, captionAudioUri: audioRecorder.uri, captionWaveform } : prev);
     }
+  };
+
+  const cancelCaptionAudioRecording = async () => {
+    if (!isCaptionRecordingRef.current && !isCaptionRecording) return;
+    isCaptionRecordingRef.current = false;
+    try {
+      await audioRecorder.stop();
+    } catch (e) {
+      console.error("Error cancelling caption recording:", e);
+    }
+    if (captionAudioTimer.current) { clearInterval(captionAudioTimer.current); captionAudioTimer.current = null; }
+    audioWaveAnims.forEach(({ anim }) => { anim.stopAnimation(); anim.setValue(0.15); });
+    setIsCaptionRecording(false);
   };
 
   const handleCapture = async () => {
@@ -706,10 +761,11 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
           fileName, fileUri, contentType,
           { group_id: gId, user_id: userId, note: dbNote },
           secondFile,
-          activeChallenge.isTarget
+          activeChallenge.isTarget,
+          slot1.waveform
         );
       } else {
-        startUpload(fileName, fileUri, contentType, dbData, secondFile, captionAudioFile);
+        startUpload(fileName, fileUri, contentType, dbData, secondFile, captionAudioFile, slot1.waveform, slot1.captionWaveform);
       }
     });
     onCaptureSent?.();
@@ -802,19 +858,24 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                   <View style={styles.audioRedDot} />
                   <Text style={styles.audioTimerText}>{audioSeconds}s / 30s</Text>
                 </View>
-                <View style={styles.audioWaveformRow} pointerEvents="none">
-                  {audioWaveAnims.map(({ anim }, i) => (
-                    <Animated.View key={i} style={[styles.audioWaveformBar, { transform: [{ scaleY: anim }] }]} />
+                <View style={[styles.audioWaveformRow, { width: "100%", paddingHorizontal: 20 }]} pointerEvents="none">
+                  {liveWaveform.map((v, i) => (
+                    <View key={i} style={[styles.audioWaveformBar, { height: Math.max(4, v * 52) }]} />
                   ))}
                 </View>
               </>
             ) : (
-              <TouchableOpacity style={styles.audioIdleTouchable} onPress={startAudioRecording} activeOpacity={0.7}>
+              <TouchableOpacity 
+                style={styles.audioIdleTouchable} 
+                onPressIn={startAudioRecording}
+                onPressOut={stopAudioRecording}
+                activeOpacity={0.7}
+              >
                 <Svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke={colors.white} strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
                   <Path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
                   <Path d="M19 10v2a7 7 0 0 1-14 0v-2" /><Path d="M12 19v4" /><Path d="M8 23h8" />
                 </Svg>
-                <Text style={styles.audioHintText}>Appuie pour enregistrer</Text>
+                <Text style={styles.audioHintText}>Maintiens pour enregistrer</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -1119,54 +1180,66 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               {viewingSlot === 1 && (
                 <View style={[styles.previewContent, { bottom: 24 }]}>
                   {activeChallenge === null && (
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                      <View style={{ flex: 1 }}>
-                        {slot1!.captionAudioUri && (
-                          <View style={[styles.captionAudioContainer, { alignSelf: "stretch", flex: 1 }]}>
+                    <View style={{ gap: 12 }}>
+                      <View style={styles.combinedInputContainer}>
+                        {isCaptionRecording ? (
+                          <View style={styles.recordingContainer}>
+                            <TouchableOpacity
+                              style={{ paddingRight: 12 }}
+                              onPress={cancelCaptionAudioRecording}
+                              activeOpacity={0.7}
+                            >
+                              <CloseIcon />
+                            </TouchableOpacity>
+                            <View style={styles.captionRecordingOverlay}>
+                              <View style={[styles.audioWaveformRow, { flex: 1 }]} pointerEvents="none">
+                                {liveWaveform.map((v, i) => (
+                                  <View key={i} style={[styles.audioWaveformBar, { height: Math.max(4, v * 52), backgroundColor: colors.white }]} />
+                                ))}
+                              </View>
+                              <Text style={styles.captionRecordingText}>{captionAudioSeconds}s</Text>
+                            </View>
+                            <TouchableOpacity
+                              style={[styles.captionRecordBtn, styles.captionRecordBtnActive]}
+                              onPress={stopCaptionAudioRecording}
+                              activeOpacity={0.8}
+                            >
+                              <View style={{ width: 14, height: 14, borderRadius: 2, backgroundColor: colors.white }} />
+                            </TouchableOpacity>
+                          </View>
+                        ) : slot1!.captionAudioUri ? (
+                          <View style={{ flex: 1, paddingRight: 8 }}>
                             <AudioCaptionPlayer 
                               player={captionAudioPlayer} 
                               status={captionAudioStatus} 
                               showVocalLabel 
                               onRemove={() => setSlot1(prev => prev ? { ...prev, captionAudioUri: null } : prev)} 
+                              waveform={slot1!.captionWaveform}
                             />
                           </View>
-                        )}                        {slot1!.note ? (
-                          <Pressable style={styles.previewNoteBox} onPress={() => setIsEditingNote(true)}>
-                            <Text style={styles.previewNoteText}>{slot1!.note}</Text>
-                          </Pressable>
                         ) : (
-                          !slot1!.captionAudioUri && (
-                            <TouchableOpacity style={styles.addNoteBtn} onPress={() => setIsEditingNote(true)}>
-                              <FeatherIcon /><Text style={styles.addNoteBtnText}>Ajouter une légende...</Text>
+                          <>
+                            <TouchableOpacity style={styles.previewNoteBox} onPress={() => setIsEditingNote(true)} activeOpacity={0.7}>
+                              {slot1!.note ? (
+                                <Text style={styles.previewNoteText} numberOfLines={1}>{slot1!.note}</Text>
+                              ) : (
+                                <Text style={styles.addNoteBtnText}>Ajouter une légende...</Text>
+                              )}
                             </TouchableOpacity>
-                          )
+
+                            <TouchableOpacity
+                              style={styles.captionRecordBtn}
+                              onPress={startCaptionAudioRecording}
+                              activeOpacity={0.8}
+                            >
+                              <Svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={colors.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <Path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                                <Path d="M19 10v2a7 7 0 0 1-14 0v-2" /><Path d="M12 19v4" /><Path d="M8 23h8" />
+                              </Svg>
+                            </TouchableOpacity>
+                          </>
                         )}
                       </View>
-
-                      {!slot1!.captionAudioUri && (
-                        <TouchableOpacity
-                          style={[styles.captionRecordBtn, isCaptionRecording && styles.captionRecordBtnActive]}
-                          onPressIn={startCaptionAudioRecording}
-                          onPressOut={stopCaptionAudioRecording}
-                          activeOpacity={0.8}
-                        >
-                          <Svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={colors.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <Path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                            <Path d="M19 10v2a7 7 0 0 1-14 0v-2" /><Path d="M12 19v4" /><Path d="M8 23h8" />
-                          </Svg>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  )}
-
-                  {isCaptionRecording && (
-                    <View style={styles.captionRecordingOverlay}>
-                      <View style={styles.audioWaveformRow} pointerEvents="none">
-                        {audioWaveAnims.map(({ anim }, i) => (
-                          <Animated.View key={i} style={[styles.audioWaveformBar, { transform: [{ scaleY: anim }], backgroundColor: colors.white }]} />
-                        ))}
-                      </View>
-                      <Text style={styles.captionRecordingText}>{captionAudioSeconds}s</Text>
                     </View>
                   )}
                 </View>
@@ -1209,54 +1282,66 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               {viewingSlot === 1 && (
                 <View style={[styles.previewContent, { bottom: 24 }]}>
                   {activeChallenge === null && (
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                      <View style={{ flex: 1 }}>
-                        {slot1!.captionAudioUri && (
-                          <View style={[styles.captionAudioContainer, { alignSelf: "stretch", flex: 1 }]}>
+                    <View style={{ gap: 12 }}>
+                      <View style={styles.combinedInputContainer}>
+                        {isCaptionRecording ? (
+                          <View style={styles.recordingContainer}>
+                            <TouchableOpacity
+                              style={{ paddingRight: 12 }}
+                              onPress={cancelCaptionAudioRecording}
+                              activeOpacity={0.7}
+                            >
+                              <CloseIcon />
+                            </TouchableOpacity>
+                            <View style={styles.captionRecordingOverlay}>
+                              <View style={[styles.audioWaveformRow, { flex: 1 }]} pointerEvents="none">
+                                {liveWaveform.map((v, i) => (
+                                  <View key={i} style={[styles.audioWaveformBar, { height: Math.max(4, v * 52), backgroundColor: colors.white }]} />
+                                ))}
+                              </View>
+                              <Text style={styles.captionRecordingText}>{captionAudioSeconds}s</Text>
+                            </View>
+                            <TouchableOpacity
+                              style={[styles.captionRecordBtn, styles.captionRecordBtnActive]}
+                              onPress={stopCaptionAudioRecording}
+                              activeOpacity={0.8}
+                            >
+                              <View style={{ width: 14, height: 14, borderRadius: 2, backgroundColor: colors.white }} />
+                            </TouchableOpacity>
+                          </View>
+                        ) : slot1!.captionAudioUri ? (
+                          <View style={{ flex: 1, paddingRight: 8 }}>
                             <AudioCaptionPlayer 
                               player={captionAudioPlayer} 
                               status={captionAudioStatus} 
                               showVocalLabel 
                               onRemove={() => setSlot1(prev => prev ? { ...prev, captionAudioUri: null } : prev)} 
+                              waveform={slot1!.captionWaveform}
                             />
                           </View>
-                        )}                        {slot1!.note ? (
-                          <Pressable style={styles.previewNoteBox} onPress={() => setIsEditingNote(true)}>
-                            <Text style={styles.previewNoteText}>{slot1!.note}</Text>
-                          </Pressable>
                         ) : (
-                          !slot1!.captionAudioUri && (
-                            <TouchableOpacity style={styles.addNoteBtn} onPress={() => setIsEditingNote(true)}>
-                              <FeatherIcon /><Text style={styles.addNoteBtnText}>Ajouter une légende...</Text>
+                          <>
+                            <TouchableOpacity style={styles.previewNoteBox} onPress={() => setIsEditingNote(true)} activeOpacity={0.7}>
+                              {slot1!.note ? (
+                                <Text style={styles.previewNoteText} numberOfLines={1}>{slot1!.note}</Text>
+                              ) : (
+                                <Text style={styles.addNoteBtnText}>Ajouter une légende...</Text>
+                              )}
                             </TouchableOpacity>
-                          )
+
+                            <TouchableOpacity
+                              style={styles.captionRecordBtn}
+                              onPress={startCaptionAudioRecording}
+                              activeOpacity={0.8}
+                            >
+                              <Svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={colors.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <Path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                                <Path d="M19 10v2a7 7 0 0 1-14 0v-2" /><Path d="M12 19v4" /><Path d="M8 23h8" />
+                              </Svg>
+                            </TouchableOpacity>
+                          </>
                         )}
                       </View>
-
-                      {!slot1!.captionAudioUri && (
-                        <TouchableOpacity
-                          style={[styles.captionRecordBtn, isCaptionRecording && styles.captionRecordBtnActive]}
-                          onPressIn={startCaptionAudioRecording}
-                          onPressOut={stopCaptionAudioRecording}
-                          activeOpacity={0.8}
-                        >
-                          <Svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={colors.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <Path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                            <Path d="M19 10v2a7 7 0 0 1-14 0v-2" /><Path d="M12 19v4" /><Path d="M8 23h8" />
-                          </Svg>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  )}
-
-                  {isCaptionRecording && (
-                    <View style={styles.captionRecordingOverlay}>
-                      <View style={styles.audioWaveformRow} pointerEvents="none">
-                        {audioWaveAnims.map(({ anim }, i) => (
-                          <Animated.View key={i} style={[styles.audioWaveformBar, { transform: [{ scaleY: anim }], backgroundColor: colors.white }]} />
-                        ))}
-                      </View>
-                      <Text style={styles.captionRecordingText}>{captionAudioSeconds}s</Text>
                     </View>
                   )}
                 </View>
@@ -1303,9 +1388,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               <TouchableOpacity style={styles.topSquareBtn} onPress={resetAll}><CloseIcon /></TouchableOpacity>
               {hasSlot2 && <TouchableOpacity style={styles.topSquareBtn} onPress={handleTrash}><TrashIcon /></TouchableOpacity>}
             </View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }} pointerEvents="none">
-              {[18,32,48,36,60,80,52,68,42,62,88,72,50,38,68,82,58,44,28,52].map((h, i) => (
-                <View key={i} style={{ width: 3, height: h, borderRadius: radii.xs, backgroundColor: colors.white, opacity: audioPreviewStatus.currentTime > 0 && audioPreviewStatus.duration > 0 && (audioPreviewStatus.currentTime / audioPreviewStatus.duration) > i / 20 ? 0.9 : 0.25 }} />
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 3, marginHorizontal: 20 }} pointerEvents="none">
+              {(previewSlot?.waveform && previewSlot.waveform.length > 0 ? compressWaveform(previewSlot.waveform, 40).map(v => Math.max(4, v * 80)) : [18,32,48,36,60,80,52,68,42,62,88,72,50,38,68,82,58,44,28,52]).map((h, i, arr) => (
+                <View key={i} style={{ width: 3, height: h, borderRadius: radii.xs, backgroundColor: colors.white, opacity: audioPreviewStatus.currentTime > 0 && audioPreviewStatus.duration > 0 && (audioPreviewStatus.currentTime / audioPreviewStatus.duration) > i / arr.length ? 0.9 : 0.25 }} />
               ))}
             </View>
             <View style={styles.audioPreviewPlayer}>
@@ -1345,15 +1430,15 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
             </View>
             {viewingSlot === 1 && (
               <View style={[styles.previewContent, { bottom: 24 }]}>
-                {slot1!.note ? (
-                  <Pressable style={styles.previewNoteBox} onPress={() => setIsEditingNote(true)}>
-                    <Text style={styles.previewNoteText}>{slot1!.note}</Text>
-                  </Pressable>
-                ) : (
-                  <TouchableOpacity style={styles.addNoteBtn} onPress={() => setIsEditingNote(true)}>
-                    <FeatherIcon /><Text style={styles.addNoteBtnText}>Ajouter une légende...</Text>
+                <View style={styles.combinedInputContainer}>
+                  <TouchableOpacity style={styles.previewNoteBox} onPress={() => setIsEditingNote(true)} activeOpacity={0.7}>
+                    {slot1!.note ? (
+                      <Text style={styles.previewNoteText} numberOfLines={1}>{slot1!.note}</Text>
+                    ) : (
+                      <Text style={styles.addNoteBtnText}>Ajouter une légende...</Text>
+                    )}
                   </TouchableOpacity>
-                )}
+                </View>
               </View>
             )}
           </View>
@@ -1627,7 +1712,7 @@ const styles = StyleSheet.create({
   audioRedDot: { width: 10, height: 10, borderRadius: radii.full, backgroundColor: "#FF3B30" },
   audioTimerText: { color: colors.white, fontFamily: typography.family.bold, fontSize: typography.size.subtitle, letterSpacing: 2, width: 260, textAlign: "center" },
   audioHintText: { color: "rgba(255,255,255,0.3)", fontFamily: typography.family.regular, fontSize: typography.size.xs, letterSpacing: 0.5, marginTop: 4 },
-  audioWaveformRow: { flexDirection: "row", alignItems: "center", gap: 4, height: 52 },
+  audioWaveformRow: { flexDirection: "row", alignItems: "center", gap: 3.5, height: 52, overflow: "hidden", justifyContent: "flex-start" },
   audioWaveformBar: { width: 3.5, height: 44, borderRadius: radii.xs, backgroundColor: colors.white },
   cameraFooter: { position: "absolute", left: 0, right: 0, alignItems: "center", gap: 24 },
   modeSlider: { flexDirection: "row", gap: 4, backgroundColor: "rgba(0,0,0,0.3)", paddingHorizontal: 20, paddingVertical: 4, borderRadius: radii.lg, marginBottom: 12 },
@@ -1678,15 +1763,35 @@ const styles = StyleSheet.create({
   drawingPreviewImage: { width: "100%", aspectRatio: 3 / 4, borderRadius: radii.xl, overflow: "hidden", backgroundColor: colors.white },
   previewTopBtns: { position: "absolute", top: 16, left: 16, right: 16, flexDirection: "row", justifyContent: "space-between" },
   topSquareBtn: { width: 38, height: 38, borderRadius: radii.sm, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center" },
-  previewContent: { position: "absolute", left: 24, right: 24 },
-  previewNoteBox: { backgroundColor: "rgba(0,0,0,0.5)", padding: 16, borderRadius: radii.lg, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
-  previewNoteText: { color: colors.white, fontSize: typography.size.md, fontFamily: typography.family.semibold, textAlign: "center" },
-  addNoteBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, padding: 16, borderRadius: radii.lg, backgroundColor: "rgba(0,0,0,0.4)", borderStyle: "dashed", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
+  previewContent: { position: "absolute", left: 12, right: 12 },
+  previewNoteBox: { flex: 1, paddingVertical: 12 },
+  previewNoteText: { color: colors.white, fontSize: typography.size.sm, fontFamily: typography.family.semibold },
+  addNoteBtn: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12 },
   addNoteBtnText: { color: "rgba(255,255,255,0.6)", fontSize: typography.size.sm, fontFamily: typography.family.semibold },
   noteEditorContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: 40 },
   largeNoteInput: { width: "100%", color: colors.white, fontSize: typography.size.xxl, fontFamily: typography.family.bold, textAlign: "center", marginBottom: 40 },
   doneNoteBtn: { backgroundColor: colors.white, paddingHorizontal: 32, paddingVertical: 14, borderRadius: radii.xl },
   doneNoteText: { color: colors.black, fontFamily: typography.family.bold, fontSize: typography.size.md },
+  // Unified Input
+  combinedInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.6)",
+    borderRadius: radii.full,
+    paddingLeft: 16,
+    paddingRight: 4,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.15)",
+    minHeight: 52,
+  },
+  recordingContainer: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingRight: 12,
+  },
   // Audio preview
   audioPreviewPlayer: { flexDirection: "row", alignItems: "center", gap: 14, marginTop: 32, paddingHorizontal: 24, width: "100%" },
   audioPreviewPlayBtn: { width: 52, height: 52, borderRadius: radii.full, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
@@ -1699,11 +1804,10 @@ const styles = StyleSheet.create({
   capturingSecondBar: { position: "absolute", left: 12, right: 12, height: 72, flexDirection: "row", gap: 12 },
   capturingSecondThumb: { flex: 1, borderRadius: radii.lg, overflow: "hidden" },
   // Caption Audio
-  captionRecordBtn: { width: 52, height: 52, borderRadius: radii.full, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
-  captionRecordBtnActive: { backgroundColor: "#FF3B30", borderColor: "#FF3B30", transform: [{ scale: 1.2 }] },
-  captionRecordingOverlay: { position: "absolute", bottom: 80, left: 0, right: 0, alignItems: "center", gap: 10 },
-  captionRecordingText: { color: colors.white, fontFamily: typography.family.bold, fontSize: typography.size.sm },
-  captionAudioContainer: { marginBottom: 12 },
+  captionRecordBtn: { width: 44, height: 44, borderRadius: radii.full, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
+  captionRecordBtnActive: { backgroundColor: "#FF3B30" },
+  captionRecordingOverlay: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
+  captionRecordingText: { color: colors.white, fontFamily: typography.family.bold, fontSize: typography.size.xs, minWidth: 24 },
 });
 
 const challengeStyles = StyleSheet.create({

@@ -116,12 +116,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
 // --- Host ---
 function ToastHost({ toasts, onDismiss }: { toasts: ToastData[]; onDismiss: (id: number) => void }) {
-  const { activeUploads } = useUpload();
+  const { uploads } = useUpload();
   const topInset = Platform.OS === "ios" ? 54 : (StatusBar.currentHeight ?? 24) + 10;
 
   return (
     <View style={[styles.rootOverlay, { top: topInset }]} pointerEvents="box-none">
-      {activeUploads.map((upload) => (
+      {uploads.map((upload) => (
         <UploadBanner key={upload.id} upload={upload} />
       ))}
       {toasts.map((toast) => (

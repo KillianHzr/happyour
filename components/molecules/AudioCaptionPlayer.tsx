@@ -10,6 +10,7 @@ interface AudioCaptionPlayerProps {
   onRemove?: () => void;
   showVocalLabel?: boolean;
   onScrollLock?: (locked: boolean) => void;
+  waveform?: number[];
 }
 
 const WAVE_BARS = [10, 14, 22, 30, 38, 34, 26, 20, 14, 18, 28, 36, 44, 40, 32, 24, 16, 12, 20, 30, 38, 42, 34, 26, 18, 14, 22, 32, 40, 36, 28, 20, 14, 10, 18, 28, 36, 40, 32, 24, 18, 14, 20, 28, 36, 32, 24, 18, 12, 8];
@@ -20,7 +21,22 @@ const TrashIcon = () => (
   </Svg>
 );
 
-export const AudioCaptionPlayer = ({ player, status, onRemove, showVocalLabel, onScrollLock }: AudioCaptionPlayerProps) => {
+function compressWaveform(data: number[], maxBars: number): number[] {
+  if (!data || data.length === 0) return [];
+  if (data.length <= maxBars) return data;
+  const result: number[] = [];
+  const chunkSize = data.length / maxBars;
+  for (let i = 0; i < maxBars; i++) {
+    const start = Math.floor(i * chunkSize);
+    const end = Math.floor((i + 1) * chunkSize);
+    const slice = data.slice(start, end);
+    const avg = slice.reduce((sum, val) => sum + val, 0) / (slice.length || 1);
+    result.push(avg);
+  }
+  return result;
+}
+
+export const AudioCaptionPlayer = ({ player, status, onRemove, showVocalLabel, onScrollLock, waveform }: AudioCaptionPlayerProps) => {
   const waveWidthRef = useRef(1);
   const waveOriginXRef = useRef(0);
   const isDraggingRef = useRef(false);
@@ -75,6 +91,11 @@ export const AudioCaptionPlayer = ({ player, status, onRemove, showVocalLabel, o
 
   const progress = (status.duration ?? 0) > 0 ? (status.currentTime ?? 0) / status.duration : 0;
 
+  // Use provided waveform or fallback to hardcoded
+  const bars = waveform && waveform.length > 0 
+    ? compressWaveform(waveform, 40).map(v => v * 36) 
+    : WAVE_BARS;
+
   return (
     <View style={styles.container}>
       <TouchableOpacity onPress={togglePlay} style={styles.playBtn}>
@@ -91,14 +112,14 @@ export const AudioCaptionPlayer = ({ player, status, onRemove, showVocalLabel, o
         {...seekPan.panHandlers}
       >
         <View style={styles.waveContainer} pointerEvents="none">
-          {WAVE_BARS.map((h, i) => (
+          {bars.map((h, i) => (
             <View
               key={i}
               style={[
                 styles.waveBar,
                 {
                   height: Math.max(3, h / 2.2),
-                  opacity: progress > i / WAVE_BARS.length ? 1 : 0.25,
+                  opacity: progress > i / bars.length ? 1 : 0.25,
                 },
               ]}
             />

@@ -104,7 +104,7 @@ export const AudioMoment = ({
     const isDrawing = path.includes("_draw");
 
     if (isAudio) {
-      return <AudioPlayerView player={player} status={status} onScrollLock={onScrollLock} />;
+      return <AudioPlayerView player={player} status={status} onScrollLock={onScrollLock} waveform={moment.waveform || undefined} />;
     }
 
     if (isVideo) {
@@ -154,6 +154,7 @@ export const AudioMoment = ({
                 audioPlayer={showAudioPlayerInOverlay ? player : undefined}
                 audioStatus={showAudioPlayerInOverlay ? status : undefined}
                 onScrollLock={showAudioPlayerInOverlay ? onScrollLock : undefined}
+                captionWaveform={moment.caption_waveform || undefined}
                 isCrown={crownWinnerId === moment.user_id}
                 isOwn={isOwn}
                 hasNewComments={moment.hasNewComments}

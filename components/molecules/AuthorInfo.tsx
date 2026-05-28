@@ -17,6 +17,7 @@ interface AuthorInfoProps {
   audioPlayer?: ReturnType<typeof useAudioPlayer>;
   audioStatus?: ReturnType<typeof useAudioPlayerStatus>;
   onScrollLock?: (locked: boolean) => void;
+  captionWaveform?: number[];
   isCrown: boolean;
   isOwn: boolean;
   hasNewComments?: boolean;
@@ -39,6 +40,7 @@ export const AuthorInfo = ({
   audioPlayer,
   audioStatus,
   onScrollLock,
+  captionWaveform,
   isCrown,
   isOwn,
   hasNewComments,
@@ -63,7 +65,7 @@ export const AuthorInfo = ({
               <Text style={styles.username}>{username}</Text>
               <Text style={styles.momentTime}>{formatTime(created_at)}</Text>
             </View>
-            <AudioCaptionPlayer player={audioPlayer!} status={audioStatus!} onScrollLock={onScrollLock} />
+            <AudioCaptionPlayer player={audioPlayer!} status={audioStatus!} onScrollLock={onScrollLock} waveform={captionWaveform} />
           </View>
         ) : (
           note && <ExpandableNote text={note} maxLines={2} />
@@ -97,26 +99,19 @@ const styles = StyleSheet.create({
   username: { 
     color: colors.white,
     fontFamily: typography.family.bold,
-    fontSize: typography.size.md
+    fontSize: typography.size.md,
   },
-  momentTime: { 
+  momentTime: {
     color: colors.textMuted,
-    fontFamily: typography.family.semibold,
-    fontSize: typography.size.xs
+    fontSize: typography.size.xs,
+    fontFamily: typography.family.regular,
   },
   actionsColumn: {
-    flexDirection: "column",
-    gap: 12,
+    flexDirection: "row",
     alignItems: "center",
+    gap: spacing.md,
   },
   reactBtnInline: {
-    width: 42,
-    height: 42,
-    borderRadius: radii.full,
-    backgroundColor: colors.glass,
-    justifyContent: "center",
-    alignItems: "center", 
-    borderWidth: 1, 
-    borderColor: colors.glassBorder
+    padding: 6,
   },
 });
