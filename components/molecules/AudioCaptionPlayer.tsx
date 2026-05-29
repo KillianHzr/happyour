@@ -3,6 +3,8 @@ import { View, StyleSheet, TouchableOpacity, PanResponder, Text } from "react-na
 import { Svg, Path } from "react-native-svg";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { colors, radii, typography } from "../../lib/theme";
+import PlayIcon from "../../assets/icons/Play.svg";
+import XIcon from "../../assets/icons/X.svg";
 
 interface AudioCaptionPlayerProps {
   player: ReturnType<typeof useAudioPlayer>;
@@ -14,12 +16,6 @@ interface AudioCaptionPlayerProps {
 }
 
 const WAVE_BARS = [10, 14, 22, 30, 38, 34, 26, 20, 14, 18, 28, 36, 44, 40, 32, 24, 16, 12, 20, 30, 38, 42, 34, 26, 18, 14, 22, 32, 40, 36, 28, 20, 14, 10, 18, 28, 36, 40, 32, 24, 18, 14, 20, 28, 36, 32, 24, 18, 12, 8];
-
-const TrashIcon = () => (
-  <Svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <Path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-  </Svg>
-);
 
 function compressWaveform(data: number[], maxBars: number): number[] {
   if (!data || data.length === 0) return [];
@@ -99,9 +95,13 @@ export const AudioCaptionPlayer = ({ player, status, onRemove, showVocalLabel, o
   return (
     <View style={styles.container}>
       <TouchableOpacity onPress={togglePlay} style={styles.playBtn}>
-        <Svg width="14" height="14" viewBox="0 0 24 24" fill={colors.white}>
-          {status.playing ? <Path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /> : <Path d="M8 5v14l11-7z" />}
-        </Svg>
+        {status.playing ? (
+          <Svg width="14" height="14" viewBox="0 0 24 24" fill={colors.white}>
+            <Path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+          </Svg>
+        ) : (
+          <PlayIcon color={colors.white} width={14} height={14} />
+        )}
       </TouchableOpacity>
       
       <View 
@@ -127,10 +127,9 @@ export const AudioCaptionPlayer = ({ player, status, onRemove, showVocalLabel, o
         </View>
       </View>
 
-      {showVocalLabel && <Text style={styles.vocalLabel}>Vocal</Text>}
       {onRemove && (
         <TouchableOpacity onPress={onRemove} style={styles.trashBtn}>
-          <TrashIcon />
+          <XIcon color={colors.white} size={20} />
         </TouchableOpacity>
       )}
     </View>
@@ -146,10 +145,13 @@ const styles = StyleSheet.create({
     height: 32,
   },
   playBtn: {
-    width: 28,
-    height: 28,
+    width: 32,
+    height: 32,
+    borderRadius: radii.sm, // var(--sds-size-radius-200) -> 8
+    backgroundColor: colors.opacityLight, // var(--background-default-default-opacity)
     justifyContent: "center",
     alignItems: "center",
+    overflow: "hidden", // blur/glass effect approximation
   },
   waveHitArea: {
     flex: 1,
@@ -166,15 +168,8 @@ const styles = StyleSheet.create({
   },
   waveBar: {
     width: 2,
-    backgroundColor: colors.white,
-    borderRadius: 1,
-  },
-  vocalLabel: {
-    color: colors.white,
-    fontSize: 10,
-    fontFamily: typography.family.bold,
-    textTransform: "uppercase",
-    opacity: 0.8,
+    backgroundColor: colors.bgNeutral, // var(--sds-color-background-neutral-default)
+    borderRadius: 4,
   },
   trashBtn: {
     padding: 6,
