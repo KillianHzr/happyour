@@ -7,7 +7,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import Svg, { Path } from "react-native-svg";
 import { supabase } from "../../lib/supabase";
-import { colors, radii, typography } from "../../lib/theme";
+import { radii, typography, type ThemeColors } from "../../lib/theme";
+import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import {
   getCurrentChallengePeriod, getChallengeWeekStart,
   fetchOrGenerateChallenge, getChallengePrompt,
@@ -34,31 +35,33 @@ type Props = {
 };
 
 function CaptureTypeIcon({ type }: { type: ChallengeCapture }) {
+  const { colors } = useTheme();
+  const stroke = colors.secondary;
   const icons: Record<ChallengeCapture, React.ReactNode> = {
     PHOTO: (
-      <Svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <Path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
         <Path d="M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />
       </Svg>
     ),
     TEXTE: (
-      <Svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <Path d="M17 6H3" /><Path d="M21 12H3" /><Path d="M15 18H3" />
       </Svg>
     ),
     AUDIO: (
-      <Svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <Path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
         <Path d="M19 10v2a7 7 0 0 1-14 0v-2" /><Path d="M12 19v4" /><Path d="M8 23h8" />
       </Svg>
     ),
     DESSIN: (
-      <Svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <Path d="M12 20h9" /><Path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
       </Svg>
     ),
     VIDEO: (
-      <Svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <Path d="M23 7l-7 5 7 5V7z" /><Path d="M1 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H1a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z" />
       </Svg>
     ),
@@ -76,6 +79,8 @@ const CAPTURE_LABEL: Record<ChallengeCapture, string> = {
 
 export default function ChallengesModal({ visible, onClose, allGroups, currentUserId, onSelectChallenge }: Props) {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [groupChallenges, setGroupChallenges] = useState<GroupChallenge[]>([]);
   const [isGap, setIsGap] = useState(false);
   const [devPeriodOverride, setDevPeriodOverride] = useState<1 | 2 | "auto">("auto");
@@ -196,7 +201,7 @@ export default function ChallengesModal({ visible, onClose, allGroups, currentUs
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.backBtn}>
             <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <Path d="M19 12H5M12 5l-7 7 7 7" stroke={colors.white} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              <Path d="M19 12H5M12 5l-7 7 7 7" stroke={colors.text} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
@@ -224,7 +229,7 @@ export default function ChallengesModal({ visible, onClose, allGroups, currentUs
 
               {gc.loading ? (
                 <View style={styles.card}>
-                  <ActivityIndicator color="rgba(255,255,255,0.5)" />
+                  <ActivityIndicator color={colors.textSecondary} />
                 </View>
               ) : !gc.challenge ? (
                 <View style={[styles.card, styles.cardDisabled]}>
@@ -287,7 +292,7 @@ export default function ChallengesModal({ visible, onClose, allGroups, currentUs
                       </View>
                     ) : (
                       <Svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                        <Path d="M9 18l6-6-6-6" stroke="rgba(255,255,255,0.5)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                        <Path d="M9 18l6-6-6-6" stroke={colors.textSecondary} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                       </Svg>
                     )}
                   </View>
@@ -301,10 +306,10 @@ export default function ChallengesModal({ visible, onClose, allGroups, currentUs
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.black,
+    backgroundColor: colors.bg,
   },
   header: {
     flexDirection: "row",
@@ -313,7 +318,7 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     paddingTop: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.08)",
+    borderBottomColor: colors.cardBorder,
   },
   backBtn: {
     width: 44,
@@ -323,12 +328,12 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   title: {
-    color: colors.white,
+    color: colors.text,
     fontFamily: typography.family.bold,
     fontSize: typography.size.xl,
   },
   subtitle: {
-    color: "rgba(255,255,255,0.45)",
+    color: colors.textTertiary,
     fontFamily: typography.family.regular,
     fontSize: typography.size.xs,
     marginTop: 1,
@@ -342,17 +347,17 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   groupName: {
-    color: "rgba(255,255,255,0.5)",
+    color: colors.textSecondary,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.xs,
     letterSpacing: 0.8,
     textTransform: "uppercase",
   },
   card: {
-    backgroundColor: "rgba(255,255,255,0.07)",
+    backgroundColor: colors.card,
     borderRadius: radii.lg,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: colors.cardBorder,
     padding: 16,
   },
   cardDisabled: {
@@ -369,17 +374,17 @@ const styles = StyleSheet.create({
     borderRadius: radii.xl,
   },
   avatarFallback: {
-    backgroundColor: "rgba(255,255,255,0.1)",
+    backgroundColor: colors.accentMuted,
     justifyContent: "center",
     alignItems: "center",
   },
   avatarLetter: {
-    color: colors.white,
+    color: colors.text,
     fontFamily: typography.family.bold,
     fontSize: typography.size.lg,
   },
   promptText: {
-    color: colors.white,
+    color: colors.text,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.sm,
     lineHeight: 21,
@@ -392,13 +397,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: colors.accentMuted,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: radii.lg,
   },
   captureBadgeText: {
-    color: "rgba(255,255,255,0.7)",
+    color: colors.secondary,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.xs,
   },
@@ -419,10 +424,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: radii.md,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: colors.accentMuted,
   },
   gapTagText: {
-    color: "rgba(255,255,255,0.4)",
+    color: colors.textTertiary,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.xs,
   },
@@ -442,7 +447,7 @@ const styles = StyleSheet.create({
     fontSize: typography.size.xs,
   },
   noThemeText: {
-    color: "rgba(255,255,255,0.3)",
+    color: colors.textTertiary,
     fontFamily: typography.family.regular,
     fontSize: typography.size.sm,
     textAlign: "center",

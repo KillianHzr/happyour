@@ -12,12 +12,15 @@ import { Link, router } from "expo-router";
 import { useAuth } from "../../lib/auth-context";
 import { useToast } from "../../lib/toast-context";
 import { translateError } from "../../lib/error-messages";
-import { colors, radii, theme, typography } from "../../lib/theme";
+import { radii, typography, type ThemeColors } from "../../lib/theme";
+import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import Loader from "../../components/Loader";
 
 export default function LoginScreen() {
   const { login, resetPassword } = useAuth();
   const { showToast } = useToast();
+  const { colors, theme } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -98,13 +101,13 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, justifyContent: "center", paddingHorizontal: 40, backgroundColor: colors.bg },
   logoMark: {
     width: 32,
     height: 32,
     borderWidth: 2,
-    borderColor: colors.white,
+    borderColor: colors.text,
     borderRadius: radii.xs,
     marginBottom: 24,
     transform: [{ rotate: "45deg" }],

@@ -4,7 +4,8 @@ import { Svg, Path } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { UserAvatar } from "../atoms/Avatar";
 import { PhotoEntry } from "../../lib/feed-types";
-import { colors, radii, spacing, typography } from "../../lib/theme";
+import { radii, spacing, typography, type ThemeColors } from "../../lib/theme";
+import { useTheme, useThemedStyles } from "../../lib/theme-context";
 
 const NAVBAR_HEIGHT = 100;
 
@@ -29,6 +30,8 @@ function formatCrownDuration(ms: number): string {
 
 export const CrownRevealPage = ({ winner, durationMs, currentUserId, userDurationMs = 0 }: CrownRevealPageProps) => {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const paddingTopBottom = Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 24) / 2);
   const isWinner = currentUserId === winner.user_id;
 
@@ -36,12 +39,12 @@ export const CrownRevealPage = ({ winner, durationMs, currentUserId, userDuratio
     <View style={[styles.fullscreenPage, { paddingTop: paddingTopBottom, paddingBottom: paddingTopBottom }]}>
       <View style={styles.crownRevealInner}>
         <Svg width={64} height={64} viewBox="0 0 24 24" style={{ marginBottom: spacing.xs }}>
-          <Path 
-            d="M2 19l2-9 4.5 4L12 5l3.5 9L20 10l2 9H2z" 
-            fill={colors.gold} 
-            stroke={colors.goldDark} 
-            strokeWidth="0.8" 
-            strokeLinejoin="round" 
+          <Path
+            d="M2 19l2-9 4.5 4L12 5l3.5 9L20 10l2 9H2z"
+            fill={colors.gold}
+            stroke={colors.goldDark}
+            strokeWidth="0.8"
+            strokeLinejoin="round"
           />
         </Svg>
         <Text style={styles.crownRevealTitle}>Couronne de la semaine</Text>
@@ -69,49 +72,49 @@ export const CrownRevealPage = ({ winner, durationMs, currentUserId, userDuratio
   );
 };
 
-const styles = StyleSheet.create({
-  fullscreenPage: { 
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
+  fullscreenPage: {
     flex: 1,
-    width: "100%", 
-    height: "100%", 
-    justifyContent: "center", 
-    alignItems: "center", 
-    backgroundColor: colors.bg 
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.bg
   },
-  crownRevealInner: { 
-    alignItems: "center", 
-    paddingHorizontal: spacing.xxl 
+  crownRevealInner: {
+    alignItems: "center",
+    paddingHorizontal: spacing.xxl
   },
-  crownRevealTitle: { 
-    fontFamily: typography.family.bold, 
+  crownRevealTitle: {
+    fontFamily: typography.family.bold,
     fontSize: typography.size.xs + 1, // 13
-    color: colors.gold, 
-    letterSpacing: 2, 
-    textTransform: "uppercase", 
+    color: colors.gold,
+    letterSpacing: 2,
+    textTransform: "uppercase",
     marginBottom: spacing.xl + 4, // 28
-    marginTop: spacing.sm 
+    marginTop: spacing.sm
   },
-  crownRevealAvatarWrap: { 
-    marginBottom: spacing.lg 
+  crownRevealAvatarWrap: {
+    marginBottom: spacing.lg
   },
-  crownRevealUsername: { 
-    fontFamily: typography.family.bold, 
+  crownRevealUsername: {
+    fontFamily: typography.family.bold,
     fontSize: typography.size.xxl + 4, // 28
-    color: colors.white, 
-    marginBottom: spacing.md, 
-    textAlign: "center" 
+    color: colors.text,
+    marginBottom: spacing.md,
+    textAlign: "center"
   },
-  crownRevealDurationLabel: { 
-    fontFamily: typography.family.regular, 
-    fontSize: typography.size.sm, 
-    color: colors.textMuted, 
-    marginBottom: spacing.xs + 2 // 6 
+  crownRevealDurationLabel: {
+    fontFamily: typography.family.regular,
+    fontSize: typography.size.sm,
+    color: colors.textMuted,
+    marginBottom: spacing.xs + 2 // 6
   },
-  crownRevealDuration: { 
-    fontFamily: typography.family.bold, 
+  crownRevealDuration: {
+    fontFamily: typography.family.bold,
     fontSize: typography.size.xxl + 14, // 38
-    color: colors.gold, 
-    letterSpacing: 1 
+    color: colors.gold,
+    letterSpacing: 1
   },
   personalStatsContainer: {
     marginTop: 48,
@@ -121,13 +124,13 @@ const styles = StyleSheet.create({
   statsDivider: {
     width: 40,
     height: 1,
-    backgroundColor: "rgba(255,255,255,0.15)",
+    backgroundColor: colors.cardBorder,
     marginBottom: 24,
   },
   personalStatsLabel: {
     fontFamily: typography.family.bold,
     fontSize: typography.size.xs,
-    color: "rgba(255,255,255,0.3)",
+    color: colors.textTertiary,
     letterSpacing: 1.5,
     textTransform: "uppercase",
     marginBottom: 12,
@@ -135,13 +138,12 @@ const styles = StyleSheet.create({
   personalDuration: {
     fontFamily: typography.family.bold,
     fontSize: typography.size.xxl,
-    color: colors.white,
+    color: colors.text,
     marginBottom: 4,
   },
   personalDurationLabel: {
     fontFamily: typography.family.regular,
     fontSize: typography.size.xs,
-    color: "rgba(255,255,255,0.4)",
+    color: colors.textTertiary,
   },
 });
-

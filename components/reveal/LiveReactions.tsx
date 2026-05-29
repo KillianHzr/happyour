@@ -12,7 +12,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
 import Accelerometer from "expo-sensors/build/Accelerometer";
 import Svg, { Path } from "react-native-svg";
-import { colors, radii, typography } from "../../lib/theme";
+import { radii, typography, type ThemeColors } from "../../lib/theme";
+import { useThemedStyles } from "../../lib/theme-context";
 
 // ─── shake detection tunables ─────────────────────────────────────────────────
 // Strategy: count X-axis direction reversals (left→right or right→left).
@@ -111,6 +112,7 @@ function WavingHand({
 // ─── BigWave — centred overlay shown on the waving user's own screen ──────────
 
 function BigWave({ trigger }: { trigger: number }) {
+  const styles = useThemedStyles(makeStyles);
   const scale   = useRef(new Animated.Value(0.6)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
@@ -174,6 +176,7 @@ export default function LiveReactions({
   isVisible,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const styles = useThemedStyles(makeStyles);
   const [participants, setParticipants] = useState<Map<string, Participant>>(new Map());
   // Per-user monotonically-increasing wave trigger
   const [waveTriggers, setWaveTriggers] = useState<Map<string, number>>(new Map());
@@ -378,7 +381,7 @@ export default function LiveReactions({
 
 // ─── styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   avatarsCol: {
     position: "absolute",
     right: 14,
@@ -395,7 +398,7 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: radii.lg,
     borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.5)",
+    borderColor: colors.borderSecondary,
   },
   avatarFallback: {
     backgroundColor: "#6D28D9",
@@ -403,7 +406,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   avatarInitial: {
-    color: colors.white,
+    color: "#FFFFFF",
     fontFamily: typography.family.bold,
     fontSize: typography.size.sm,
   },
@@ -414,15 +417,15 @@ const styles = StyleSheet.create({
   bigWaveCard: {
     alignItems: "center",
     gap: 10,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: colors.opacityLight,
     borderRadius: radii.xl,
     paddingHorizontal: 32,
     paddingVertical: 24,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: colors.cardBorder,
   },
   bigWaveLabel: {
-    color: colors.white,
+    color: colors.text,
     fontSize: typography.size.xxl,
     fontFamily: typography.family.bold,
     letterSpacing: 0.5,

@@ -1,21 +1,23 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { colors, radii, typography } from "../lib/theme";
+import { radii, typography, type ThemeColors } from "../lib/theme";
+import { useThemedStyles } from "../lib/theme-context";
 
 export default function OfflineView() {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.container}>
       <View style={styles.logoMark} />
       <Text style={styles.title}>Hors connexion</Text>
       <Text style={styles.subtitle}>
-        Une connexion internet est nécessaire pour se connecter ou s'inscrire. 
+        Une connexion internet est nécessaire pour se connecter ou s'inscrire.
         Vérifie tes réglages réseau.
       </Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: "center",
@@ -27,7 +29,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderWidth: 2,
-    borderColor: colors.white,
+    borderColor: colors.text,
     borderRadius: radii.xs,
     marginBottom: 24,
     transform: [{ rotate: "45deg" }],

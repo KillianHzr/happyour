@@ -2,7 +2,8 @@ import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { UserAvatar } from "../atoms/Avatar";
 import { TrashIcon } from "../atoms/TrashIcon";
-import { colors, radii, spacing, typography } from "../../lib/theme";
+import { radii, spacing, typography, type ThemeColors } from "../../lib/theme";
+import { useThemedStyles } from "../../lib/theme-context";
 
 export interface Comment {
   id: string;
@@ -23,13 +24,14 @@ interface CommentItemProps {
 }
 
 export const CommentItem = ({ item, isMyComment, onDelete }: CommentItemProps) => {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.commentRow}>
       <View style={styles.avatarContainer}>
-        <UserAvatar 
-          avatar_url={item.profiles.avatar_url} 
-          username={item.profiles.username} 
-          size={38} 
+        <UserAvatar
+          avatar_url={item.profiles.avatar_url}
+          username={item.profiles.username}
+          size={38}
         />
       </View>
       <View style={styles.commentContent}>
@@ -38,7 +40,7 @@ export const CommentItem = ({ item, isMyComment, onDelete }: CommentItemProps) =
           <Text style={styles.content}>{item.content}</Text>
         </View>
         {isMyComment && (
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => onDelete(item.id)}
             style={styles.deleteBtn}
           >
@@ -50,7 +52,7 @@ export const CommentItem = ({ item, isMyComment, onDelete }: CommentItemProps) =
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   commentRow: {
     flexDirection: "row",
     marginBottom: spacing.xl,
@@ -62,12 +64,12 @@ const styles = StyleSheet.create({
     borderRadius: radii.lg,
     overflow: "hidden",
     borderWidth: 1,
-    borderColor: colors.glassBorder,
+    borderColor: colors.cardBorder,
   },
   commentContent: {
     flex: 1,
     gap: spacing.xs,
-    backgroundColor: colors.glassMuted,
+    backgroundColor: colors.card,
     padding: spacing.md,
     borderRadius: radii.lg,
     borderTopLeftRadius: radii.xs,
@@ -85,7 +87,7 @@ const styles = StyleSheet.create({
   content: {
     fontFamily: typography.family.regular,
     fontSize: typography.size.md,
-    color: colors.white,
+    color: colors.text,
     lineHeight: 20,
   },
 });

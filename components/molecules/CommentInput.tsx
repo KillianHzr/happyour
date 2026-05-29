@@ -1,7 +1,8 @@
 import React from "react";
 import { View, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet } from "react-native";
 import { SendIcon } from "../atoms/SendIcon";
-import { colors, spacing, radii, typography } from "../../lib/theme";
+import { spacing, radii, typography, type ThemeColors } from "../../lib/theme";
+import { useTheme, useThemedStyles } from "../../lib/theme-context";
 
 interface CommentInputProps {
   content: string;
@@ -11,6 +12,8 @@ interface CommentInputProps {
 }
 
 export const CommentInput = ({ content, setContent, onSubmit, submitting }: CommentInputProps) => {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const isDisabled = !content.trim() || submitting;
 
   return (
@@ -25,13 +28,13 @@ export const CommentInput = ({ content, setContent, onSubmit, submitting }: Comm
           multiline
           maxLength={500}
         />
-        <TouchableOpacity 
-          style={[styles.sendBtn, !content.trim() && styles.sendBtnDisabled]} 
+        <TouchableOpacity
+          style={[styles.sendBtn, !content.trim() && styles.sendBtnDisabled]}
           onPress={onSubmit}
           disabled={isDisabled}
         >
           {submitting ? (
-            <ActivityIndicator size="small" color={colors.black} />
+            <ActivityIndicator size="small" color={colors.bg} />
           ) : (
             <SendIcon disabled={!content.trim()} />
           )}
@@ -41,18 +44,18 @@ export const CommentInput = ({ content, setContent, onSubmit, submitting }: Comm
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   inputArea: {
     padding: spacing.xl,
     paddingTop: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.cardBorder,
-    backgroundColor: colors.glassMuted,
+    backgroundColor: colors.card,
   },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.glassMuted,
+    backgroundColor: colors.bg,
     borderRadius: radii.full,
     paddingLeft: spacing.lg,
     paddingRight: spacing.xs,
@@ -62,7 +65,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    color: colors.white,
+    color: colors.text,
     fontFamily: typography.family.regular,
     fontSize: typography.size.lg,
     maxHeight: 100,
@@ -72,13 +75,12 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: radii.full,
-    backgroundColor: colors.white,
+    backgroundColor: colors.text,
     justifyContent: "center",
     alignItems: "center",
     marginLeft: spacing.sm,
   },
   sendBtnDisabled: {
-    backgroundColor: colors.glass,
+    backgroundColor: colors.accentMuted,
   },
 });
-

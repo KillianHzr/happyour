@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Animated, Easing } from "react-native";
-import { colors, radii, typography } from "../lib/theme";
+import { radii, typography, type ThemeColors } from "../lib/theme";
+import { useThemedStyles } from "../lib/theme-context";
 
 interface SplashScreenProps {
   onFinish: () => void;
@@ -8,6 +9,7 @@ interface SplashScreenProps {
 }
 
 export default function SplashScreen({ onFinish, ready }: SplashScreenProps) {
+  const styles = useThemedStyles(makeStyles);
   const logoScale = useRef(new Animated.Value(0.8)).current;
   const logoOpacity = useRef(new Animated.Value(0)).current;
   const dotOpacity1 = useRef(new Animated.Value(0.1)).current;
@@ -66,7 +68,7 @@ export default function SplashScreen({ onFinish, ready }: SplashScreenProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: colors.bg,
@@ -79,7 +81,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderWidth: 3,
-    borderColor: colors.white,
+    borderColor: colors.text,
     borderRadius: radii.sm,
     marginBottom: 20,
     transform: [{ rotate: "45deg" }],
@@ -92,5 +94,5 @@ const styles = StyleSheet.create({
     textTransform: "lowercase",
   },
   dots: { flexDirection: "row", marginTop: 60, gap: 12 },
-  dot: { width: 4, height: 4, borderRadius: radii.xs, backgroundColor: colors.white },
+  dot: { width: 4, height: 4, borderRadius: radii.xs, backgroundColor: colors.text },
 });

@@ -2,6 +2,8 @@ import { StyleSheet } from "react-native";
 // @ts-ignore
 import tokens from "../design-tokens.json";
 
+export type ThemeMode = "Light" | "Dark";
+
 /**
  * Résout un token de design par chemin et mode.
  *
@@ -108,10 +110,7 @@ const resolveTextStyle = (textStyleName: string, mode: "Light" | "Dark" = "Light
   };
 };
 
-// ─── Mode actif ──────────────────────────────────────────────────────────────
-const activeMode = "Dark";
-
-// ─── Palettes primitives ─────────────────────────────────────────────────────
+// ─── Palettes primitives (mode-indépendantes) ────────────────────────────────
 export const palette = {
   slate: {
     100:  resolveToken("Primitives/color/slate/100",  "Value") as string,   // #F3F3F3
@@ -209,326 +208,327 @@ export const palette = {
     900:  resolveToken("Primitives/color/blue/900",  "Value") as string,    // #183057
     1000: resolveToken("Primitives/color/blue/1000", "Value") as string,    // #15253F
   },
-  // white/black : rendus comme rgba(opacité) — ex: white[500] = rgba(255,255,255,0.5)
+  // white/black : rendus comme rgba(opacité) — mode-indépendants
   white: {
-    100:  resolveToken("Primitives/color/white/100",  activeMode) as string,
-    200:  resolveToken("Primitives/color/white/200",  activeMode) as string,
-    300:  resolveToken("Primitives/color/white/300",  activeMode) as string,
-    400:  resolveToken("Primitives/color/white/400",  activeMode) as string,
-    500:  resolveToken("Primitives/color/white/500",  activeMode) as string,
-    600:  resolveToken("Primitives/color/white/600",  activeMode) as string,
-    700:  resolveToken("Primitives/color/white/700",  activeMode) as string,
-    800:  resolveToken("Primitives/color/white/800",  activeMode) as string,
-    900:  resolveToken("Primitives/color/white/900",  activeMode) as string,
-    1000: resolveToken("Primitives/color/white/1000", activeMode) as string,
+    100:  resolveToken("Primitives/color/white/100",  "Value") as string,
+    200:  resolveToken("Primitives/color/white/200",  "Value") as string,
+    300:  resolveToken("Primitives/color/white/300",  "Value") as string,
+    400:  resolveToken("Primitives/color/white/400",  "Value") as string,
+    500:  resolveToken("Primitives/color/white/500",  "Value") as string,
+    600:  resolveToken("Primitives/color/white/600",  "Value") as string,
+    700:  resolveToken("Primitives/color/white/700",  "Value") as string,
+    800:  resolveToken("Primitives/color/white/800",  "Value") as string,
+    900:  resolveToken("Primitives/color/white/900",  "Value") as string,
+    1000: resolveToken("Primitives/color/white/1000", "Value") as string,
   },
   black: {
-    100:  resolveToken("Primitives/color/black/100",  activeMode) as string,
-    200:  resolveToken("Primitives/color/black/200",  activeMode) as string,
-    300:  resolveToken("Primitives/color/black/300",  activeMode) as string,
-    400:  resolveToken("Primitives/color/black/400",  activeMode) as string,
-    500:  resolveToken("Primitives/color/black/500",  activeMode) as string,
-    600:  resolveToken("Primitives/color/black/600",  activeMode) as string,
-    700:  resolveToken("Primitives/color/black/700",  activeMode) as string,
-    800:  resolveToken("Primitives/color/black/800",  activeMode) as string,
-    900:  resolveToken("Primitives/color/black/900",  activeMode) as string,
-    1000: resolveToken("Primitives/color/black/1000", activeMode) as string,
+    100:  resolveToken("Primitives/color/black/100",  "Value") as string,
+    200:  resolveToken("Primitives/color/black/200",  "Value") as string,
+    300:  resolveToken("Primitives/color/black/300",  "Value") as string,
+    400:  resolveToken("Primitives/color/black/400",  "Value") as string,
+    500:  resolveToken("Primitives/color/black/500",  "Value") as string,
+    600:  resolveToken("Primitives/color/black/600",  "Value") as string,
+    700:  resolveToken("Primitives/color/black/700",  "Value") as string,
+    800:  resolveToken("Primitives/color/black/800",  "Value") as string,
+    900:  resolveToken("Primitives/color/black/900",  "Value") as string,
+    1000: resolveToken("Primitives/color/black/1000", "Value") as string,
   },
 } as const;
 
-// ─── Couleurs sémantiques ────────────────────────────────────────────────────
-export const colors = {
+// ─── Couleurs sémantiques (fabrique par mode) ────────────────────────────────
+export const buildColors = (mode: ThemeMode) => ({
 
   // ── Background / Fond par défaut ─────────────────────────────────────────
-  bg:                    resolveToken("-> Color/background/default/default",          activeMode), // #1E1E1E
-  bgHover:               resolveToken("-> Color/background/default/default-hover",    activeMode), // #383838
-  card:                  resolveToken("-> Color/background/default/secondary",        activeMode), // #2C2C2C
-  cardHover:             resolveToken("-> Color/background/default/secondary-hover",  activeMode), // #1E1E1E
-  accentMuted:           resolveToken("-> Color/background/default/tertiary",         activeMode), // #444444
-  bgTertiaryHover:       resolveToken("-> Color/background/default/tertiary-hover",   activeMode), // #383838
-  opacityLight:          resolveToken("-> Color/background/default/opacity-light",    activeMode), // rgba(12,12,13,0.4)
-  opacityDark:           resolveToken("-> Color/background/default/opacity-dark",     activeMode), // rgba(255,255,255,0.3)
+  bg:                    resolveToken("-> Color/background/default/default",          mode), // #1E1E1E
+  bgHover:               resolveToken("-> Color/background/default/default-hover",    mode), // #383838
+  card:                  resolveToken("-> Color/background/default/secondary",        mode), // #2C2C2C
+  cardHover:             resolveToken("-> Color/background/default/secondary-hover",  mode), // #1E1E1E
+  accentMuted:           resolveToken("-> Color/background/default/tertiary",         mode), // #444444
+  bgTertiaryHover:       resolveToken("-> Color/background/default/tertiary-hover",   mode), // #383838
+  opacityLight:          resolveToken("-> Color/background/default/opacity-light",    mode), // rgba(12,12,13,0.4)
+  opacityDark:           resolveToken("-> Color/background/default/opacity-dark",     mode), // rgba(255,255,255,0.3)
 
   // ── Background / Fond neutre ──────────────────────────────────────────────
-  bgNeutral:                resolveToken("-> Color/background/neutral/default",             activeMode),
-  bgNeutralHover:           resolveToken("-> Color/background/neutral/default-hover",       activeMode),
-  bgNeutralSecondary:       resolveToken("-> Color/background/neutral/secondary",           activeMode),
-  bgNeutralSecondaryHover:  resolveToken("-> Color/background/neutral/secondary-hover",     activeMode),
-  bgNeutralTertiary:        resolveToken("-> Color/background/neutral/tertiary",            activeMode),
-  bgNeutralTertiaryHover:   resolveToken("-> Color/background/neutral/tertiary-hover",      activeMode),
+  bgNeutral:                resolveToken("-> Color/background/neutral/default",             mode),
+  bgNeutralHover:           resolveToken("-> Color/background/neutral/default-hover",       mode),
+  bgNeutralSecondary:       resolveToken("-> Color/background/neutral/secondary",           mode),
+  bgNeutralSecondaryHover:  resolveToken("-> Color/background/neutral/secondary-hover",     mode),
+  bgNeutralTertiary:        resolveToken("-> Color/background/neutral/tertiary",            mode),
+  bgNeutralTertiaryHover:   resolveToken("-> Color/background/neutral/tertiary-hover",      mode),
 
   // ── Background / Fond brand ───────────────────────────────────────────────
-  brand:                 resolveToken("-> Color/background/brand/default",            activeMode), // #FF4D91
-  brandHover:            resolveToken("-> Color/background/brand/default-hover",      activeMode), // #FF80B1
-  brandSecondary:        resolveToken("-> Color/background/brand/secondary",          activeMode), // #E50058
-  brandSecondaryHover:   resolveToken("-> Color/background/brand/secondary-hover",    activeMode),
-  brandTertiary:         resolveToken("-> Color/background/brand/tertiary",           activeMode),
-  brandTertiaryHover:    resolveToken("-> Color/background/brand/tertiary-hover",     activeMode),
+  brand:                 resolveToken("-> Color/background/brand/default",            mode), // #FF4D91
+  brandHover:            resolveToken("-> Color/background/brand/default-hover",      mode), // #FF80B1
+  brandSecondary:        resolveToken("-> Color/background/brand/secondary",          mode), // #E50058
+  brandSecondaryHover:   resolveToken("-> Color/background/brand/secondary-hover",    mode),
+  brandTertiary:         resolveToken("-> Color/background/brand/tertiary",           mode),
+  brandTertiaryHover:    resolveToken("-> Color/background/brand/tertiary-hover",     mode),
 
   // ── Background / Fond positif (vert) ─────────────────────────────────────
-  bgPositive:                resolveToken("-> Color/background/positive/default",           activeMode),
-  bgPositiveHover:           resolveToken("-> Color/background/positive/default-hover",     activeMode),
-  bgPositiveSecondary:       resolveToken("-> Color/background/positive/secondary",         activeMode),
-  bgPositiveSecondaryHover:  resolveToken("-> Color/background/positive/secondary-hover",   activeMode),
-  bgPositiveTertiary:        resolveToken("-> Color/background/positive/tertiary",          activeMode),
-  bgPositiveTertiaryHover:   resolveToken("-> Color/background/positive/tertiary-hover",    activeMode),
+  bgPositive:                resolveToken("-> Color/background/positive/default",           mode),
+  bgPositiveHover:           resolveToken("-> Color/background/positive/default-hover",     mode),
+  bgPositiveSecondary:       resolveToken("-> Color/background/positive/secondary",         mode),
+  bgPositiveSecondaryHover:  resolveToken("-> Color/background/positive/secondary-hover",   mode),
+  bgPositiveTertiary:        resolveToken("-> Color/background/positive/tertiary",          mode),
+  bgPositiveTertiaryHover:   resolveToken("-> Color/background/positive/tertiary-hover",    mode),
 
   // ── Background / Fond warning (jaune) ────────────────────────────────────
-  bgWarning:                resolveToken("-> Color/background/warning/default",             activeMode),
-  bgWarningHover:           resolveToken("-> Color/background/warning/default-hover",       activeMode),
-  bgWarningSecondary:       resolveToken("-> Color/background/warning/secondary",           activeMode),
-  bgWarningSecondaryHover:  resolveToken("-> Color/background/warning/secondary-hover",     activeMode),
-  bgWarningTertiary:        resolveToken("-> Color/background/warning/tertiary",            activeMode),
-  bgWarningTertiaryHover:   resolveToken("-> Color/background/warning/tertiary-hover",      activeMode),
+  bgWarning:                resolveToken("-> Color/background/warning/default",             mode),
+  bgWarningHover:           resolveToken("-> Color/background/warning/default-hover",       mode),
+  bgWarningSecondary:       resolveToken("-> Color/background/warning/secondary",           mode),
+  bgWarningSecondaryHover:  resolveToken("-> Color/background/warning/secondary-hover",     mode),
+  bgWarningTertiary:        resolveToken("-> Color/background/warning/tertiary",            mode),
+  bgWarningTertiaryHover:   resolveToken("-> Color/background/warning/tertiary-hover",      mode),
 
   // ── Background / Fond danger (rouge) ─────────────────────────────────────
-  bgDanger:                resolveToken("-> Color/background/danger/default",               activeMode),
-  bgDangerHover:           resolveToken("-> Color/background/danger/default-hover",         activeMode),
-  bgDangerSecondary:       resolveToken("-> Color/background/danger/secondary",             activeMode),
-  bgDangerSecondaryHover:  resolveToken("-> Color/background/danger/secondary-hover",       activeMode),
-  bgDangerTertiary:        resolveToken("-> Color/background/danger/tertiary",              activeMode),
-  bgDangerTertiaryHover:   resolveToken("-> Color/background/danger/tertiary-hover",        activeMode),
+  bgDanger:                resolveToken("-> Color/background/danger/default",               mode),
+  bgDangerHover:           resolveToken("-> Color/background/danger/default-hover",         mode),
+  bgDangerSecondary:       resolveToken("-> Color/background/danger/secondary",             mode),
+  bgDangerSecondaryHover:  resolveToken("-> Color/background/danger/secondary-hover",       mode),
+  bgDangerTertiary:        resolveToken("-> Color/background/danger/tertiary",              mode),
+  bgDangerTertiaryHover:   resolveToken("-> Color/background/danger/tertiary-hover",        mode),
 
   // ── Background / Désactivé & utilitaires ─────────────────────────────────
-  bgDisabled:     resolveToken("-> Color/background/disabled/default",                activeMode),
-  scrim:          resolveToken("-> Color/background/utilities/scrim",                 activeMode), // #000000
-  blanket:        resolveToken("-> Color/background/utilities/blanket",               activeMode), // #000000
-  bgOverlay:      resolveToken("-> Color/background/utilities/overlay",               activeMode), // #000000
-  bgMeasurement:  resolveToken("-> Color/background/utilities/measurement",           activeMode),
+  bgDisabled:     resolveToken("-> Color/background/disabled/default",                mode),
+  scrim:          resolveToken("-> Color/background/utilities/scrim",                 mode), // #000000
+  blanket:        resolveToken("-> Color/background/utilities/blanket",               mode), // #000000
+  bgOverlay:      resolveToken("-> Color/background/utilities/overlay",               mode), // #000000
+  bgMeasurement:  resolveToken("-> Color/background/utilities/measurement",           mode),
 
   // ── Texte par défaut ──────────────────────────────────────────────────────
-  text:           resolveToken("-> Color/text/default/default",    activeMode),  // #FFFFFF
-  textSecondary:  resolveToken("-> Color/text/default/secondary",  activeMode),  // rgba(255,255,255,0.5)
-  textTertiary:   resolveToken("-> Color/text/default/tertiary",   activeMode),  // rgba(255,255,255,0.4)
+  text:           resolveToken("-> Color/text/default/default",    mode),  // #FFFFFF
+  textSecondary:  resolveToken("-> Color/text/default/secondary",  mode),  // rgba(255,255,255,0.5)
+  textTertiary:   resolveToken("-> Color/text/default/tertiary",   mode),  // rgba(255,255,255,0.4)
 
   // ── Texte neutre ──────────────────────────────────────────────────────────
-  textNeutral:           resolveToken("-> Color/text/neutral/default",             activeMode),
-  secondary:             resolveToken("-> Color/text/neutral/secondary",           activeMode),  // #CDCDCD
-  textNeutralSecondary:  resolveToken("-> Color/text/neutral/secondary",           activeMode),  // alias
-  muted:                 resolveToken("-> Color/text/neutral/tertiary",            activeMode),  // #B2B2B2
-  textMuted:             resolveToken("-> Color/text/neutral/tertiary",            activeMode),  // alias
-  textNeutralTertiary:   resolveToken("-> Color/text/neutral/tertiary",            activeMode),  // alias
-  textNeutralOnBrand:    resolveToken("-> Color/text/neutral/on-neutral-brand",    activeMode),
-  textNeutralOnSecondary: resolveToken("-> Color/text/neutral/on-neutral-secondary", activeMode),
-  textNeutralOnTertiary:  resolveToken("-> Color/text/neutral/on-neutral-tertiary",  activeMode),
+  textNeutral:           resolveToken("-> Color/text/neutral/default",             mode),
+  secondary:             resolveToken("-> Color/text/neutral/secondary",           mode),  // #CDCDCD
+  textNeutralSecondary:  resolveToken("-> Color/text/neutral/secondary",           mode),  // alias
+  muted:                 resolveToken("-> Color/text/neutral/tertiary",            mode),  // #B2B2B2
+  textMuted:             resolveToken("-> Color/text/neutral/tertiary",            mode),  // alias
+  textNeutralTertiary:   resolveToken("-> Color/text/neutral/tertiary",            mode),  // alias
+  textNeutralOnBrand:    resolveToken("-> Color/text/neutral/on-neutral-brand",    mode),
+  textNeutralOnSecondary: resolveToken("-> Color/text/neutral/on-neutral-secondary", mode),
+  textNeutralOnTertiary:  resolveToken("-> Color/text/neutral/on-neutral-tertiary",  mode),
 
   // ── Texte brand ───────────────────────────────────────────────────────────
-  brandText:               resolveToken("-> Color/text/brand/default",          activeMode),
-  textBrandSecondary:      resolveToken("-> Color/text/brand/secondary",        activeMode),
-  textBrandTertiary:       resolveToken("-> Color/text/brand/tertiary",         activeMode),
-  textBrandOnBrand:        resolveToken("-> Color/text/brand/on-brand-default", activeMode),
-  textBrandOnBrandSecondary: resolveToken("-> Color/text/brand/on-brand-secondary", activeMode),
-  textBrandOnBrandTertiary:  resolveToken("-> Color/text/brand/on-brand-tertiary",  activeMode),
+  brandText:               resolveToken("-> Color/text/brand/default",          mode),
+  textBrandSecondary:      resolveToken("-> Color/text/brand/secondary",        mode),
+  textBrandTertiary:       resolveToken("-> Color/text/brand/tertiary",         mode),
+  textBrandOnBrand:        resolveToken("-> Color/text/brand/on-brand-default", mode),
+  textBrandOnBrandSecondary: resolveToken("-> Color/text/brand/on-brand-secondary", mode),
+  textBrandOnBrandTertiary:  resolveToken("-> Color/text/brand/on-brand-tertiary",  mode),
 
   // ── Texte positif ─────────────────────────────────────────────────────────
-  textPositive:                    resolveToken("-> Color/text/positive/default",               activeMode),
-  textPositiveSecondary:           resolveToken("-> Color/text/positive/secondary",             activeMode),
-  textPositiveTertiary:            resolveToken("-> Color/text/positive/tertiary",              activeMode),
-  textPositiveOnPositive:          resolveToken("-> Color/text/positive/on-positive-default",   activeMode),
-  textPositiveOnPositiveSecondary: resolveToken("-> Color/text/positive/on-positive-secondary", activeMode),
-  textPositiveOnPositiveTertiary:  resolveToken("-> Color/text/positive/on-positive-tertiary",  activeMode),
+  textPositive:                    resolveToken("-> Color/text/positive/default",               mode),
+  textPositiveSecondary:           resolveToken("-> Color/text/positive/secondary",             mode),
+  textPositiveTertiary:            resolveToken("-> Color/text/positive/tertiary",              mode),
+  textPositiveOnPositive:          resolveToken("-> Color/text/positive/on-positive-default",   mode),
+  textPositiveOnPositiveSecondary: resolveToken("-> Color/text/positive/on-positive-secondary", mode),
+  textPositiveOnPositiveTertiary:  resolveToken("-> Color/text/positive/on-positive-tertiary",  mode),
 
   // ── Texte warning ─────────────────────────────────────────────────────────
-  textWarning:                   resolveToken("-> Color/text/warning/default",              activeMode),
-  textWarningSecondary:          resolveToken("-> Color/text/warning/secondary",            activeMode),
-  textWarningTertiary:           resolveToken("-> Color/text/warning/tertiary",             activeMode),
-  textWarningOnWarning:          resolveToken("-> Color/text/warning/on-warning-default",   activeMode),
-  textWarningOnWarningSecondary: resolveToken("-> Color/text/warning/on-warning-secondary", activeMode),
-  textWarningOnWarningTertiary:  resolveToken("-> Color/text/warning/on-warning-tertiary",  activeMode),
+  textWarning:                   resolveToken("-> Color/text/warning/default",              mode),
+  textWarningSecondary:          resolveToken("-> Color/text/warning/secondary",            mode),
+  textWarningTertiary:           resolveToken("-> Color/text/warning/tertiary",             mode),
+  textWarningOnWarning:          resolveToken("-> Color/text/warning/on-warning-default",   mode),
+  textWarningOnWarningSecondary: resolveToken("-> Color/text/warning/on-warning-secondary", mode),
+  textWarningOnWarningTertiary:  resolveToken("-> Color/text/warning/on-warning-tertiary",  mode),
 
   // ── Texte danger ──────────────────────────────────────────────────────────
-  textDanger:                  resolveToken("-> Color/text/danger/default",             activeMode),
-  danger:                      resolveToken("-> Color/text/danger/secondary",           activeMode),  // #F4776A
-  textDangerTertiary:          resolveToken("-> Color/text/danger/tertiary",            activeMode),
-  textDangerOnDanger:          resolveToken("-> Color/text/danger/on-danger-default",   activeMode),
-  textDangerOnDangerSecondary: resolveToken("-> Color/text/danger/on-danger-secondary", activeMode),
-  textDangerOnDangerTertiary:  resolveToken("-> Color/text/danger/on-danger-tertiary",  activeMode),
+  textDanger:                  resolveToken("-> Color/text/danger/default",             mode),
+  danger:                      resolveToken("-> Color/text/danger/secondary",           mode),  // #F4776A
+  textDangerTertiary:          resolveToken("-> Color/text/danger/tertiary",            mode),
+  textDangerOnDanger:          resolveToken("-> Color/text/danger/on-danger-default",   mode),
+  textDangerOnDangerSecondary: resolveToken("-> Color/text/danger/on-danger-secondary", mode),
+  textDangerOnDangerTertiary:  resolveToken("-> Color/text/danger/on-danger-tertiary",  mode),
 
   // ── Texte désactivé & utilitaires ────────────────────────────────────────
-  textDisabled:      resolveToken("-> Color/text/disabled/default",              activeMode),
-  textOnDisabled:    resolveToken("-> Color/text/disabled/on-disabled",          activeMode),
-  textOnOverlay:     resolveToken("-> Color/text/utilities/text-on-overlay",     activeMode),
-  textOnMeasurement: resolveToken("-> Color/text/utilities/text-on-measurement", activeMode),
+  textDisabled:      resolveToken("-> Color/text/disabled/default",              mode),
+  textOnDisabled:    resolveToken("-> Color/text/disabled/on-disabled",          mode),
+  textOnOverlay:     resolveToken("-> Color/text/utilities/text-on-overlay",     mode),
+  textOnMeasurement: resolveToken("-> Color/text/utilities/text-on-measurement", mode),
 
   // ── Accent (compatibilité) ────────────────────────────────────────────────
-  accent: resolveToken("-> Color/text/default/default", activeMode),  // rgba(255,255,255,1)
+  accent: resolveToken("-> Color/text/default/default", mode),  // rgba(255,255,255,1)
 
   // ── Bordures par défaut ───────────────────────────────────────────────────
-  cardBorder:      resolveToken("-> Color/border/default/default",   activeMode),  // #444444
-  borderSecondary: resolveToken("-> Color/border/default/secondary", activeMode),
-  borderTertiary:  resolveToken("-> Color/border/default/tertiary",  activeMode),
+  cardBorder:      resolveToken("-> Color/border/default/default",   mode),  // #444444
+  borderSecondary: resolveToken("-> Color/border/default/secondary", mode),
+  borderTertiary:  resolveToken("-> Color/border/default/tertiary",  mode),
 
   // ── Bordures neutres ──────────────────────────────────────────────────────
-  borderNeutral:          resolveToken("-> Color/border/neutral/sefault",   activeMode),
-  borderNeutralSecondary: resolveToken("-> Color/border/neutral/secondary", activeMode),
-  borderNeutralTertiary:  resolveToken("-> Color/border/neutral/tertiary",  activeMode),
+  borderNeutral:          resolveToken("-> Color/border/neutral/sefault",   mode),
+  borderNeutralSecondary: resolveToken("-> Color/border/neutral/secondary", mode),
+  borderNeutralTertiary:  resolveToken("-> Color/border/neutral/tertiary",  mode),
 
   // ── Bordures brand ────────────────────────────────────────────────────────
-  borderBrand:          resolveToken("-> Color/border/brand/default",   activeMode),
-  borderBrandSecondary: resolveToken("-> Color/border/brand/secondary", activeMode),
-  borderBrandTertiary:  resolveToken("-> Color/border/brand/tertiary",  activeMode),
+  borderBrand:          resolveToken("-> Color/border/brand/default",   mode),
+  borderBrandSecondary: resolveToken("-> Color/border/brand/secondary", mode),
+  borderBrandTertiary:  resolveToken("-> Color/border/brand/tertiary",  mode),
 
   // ── Bordures positives ────────────────────────────────────────────────────
-  borderPositive:          resolveToken("-> Color/border/positive/default",   activeMode),
-  borderPositiveSecondary: resolveToken("-> Color/border/positive/secondary", activeMode),
-  borderPositiveTertiary:  resolveToken("-> Color/border/positive/tertiary",  activeMode),
+  borderPositive:          resolveToken("-> Color/border/positive/default",   mode),
+  borderPositiveSecondary: resolveToken("-> Color/border/positive/secondary", mode),
+  borderPositiveTertiary:  resolveToken("-> Color/border/positive/tertiary",  mode),
 
   // ── Bordures warning ──────────────────────────────────────────────────────
-  borderWarning:          resolveToken("-> Color/border/warning/default",   activeMode),
-  borderWarningSecondary: resolveToken("-> Color/border/warning/secondary", activeMode),
-  borderWarningTertiary:  resolveToken("-> Color/border/warning/tertiary",  activeMode),
+  borderWarning:          resolveToken("-> Color/border/warning/default",   mode),
+  borderWarningSecondary: resolveToken("-> Color/border/warning/secondary", mode),
+  borderWarningTertiary:  resolveToken("-> Color/border/warning/tertiary",  mode),
 
   // ── Bordures danger ───────────────────────────────────────────────────────
-  borderDanger:          resolveToken("-> Color/border/danger/default",   activeMode),
-  borderDangerSecondary: resolveToken("-> Color/border/danger/secondary", activeMode),
-  borderDangerTertiary:  resolveToken("-> Color/border/danger/tertiary",  activeMode),
+  borderDanger:          resolveToken("-> Color/border/danger/default",   mode),
+  borderDangerSecondary: resolveToken("-> Color/border/danger/secondary", mode),
+  borderDangerTertiary:  resolveToken("-> Color/border/danger/tertiary",  mode),
 
   // ── Bordures désactivées & utilitaires ───────────────────────────────────
-  borderDisabled:    resolveToken("-> Color/border/disables/default",         activeMode),
-  borderMeasurement: resolveToken("-> Color/border/utilities/measurement",    activeMode),
-  borderSwatch:      resolveToken("-> Color/border/utilities/swatch",         activeMode),
+  borderDisabled:    resolveToken("-> Color/border/disables/default",         mode),
+  borderMeasurement: resolveToken("-> Color/border/utilities/measurement",    mode),
+  borderSwatch:      resolveToken("-> Color/border/utilities/swatch",         mode),
 
   // ── Icônes par défaut ─────────────────────────────────────────────────────
-  icon:          resolveToken("-> Color/icon/default/default",   activeMode),
-  iconSecondary: resolveToken("-> Color/icon/default/secondary", activeMode),
-  iconTertiary:  resolveToken("-> Color/icon/default/tertiary",  activeMode),
+  icon:          resolveToken("-> Color/icon/default/default",   mode),
+  iconSecondary: resolveToken("-> Color/icon/default/secondary", mode),
+  iconTertiary:  resolveToken("-> Color/icon/default/tertiary",  mode),
 
   // ── Icônes neutres ────────────────────────────────────────────────────────
-  iconNeutral:              resolveToken("-> Color/icon/neutral/default",             activeMode),
-  iconNeutralSecondary:     resolveToken("-> Color/icon/neutral/secondary",           activeMode),
-  iconNeutralTertiary:      resolveToken("-> Color/icon/neutral/tertiary",            activeMode),
-  iconNeutralOnNeutral:     resolveToken("-> Color/icon/neutral/on-neutral-default",  activeMode),
-  iconNeutralOnNeutralSecondary: resolveToken("-> Color/icon/neutral/on-neutral-secondary", activeMode),
-  iconNeutralOnNeutralTertiary:  resolveToken("-> Color/icon/neutral/on-neutral-tertiary",  activeMode),
+  iconNeutral:              resolveToken("-> Color/icon/neutral/default",             mode),
+  iconNeutralSecondary:     resolveToken("-> Color/icon/neutral/secondary",           mode),
+  iconNeutralTertiary:      resolveToken("-> Color/icon/neutral/tertiary",            mode),
+  iconNeutralOnNeutral:     resolveToken("-> Color/icon/neutral/on-neutral-default",  mode),
+  iconNeutralOnNeutralSecondary: resolveToken("-> Color/icon/neutral/on-neutral-secondary", mode),
+  iconNeutralOnNeutralTertiary:  resolveToken("-> Color/icon/neutral/on-neutral-tertiary",  mode),
 
   // ── Icônes brand ──────────────────────────────────────────────────────────
-  iconBrand:                resolveToken("-> Color/icon/brand/default",          activeMode),
-  iconBrandSecondary:       resolveToken("-> Color/icon/brand/secondary",        activeMode),
-  iconBrandTertiary:        resolveToken("-> Color/icon/brand/tertiary",         activeMode),
-  iconBrandOnBrand:         resolveToken("-> Color/icon/brand/on-brand-default", activeMode),
-  iconBrandOnBrandSecondary: resolveToken("-> Color/icon/brand/on-brand-secondary", activeMode),
-  iconBrandOnBrandTertiary:  resolveToken("-> Color/icon/brand/on-brand-tertiary",  activeMode),
+  iconBrand:                resolveToken("-> Color/icon/brand/default",          mode),
+  iconBrandSecondary:       resolveToken("-> Color/icon/brand/secondary",        mode),
+  iconBrandTertiary:        resolveToken("-> Color/icon/brand/tertiary",         mode),
+  iconBrandOnBrand:         resolveToken("-> Color/icon/brand/on-brand-default", mode),
+  iconBrandOnBrandSecondary: resolveToken("-> Color/icon/brand/on-brand-secondary", mode),
+  iconBrandOnBrandTertiary:  resolveToken("-> Color/icon/brand/on-brand-tertiary",  mode),
 
   // ── Icônes positives ──────────────────────────────────────────────────────
-  iconPositive:                    resolveToken("-> Color/icon/positive/default",               activeMode),
-  iconPositiveSecondary:           resolveToken("-> Color/icon/positive/secondary",             activeMode),
-  iconPositiveTertiary:            resolveToken("-> Color/icon/positive/tertiary",              activeMode),
-  iconPositiveOnPositive:          resolveToken("-> Color/icon/positive/on-positive-default",   activeMode),
-  iconPositiveOnPositiveSecondary: resolveToken("-> Color/icon/positive/on-positive-secondary", activeMode),
-  iconPositiveOnPositiveTertiary:  resolveToken("-> Color/icon/positive/on-positive-tertiary",  activeMode),
+  iconPositive:                    resolveToken("-> Color/icon/positive/default",               mode),
+  iconPositiveSecondary:           resolveToken("-> Color/icon/positive/secondary",             mode),
+  iconPositiveTertiary:            resolveToken("-> Color/icon/positive/tertiary",              mode),
+  iconPositiveOnPositive:          resolveToken("-> Color/icon/positive/on-positive-default",   mode),
+  iconPositiveOnPositiveSecondary: resolveToken("-> Color/icon/positive/on-positive-secondary", mode),
+  iconPositiveOnPositiveTertiary:  resolveToken("-> Color/icon/positive/on-positive-tertiary",  mode),
 
   // ── Icônes warning ────────────────────────────────────────────────────────
-  iconWarning:                   resolveToken("-> Color/icon/warning/default",              activeMode),
-  iconWarningSecondary:          resolveToken("-> Color/icon/warning/secondary",            activeMode),
-  iconWarningTertiary:           resolveToken("-> Color/icon/warning/tertiary",             activeMode),
-  iconWarningOnWarning:          resolveToken("-> Color/icon/warning/on-warning-default",   activeMode),
-  iconWarningOnWarningSecondary: resolveToken("-> Color/icon/warning/on-warning-secondary", activeMode),
-  iconWarningOnWarningTertiary:  resolveToken("-> Color/icon/warning/on-warning-tertiary",  activeMode),
+  iconWarning:                   resolveToken("-> Color/icon/warning/default",              mode),
+  iconWarningSecondary:          resolveToken("-> Color/icon/warning/secondary",            mode),
+  iconWarningTertiary:           resolveToken("-> Color/icon/warning/tertiary",             mode),
+  iconWarningOnWarning:          resolveToken("-> Color/icon/warning/on-warning-default",   mode),
+  iconWarningOnWarningSecondary: resolveToken("-> Color/icon/warning/on-warning-secondary", mode),
+  iconWarningOnWarningTertiary:  resolveToken("-> Color/icon/warning/on-warning-tertiary",  mode),
 
   // ── Icônes danger ─────────────────────────────────────────────────────────
-  iconDanger:                  resolveToken("-> Color/icon/danger/default",             activeMode),
-  iconDangerSecondary:         resolveToken("-> Color/icon/danger/secondary",           activeMode),
-  iconDangerTertiary:          resolveToken("-> Color/icon/danger/tertiary",            activeMode),
-  iconDangerOnDanger:          resolveToken("-> Color/icon/danger/on-danger-default",   activeMode),
-  iconDangerOnDangerSecondary: resolveToken("-> Color/icon/danger/on-danger-secondary", activeMode),
-  iconDangerOnDangerTertiary:  resolveToken("-> Color/icon/danger/on-danger-tertiary",  activeMode),
+  iconDanger:                  resolveToken("-> Color/icon/danger/default",             mode),
+  iconDangerSecondary:         resolveToken("-> Color/icon/danger/secondary",           mode),
+  iconDangerTertiary:          resolveToken("-> Color/icon/danger/tertiary",            mode),
+  iconDangerOnDanger:          resolveToken("-> Color/icon/danger/on-danger-default",   mode),
+  iconDangerOnDangerSecondary: resolveToken("-> Color/icon/danger/on-danger-secondary", mode),
+  iconDangerOnDangerTertiary:  resolveToken("-> Color/icon/danger/on-danger-tertiary",  mode),
 
   // ── Icônes désactivées & utilitaires ─────────────────────────────────────
-  iconDisabled:      resolveToken("-> Color/icon/disabled/default",              activeMode),
-  iconOnDisabled:    resolveToken("-> Color/icon/disabled/on-disabled",          activeMode),
-  iconMeasurement:   resolveToken("-> Color/icon/utilities/icon",                activeMode),
-  iconOnMeasurement: resolveToken("-> Color/icon/utilities/icon-on-measurement", activeMode),
+  iconDisabled:      resolveToken("-> Color/icon/disabled/default",              mode),
+  iconOnDisabled:    resolveToken("-> Color/icon/disabled/on-disabled",          mode),
+  iconMeasurement:   resolveToken("-> Color/icon/utilities/icon",                mode),
+  iconOnMeasurement: resolveToken("-> Color/icon/utilities/icon-on-measurement", mode),
 
-  // ── Statuts hors-tokens (alias compatibilité) ─────────────────────────────
-  gold:     resolveToken("Primitives/color/yellow/400", activeMode),  // #E8B931
-  goldDark: resolveToken("Primitives/color/yellow/600", activeMode),  // #BF6A02
+  // ── Statuts hors-tokens (alias compatibilité, mode-indépendants) ──────────
+  gold:     resolveToken("Primitives/color/yellow/400", "Value"),  // #E8B931
+  goldDark: resolveToken("Primitives/color/yellow/600", "Value"),  // #BF6A02
 
   // ── Utilitaires fixes ────────────────────────────────────────────────────
-  overlay:    resolveToken("-> Color/background/default/secondary", activeMode), // #2C2C2C
+  overlay:    resolveToken("-> Color/background/default/secondary", mode), // #2C2C2C
   white:      "#FFFFFF" as string,
   black:      "#0C0C0D" as string,
   glass:      "rgba(0, 0, 0, 0.5)" as string,
   glassMuted: "rgba(255, 255, 255, 0.07)" as string,
   glassBorder:"rgba(255, 255, 255, 0.12)" as string,
+});
 
-} as const;
+export type ThemeColors = ReturnType<typeof buildColors>;
 
-// ─── Espacements ─────────────────────────────────────────────────────────────
+// ─── Espacements (mode-indépendants) ─────────────────────────────────────────
 export const spacing = {
-  xxs:   resolveToken("-> Size/space/050",  activeMode) as number,   // 2
-  xs:    resolveToken("-> Size/space/100",  activeMode) as number,   // 4
-  xs2:   resolveToken("-> Size/space/150",  activeMode) as number,   // 6
-  sm:    resolveToken("-> Size/space/200",  activeMode) as number,   // 8
-  md:    resolveToken("-> Size/space/300",  activeMode) as number,   // 12
-  lg:    resolveToken("-> Size/space/400",  activeMode) as number,   // 16
-  xl:    resolveToken("-> Size/space/600",  activeMode) as number,   // 24
-  xxl:   resolveToken("-> Size/space/800",  activeMode) as number,   // 32
-  xl3:   resolveToken("-> Size/space/1200", activeMode) as number,   // 48
-  xl4:   resolveToken("-> Size/space/1600", activeMode) as number,   // 64
-  xl6:   resolveToken("-> Size/space/2400", activeMode) as number,   // 96
-  xl10:  resolveToken("-> Size/space/4000", activeMode) as number,   // 160
+  xxs:   resolveToken("-> Size/space/050",  "Value") as number,   // 2
+  xs:    resolveToken("-> Size/space/100",  "Value") as number,   // 4
+  xs2:   resolveToken("-> Size/space/150",  "Value") as number,   // 6
+  sm:    resolveToken("-> Size/space/200",  "Value") as number,   // 8
+  md:    resolveToken("-> Size/space/300",  "Value") as number,   // 12
+  lg:    resolveToken("-> Size/space/400",  "Value") as number,   // 16
+  xl:    resolveToken("-> Size/space/600",  "Value") as number,   // 24
+  xxl:   resolveToken("-> Size/space/800",  "Value") as number,   // 32
+  xl3:   resolveToken("-> Size/space/1200", "Value") as number,   // 48
+  xl4:   resolveToken("-> Size/space/1600", "Value") as number,   // 64
+  xl6:   resolveToken("-> Size/space/2400", "Value") as number,   // 96
+  xl10:  resolveToken("-> Size/space/4000", "Value") as number,   // 160
   // Négatifs
-  negXxs: resolveToken("-> Size/space/neg-25",  activeMode) as number,  // -1
-  negXs:  resolveToken("-> Size/space/neg-100", activeMode) as number,  // -4
-  negSm:  resolveToken("-> Size/space/neg-200", activeMode) as number,  // -8
-  negMd:  resolveToken("-> Size/space/neg-300", activeMode) as number,  // -12
-  negLg:  resolveToken("-> Size/space/neg-400", activeMode) as number,  // -16
-  negXl:  resolveToken("-> Size/space/neg-600", activeMode) as number,  // -24
+  negXxs: resolveToken("-> Size/space/neg-25",  "Value") as number,  // -1
+  negXs:  resolveToken("-> Size/space/neg-100", "Value") as number,  // -4
+  negSm:  resolveToken("-> Size/space/neg-200", "Value") as number,  // -8
+  negMd:  resolveToken("-> Size/space/neg-300", "Value") as number,  // -12
+  negLg:  resolveToken("-> Size/space/neg-400", "Value") as number,  // -16
+  negXl:  resolveToken("-> Size/space/neg-600", "Value") as number,  // -24
 } as const;
 
-// ─── Rayons de bordure ───────────────────────────────────────────────────────
+// ─── Rayons de bordure (mode-indépendants) ───────────────────────────────────
 export const radii = {
-  none:   resolveToken("-> Size/radius/empty", activeMode) as number,  // 0
-  xs:     resolveToken("-> Size/radius/100",   activeMode) as number,  // 4
-  sm:     resolveToken("-> Size/radius/200",   activeMode) as number,  // 8
-  md:     resolveToken("-> Size/radius/300",   activeMode) as number,  // 12
-  lg:     resolveToken("-> Size/radius/400",   activeMode) as number,  // 16
-  xl:     resolveToken("-> Size/radius/600",   activeMode) as number,  // 24
-  xxl:    resolveToken("-> Size/radius/800",   activeMode) as number,  // 32
-  xl3:    resolveToken("-> Size/radius/1000",  activeMode) as number,  // 40
-  full:   resolveToken("-> Size/radius/full",  activeMode) as number,  // 999
-  card:   resolveToken("-> Size/radius/400",   activeMode) as number,  // 16 (alias)
-  button: resolveToken("-> Size/radius/200",   activeMode) as number,  // 8  (alias)
+  none:   resolveToken("-> Size/radius/empty", "Value") as number,  // 0
+  xs:     resolveToken("-> Size/radius/100",   "Value") as number,  // 4
+  sm:     resolveToken("-> Size/radius/200",   "Value") as number,  // 8
+  md:     resolveToken("-> Size/radius/300",   "Value") as number,  // 12
+  lg:     resolveToken("-> Size/radius/400",   "Value") as number,  // 16
+  xl:     resolveToken("-> Size/radius/600",   "Value") as number,  // 24
+  xxl:    resolveToken("-> Size/radius/800",   "Value") as number,  // 32
+  xl3:    resolveToken("-> Size/radius/1000",  "Value") as number,  // 40
+  full:   resolveToken("-> Size/radius/full",  "Value") as number,  // 999
+  card:   resolveToken("-> Size/radius/400",   "Value") as number,  // 16 (alias)
+  button: resolveToken("-> Size/radius/200",   "Value") as number,  // 8  (alias)
 } as const;
 
-// ─── Profondeur / Z-index ────────────────────────────────────────────────────
+// ─── Profondeur / Z-index (mode-indépendants) ────────────────────────────────
 export const depth = {
-  none:   resolveToken("-> Size/depth/empty",    activeMode) as number,   // 0
-  xxs:    resolveToken("-> Size/depth/025",       activeMode) as number,   // 1
-  xs:     resolveToken("-> Size/depth/100",       activeMode) as number,   // 4
-  sm:     resolveToken("-> Size/depth/200",       activeMode) as number,   // 8
-  md:     resolveToken("-> Size/depth/400",       activeMode) as number,   // 16
-  lg:     resolveToken("-> Size/depth/800",       activeMode) as number,   // 32
-  xl:     resolveToken("-> Size/depth/1200",      activeMode) as number,   // 48
-  negXxs: resolveToken("-> Size/depth/neg-025",   activeMode) as number,   // -1
-  negXs:  resolveToken("-> Size/depth/neg-100",   activeMode) as number,   // -4
-  negSm:  resolveToken("-> Size/depth/neg-200",   activeMode) as number,   // -8
-  negMd:  resolveToken("-> Size/depth/neg-400",   activeMode) as number,   // -16
-  negLg:  resolveToken("-> Size/depth/neg-800",   activeMode) as number,   // -32
-  negXl:  resolveToken("-> Size/depth/neg-1200",  activeMode) as number,   // -48
+  none:   resolveToken("-> Size/depth/empty",    "Value") as number,   // 0
+  xxs:    resolveToken("-> Size/depth/025",       "Value") as number,   // 1
+  xs:     resolveToken("-> Size/depth/100",       "Value") as number,   // 4
+  sm:     resolveToken("-> Size/depth/200",       "Value") as number,   // 8
+  md:     resolveToken("-> Size/depth/400",       "Value") as number,   // 16
+  lg:     resolveToken("-> Size/depth/800",       "Value") as number,   // 32
+  xl:     resolveToken("-> Size/depth/1200",      "Value") as number,   // 48
+  negXxs: resolveToken("-> Size/depth/neg-025",   "Value") as number,   // -1
+  negXs:  resolveToken("-> Size/depth/neg-100",   "Value") as number,   // -4
+  negSm:  resolveToken("-> Size/depth/neg-200",   "Value") as number,   // -8
+  negMd:  resolveToken("-> Size/depth/neg-400",   "Value") as number,   // -16
+  negLg:  resolveToken("-> Size/depth/neg-800",   "Value") as number,   // -32
+  negXl:  resolveToken("-> Size/depth/neg-1200",  "Value") as number,   // -48
 } as const;
 
-// ─── Flou ────────────────────────────────────────────────────────────────────
+// ─── Flou (mode-indépendant) ──────────────────────────────────────────────────
 export const blur = {
-  sm: resolveToken("-> Size/blur/100",  activeMode) as number,  // 4
-  md: resolveToken("-> Size/blur/400",  activeMode) as number,  // 16
-  lg: resolveToken("-> Size/blur/1200", activeMode) as number,  // 48
+  sm: resolveToken("-> Size/blur/100",  "Value") as number,  // 4
+  md: resolveToken("-> Size/blur/400",  "Value") as number,  // 16
+  lg: resolveToken("-> Size/blur/1200", "Value") as number,  // 48
 } as const;
 
-// ─── Épaisseurs de trait ─────────────────────────────────────────────────────
+// ─── Épaisseurs de trait (mode-indépendantes) ────────────────────────────────
 export const stroke = {
-  sm: resolveToken("-> Size/stroke/025", activeMode) as number,  // 1
-  md: resolveToken("-> Size/stroke/050", activeMode) as number,  // 2
+  sm: resolveToken("-> Size/stroke/025", "Value") as number,  // 1
+  md: resolveToken("-> Size/stroke/050", "Value") as number,  // 2
 } as const;
 
-// ─── Tailles d'icônes ────────────────────────────────────────────────────────
+// ─── Tailles d'icônes (mode-indépendantes) ───────────────────────────────────
 export const iconSize = {
-  sm: resolveToken("-> Size/icon/small",  activeMode) as number,  // 24
-  md: resolveToken("-> Size/icon/medium", activeMode) as number,  // 32
-  lg: resolveToken("-> Size/icon/large",  activeMode) as number,  // 40
+  sm: resolveToken("-> Size/icon/small",  "Value") as number,  // 24
+  md: resolveToken("-> Size/icon/medium", "Value") as number,  // 32
+  lg: resolveToken("-> Size/icon/large",  "Value") as number,  // 40
 } as const;
 
-// ─── Typographie ─────────────────────────────────────────────────────────────
+// ─── Typographie (mode-indépendante) ─────────────────────────────────────────
 export const typography = {
   family: {
     regular:   "Inter_400Regular",
@@ -538,111 +538,123 @@ export const typography = {
     extrabold: "Inter_800ExtraBold",
   },
   size: {
-    xxs:          resolveToken("-> Typography/body/size-extra-small",  activeMode) as number,  // 10
-    xs:           resolveToken("Primitives/typography/scale-01",       activeMode) as number,  // 12
-    sm:           resolveToken("-> Typography/body/size-small",        activeMode) as number,  // 14
-    md:           resolveToken("-> Typography/body/size-medium",       activeMode) as number,  // 16
-    lg:           17 as number,                                                                // custom (entre md et xl)
-    xl:           resolveToken("-> Typography/body/size-large",        activeMode) as number,  // 20
-    xxl:          resolveToken("-> Typography/heading/size-base",      activeMode) as number,  // 24
-    headingSm:    resolveToken("-> Typography/heading/size-small",     activeMode) as number,  // 20
-    headingLg:    resolveToken("-> Typography/heading/size-large",     activeMode) as number,  // 32
-    subheadingSm: resolveToken("-> Typography/subheading/size-small",  activeMode) as number,  // 16
-    subheadingMd: resolveToken("-> Typography/subheading/size-medium", activeMode) as number,  // 20
-    subheadingLg: resolveToken("-> Typography/subheading/size-large",  activeMode) as number,  // 24
-    subtitleSm:   resolveToken("-> Typography/subtitle/size-small",    activeMode) as number,  // 24
-    subtitle:     resolveToken("-> Typography/subtitle/size-base",     activeMode) as number,  // 32
-    subtitleLg:   resolveToken("-> Typography/subtitle/size-large",    activeMode) as number,  // 40
-    titleSm:      resolveToken("-> Typography/title-page/size-small",  activeMode) as number,  // 40
-    title:        resolveToken("-> Typography/title-page/size-base",   activeMode) as number,  // 48
-    titleLg:      resolveToken("-> Typography/title-page/size-large",  activeMode) as number,  // 64
-    hero:         resolveToken("-> Typography/title-hero/size",        activeMode) as number,  // 72
+    xxs:          resolveToken("-> Typography/body/size-extra-small",  "Value") as number,  // 10
+    xs:           resolveToken("Primitives/typography/scale-01",       "Value") as number,  // 12
+    sm:           resolveToken("-> Typography/body/size-small",        "Value") as number,  // 14
+    md:           resolveToken("-> Typography/body/size-medium",       "Value") as number,  // 16
+    lg:           17 as number,                                                             // custom (entre md et xl)
+    xl:           resolveToken("-> Typography/body/size-large",        "Value") as number,  // 20
+    xxl:          resolveToken("-> Typography/heading/size-base",      "Value") as number,  // 24
+    headingSm:    resolveToken("-> Typography/heading/size-small",     "Value") as number,  // 20
+    headingLg:    resolveToken("-> Typography/heading/size-large",     "Value") as number,  // 32
+    subheadingSm: resolveToken("-> Typography/subheading/size-small",  "Value") as number,  // 16
+    subheadingMd: resolveToken("-> Typography/subheading/size-medium", "Value") as number,  // 20
+    subtitleSm:   resolveToken("-> Typography/subtitle/size-small",    "Value") as number,  // 24
+    subtitle:     resolveToken("-> Typography/subtitle/size-base",     "Value") as number,  // 32
+    subtitleLg:   resolveToken("-> Typography/subtitle/size-large",    "Value") as number,  // 40
+    titleSm:      resolveToken("-> Typography/title-page/size-small",  "Value") as number,  // 40
+    title:        resolveToken("-> Typography/title-page/size-base",   "Value") as number,  // 48
+    titleLg:      resolveToken("-> Typography/title-page/size-large",  "Value") as number,  // 64
+    hero:         resolveToken("-> Typography/title-hero/size",        "Value") as number,  // 72
   },
   weight: {
-    thin:       resolveToken("Primitives/typography/weight-thin",        activeMode) as number,  // 100
-    extraLight: resolveToken("Primitives/typography/weight-extra-light", activeMode) as number,  // 200
-    light:      resolveToken("Primitives/typography/weight-light",       activeMode) as number,  // 300
-    regular:    resolveToken("Primitives/typography/weight-regular",     activeMode) as number,  // 400
-    medium:     resolveToken("Primitives/typography/weight-medium",      activeMode) as number,  // 500
-    semibold:   resolveToken("Primitives/typography/weight-semibold",    activeMode) as number,  // 600
-    bold:       resolveToken("Primitives/typography/weight-bold",        activeMode) as number,  // 700
-    extraBold:  resolveToken("Primitives/typography/weight-extra-bold",  activeMode) as number,  // 800
-    black:      resolveToken("Primitives/typography/weight-black",       activeMode) as number,  // 900
+    thin:       resolveToken("Primitives/typography/weight-thin",        "Value") as number,  // 100
+    extraLight: resolveToken("Primitives/typography/weight-extra-light", "Value") as number,  // 200
+    light:      resolveToken("Primitives/typography/weight-light",       "Value") as number,  // 300
+    regular:    resolveToken("Primitives/typography/weight-regular",     "Value") as number,  // 400
+    medium:     resolveToken("Primitives/typography/weight-medium",      "Value") as number,  // 500
+    semibold:   resolveToken("Primitives/typography/weight-semibold",    "Value") as number,  // 600
+    bold:       resolveToken("Primitives/typography/weight-bold",        "Value") as number,  // 700
+    extraBold:  resolveToken("Primitives/typography/weight-extra-bold",  "Value") as number,  // 800
+    black:      resolveToken("Primitives/typography/weight-black",       "Value") as number,  // 900
   },
 } as const;
 
-// ─── Ombres ──────────────────────────────────────────────────────────────────
-export const shadows = {
-  sm:        resolveShadow("drop-shadow/100", activeMode),  // alias
-  md:        resolveShadow("drop-shadow/300", activeMode),  // alias
-  lg:        resolveShadow("drop-shadow/600", activeMode),  // alias
-  shadow100: resolveShadow("drop-shadow/100", activeMode),
-  shadow200: resolveShadow("drop-shadow/200", activeMode),
-  shadow300: resolveShadow("drop-shadow/300", activeMode),
-  shadow400: resolveShadow("drop-shadow/400", activeMode),
-  shadow500: resolveShadow("drop-shadow/500", activeMode),
-  shadow600: resolveShadow("drop-shadow/600", activeMode),
-} as const;
-
-// ─── Styles de texte (Figma Text Styles) ────────────────────────────────────
-export const textStyles = {
-  bodyBase:        resolveTextStyle("body-base",        activeMode),
-  bodyStrong:      resolveTextStyle("body-strong",      activeMode),
-  bodyEmphasis:    resolveTextStyle("body-emphasis",    activeMode),
-  bodySmall:       resolveTextStyle("body-small",       activeMode),
-  bodySmallStrong: resolveTextStyle("body-small-strong", activeMode),
-  subheading:      resolveTextStyle("subheading",       activeMode),
-  heading:         resolveTextStyle("heading",          activeMode),
-  subtitle:        resolveTextStyle("subtitle",         activeMode),
-  subtitleStrong:  resolveTextStyle("subtitle-strong",  activeMode),
-  titlePage:       resolveTextStyle("title-page",       activeMode),
-  titleHero:       resolveTextStyle("title-hero",       activeMode),
-} as const;
-
-// ─── Styles composés ─────────────────────────────────────────────────────────
-export const theme = StyleSheet.create({
-  glassCard: {
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    borderRadius: radii.card,
-    ...shadows.sm,
-  },
-  accentButton: {
-    backgroundColor: colors.accent,
-    borderRadius: radii.button,
-    padding: spacing.lg,
-    alignItems: "center",
-    ...shadows.md,
-  },
-  accentButtonText: {
-    color: colors.bg,
-    fontFamily: typography.family.bold,
-    fontSize: typography.size.md,
-    fontWeight: "700" as const,
-  },
-  outlineButton: {
-    borderWidth: 1,
-    borderColor: colors.accent,
-    borderRadius: radii.button,
-    padding: spacing.lg,
-    alignItems: "center" as const,
-  },
-  outlineButtonText: {
-    color: colors.accent,
-    fontFamily: typography.family.semibold,
-    fontSize: typography.size.md,
-    fontWeight: "600" as const,
-  },
-  glassInput: {
-    backgroundColor: colors.glassMuted,
-    borderWidth: 1,
-    borderColor: colors.glassBorder,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    color: colors.text,
-    fontFamily: typography.family.regular,
-    fontSize: typography.size.md,
-  },
+// ─── Ombres (fabrique par mode) ──────────────────────────────────────────────
+export const buildShadows = (mode: ThemeMode) => ({
+  sm:        resolveShadow("drop-shadow/100", mode),  // alias
+  md:        resolveShadow("drop-shadow/300", mode),  // alias
+  lg:        resolveShadow("drop-shadow/600", mode),  // alias
+  shadow100: resolveShadow("drop-shadow/100", mode),
+  shadow200: resolveShadow("drop-shadow/200", mode),
+  shadow300: resolveShadow("drop-shadow/300", mode),
+  shadow400: resolveShadow("drop-shadow/400", mode),
+  shadow500: resolveShadow("drop-shadow/500", mode),
+  shadow600: resolveShadow("drop-shadow/600", mode),
 });
+
+export type ThemeShadows = ReturnType<typeof buildShadows>;
+
+// ─── Styles de texte (Figma Text Styles, mode-indépendants) ──────────────────
+export const textStyles = {
+  bodyBase:        resolveTextStyle("body-base",        "Light"),
+  bodyStrong:      resolveTextStyle("body-strong",      "Light"),
+  bodyEmphasis:    resolveTextStyle("body-emphasis",    "Light"),
+  bodySmall:       resolveTextStyle("body-small",       "Light"),
+  bodySmallStrong: resolveTextStyle("body-small-strong", "Light"),
+  subheading:      resolveTextStyle("subheading",       "Light"),
+  heading:         resolveTextStyle("heading",          "Light"),
+  subtitle:        resolveTextStyle("subtitle",         "Light"),
+  subtitleStrong:  resolveTextStyle("subtitle-strong",  "Light"),
+  titlePage:       resolveTextStyle("title-page",       "Light"),
+  titleHero:       resolveTextStyle("title-hero",       "Light"),
+} as const;
+
+// ─── Styles composés (fabrique par mode) ─────────────────────────────────────
+export const buildTheme = (colors: ThemeColors, shadows: ThemeShadows) =>
+  StyleSheet.create({
+    glassCard: {
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.cardBorder,
+      borderRadius: radii.card,
+      ...shadows.sm,
+    },
+    accentButton: {
+      backgroundColor: colors.accent,
+      borderRadius: radii.button,
+      padding: spacing.lg,
+      alignItems: "center",
+      ...shadows.md,
+    },
+    accentButtonText: {
+      color: colors.bg,
+      fontFamily: typography.family.bold,
+      fontSize: typography.size.md,
+      fontWeight: "700" as const,
+    },
+    outlineButton: {
+      borderWidth: 1,
+      borderColor: colors.accent,
+      borderRadius: radii.button,
+      padding: spacing.lg,
+      alignItems: "center" as const,
+    },
+    outlineButtonText: {
+      color: colors.accent,
+      fontFamily: typography.family.semibold,
+      fontSize: typography.size.md,
+      fontWeight: "600" as const,
+    },
+    glassInput: {
+      backgroundColor: colors.glassMuted,
+      borderWidth: 1,
+      borderColor: colors.glassBorder,
+      borderRadius: radii.md,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+      color: colors.text,
+      fontFamily: typography.family.regular,
+      fontSize: typography.size.md,
+    },
+  });
+
+export type ThemeStyles = ReturnType<typeof buildTheme>;
+
+// ─── Exports statiques de rétro-compatibilité (mode Dark par défaut) ─────────
+// Servent de fallback pour tout usage hors composant React et permettent une
+// migration incrémentale fichier par fichier. Les composants migrés utilisent
+// `useTheme()` (lib/theme-context) pour des couleurs réactives.
+export const colors = buildColors("Dark");
+export const shadows = buildShadows("Dark");
+export const theme = buildTheme(colors, shadows);

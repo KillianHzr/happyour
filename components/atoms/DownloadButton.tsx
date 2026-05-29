@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import { TouchableOpacity, ActivityIndicator, StyleSheet } from "react-native";
 import { DownloadIcon } from "./DownloadIcon";
 import { handleDownloadMedia } from "../../lib/media-utils";
-import { colors, radii } from "../../lib/theme";
+import { radii, type ThemeColors } from "../../lib/theme";
+import { useTheme, useThemedStyles } from "../../lib/theme-context";
 
 interface DownloadButtonProps {
   url: string;
@@ -11,6 +12,8 @@ interface DownloadButtonProps {
 }
 
 export const DownloadButton = ({ url, filename, style }: DownloadButtonProps) => {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [isDownloading, setIsDownloading] = useState(false);
 
   const onDownload = async () => {
@@ -20,14 +23,14 @@ export const DownloadButton = ({ url, filename, style }: DownloadButtonProps) =>
   };
 
   return (
-    <TouchableOpacity 
-      style={[styles.downloadBtn, style]} 
-      onPress={onDownload} 
+    <TouchableOpacity
+      style={[styles.downloadBtn, style]}
+      onPress={onDownload}
       disabled={isDownloading}
       activeOpacity={0.7}
     >
       {isDownloading ? (
-        <ActivityIndicator size="small" color={colors.white} />
+        <ActivityIndicator size="small" color={colors.text} />
       ) : (
         <DownloadIcon />
       )}
@@ -35,12 +38,12 @@ export const DownloadButton = ({ url, filename, style }: DownloadButtonProps) =>
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   downloadBtn: {
     width: 36,
     height: 36,
     borderRadius: radii.lg,
-    backgroundColor: colors.overlay,
+    backgroundColor: colors.card,
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1,

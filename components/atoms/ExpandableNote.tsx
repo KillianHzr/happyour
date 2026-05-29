@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import { typography } from "../../lib/theme";
+import { typography, type ThemeColors } from "../../lib/theme";
+import { useThemedStyles } from "../../lib/theme-context";
 
 interface ExpandableNoteProps {
   text: string;
@@ -8,6 +9,7 @@ interface ExpandableNoteProps {
 }
 
 export const ExpandableNote = ({ text, maxLines }: ExpandableNoteProps) => {
+  const styles = useThemedStyles(makeStyles);
   const [expanded, setExpanded] = useState(false);
   const [isTruncated, setIsTruncated] = useState(false);
 
@@ -31,17 +33,17 @@ export const ExpandableNote = ({ text, maxLines }: ExpandableNoteProps) => {
   );
 };
 
-const styles = StyleSheet.create({
-  momentNote: { 
-    color: "rgba(255,255,255,0.75)", 
-    fontFamily: typography.family.regular, 
-    fontSize: typography.size.xs, 
-    marginTop: 3 
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
+  momentNote: {
+    color: colors.text,
+    fontFamily: typography.family.regular,
+    fontSize: typography.size.xs,
+    marginTop: 3
   },
-  noteExpand: { 
-    color: "rgba(255,255,255,0.45)", 
-    fontFamily: typography.family.semibold, 
-    fontSize: typography.size.xs, 
-    marginTop: 2 
+  noteExpand: {
+    color: colors.textSecondary,
+    fontFamily: typography.family.semibold,
+    fontSize: typography.size.xs,
+    marginTop: 2
   },
 });

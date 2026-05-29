@@ -1,7 +1,7 @@
 import React from "react";
-import { View } from "react-native";
 import { Svg, Text as SvgText, Defs, Mask, Rect } from "react-native-svg";
-import { colors, typography } from "../../lib/theme";
+import { colors as staticColors, typography } from "../../lib/theme";
+import { useTheme } from "../../lib/theme-context";
 
 interface TextStickerProps {
   text: string;
@@ -12,8 +12,10 @@ interface TextStickerProps {
 export const TextSticker = ({
   text,
   fontSize = 42,
-  backgroundColor = colors.brand
+  backgroundColor,
 }: TextStickerProps) => {
+  const { colors } = useTheme();
+  const bg = backgroundColor ?? colors.brand;
   const displayValue = (text || "—").toUpperCase();
 
   // Extremely tight width/height calculations
@@ -26,12 +28,12 @@ export const TextSticker = ({
     <Svg height={height} width={width} viewBox={`0 0 ${width} ${height}`}>
       <Defs>
         <Mask id="knockoutMask">
-          {/* White defines the shape of the pink rectangle */}
-          <Rect width={width} height={height} fill={colors.white} />
+          {/* White defines the shape of the rectangle (mask color — must stay literal) */}
+          <Rect width={width} height={height} fill={staticColors.white} />
 
-          {/* Black cuts the text out of that shape */}
+          {/* Black cuts the text out of that shape (mask color — must stay literal) */}
           <SvgText
-            fill={colors.black}
+            fill={staticColors.black}
             fontSize={fontSize}
             fontWeight={String(typography.weight.black)}
             fontFamily={typography.family.bold}
@@ -45,11 +47,11 @@ export const TextSticker = ({
         </Mask>
       </Defs>
 
-      {/* The pink rectangle with the text hole cut out */}
+      {/* The colored rectangle with the text hole cut out */}
       <Rect
         width={width}
         height={height}
-        fill={backgroundColor}
+        fill={bg}
         mask="url(#knockoutMask)"
       />
     </Svg>

@@ -29,30 +29,40 @@ import { notifyNewPhoto } from "../../../../lib/notifications";
 import { useUpload } from "../../../../lib/upload-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
-import { colors, radii, typography } from "../../../../lib/theme";
+import { radii, typography, type ThemeColors } from "../../../../lib/theme";
+import { useTheme, useThemedStyles } from "../../../../lib/theme-context";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const NAVBAR_HEIGHT = 100;
 
-const SendIcon = ({ color = colors.black }) => (
-  <Svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-    <Path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-  </Svg>
-);
+const SendIcon = ({ color }: { color?: string }) => {
+  const { colors } = useTheme();
+  return (
+    <Svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+      <Path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13" stroke={color ?? colors.bg} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </Svg>
+  );
+};
 
-const FeatherIcon = () => (
-  <Svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={colors.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <Path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h3.5l6.74-6.74z" />
-    <Path d="M16 8L2 22" />
-    <Path d="M17.5 15H9" />
-  </Svg>
-);
+const FeatherIcon = () => {
+  const { colors } = useTheme();
+  return (
+    <Svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={colors.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h3.5l6.74-6.74z" />
+      <Path d="M16 8L2 22" />
+      <Path d="M17.5 15H9" />
+    </Svg>
+  );
+};
 
-const CloseIcon = () => (
-  <Svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={colors.white} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <Path d="M18 6L6 18M6 6l12 12" />
-  </Svg>
-);
+const CloseIcon = () => {
+  const { colors } = useTheme();
+  return (
+    <Svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={colors.text} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M18 6L6 18M6 6l12 12" />
+    </Svg>
+  );
+};
 
 export default function PreviewScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -60,6 +70,8 @@ export default function PreviewScreen() {
   const { showToast } = useToast();
   const { startUpload } = useUpload();
   const insets = useSafeAreaInsets();
+  const { colors, mode } = useTheme();
+  const styles = useThemedStyles(makeStyles);
 
   const [base64, setBase64] = useState<string | null>(null);
   const [uri, setUri] = useState<string | null>(null);
@@ -105,7 +117,7 @@ export default function PreviewScreen() {
   const handleSend = () => {
     if (!user || uploading || !uri) return;
     setUploading(true);
-    
+
     const dbData = {
       group_id: id as string,
       user_id: user.id,
@@ -117,7 +129,7 @@ export default function PreviewScreen() {
 
     // ON LANCE TOUT EN ARRIÈRE-PLAN SANS ATTENDRE
     startUpload(fileName, uri, contentType, dbData);
-    
+
     // ON FERME L'INTERFACE IMMÉDIATEMENT
     clearCaptureData();
     router.back();
@@ -141,9 +153,9 @@ export default function PreviewScreen() {
           )}
 
           <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-            <TouchableOpacity 
-              style={[styles.backCaptureBtnInside, { top: 16 }]} 
-              onPress={handleDiscard} 
+            <TouchableOpacity
+              style={[styles.backCaptureBtnInside, { top: 16 }]}
+              onPress={handleDiscard}
               disabled={uploading}
             >
               <CloseIcon />
@@ -151,17 +163,17 @@ export default function PreviewScreen() {
 
             <View style={[styles.previewContent, { bottom: 120 }]}>
               {note ? (
-                <Pressable 
-                  style={styles.previewNoteBox} 
-                  onPress={() => setIsEditingNote(true)} 
+                <Pressable
+                  style={styles.previewNoteBox}
+                  onPress={() => setIsEditingNote(true)}
                   disabled={uploading}
                 >
                   <Text style={styles.previewNoteText}>{note}</Text>
                 </Pressable>
               ) : (
-                <TouchableOpacity 
-                  style={styles.addNoteBtn} 
-                  onPress={() => setIsEditingNote(true)} 
+                <TouchableOpacity
+                  style={styles.addNoteBtn}
+                  onPress={() => setIsEditingNote(true)}
                   disabled={uploading}
                 >
                   <FeatherIcon />
@@ -171,13 +183,13 @@ export default function PreviewScreen() {
             </View>
 
             <View style={[styles.postCaptureActions, { bottom: 20 }]}>
-              <TouchableOpacity 
-                style={styles.sendCaptureBtn} 
-                onPress={handleSend} 
+              <TouchableOpacity
+                style={styles.sendCaptureBtn}
+                onPress={handleSend}
                 disabled={uploading}
               >
                 <View style={styles.sendCaptureInner}>
-                  {uploading ? <ActivityIndicator color={colors.black} /> : <SendIcon color={colors.black} />}
+                  {uploading ? <ActivityIndicator color={colors.bg} /> : <SendIcon color={colors.bg} />}
                 </View>
               </TouchableOpacity>
             </View>
@@ -186,9 +198,9 @@ export default function PreviewScreen() {
       </View>
 
       <Modal visible={isEditingNote} transparent animationType="fade">
-        <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill}>
+        <BlurView intensity={100} tint={mode === "Dark" ? "dark" : "light"} style={StyleSheet.absoluteFill}>
           <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.noteEditorContainer}>
-            <TextInput style={styles.largeNoteInput} placeholder="Note..." placeholderTextColor="rgba(255,255,255,0.3)" value={note} onChangeText={setNote} maxLength={140} multiline autofocus="off" />
+            <TextInput style={styles.largeNoteInput} placeholder="Note..." placeholderTextColor={colors.textTertiary} value={note} onChangeText={setNote} maxLength={140} multiline autofocus="off" />
             <TouchableOpacity style={styles.doneNoteBtn} onPress={() => setIsEditingNote(false)}><Text style={styles.doneNoteText}>Terminé</Text></TouchableOpacity>
           </KeyboardAvoidingView>
         </BlurView>
@@ -197,22 +209,22 @@ export default function PreviewScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.black },
-  previewContainer: { flex: 1, backgroundColor: colors.black, alignItems: "center" },
-  previewImageWrapper: { flex: 1, width: '100%', borderRadius: radii.xl, overflow: "hidden", backgroundColor: "#1A1A1A" },
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.bg },
+  previewContainer: { flex: 1, backgroundColor: colors.bg, alignItems: "center" },
+  previewImageWrapper: { flex: 1, width: '100%', borderRadius: radii.xl, overflow: "hidden", backgroundColor: colors.card },
   previewImage: { width: "100%", height: "100%" },
   previewContent: { position: "absolute", left: 24, right: 24 },
-  previewNoteBox: { backgroundColor: "rgba(0,0,0,0.5)", padding: 16, borderRadius: radii.lg, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
-  previewNoteText: { color: colors.white, fontSize: typography.size.md, fontFamily: typography.family.semibold, textAlign: "center" },
-  addNoteBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, padding: 16, borderRadius: radii.lg, backgroundColor: "rgba(0,0,0,0.4)", borderStyle: "dashed", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
-  addNoteBtnText: { color: "rgba(255,255,255,0.6)", fontSize: typography.size.sm, fontFamily: typography.family.semibold },
-  backCaptureBtnInside: { position: "absolute", left: 16, width: 44, height: 44, borderRadius: radii.xl, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center" },
+  previewNoteBox: { backgroundColor: colors.opacityLight, padding: 16, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.cardBorder },
+  previewNoteText: { color: colors.text, fontSize: typography.size.md, fontFamily: typography.family.semibold, textAlign: "center" },
+  addNoteBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, padding: 16, borderRadius: radii.lg, backgroundColor: colors.opacityLight, borderStyle: "dashed", borderWidth: 1, borderColor: colors.borderSecondary },
+  addNoteBtnText: { color: colors.secondary, fontSize: typography.size.sm, fontFamily: typography.family.semibold },
+  backCaptureBtnInside: { position: "absolute", left: 16, width: 44, height: 44, borderRadius: radii.xl, backgroundColor: colors.opacityLight, justifyContent: "center", alignItems: "center" },
   postCaptureActions: { position: "absolute", left: 0, right: 0, alignItems: "center" },
-  sendCaptureBtn: { width: 84, height: 84, borderRadius: radii.full, borderWidth: 5, borderColor: colors.white, justifyContent: "center", alignItems: "center" },
-  sendCaptureInner: { width: 66, height: 66, borderRadius: radii.full, backgroundColor: colors.white, justifyContent: "center", alignItems: "center" },
+  sendCaptureBtn: { width: 84, height: 84, borderRadius: radii.full, borderWidth: 5, borderColor: colors.text, justifyContent: "center", alignItems: "center" },
+  sendCaptureInner: { width: 66, height: 66, borderRadius: radii.full, backgroundColor: colors.text, justifyContent: "center", alignItems: "center" },
   noteEditorContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: 40 },
-  largeNoteInput: { width: "100%", color: colors.white, fontSize: typography.size.xxl, fontFamily: typography.family.bold, textAlign: "center", marginBottom: 40 },
-  doneNoteBtn: { backgroundColor: colors.white, paddingHorizontal: 32, paddingVertical: 14, borderRadius: radii.xl },
-  doneNoteText: { color: colors.black, fontFamily: typography.family.bold, fontSize: typography.size.md },
+  largeNoteInput: { width: "100%", color: colors.text, fontSize: typography.size.xxl, fontFamily: typography.family.bold, textAlign: "center", marginBottom: 40 },
+  doneNoteBtn: { backgroundColor: colors.text, paddingHorizontal: 32, paddingVertical: 14, borderRadius: radii.xl },
+  doneNoteText: { color: colors.bg, fontFamily: typography.family.bold, fontSize: typography.size.md },
 });

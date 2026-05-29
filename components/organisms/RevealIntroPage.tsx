@@ -2,7 +2,8 @@ import React, { useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Animated } from "react-native";
 import { Svg, Path } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { colors, spacing, typography } from "../../lib/theme";
+import { spacing, typography, type ThemeColors } from "../../lib/theme";
+import { useTheme, useThemedStyles } from "../../lib/theme-context";
 
 const NAVBAR_HEIGHT = 100;
 
@@ -13,13 +14,15 @@ interface RevealIntroPageProps {
   customSubtitle?: string;
 }
 
-export const RevealIntroPage = ({ 
-  groupName, 
-  isVisible, 
-  customTitle, 
-  customSubtitle 
+export const RevealIntroPage = ({
+  groupName,
+  isVisible,
+  customTitle,
+  customSubtitle
 }: RevealIntroPageProps) => {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.9)).current;
   const hintOpacity = useRef(new Animated.Value(0)).current;
@@ -59,23 +62,23 @@ export const RevealIntroPage = ({
           ? <Text style={styles.revealIntroGroup}>{customSubtitle}</Text>
           : groupName ? <Text style={styles.revealIntroGroup}>{groupName}</Text> : null}
       </Animated.View>
-      <Animated.View 
+      <Animated.View
         style={[
-          styles.revealIntroHint, 
-          { 
-            bottom: Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 24) / 2), 
-            opacity: hintOpacity, 
-            transform: [{ translateY: hintY }] 
+          styles.revealIntroHint,
+          {
+            bottom: Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 24) / 2),
+            opacity: hintOpacity,
+            transform: [{ translateY: hintY }]
           }
         ]}
       >
         <Svg width={24} height={24} viewBox="0 0 24 24">
-          <Path 
-            d="M12 5v14M5 12l7 7 7-7" 
-            stroke={colors.textMuted} 
-            strokeWidth="1.5" 
-            strokeLinecap="round" 
-            strokeLinejoin="round" 
+          <Path
+            d="M12 5v14M5 12l7 7 7-7"
+            stroke={colors.textMuted}
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
           />
         </Svg>
         <Text style={styles.revealIntroHintText}>Scroll</Text>
@@ -84,48 +87,48 @@ export const RevealIntroPage = ({
   );
 };
 
-const styles = StyleSheet.create({
-  fullscreenPage: { 
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
+  fullscreenPage: {
     flex: 1,
-    width: "100%", 
-    height: "100%", 
-    justifyContent: "center", 
-    alignItems: "center", 
-    backgroundColor: colors.bg 
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.bg
   },
-  revealIntroEyebrow: { 
-    fontFamily: typography.family.regular, 
-    fontSize: typography.size.sm, 
-    color: colors.textMuted, 
-    letterSpacing: 4, 
-    textTransform: "uppercase", 
-    marginBottom: spacing.md 
+  revealIntroEyebrow: {
+    fontFamily: typography.family.regular,
+    fontSize: typography.size.sm,
+    color: colors.textMuted,
+    letterSpacing: 4,
+    textTransform: "uppercase",
+    marginBottom: spacing.md
   },
-  revealIntroTitle: { 
-    fontFamily: typography.family.bold, 
-    fontSize: typography.size.title, 
-    color: colors.white, 
-    letterSpacing: -1.5, 
-    lineHeight: 62, 
-    textAlign: "center" 
+  revealIntroTitle: {
+    fontFamily: typography.family.bold,
+    fontSize: typography.size.title,
+    color: colors.text,
+    letterSpacing: -1.5,
+    lineHeight: 62,
+    textAlign: "center"
   },
-  revealIntroGroup: { 
-    fontFamily: typography.family.regular, 
-    fontSize: typography.size.xl, 
-    color: colors.textMuted, 
-    marginTop: spacing.md, 
-    textAlign: "center" 
+  revealIntroGroup: {
+    fontFamily: typography.family.regular,
+    fontSize: typography.size.xl,
+    color: colors.textMuted,
+    marginTop: spacing.md,
+    textAlign: "center"
   },
-  revealIntroHint: { 
-    position: "absolute", 
-    alignItems: "center", 
-    gap: spacing.xs + 2 
+  revealIntroHint: {
+    position: "absolute",
+    alignItems: "center",
+    gap: spacing.xs + 2
   },
-  revealIntroHintText: { 
-    fontFamily: typography.family.regular, 
-    fontSize: typography.size.xs - 1, 
-    color: colors.textMuted, 
-    letterSpacing: 2, 
-    textTransform: "uppercase" 
+  revealIntroHintText: {
+    fontFamily: typography.family.regular,
+    fontSize: typography.size.xs - 1,
+    color: colors.textMuted,
+    letterSpacing: 2,
+    textTransform: "uppercase"
   },
 });

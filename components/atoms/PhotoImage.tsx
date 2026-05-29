@@ -2,6 +2,7 @@ import React, { useState, useRef } from "react";
 import { View, StyleSheet, ActivityIndicator } from "react-native";
 import { Image } from "expo-image";
 import { radii } from "../../lib/theme";
+import { useTheme } from "../../lib/theme-context";
 
 
 interface PhotoImageProps {
@@ -11,6 +12,7 @@ interface PhotoImageProps {
 }
 
 export const PhotoImage = ({ url, fallback_url, isDrawing }: PhotoImageProps) => {
+  const { colors } = useTheme();
   const [useFallback, setUseFallback] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const prevUrlRef = useRef(url);
@@ -28,7 +30,7 @@ export const PhotoImage = ({ url, fallback_url, isDrawing }: PhotoImageProps) =>
       <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center" }]}>
         {!loaded && (
           <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center" }]} pointerEvents="none">
-            <ActivityIndicator size="large" color="rgba(255,255,255,0.5)" />
+            <ActivityIndicator size="large" color={colors.textSecondary} />
           </View>
         )}
         <Image

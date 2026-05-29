@@ -27,7 +27,8 @@ import { useAuth } from "../lib/auth-context";
 import { CloseIcon } from "./atoms/CloseIcon";
 import { CommentItem, Comment } from "./molecules/CommentItem";
 import { CommentInput } from "./molecules/CommentInput";
-import { colors, radii, typography } from "../lib/theme";
+import { radii, typography, type ThemeColors } from "../lib/theme";
+import { useTheme, useThemedStyles } from "../lib/theme-context";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const MODAL_HEIGHT = SCREEN_HEIGHT * 0.75;
@@ -43,7 +44,9 @@ interface CommentModalProps {
 export default function CommentModal({ visible, onClose, onSeen, photoId, photoOwnerId }: CommentModalProps) {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
-  
+  const { colors, mode } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -271,7 +274,7 @@ export default function CommentModal({ visible, onClose, onSeen, photoId, photoO
               ]}
             >
               <View style={styles.modalBackgroundFiller}>
-                <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+                <BlurView intensity={80} tint={mode === "Dark" ? "dark" : "light"} style={StyleSheet.absoluteFill} />
               </View>
               
               <View style={{ flex: 1 }}>
@@ -287,7 +290,7 @@ export default function CommentModal({ visible, onClose, onSeen, photoId, photoO
 
                 {loading ? (
                   <View style={styles.loaderContainer}>
-                    <ActivityIndicator size="large" color={colors.white} />
+                    <ActivityIndicator size="large" color={colors.text} />
                   </View>
                 ) : (
                   <FlatList
@@ -336,7 +339,7 @@ export default function CommentModal({ visible, onClose, onSeen, photoId, photoO
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -345,7 +348,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   backdrop: {
-    backgroundColor: "rgba(0,0,0,0.75)",
+    backgroundColor: colors.opacityLight,
   },
   modalContainer: {
     height: MODAL_HEIGHT,
@@ -356,7 +359,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: -SCREEN_HEIGHT,
-    backgroundColor: "rgba(25,25,25,0.75)",
+    backgroundColor: colors.card,
     borderTopLeftRadius: radii.xl,
     borderTopRightRadius: radii.xl,
     overflow: "hidden",
@@ -370,7 +373,7 @@ const styles = StyleSheet.create({
   dragHandle: {
     width: 38,
     height: 4,
-    backgroundColor: "rgba(255,255,255,0.25)",
+    backgroundColor: colors.borderSecondary,
     borderRadius: radii.xs,
     marginBottom: 8,
   },
@@ -381,12 +384,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "center",
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.1)",
+    borderBottomColor: colors.cardBorder,
   },
   headerTitle: {
     fontFamily: typography.family.bold,
     fontSize: typography.size.md,
-    color: colors.white,
+    color: colors.text,
     letterSpacing: 0.5,
   },
   closeBtn: {
@@ -413,24 +416,24 @@ const styles = StyleSheet.create({
   emptyText: {
     fontFamily: typography.family.medium,
     fontSize: typography.size.sm,
-    color: "rgba(255,255,255,0.3)",
+    color: colors.textTertiary,
   },
   inputArea: {
     padding: 20,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.1)",
-    backgroundColor: "rgba(0,0,0,0.2)",
+    borderTopColor: colors.cardBorder,
+    backgroundColor: colors.card,
   },
   alreadySharedContainer: {
     alignItems: "center",
     paddingVertical: 14,
-    backgroundColor: "rgba(255,255,255,0.05)",
+    backgroundColor: colors.accentMuted,
     borderRadius: radii.lg,
   },
   alreadySharedText: {
     fontFamily: typography.family.semibold,
     fontSize: typography.size.sm,
-    color: "rgba(255,255,255,0.4)",
+    color: colors.textTertiary,
   },
 });

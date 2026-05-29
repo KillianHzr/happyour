@@ -6,7 +6,8 @@ import { getChallengePrompt, type ChallengeWithData, type ChallengeResponse } fr
 import Svg, { Path } from "react-native-svg";
 import { r2Storage } from "../../lib/r2";
 import ChallengeAudioPlayer from "./ChallengeAudioPlayer";
-import { colors, radii, typography } from "../../lib/theme";
+import { radii, typography, type ThemeColors } from "../../lib/theme";
+import { useTheme, useThemedStyles } from "../../lib/theme-context";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -31,11 +32,12 @@ function mediaType(path: string | null): "text" | "audio" | "drawing" | "photo" 
 
 // Inline thumbnail renderer for grid cards
 function ResponseThumb({ r }: { r: ChallengeResponse }) {
+  const { colors } = useTheme();
   const type = mediaType(r.image_path);
   if (type === "text") {
     return (
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#1A1A1A", justifyContent: "center", alignItems: "center", padding: 6 }]}>
-        <Text style={{ color: colors.white, fontSize: typography.size.xs, fontFamily: typography.family.semibold, textAlign: "center" }} numberOfLines={4}>
+      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.card, justifyContent: "center", alignItems: "center", padding: 6 }]}>
+        <Text style={{ color: colors.text, fontSize: typography.size.xs, fontFamily: typography.family.semibold, textAlign: "center" }} numberOfLines={4}>
           {r.note}
         </Text>
       </View>
@@ -43,14 +45,14 @@ function ResponseThumb({ r }: { r: ChallengeResponse }) {
   }
   if (type === "audio") {
     return (
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#111", justifyContent: "center", alignItems: "center", gap: 5 }]}>
+      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", gap: 5 }]}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
           {MINI_WAVE.map((h, i) => (
-            <View key={i} style={{ width: 2.5, height: h, borderRadius: radii.xs, backgroundColor: "rgba(255,255,255,0.55)" }} />
+            <View key={i} style={{ width: 2.5, height: h, borderRadius: radii.xs, backgroundColor: colors.textSecondary }} />
           ))}
         </View>
-        <View style={{ width: 22, height: 22, borderRadius: radii.md, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" }}>
-          <Svg width="9" height="9" viewBox="0 0 24 24" fill={colors.white}>
+        <View style={{ width: 22, height: 22, borderRadius: radii.md, backgroundColor: colors.accentMuted, justifyContent: "center", alignItems: "center" }}>
+          <Svg width="9" height="9" viewBox="0 0 24 24" fill={colors.text}>
             <Path d="M8 5v14l11-7z" />
           </Svg>
         </View>
@@ -63,11 +65,12 @@ function ResponseThumb({ r }: { r: ChallengeResponse }) {
 
 // Modal media renderer — respects exact same ratios as PhotoFeed
 function ModalMedia({ imagePath, url, note }: { imagePath: string | null; url: string | null; note: string | null }) {
+  const { colors } = useTheme();
   const type = mediaType(imagePath);
   if (type === "text") {
     return (
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#111", justifyContent: "center", alignItems: "center", padding: 28 }]}>
-        <Text style={{ color: colors.white, fontFamily: typography.family.semibold, fontSize: typography.size.xl, textAlign: "center", lineHeight: 28 }}>
+      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", padding: 28 }]}>
+        <Text style={{ color: colors.text, fontFamily: typography.family.semibold, fontSize: typography.size.xl, textAlign: "center", lineHeight: 28 }}>
           {note ?? ""}
         </Text>
       </View>
@@ -79,7 +82,7 @@ function ModalMedia({ imagePath, url, note }: { imagePath: string | null; url: s
   }
   if (type === "drawing") {
     return (
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#111", justifyContent: "center", alignItems: "center" }]}>
+      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.bg, justifyContent: "center", alignItems: "center" }]}>
         <Image
           source={{ uri: url ?? "" }}
           style={{ width: "100%", aspectRatio: 3 / 4 }}
@@ -111,6 +114,8 @@ export default function ChallengeVotePage({
   onVote: (challengeId: string, responseId: string) => void;
 }) {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const cvStyles = useThemedStyles(makeStyles);
   const [selected, setSelected] = useState<ChallengeResponse | null>(null);
   const [swapped, setSwapped] = useState(false);
 
@@ -235,12 +240,12 @@ export default function ChallengeVotePage({
               <View style={cvStyles.modalTopBar}>
                 <TouchableOpacity style={cvStyles.modalCloseBtn} onPress={() => setSelected(null)} activeOpacity={0.7}>
                   <Svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                    <Path d="M18 6L6 18M6 6l12 12" stroke={colors.white} strokeWidth="2.5" strokeLinecap="round" />
+                    <Path d="M18 6L6 18M6 6l12 12" stroke={colors.text} strokeWidth="2.5" strokeLinecap="round" />
                   </Svg>
                 </TouchableOpacity>
                 {hasSecond && (
                   <TouchableOpacity style={cvStyles.swapBtn} onPress={() => setSwapped(v => !v)} activeOpacity={0.7}>
-                    <Svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={colors.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <Svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={colors.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <Path d="M7 16V4m0 0L3 8m4-4l4 4" /><Path d="M17 8v12m0 0l4-4m-4 4l-4-4" />
                     </Svg>
                     <Text style={cvStyles.swapBtnText}>{swapped ? "Voir 1ère capture" : "Voir 2ème capture"}</Text>
@@ -282,11 +287,11 @@ export default function ChallengeVotePage({
   );
 }
 
-const cvStyles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT,
-    backgroundColor: "#0A0A0A",
+    backgroundColor: colors.bg,
     paddingHorizontal: 20,
   },
   header: {
@@ -296,13 +301,13 @@ const cvStyles = StyleSheet.create({
     marginBottom: 12,
   },
   defiPill: {
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: colors.accentMuted,
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: radii.lg,
   },
   defiPillText: {
-    color: colors.white,
+    color: colors.text,
     fontFamily: typography.family.bold,
     fontSize: typography.size.xs,
     letterSpacing: 0.8,
@@ -323,13 +328,13 @@ const cvStyles = StyleSheet.create({
     fontSize: typography.size.xs,
   },
   periodLabel: {
-    color: "rgba(255,255,255,0.4)",
+    color: colors.textTertiary,
     fontFamily: typography.family.regular,
     fontSize: typography.size.xs,
     letterSpacing: 0.5,
   },
   prompt: {
-    color: colors.white,
+    color: colors.text,
     fontFamily: typography.family.bold,
     fontSize: typography.size.lg,
     lineHeight: 24,
@@ -339,7 +344,7 @@ const cvStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: colors.card,
     borderRadius: radii.lg,
     padding: 12,
     marginBottom: 18,
@@ -350,23 +355,23 @@ const cvStyles = StyleSheet.create({
     borderRadius: radii.lg,
   },
   avatarFallback: {
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: colors.accentMuted,
     justifyContent: "center",
     alignItems: "center",
   },
   avatarLetter: {
-    color: colors.white,
+    color: colors.text,
     fontFamily: typography.family.bold,
     fontSize: typography.size.sm,
   },
   targetLabel: {
-    color: "rgba(255,255,255,0.4)",
+    color: colors.textTertiary,
     fontFamily: typography.family.regular,
     fontSize: typography.size.xs,
     letterSpacing: 0.5,
   },
   targetName: {
-    color: colors.white,
+    color: colors.text,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.sm,
   },
@@ -375,10 +380,10 @@ const cvStyles = StyleSheet.create({
     height: 48,
     borderRadius: radii.sm,
     overflow: "hidden",
-    backgroundColor: "#1A1A1A",
+    backgroundColor: colors.card,
   },
   responsesLabel: {
-    color: "rgba(255,255,255,0.4)",
+    color: colors.textTertiary,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.xs,
     letterSpacing: 0.8,
@@ -394,7 +399,7 @@ const cvStyles = StyleSheet.create({
     width: CARD_SIZE,
     borderRadius: radii.md,
     overflow: "hidden",
-    backgroundColor: "#1A1A1A",
+    backgroundColor: colors.card,
     borderWidth: 2,
     borderColor: "transparent",
   },
@@ -404,7 +409,7 @@ const cvStyles = StyleSheet.create({
   responseThumb: {
     width: CARD_SIZE - 4,
     height: CARD_SIZE - 4,
-    backgroundColor: "#1A1A1A",
+    backgroundColor: colors.card,
   },
   votedBadge: {
     position: "absolute",
@@ -418,7 +423,7 @@ const cvStyles = StyleSheet.create({
     alignItems: "center",
   },
   votedBadgeText: {
-    color: colors.white,
+    color: "#FFFFFF",
     fontFamily: typography.family.bold,
     fontSize: typography.size.xs,
   },
@@ -429,10 +434,10 @@ const cvStyles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: radii.xs,
-    backgroundColor: "rgba(255,255,255,0.7)",
+    backgroundColor: colors.textSecondary,
   },
   hint: {
-    color: "rgba(255,255,255,0.35)",
+    color: colors.textTertiary,
     fontFamily: typography.family.regular,
     fontSize: typography.size.xs,
     textAlign: "center",
@@ -441,7 +446,7 @@ const cvStyles = StyleSheet.create({
   // Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.95)",
+    backgroundColor: colors.bg,
   },
   modalContainer: {
     flex: 1,
@@ -457,7 +462,7 @@ const cvStyles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: radii.lg,
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: colors.accentMuted,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -465,13 +470,13 @@ const cvStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "rgba(255,255,255,0.1)",
+    backgroundColor: colors.accentMuted,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: radii.lg,
   },
   swapBtnText: {
-    color: "rgba(255,255,255,0.8)",
+    color: colors.secondary,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.xs,
   },
@@ -479,31 +484,31 @@ const cvStyles = StyleSheet.create({
     flex: 1,
     borderRadius: radii.lg,
     overflow: "hidden",
-    backgroundColor: "#111",
+    backgroundColor: colors.bg,
     marginBottom: 12,
   },
   noteBox: {
-    backgroundColor: "rgba(255,255,255,0.07)",
+    backgroundColor: colors.card,
     borderRadius: radii.md,
     paddingHorizontal: 14,
     paddingVertical: 10,
     marginBottom: 12,
   },
   noteText: {
-    color: "rgba(255,255,255,0.75)",
+    color: colors.secondary,
     fontFamily: typography.family.regular,
     fontSize: typography.size.sm,
     textAlign: "center",
     lineHeight: 20,
   },
   voteBtn: {
-    backgroundColor: colors.white,
+    backgroundColor: colors.text,
     borderRadius: radii.lg,
     paddingVertical: 15,
     alignItems: "center",
   },
   voteBtnText: {
-    color: colors.black,
+    color: colors.bg,
     fontFamily: typography.family.bold,
     fontSize: typography.size.sm,
   },

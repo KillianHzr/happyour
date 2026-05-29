@@ -5,7 +5,8 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { colors, radii, theme, typography } from "../../lib/theme";
+import { radii, typography, type ThemeColors } from "../../lib/theme";
+import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import { CloseIcon } from "./GroupIcons";
 import Svg, { Path } from "react-native-svg";
 
@@ -27,17 +28,22 @@ type Props = {
   onTransferAdmin: (newAdminId: string) => Promise<void>;
 };
 
-const ChevronRight = ({ color = "rgba(255,255,255,0.3)" }) => (
-  <Svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-    <Path d="M9 18l6-6-6-6" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-  </Svg>
-);
+const ChevronRight = ({ color }: { color?: string }) => {
+  const { colors } = useTheme();
+  return (
+    <Svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <Path d="M9 18l6-6-6-6" stroke={color ?? colors.textTertiary} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </Svg>
+  );
+};
 
 export default function GroupSettingsModal({
   visible, onClose, groupName, isAdmin, members, userId,
   onRename, onLeave, onDelete, onTransferAdmin,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [editedName, setEditedName] = useState(groupName);
   const [subView, setSubView] = useState<SubView>(null);
   const [loading, setLoading] = useState(false);
@@ -54,12 +60,12 @@ export default function GroupSettingsModal({
     const trimmed = editedName.trim();
     if (!trimmed || trimmed === groupName) return;
     setLoading(true);
-    try { 
-      await onRename(trimmed); 
+    try {
+      await onRename(trimmed);
     } catch (e) {
       setEditedName(groupName);
-    } finally { 
-      setLoading(false); 
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -84,8 +90,8 @@ export default function GroupSettingsModal({
   };
 
   const renderMainContent = () => (
-    <ScrollView 
-      style={styles.scroll} 
+    <ScrollView
+      style={styles.scroll}
       contentContainerStyle={{ paddingTop: insets.top + 60, paddingBottom: insets.bottom + 40 }}
     >
       <View style={styles.header}>
@@ -107,20 +113,20 @@ export default function GroupSettingsModal({
                 onSubmitEditing={handleRename}
                 onBlur={handleRename}
                 placeholder="Nom du groupe"
-                placeholderTextColor="rgba(255,255,255,0.3)"
+                placeholderTextColor={colors.textTertiary}
               />
-              {loading && <ActivityIndicator size="small" color={colors.white} style={{ marginLeft: 8 }} />}
+              {loading && <ActivityIndicator size="small" color={colors.text} style={{ marginLeft: 8 }} />}
             </View>
-            
+
             <View style={styles.divider} />
-            
+
             <TouchableOpacity style={styles.menuItem} onPress={() => setSubView("transfer")}>
               <Text style={styles.menuItemText}>Transférer la gestion</Text>
               <ChevronRight />
             </TouchableOpacity>
-            
+
             <View style={styles.divider} />
-            
+
             <TouchableOpacity style={styles.menuItem} onPress={() => setSubView("delete")}>
               <Text style={[styles.menuItemText, styles.dangerText]}>Supprimer le groupe</Text>
               <ChevronRight color="rgba(255, 59, 48, 0.4)" />
@@ -176,8 +182,8 @@ export default function GroupSettingsModal({
 
     if (subView === "leave") {
       subTitle = isLastMember ? "Supprimer le groupe ?" : "Quitter le groupe";
-      subBody = isLastMember 
-        ? "Tu es le dernier membre. En quittant ce groupe, il sera définitivement supprimé ainsi que tous ses moments." 
+      subBody = isLastMember
+        ? "Tu es le dernier membre. En quittant ce groupe, il sera définitivement supprimé ainsi que tous ses moments."
         : "Tu ne pourras plus accéder aux moments de ce groupe.";
       btnText = isLastMember ? "Quitter et supprimer" : "Quitter";
       onConfirm = handleLeave;
@@ -194,7 +200,7 @@ export default function GroupSettingsModal({
           <View style={[styles.content, { paddingTop: insets.top + 60 }]}>
             <Text style={styles.subTitle}>Transférer la gestion</Text>
             <Text style={styles.subDescription}>Choisir le nouveau responsable du groupe :</Text>
-            
+
             <View style={styles.box}>
               {otherMembers.length === 0 ? (
                 <Text style={styles.emptyText}>Aucun autre membre dans ce groupe.</Text>
@@ -212,7 +218,7 @@ export default function GroupSettingsModal({
                           : <Text style={styles.memberInitial}>{m.username[0]?.toUpperCase()}</Text>}
                       </View>
                       <Text style={styles.memberName}>{m.username}</Text>
-                      {transferringId === m.user_id ? <ActivityIndicator size="small" color={colors.white} /> : <ChevronRight />}
+                      {transferringId === m.user_id ? <ActivityIndicator size="small" color={colors.text} /> : <ChevronRight />}
                     </TouchableOpacity>
                     {i < otherMembers.length - 1 && <View style={styles.divider} />}
                   </View>
@@ -233,13 +239,13 @@ export default function GroupSettingsModal({
         <View style={[styles.content, { paddingTop: insets.top + 80 }]}>
           <Text style={styles.subTitle}>{subTitle}</Text>
           <Text style={styles.subDescription}>{subBody}</Text>
-          
+
           <View style={{ flex: 1 }} />
-          
+
           <TouchableOpacity style={[styles.confirmBtn, loading && { opacity: 0.7 }]} onPress={onConfirm} disabled={loading}>
-            {loading ? <ActivityIndicator color={colors.white} /> : <Text style={styles.confirmBtnText}>{btnText}</Text>}
+            {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.confirmBtnText}>{btnText}</Text>}
           </TouchableOpacity>
-          
+
           <TouchableOpacity style={styles.cancelBtn} onPress={() => setSubView(null)}>
             <Text style={styles.cancelBtnText}>Annuler</Text>
           </TouchableOpacity>
@@ -251,8 +257,8 @@ export default function GroupSettingsModal({
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
       <View style={styles.container}>
-        <TouchableOpacity 
-          style={[styles.closeBtn, { top: insets.top + 20 }]} 
+        <TouchableOpacity
+          style={[styles.closeBtn, { top: insets.top + 20 }]}
           onPress={handleClose}
         >
           <CloseIcon />
@@ -264,49 +270,49 @@ export default function GroupSettingsModal({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   scroll: { flex: 1 },
   closeBtn: {
     position: "absolute", right: 20, zIndex: 100,
     width: 44, height: 44, borderRadius: radii.xl,
-    backgroundColor: "rgba(255,255,255,0.1)",
+    backgroundColor: colors.accentMuted,
     justifyContent: "center", alignItems: "center",
   },
   header: { paddingHorizontal: 20, marginBottom: 32, alignItems: "center" },
-  title: { fontSize: typography.size.xxl, fontFamily: typography.family.bold, color: colors.white, textAlign: "center", marginBottom: 8 },
-  groupNameDisplay: { fontSize: typography.size.md, fontFamily: typography.family.semibold, color: "rgba(255,255,255,0.5)", textAlign: "center" },
-  
+  title: { fontSize: typography.size.xxl, fontFamily: typography.family.bold, color: colors.text, textAlign: "center", marginBottom: 8 },
+  groupNameDisplay: { fontSize: typography.size.md, fontFamily: typography.family.semibold, color: colors.textSecondary, textAlign: "center" },
+
   section: { marginHorizontal: 20, marginBottom: 24 },
-  sectionLabel: { fontSize: typography.size.xs, fontFamily: typography.family.semibold, color: "rgba(255,255,255,0.3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, paddingLeft: 4 },
-  box: { backgroundColor: "#2C2C2E", borderRadius: radii.lg, overflow: "hidden", paddingHorizontal: 16 },
-  
+  sectionLabel: { fontSize: typography.size.xs, fontFamily: typography.family.semibold, color: colors.textTertiary, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, paddingLeft: 4 },
+  box: { backgroundColor: colors.card, borderRadius: radii.lg, overflow: "hidden", paddingHorizontal: 16 },
+
   row: { flexDirection: "row", alignItems: "center", paddingVertical: 14 },
-  input: { flex: 1, color: colors.white, fontFamily: typography.family.semibold, fontSize: typography.size.md, padding: 0 },
-  
+  input: { flex: 1, color: colors.text, fontFamily: typography.family.semibold, fontSize: typography.size.md, padding: 0 },
+
   menuItem: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 14 },
-  menuItemText: { color: colors.white, fontFamily: typography.family.semibold, fontSize: typography.size.md },
+  menuItemText: { color: colors.text, fontFamily: typography.family.semibold, fontSize: typography.size.md },
   dangerText: { color: "#FF3B30" },
-  
-  divider: { height: 1, backgroundColor: "rgba(255,255,255,0.05)" },
-  
+
+  divider: { height: 1, backgroundColor: colors.cardBorder },
+
   memberRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12 },
-  memberAvatar: { width: 36, height: 36, borderRadius: radii.lg, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center", overflow: "hidden" },
+  memberAvatar: { width: 36, height: 36, borderRadius: radii.lg, backgroundColor: colors.accentMuted, justifyContent: "center", alignItems: "center", overflow: "hidden" },
   avatarImg: { width: "100%", height: "100%" },
-  memberInitial: { color: colors.white, fontFamily: typography.family.bold, fontSize: typography.size.sm },
-  memberName: { color: colors.white, fontFamily: typography.family.semibold, fontSize: typography.size.sm },
-  meTag: { color: "rgba(255,255,255,0.4)", fontSize: typography.size.xs, fontFamily: typography.family.regular },
-  adminBadge: { backgroundColor: "rgba(255,255,255,0.1)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: radii.xs },
-  adminBadgeText: { color: "rgba(255,255,255,0.6)", fontSize: typography.size.xs, fontFamily: typography.family.bold },
+  memberInitial: { color: colors.text, fontFamily: typography.family.bold, fontSize: typography.size.sm },
+  memberName: { color: colors.text, fontFamily: typography.family.semibold, fontSize: typography.size.sm },
+  meTag: { color: colors.textTertiary, fontSize: typography.size.xs, fontFamily: typography.family.regular },
+  adminBadge: { backgroundColor: colors.accentMuted, paddingHorizontal: 8, paddingVertical: 4, borderRadius: radii.xs },
+  adminBadgeText: { color: colors.secondary, fontSize: typography.size.xs, fontFamily: typography.family.bold },
 
   // Subviews
   subContainer: { flex: 1, backgroundColor: colors.bg },
   content: { flex: 1, paddingHorizontal: 20, alignItems: "center" },
-  subTitle: { fontSize: typography.size.subtitle, fontFamily: typography.family.bold, color: colors.white, textAlign: "center", marginBottom: 16, letterSpacing: -1 },
-  subDescription: { fontSize: typography.size.lg, fontFamily: typography.family.regular, color: "rgba(255,255,255,0.6)", textAlign: "center", lineHeight: 26, marginBottom: 32 },
+  subTitle: { fontSize: typography.size.subtitle, fontFamily: typography.family.bold, color: colors.text, textAlign: "center", marginBottom: 16, letterSpacing: -1 },
+  subDescription: { fontSize: typography.size.lg, fontFamily: typography.family.regular, color: colors.secondary, textAlign: "center", lineHeight: 26, marginBottom: 32 },
   confirmBtn: { width: "100%", height: 64, borderRadius: radii.lg, backgroundColor: "#FF3B30", justifyContent: "center", alignItems: "center", marginBottom: 12 },
-  confirmBtnText: { color: colors.white, fontSize: typography.size.lg, fontFamily: typography.family.bold },
+  confirmBtnText: { color: "#FFFFFF", fontSize: typography.size.lg, fontFamily: typography.family.bold },
   cancelBtn: { width: "100%", height: 64, justifyContent: "center", alignItems: "center" },
-  cancelBtnText: { color: "rgba(255,255,255,0.4)", fontSize: typography.size.md, fontFamily: typography.family.semibold },
-  emptyText: { color: "rgba(255,255,255,0.4)", fontFamily: typography.family.regular, fontSize: typography.size.sm, paddingVertical: 20, textAlign: "center" },
+  cancelBtnText: { color: colors.textTertiary, fontSize: typography.size.md, fontFamily: typography.family.semibold },
+  emptyText: { color: colors.textTertiary, fontFamily: typography.family.regular, fontSize: typography.size.sm, paddingVertical: 20, textAlign: "center" },
 });

@@ -4,7 +4,8 @@ import { CrownedAvatar } from "../atoms/Avatar";
 import { ExpandableNote } from "../atoms/ExpandableNote";
 import { CommentIcon } from "../atoms/CommentIcon";
 import { PlusIcon } from "../atoms/PlusIcon";
-import { colors, spacing, radii, typography } from "../../lib/theme";
+import { spacing, radii, typography, type ThemeColors } from "../../lib/theme";
+import { useThemedStyles } from "../../lib/theme-context";
 
 interface AuthorInfoProps {
   avatar_url?: string | null;
@@ -36,6 +37,7 @@ export const AuthorInfo = ({
   onOpenComments,
   onOpenPicker,
 }: AuthorInfoProps) => {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.authorInfo}>
       <CrownedAvatar avatar_url={avatar_url} username={username} size={36} isCrown={isCrown} />
@@ -60,23 +62,23 @@ export const AuthorInfo = ({
   );
 };
 
-const styles = StyleSheet.create({
-  authorInfo: { 
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
+  authorInfo: {
     flexDirection: "row",
     alignItems: "flex-end",
     gap: spacing.md
   },
-  usernameLine: { 
-    flexDirection: "row", 
-    alignItems: "center", 
+  usernameLine: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.sm
   },
-  username: { 
-    color: colors.white,
+  username: {
+    color: colors.text,
     fontFamily: typography.family.bold,
     fontSize: typography.size.md
   },
-  momentTime: { 
+  momentTime: {
     color: colors.textMuted,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.xs
@@ -90,10 +92,10 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: radii.full,
-    backgroundColor: colors.glass,
+    backgroundColor: colors.opacityLight,
     justifyContent: "center",
-    alignItems: "center", 
-    borderWidth: 1, 
-    borderColor: colors.glassBorder
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.cardBorder
   },
 });

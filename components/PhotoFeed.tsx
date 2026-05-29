@@ -29,7 +29,8 @@ import { VideoMoment } from "./organisms/VideoMoment";
 import { RevealIntroPage } from "./organisms/RevealIntroPage";
 import { CrownRevealPage } from "./organisms/CrownRevealPage";
 import { AnimatedPageWrapper } from "./molecules/AnimatedPageWrapper";
-import { colors, radii, typography } from "../lib/theme";
+import { radii, typography, type ThemeColors } from "../lib/theme";
+import { useTheme, useThemedStyles } from "../lib/theme-context";
 
 export { PhotoEntry, Reaction };
 
@@ -101,6 +102,8 @@ export default function PhotoFeed({
   onVoteChallenge
 }: Props) {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const scrollY = useSharedValue(0);
   const onScroll = useAnimatedScrollHandler((event) => {
     scrollY.value = event.contentOffset.y;
@@ -335,7 +338,7 @@ export default function PhotoFeed({
             <Svg width="12" height="12" viewBox="0 0 24 24" fill="none" style={{ marginRight: 5 }}>
               <Path 
                 d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" 
-                stroke={revealMsLeft < 4 * 3600000 ? colors.white : "rgba(255,255,255,0.7)"} 
+                stroke={revealMsLeft < 4 * 3600000 ? "#FFFFFF" : colors.secondary}
                 strokeWidth="2" 
                 strokeLinecap="round" 
               />
@@ -360,56 +363,56 @@ export default function PhotoFeed({
   );
 }
 
-const styles = StyleSheet.create({
-  list: { flex: 1, backgroundColor: colors.black },
-  fullscreenPage: { 
-    width: SCREEN_WIDTH, 
-    height: SCREEN_HEIGHT, 
-    justifyContent: "center", 
-    alignItems: "center", 
-    backgroundColor: colors.black, 
-    paddingHorizontal: 12 
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
+  list: { flex: 1, backgroundColor: colors.bg },
+  fullscreenPage: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.bg,
+    paddingHorizontal: 12
   },
-  separatorDay: { 
-    fontFamily: typography.family.bold, 
-    fontSize: typography.size.title, 
-    color: colors.white, 
-    textAlign: "center", 
-    letterSpacing: -2 
+  separatorDay: {
+    fontFamily: typography.family.bold,
+    fontSize: typography.size.title,
+    color: colors.text,
+    textAlign: "center",
+    letterSpacing: -2
   },
-  separatorDate: { 
-    fontFamily: typography.family.semibold, 
-    fontSize: typography.size.sm, 
-    color: "rgba(255,255,255,0.4)", 
-    textTransform: "uppercase", 
-    marginTop: 8 
+  separatorDate: {
+    fontFamily: typography.family.semibold,
+    fontSize: typography.size.sm,
+    color: colors.textTertiary,
+    textTransform: "uppercase",
+    marginTop: 8
   },
-  endLogoMark: { 
-    width: 32, 
-    height: 32, 
-    borderWidth: 2, 
-    borderColor: colors.white, 
-    borderRadius: radii.xs, 
-    marginBottom: 24, 
-    transform: [{ rotate: "45deg" }] 
+  endLogoMark: {
+    width: 32,
+    height: 32,
+    borderWidth: 2,
+    borderColor: colors.text,
+    borderRadius: radii.xs,
+    marginBottom: 24,
+    transform: [{ rotate: "45deg" }]
   },
-  endTitle: { 
-    fontFamily: typography.family.bold, 
-    fontSize: typography.size.xxl, 
-    color: colors.white 
+  endTitle: {
+    fontFamily: typography.family.bold,
+    fontSize: typography.size.xxl,
+    color: colors.text
   },
-  endSubtitle: { 
-    fontFamily: typography.family.regular, 
-    fontSize: typography.size.sm, 
-    color: "rgba(255,255,255,0.4)", 
-    marginTop: 8 
+  endSubtitle: {
+    fontFamily: typography.family.regular,
+    fontSize: typography.size.sm,
+    color: colors.textTertiary,
+    marginTop: 8
   },
-  countdownText: { 
-    fontFamily: typography.family.bold, 
-    fontSize: typography.size.subtitle, 
-    color: colors.white, 
-    marginTop: 12, 
-    letterSpacing: 2 
+  countdownText: {
+    fontFamily: typography.family.bold,
+    fontSize: typography.size.subtitle,
+    color: colors.text,
+    marginTop: 12,
+    letterSpacing: 2
   },
   revealCountdownBar: {
     position: 'absolute',
@@ -421,23 +424,23 @@ const styles = StyleSheet.create({
   revealCountdownPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: colors.opacityLight,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: radii.lg,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderColor: colors.cardBorder,
   },
   revealCountdownPillRed: {
     backgroundColor: 'rgba(255,59,48,0.2)',
     borderColor: 'rgba(255,59,48,0.4)',
   },
   revealCountdownText: {
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.secondary,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.xs,
   },
   revealCountdownTextRed: {
-    color: colors.white,
+    color: '#FFFFFF',
   },
 });

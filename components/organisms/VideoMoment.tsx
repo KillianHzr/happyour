@@ -12,7 +12,8 @@ import { SecondCaptureThumbnail } from "../molecules/SecondCaptureThumbnail";
 import { AuthorInfo } from "../molecules/AuthorInfo";
 import { ReactionsRow } from "../molecules/ReactionsRow";
 import { r2Storage } from "../../lib/r2";
-import { colors, radii, spacing, typography } from "../../lib/theme";
+import { radii, spacing, typography, type ThemeColors } from "../../lib/theme";
+import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import { PhotoEntry, Reaction } from "../../lib/feed-types";
 
 interface VideoMomentProps {
@@ -37,6 +38,9 @@ export const VideoMoment = ({
   cachedUrl
 }: VideoMomentProps) => {
   const insets = useSafeAreaInsets();
+  const { colors, mode } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+  const scrimColor = mode === "Dark" ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.85)";
   const [isPaused, setIsPaused] = useState(false);
   const [swapped, setSwapped] = useState(false);
   const isOwn = moment.user_id === currentUserId;
@@ -117,7 +121,7 @@ export const VideoMoment = ({
       const secondNote = moment.second_note;
       const textLen = secondNote?.length ?? 0;
       const fontSize = textLen <= 40 ? 32 : textLen <= 100 ? 26 : textLen <= 200 ? 21 : textLen <= 300 ? 17 : 15;
-      
+
       if (secondIsText) {
         return (
           <View style={styles.textMomentBg}>
@@ -131,7 +135,7 @@ export const VideoMoment = ({
       }
       return <PhotoImage url={secondUrl} isDrawing={secondIsDrawing} />;
     }
-    
+
     return (
       <>
         <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center" }]} pointerEvents="none">
@@ -141,7 +145,7 @@ export const VideoMoment = ({
         {isVisible && isPaused && (
           <View style={styles.pauseOverlay} pointerEvents="none">
             <View style={styles.pauseCircle}>
-              <Svg width="24" height="24" viewBox="0 0 24 24" fill={colors.white}>
+              <Svg width="24" height="24" viewBox="0 0 24 24" fill={colors.text}>
                 <Path d="M8 5v14l11-7z" />
               </Svg>
             </View>
@@ -156,8 +160,8 @@ export const VideoMoment = ({
   return (
     <View style={[styles.fullscreenPage, { paddingTop: paddingTopBottom, paddingBottom: paddingTopBottom }]}>
       <View style={styles.momentWrapper}>
-        <Pressable 
-          style={StyleSheet.absoluteFill} 
+        <Pressable
+          style={StyleSheet.absoluteFill}
           onPress={() => !swapped && setIsPaused((v) => !v)}
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
@@ -180,10 +184,10 @@ export const VideoMoment = ({
               </Reanimated.View>
             )}
             <Reanimated.View style={[styles.momentOverlay, animatedUiStyle]} pointerEvents="box-none">
-              <LinearGradient 
-                colors={["transparent", "rgba(0,0,0,0.85)"]} 
-                style={StyleSheet.absoluteFill} 
-                pointerEvents="none" 
+              <LinearGradient
+                colors={["transparent", scrimColor]}
+                style={StyleSheet.absoluteFill}
+                pointerEvents="none"
               />
               <AuthorInfo
                 avatar_url={moment.avatar_url}
@@ -196,20 +200,20 @@ export const VideoMoment = ({
                 onOpenComments={() => onOpenComments?.(moment.id, moment.user_id)}
                 onOpenPicker={() => onOpenPicker?.(moment.id)}
               />
-              <ReactionsRow 
-                reactions={moment.reactions} 
-                currentUserId={currentUserId} 
-                photoId={moment.id} 
-                crownWinnerId={crownWinnerId} 
-                onOpenPicker={onOpenPicker} 
+              <ReactionsRow
+                reactions={moment.reactions}
+                currentUserId={currentUserId}
+                photoId={moment.id}
+                crownWinnerId={crownWinnerId}
+                onOpenPicker={onOpenPicker}
               />
             </Reanimated.View>
             {hasSecond && (
               <Reanimated.View style={[StyleSheet.absoluteFill, animatedUiStyle]} pointerEvents="box-none">
-                <SecondCaptureThumbnail 
-                  secondPath={swapped ? moment.image_path : moment.second_image_path!} 
-                  secondNote={swapped ? moment.note : moment.second_note} 
-                  onPress={() => setSwapped(v => !v)} 
+                <SecondCaptureThumbnail
+                  secondPath={swapped ? moment.image_path : moment.second_image_path!}
+                  secondNote={swapped ? moment.note : moment.second_note}
+                  onPress={() => setSwapped(v => !v)}
                 />
               </Reanimated.View>
             )}
@@ -220,67 +224,67 @@ export const VideoMoment = ({
   );
 };
 
-const styles = StyleSheet.create({
-  fullscreenPage: { 
-    width: "100%", 
-    height: "100%", 
-    justifyContent: "center", 
-    alignItems: "center", 
-    backgroundColor: colors.bg, 
-    paddingHorizontal: spacing.md 
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
+  fullscreenPage: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.bg,
+    paddingHorizontal: spacing.md
   },
-  momentWrapper: { 
-    flex: 1, 
-    width: '100%', 
-    borderRadius: spacing.xxl, 
-    overflow: "hidden", 
-    backgroundColor: "transparent" 
+  momentWrapper: {
+    flex: 1,
+    width: '100%',
+    borderRadius: spacing.xxl,
+    overflow: "hidden",
+    backgroundColor: "transparent"
   },
-  groupTag: { 
-    position: "absolute", 
-    top: spacing.md + 2, 
-    left: spacing.md + 2, 
-    zIndex: 5, 
-    backgroundColor: "rgba(0,0,0,0.58)", 
-    borderRadius: radii.sm, 
-    paddingHorizontal: spacing.sm + 2, 
-    paddingVertical: spacing.xs + 1, 
-    borderWidth: 1, 
-    borderColor: colors.cardBorder 
+  groupTag: {
+    position: "absolute",
+    top: spacing.md + 2,
+    left: spacing.md + 2,
+    zIndex: 5,
+    backgroundColor: colors.opacityLight,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.xs + 1,
+    borderWidth: 1,
+    borderColor: colors.cardBorder
   },
-  groupTagText: { 
-    color: colors.white, 
-    fontSize: typography.size.xs, 
-    fontFamily: typography.family.semibold 
+  groupTagText: {
+    color: colors.text,
+    fontSize: typography.size.xs,
+    fontFamily: typography.family.semibold
   },
-  textMomentBg: { 
-    flex: 1, 
-    width: "100%", 
-    justifyContent: "center", 
-    alignItems: "center", 
-    padding: spacing.xxl, 
-    backgroundColor: colors.bg 
+  textMomentBg: {
+    flex: 1,
+    width: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.xxl,
+    backgroundColor: colors.bg
   },
-  quoteContainer: { 
-    width: "100%", 
-    alignItems: "center", 
-    gap: spacing.xxl 
+  quoteContainer: {
+    width: "100%",
+    alignItems: "center",
+    gap: spacing.xxl
   },
-  textMomentContent: { 
-    fontFamily: typography.family.bold, 
-    color: colors.white, 
-    textAlign: "center", 
-    letterSpacing: -0.5 
+  textMomentContent: {
+    fontFamily: typography.family.bold,
+    color: colors.text,
+    textAlign: "center",
+    letterSpacing: -0.5
   },
-  momentOverlay: { 
-    position: "absolute", 
-    bottom: 0, 
-    left: 0, 
-    right: 0, 
-    padding: spacing.xl + 2, 
-    paddingBottom: spacing.xxl, 
-    paddingTop: 80, 
-    gap: spacing.md + 2 
+  momentOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: spacing.xl + 2,
+    paddingBottom: spacing.xxl,
+    paddingTop: 80,
+    gap: spacing.md + 2
   },
   downloadBtnContainer: {
     position: "absolute",
@@ -288,17 +292,17 @@ const styles = StyleSheet.create({
     right: spacing.md + 2,
     zIndex: 10,
   },
-  pauseOverlay: { 
-    ...StyleSheet.absoluteFillObject, 
-    justifyContent: "center", 
-    alignItems: "center" 
+  pauseOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center"
   },
-  pauseCircle: { 
-    width: 64, 
-    height: 64, 
-    borderRadius: radii.xl, 
-    backgroundColor: colors.overlay, 
-    justifyContent: "center", 
-    alignItems: "center" 
+  pauseCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: radii.xl,
+    backgroundColor: colors.opacityLight,
+    justifyContent: "center",
+    alignItems: "center"
   },
 });

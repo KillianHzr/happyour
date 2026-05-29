@@ -4,7 +4,8 @@ import {
   Pressable, View, Easing, KeyboardAvoidingView, Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { radii } from "../lib/theme";
+import { radii, type ThemeColors } from "../lib/theme";
+import { useThemedStyles } from "../lib/theme-context";
 
 
 type Props = {
@@ -15,6 +16,7 @@ type Props = {
 
 export default function BottomSheet({ visible, onClose, children }: Props) {
   const insets = useSafeAreaInsets();
+  const styles = useThemedStyles(makeStyles);
   const [mounted, setMounted] = useState(false);
   const overlayAnim = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(600)).current;
@@ -133,14 +135,14 @@ export default function BottomSheet({ visible, onClose, children }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   root: { flex: 1, justifyContent: "flex-end" },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.72)",
+    backgroundColor: colors.opacityLight,
   },
   sheet: {
-    backgroundColor: "#161616",
+    backgroundColor: colors.card,
     borderTopLeftRadius: radii.xl,
     borderTopRightRadius: radii.xl,
     paddingHorizontal: 24,
@@ -153,7 +155,7 @@ const styles = StyleSheet.create({
   },
   handle: {
     width: 36, height: 4,
-    backgroundColor: "rgba(255,255,255,0.25)",
+    backgroundColor: colors.borderSecondary,
     borderRadius: radii.xs,
   },
 });

@@ -1,7 +1,6 @@
 import React, { forwardRef, useImperativeHandle, useRef, useState, useEffect } from "react";
 import { View, StyleSheet, PanResponder } from "react-native";
 import { Canvas, Path, Fill, Skia, useCanvasRef } from "@shopify/react-native-skia";
-import { colors } from "../lib/theme";
 import * as FileSystem from "expo-file-system/legacy";
 
 export interface DrawingCanvasRef {
@@ -121,7 +120,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { color: string; strok
         {...panResponder.panHandlers}
       >
         <Canvas ref={canvasRef} style={StyleSheet.absoluteFill}>
-          <Fill color={colors.white} />
+          <Fill color="#FFFFFF" />
           {completedStrokes.map((stroke, i) => (
             <Path
               key={i}

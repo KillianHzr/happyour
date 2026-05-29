@@ -6,6 +6,7 @@ import { View, StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import * as Updates from "expo-updates";
 import { AuthProvider } from "../lib/auth-context";
+import { ThemeProvider, useTheme } from "../lib/theme-context";
 import { UploadProvider } from "../lib/upload-context";
 import { ToastProvider } from "../lib/toast-context";
 import { setupNotificationHandler } from "../lib/notifications";
@@ -39,24 +40,32 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
-        <UploadProvider>
-          <ToastProvider>
-            <View style={{ flex: 1 }}>
-              <StatusBar style="light" />
-              {!splashDone && (
-                <SplashScreen ready={appReady} onFinish={() => setSplashDone(true)} />
-              )}
-              {appReady && (
-                <View style={splashDone ? styles.visible : styles.hidden}>
-                  <Slot />
-                </View>
-              )}
-            </View>
-          </ToastProvider>
-        </UploadProvider>
+        <ThemeProvider>
+          <UploadProvider>
+            <ToastProvider>
+              <View style={{ flex: 1 }}>
+                <ThemedStatusBar />
+                {!splashDone && (
+                  <SplashScreen ready={appReady} onFinish={() => setSplashDone(true)} />
+                )}
+                {appReady && (
+                  <View style={splashDone ? styles.visible : styles.hidden}>
+                    <Slot />
+                  </View>
+                )}
+              </View>
+            </ToastProvider>
+          </UploadProvider>
+        </ThemeProvider>
       </AuthProvider>
     </GestureHandlerRootView>
   );
+}
+
+/** StatusBar dont le style suit le mode de thème actif. */
+function ThemedStatusBar() {
+  const { mode } = useTheme();
+  return <StatusBar style={mode === "Dark" ? "light" : "dark"} />;
 }
 
 async function checkOTAUpdate() {

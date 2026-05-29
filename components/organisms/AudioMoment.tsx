@@ -4,7 +4,8 @@ import Reanimated, { useSharedValue, useAnimatedStyle, withTiming } from "react-
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
-import { colors, spacing, radii, typography } from "../../lib/theme";
+import { spacing, radii, typography, type ThemeColors } from "../../lib/theme";
+import { useTheme, useThemedStyles } from "../../lib/theme-context";
 
 import { PhotoImage } from "../atoms/PhotoImage";
 import { DownloadButton } from "../atoms/DownloadButton";
@@ -37,6 +38,9 @@ export const AudioMoment = ({
   onScrollLock
 }: AudioMomentProps) => {
   const insets = useSafeAreaInsets();
+  const { mode } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+  const scrimColor = mode === "Dark" ? "rgba(0,0,0,0.92)" : "rgba(255,255,255,0.92)";
   const [swapped, setSwapped] = useState(false);
   const isOwn = moment.user_id === currentUserId;
 
@@ -51,8 +55,8 @@ export const AudioMoment = ({
   const player = useAudioPlayer(!swapped ? moment.url : "");
   const status = useAudioPlayerStatus(player);
 
-  useEffect(() => { 
-    if (!isVisible) player.pause(); 
+  useEffect(() => {
+    if (!isVisible) player.pause();
   }, [isVisible]);
 
   const handlePressIn = () => {
@@ -78,7 +82,7 @@ export const AudioMoment = ({
       const secondNote = moment.second_note;
       const textLen = secondNote?.length ?? 0;
       const fontSize = textLen <= 40 ? 32 : textLen <= 100 ? 26 : textLen <= 200 ? 21 : textLen <= 300 ? 17 : 15;
-      
+
       if (secondIsText) {
         return (
           <View style={styles.textMomentBg}>
@@ -119,10 +123,10 @@ export const AudioMoment = ({
               </Reanimated.View>
             )}
             <Reanimated.View style={[styles.momentOverlay, animatedUiStyle]} pointerEvents="box-none">
-              <LinearGradient 
-                colors={["transparent", "rgba(0,0,0,0.92)"]} 
-                style={StyleSheet.absoluteFill} 
-                pointerEvents="none" 
+              <LinearGradient
+                colors={["transparent", scrimColor]}
+                style={StyleSheet.absoluteFill}
+                pointerEvents="none"
               />
               <AuthorInfo
                 avatar_url={moment.avatar_url}
@@ -135,12 +139,12 @@ export const AudioMoment = ({
                 onOpenComments={() => onOpenComments?.(moment.id, moment.user_id)}
                 onOpenPicker={() => onOpenPicker?.(moment.id)}
               />
-              <ReactionsRow 
-                reactions={moment.reactions} 
-                currentUserId={currentUserId} 
-                photoId={moment.id} 
-                crownWinnerId={crownWinnerId} 
-                onOpenPicker={onOpenPicker} 
+              <ReactionsRow
+                reactions={moment.reactions}
+                currentUserId={currentUserId}
+                photoId={moment.id}
+                crownWinnerId={crownWinnerId}
+                onOpenPicker={onOpenPicker}
               />
             </Reanimated.View>
             {hasSecond && (
@@ -159,67 +163,67 @@ export const AudioMoment = ({
   );
 };
 
-const styles = StyleSheet.create({
-  fullscreenPage: { 
-    width: "100%", 
-    height: "100%", 
-    justifyContent: "center", 
-    alignItems: "center", 
-    backgroundColor: colors.black, 
-    paddingHorizontal: spacing.md 
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
+  fullscreenPage: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.bg,
+    paddingHorizontal: spacing.md
   },
-  momentWrapper: { 
-    flex: 1, 
-    width: '100%', 
-    borderRadius: radii.xl, 
-    overflow: "hidden", 
-    backgroundColor: "transparent" 
+  momentWrapper: {
+    flex: 1,
+    width: '100%',
+    borderRadius: radii.xl,
+    overflow: "hidden",
+    backgroundColor: "transparent"
   },
-  groupTag: { 
-    position: "absolute", 
-    top: spacing.md, 
-    left: spacing.md, 
-    zIndex: 5, 
-    backgroundColor: colors.overlay, 
-    borderRadius: radii.md, 
-    paddingHorizontal: 10, 
-    paddingVertical: 5, 
-    borderWidth: 1, 
-    borderColor: colors.cardBorder 
+  groupTag: {
+    position: "absolute",
+    top: spacing.md,
+    left: spacing.md,
+    zIndex: 5,
+    backgroundColor: colors.opacityLight,
+    borderRadius: radii.md,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: colors.cardBorder
   },
-  groupTagText: { 
-    color: colors.white, 
-    fontSize: typography.size.xs, 
-    fontFamily: typography.family.semibold 
+  groupTagText: {
+    color: colors.text,
+    fontSize: typography.size.xs,
+    fontFamily: typography.family.semibold
   },
-  textMomentBg: { 
-    flex: 1, 
-    width: "100%", 
-    justifyContent: "center", 
-    alignItems: "center", 
-    padding: spacing.xxl, 
-    backgroundColor: colors.black 
+  textMomentBg: {
+    flex: 1,
+    width: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.xxl,
+    backgroundColor: colors.bg
   },
-  quoteContainer: { 
-    width: "100%", 
-    alignItems: "center", 
-    gap: spacing.xxl 
+  quoteContainer: {
+    width: "100%",
+    alignItems: "center",
+    gap: spacing.xxl
   },
-  textMomentContent: { 
-    fontFamily: typography.family.bold, 
-    color: colors.white, 
-    textAlign: "center", 
-    letterSpacing: -0.5 
+  textMomentContent: {
+    fontFamily: typography.family.bold,
+    color: colors.text,
+    textAlign: "center",
+    letterSpacing: -0.5
   },
-  momentOverlay: { 
-    position: "absolute", 
-    bottom: 0, 
-    left: 0, 
-    right: 0, 
-    padding: spacing.xl, 
-    paddingBottom: spacing.xxl, 
-    paddingTop: 80, 
-    gap: spacing.md 
+  momentOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: spacing.xl,
+    paddingBottom: spacing.xxl,
+    paddingTop: 80,
+    gap: spacing.md
   },
   downloadBtnContainer: {
     position: "absolute",

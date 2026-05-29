@@ -1,13 +1,15 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { CloseIcon } from "../atoms/CloseIcon";
-import { colors, spacing, radii, typography } from "../../lib/theme";
+import { spacing, radii, typography, type ThemeColors } from "../../lib/theme";
+import { useThemedStyles } from "../../lib/theme-context";
 
 interface CommentModalHeaderProps {
   onClose: () => void;
 }
 
 export const CommentModalHeader = ({ onClose }: CommentModalHeaderProps) => {
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.header}>
       <View style={styles.headerIndicator} />
@@ -21,10 +23,10 @@ export const CommentModalHeader = ({ onClose }: CommentModalHeaderProps) => {
   );
 };
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   header: {
     width: "100%",
-    backgroundColor: colors.glassMuted,
+    backgroundColor: colors.card,
     borderTopLeftRadius: radii.xl,
     borderTopRightRadius: radii.xl,
     overflow: "hidden",
@@ -32,7 +34,7 @@ const styles = StyleSheet.create({
   headerIndicator: {
     width: 40,
     height: 4,
-    backgroundColor: colors.glass,
+    backgroundColor: colors.borderSecondary,
     borderRadius: radii.xs,
     alignSelf: "center",
     marginTop: spacing.md,
@@ -49,7 +51,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontFamily: typography.family.bold,
     fontSize: typography.size.lg,
-    color: colors.white,
+    color: colors.text,
     letterSpacing: 0.5,
   },
   closeBtn: {
@@ -61,4 +63,3 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 });
-

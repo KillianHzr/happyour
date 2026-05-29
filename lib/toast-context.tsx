@@ -10,7 +10,7 @@ import {
 import { BlurView } from "expo-blur";
 import Svg, { Path, Circle } from "react-native-svg";
 import { useUpload } from "./upload-context";
-import { colors, radii, typography } from "./theme";
+import { radii, typography } from "./theme";
 
 
 
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderWidth: 1,
     borderColor: "rgba(0,0,0,0.06)",
-    shadowColor: colors.black,
+    shadowColor: "#000000",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.12,
     shadowRadius: 16,
