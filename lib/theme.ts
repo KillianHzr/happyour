@@ -125,16 +125,16 @@ export const palette = {
     1000: resolveToken("Primitives/color/slate/1000", "Value") as string,   // #242424
   },
   brand: {
-    100:  resolveToken("Primitives/color/brand/100",  "Value") as string,   // #FFE5EF
-    200:  resolveToken("Primitives/color/brand/200",  "Value") as string,   // #FFB2D0
-    300:  resolveToken("Primitives/color/brand/300",  "Value") as string,   // #FF80B1
-    400:  resolveToken("Primitives/color/brand/400",  "Value") as string,   // #FF4D91
-    500:  resolveToken("Primitives/color/brand/500",  "Value") as string,   // #FF1A72
-    600:  resolveToken("Primitives/color/brand/600",  "Value") as string,   // #E50058
-    700:  resolveToken("Primitives/color/brand/700",  "Value") as string,   // #B20045
-    800:  resolveToken("Primitives/color/brand/800",  "Value") as string,   // #800031
-    900:  resolveToken("Primitives/color/brand/900",  "Value") as string,   // #4D001D
-    1000: resolveToken("Primitives/color/brand/1000", "Value") as string,   // #1A000A
+    100:  resolveToken("Primitives/color/brand/100",  "Value") as string,   // #FFECE5
+    200:  resolveToken("Primitives/color/brand/200",  "Value") as string,   // #FFC7B2
+    300:  resolveToken("Primitives/color/brand/300",  "Value") as string,   // #FFA180
+    400:  resolveToken("Primitives/color/brand/400",  "Value") as string,   // #FF7B4D
+    500:  resolveToken("Primitives/color/brand/500",  "Value") as string,   // #FF561A
+    600:  resolveToken("Primitives/color/brand/600",  "Value") as string,   // #E53C00
+    700:  resolveToken("Primitives/color/brand/700",  "Value") as string,   // #B22F00
+    800:  resolveToken("Primitives/color/brand/800",  "Value") as string,   // #802100
+    900:  resolveToken("Primitives/color/brand/900",  "Value") as string,   // #4D1400
+    1000: resolveToken("Primitives/color/brand/1000", "Value") as string,   // #1A0700
   },
   red: {
     100:  resolveToken("Primitives/color/red/100",  "Value") as string,     // #FEE9E7
@@ -245,8 +245,9 @@ export const buildColors = (mode: ThemeMode) => ({
   cardHover:             resolveToken("-> Color/background/default/secondary-hover",  mode), // #1E1E1E
   accentMuted:           resolveToken("-> Color/background/default/tertiary",         mode), // #444444
   bgTertiaryHover:       resolveToken("-> Color/background/default/tertiary-hover",   mode), // #383838
-  opacityLight:          resolveToken("-> Color/background/default/opacity-light",    mode), // rgba(12,12,13,0.4)
-  opacityDark:           resolveToken("-> Color/background/default/opacity-dark",     mode), // rgba(255,255,255,0.3)
+  opacityLight:          resolveToken("-> Color/background/default/default-opacity",   mode), // Dark: rgba(12,12,13,0.4)  (ex "opacity-light")
+  opacityDark:           resolveToken("-> Color/background/default/secondary-opacity", mode), // Dark: rgba(12,12,13,0.1)  (ex "opacity-dark")
+  bgInverse:             resolveToken("-> Color/background/default/default-inverse",   mode), // Dark: #FFFFFF / Light: #0C0C0D
 
   // ── Background / Fond neutre ──────────────────────────────────────────────
   bgNeutral:                resolveToken("-> Color/background/neutral/default",             mode),
@@ -257,9 +258,9 @@ export const buildColors = (mode: ThemeMode) => ({
   bgNeutralTertiaryHover:   resolveToken("-> Color/background/neutral/tertiary-hover",      mode),
 
   // ── Background / Fond brand ───────────────────────────────────────────────
-  brand:                 resolveToken("-> Color/background/brand/default",            mode), // #FF4D91
-  brandHover:            resolveToken("-> Color/background/brand/default-hover",      mode), // #FF80B1
-  brandSecondary:        resolveToken("-> Color/background/brand/secondary",          mode), // #E50058
+  brand:                 resolveToken("-> Color/background/brand/default",            mode), // #FF561A (brand/500, Light+Dark)
+  brandHover:            resolveToken("-> Color/background/brand/default-hover",      mode),
+  brandSecondary:        resolveToken("-> Color/background/brand/secondary",          mode),
   brandSecondaryHover:   resolveToken("-> Color/background/brand/secondary-hover",    mode),
   brandTertiary:         resolveToken("-> Color/background/brand/tertiary",           mode),
   brandTertiaryHover:    resolveToken("-> Color/background/brand/tertiary-hover",     mode),
@@ -511,9 +512,27 @@ export const depth = {
 // ─── Flou (mode-indépendant) ──────────────────────────────────────────────────
 export const blur = {
   sm: resolveToken("-> Size/blur/100",  "Value") as number,  // 4
-  md: resolveToken("-> Size/blur/400",  "Value") as number,  // 16
-  lg: resolveToken("-> Size/blur/1200", "Value") as number,  // 48
+  md: resolveToken("-> Size/blur/400",  "Value") as number,  // 16  (= effect style blur/glass)
+  lg: resolveToken("-> Size/blur/1200", "Value") as number,  // 48  (= blur/overlay, blur/layer)
+  xl: resolveToken("-> Size/blur/2400", "Value") as number,  // 96  (= blur/background-blur)
 } as const;
+
+/**
+ * Conversion taille de flou (px, issue des design tokens) → `intensity` d'expo-blur (1–100).
+ *
+ * `expo-blur` n'accepte pas de rayon en px : sur iOS c'est un material système
+ * réglé en intensité 0–100, sans rayon gaussien. On approxime donc linéairement.
+ * IMPORTANT : tout est dérivé des tokens — si les designers changent `blur/*`,
+ * l'intensité recalculée suit automatiquement (rien n'est codé en dur ailleurs).
+ *
+ * `BLUR_PX_TO_INTENSITY` est le seul facteur d'ajustement (calage visuel).
+ */
+const BLUR_PX_TO_INTENSITY = 3;
+export const blurIntensity = (px: number): number =>
+  Math.max(1, Math.min(100, Math.round(px * BLUR_PX_TO_INTENSITY)));
+
+/** Intensité du flou "glass" (frosted), dérivée du token blur/glass (= blur.md). */
+export const glassBlurIntensity = blurIntensity(blur.md);
 
 // ─── Épaisseurs de trait (mode-indépendantes) ────────────────────────────────
 export const stroke = {
@@ -538,7 +557,7 @@ export const typography = {
     extrabold: "Inter_800ExtraBold",
   },
   size: {
-    xxs:          resolveToken("-> Typography/body/size-extra-small",  "Value") as number,  // 10
+    xxs:          resolveToken("-> Typography/body/size-extra-small",  "Value") as number,  // 12 (ex 10)
     xs:           resolveToken("Primitives/typography/scale-01",       "Value") as number,  // 12
     sm:           resolveToken("-> Typography/body/size-small",        "Value") as number,  // 14
     md:           resolveToken("-> Typography/body/size-medium",       "Value") as number,  // 16
@@ -592,6 +611,9 @@ export const textStyles = {
   bodyEmphasis:    resolveTextStyle("body-emphasis",    "Light"),
   bodySmall:       resolveTextStyle("body-small",       "Light"),
   bodySmallStrong: resolveTextStyle("body-small-strong", "Light"),
+  bodyExtraSmall:       resolveTextStyle("body-extra-small",        "Light"),
+  bodyExtraSmallStrong: resolveTextStyle("body-extra-small-strong", "Light"),
+  bodyCode:        resolveTextStyle("body-code",        "Light"),
   subheading:      resolveTextStyle("subheading",       "Light"),
   heading:         resolveTextStyle("heading",          "Light"),
   subtitle:        resolveTextStyle("subtitle",         "Light"),
