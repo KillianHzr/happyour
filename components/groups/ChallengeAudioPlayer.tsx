@@ -5,6 +5,11 @@ import Svg, { Path } from "react-native-svg";
 import { radii, typography, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
 
+interface ChallengeAudioPlayerProps {
+  url: string;
+  waveform?: number[];
+}
+
 const WAVE_HEIGHTS = [18, 32, 48, 36, 60, 80, 52, 68, 42, 62, 88, 72, 50, 38, 68, 82, 58, 44, 28, 52, 72, 56, 78, 46, 36, 62, 50, 66, 42, 28];
 const SPEEDS = [0.5, 1, 1.5, 2];
 
@@ -15,7 +20,22 @@ function fmtAudio(s: number): string {
   return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
-export default function ChallengeAudioPlayer({ url }: { url: string }) {
+function compressWaveform(data: number[], maxBars: number): number[] {
+  if (!data || data.length === 0) return [];
+  if (data.length <= maxBars) return data;
+  const result: number[] = [];
+  const chunkSize = data.length / maxBars;
+  for (let i = 0; i < maxBars; i++) {
+    const start = Math.floor(i * chunkSize);
+    const end = Math.floor((i + 1) * chunkSize);
+    const slice = data.slice(start, end);
+    const avg = slice.reduce((sum, val) => sum + val, 0) / (slice.length || 1);
+    result.push(avg);
+  }
+  return result;
+}
+
+export default function ChallengeAudioPlayer({ url, waveform }: ChallengeAudioPlayerProps) {
   const { colors } = useTheme();
   const s = useThemedStyles(makeStyles);
   const player = useAudioPlayer(url);
@@ -104,11 +124,16 @@ export default function ChallengeAudioPlayer({ url }: { url: string }) {
     })
   ).current;
 
+  // Use provided waveform or fallback to hardcoded
+  const bars = waveform && waveform.length > 0 
+    ? compressWaveform(waveform, 40).map(v => v * 32) 
+    : WAVE_HEIGHTS;
+
   return (
     <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", gap: 24, paddingHorizontal: 16 }]}>
       <View style={s.waveContainer} pointerEvents="none">
-        {WAVE_HEIGHTS.map((h, i) => (
-          <View key={i} style={[s.waveBar, { height: h, opacity: progress > i / WAVE_HEIGHTS.length ? 0.9 : 0.25 }]} />
+        {bars.map((h, i) => (
+          <View key={i} style={[s.waveBar, { height: h, opacity: progress > i / bars.length ? 0.9 : 0.25 }]} />
         ))}
       </View>
       <View style={s.playerRow}>
@@ -120,39 +145,35 @@ export default function ChallengeAudioPlayer({ url }: { url: string }) {
             }
           </Svg>
         </TouchableOpacity>
-        <TouchableOpacity onPress={cycleSpeed} style={s.speedBtn} activeOpacity={0.8}>
-          <Text style={s.speedText}>
-            {playbackSpeed === 0.5 ? "×0.5" : playbackSpeed === 1 ? "×1" : playbackSpeed === 1.5 ? "×1.5" : "×2"}
-          </Text>
-        </TouchableOpacity>
+
         <View style={s.progressWrapper}>
           <View
             style={s.seekHitArea}
-            onLayout={(e) => { seekWidthRef.current = e.nativeEvent.layout.width; }}
+            onLayout={(e) => { seekWidthRef.current = e.nativeEvent.layout.width || 1; }}
             {...seekPan.panHandlers}
           >
             <View style={s.seekTrack}>
-              <View ref={fillRef} style={[s.seekFill, { width: `${progress * 100}%` as any }]} />
+              <View ref={fillRef} style={[s.seekFill, { width: `${progress * 100}%` }]} />
             </View>
-            <View
-              ref={thumbRef}
-              style={[s.seekThumb, { left: `${Math.min(progress * 100, 100)}%` as any }]}
-              pointerEvents="none"
-            />
+            <View ref={thumbRef} style={[s.seekThumb, { left: `${Math.min(progress * 100, 100)}%` }]} pointerEvents="none" />
           </View>
           <View style={s.timesRow}>
             <Text style={s.timeText}>{fmtAudio(status.currentTime)}</Text>
             <Text style={s.timeText}>{fmtAudio(status.duration)}</Text>
           </View>
         </View>
+
+        <TouchableOpacity style={s.speedBtn} onPress={cycleSpeed}>
+          <Text style={s.speedText}>{playbackSpeed}x</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
 }
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
-  waveContainer: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 3 },
-  waveBar: { width: 3, borderRadius: radii.xs, backgroundColor: colors.text },
+  waveContainer: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 3.5 },
+  waveBar: { width: 3.5, borderRadius: radii.xs, backgroundColor: colors.text },
   playerRow: { flexDirection: "row", alignItems: "center", gap: 14, alignSelf: "stretch" },
   playBtn: { width: 52, height: 52, borderRadius: radii.full, backgroundColor: colors.accentMuted, justifyContent: "center", alignItems: "center" },
   speedBtn: { width: 40, height: 28, borderRadius: radii.sm, backgroundColor: colors.accentMuted, justifyContent: "center", alignItems: "center" },

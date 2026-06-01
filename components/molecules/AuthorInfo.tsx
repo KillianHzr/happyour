@@ -7,11 +7,18 @@ import { PlusIcon } from "../atoms/PlusIcon";
 import { spacing, radii, typography, type ThemeColors } from "../../lib/theme";
 import { useThemedStyles } from "../../lib/theme-context";
 
+import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import { AudioCaptionPlayer } from "./AudioCaptionPlayer";
+
 interface AuthorInfoProps {
   avatar_url?: string | null;
   username: string;
   created_at: string;
   note?: string | null;
+  audioPlayer?: ReturnType<typeof useAudioPlayer>;
+  audioStatus?: ReturnType<typeof useAudioPlayerStatus>;
+  onScrollLock?: (locked: boolean) => void;
+  captionWaveform?: number[];
   isCrown: boolean;
   isOwn: boolean;
   hasNewComments?: boolean;
@@ -31,6 +38,10 @@ export const AuthorInfo = ({
   username,
   created_at,
   note,
+  audioPlayer,
+  audioStatus,
+  onScrollLock,
+  captionWaveform,
   isCrown,
   isOwn,
   hasNewComments,
@@ -38,15 +49,29 @@ export const AuthorInfo = ({
   onOpenPicker,
 }: AuthorInfoProps) => {
   const styles = useThemedStyles(makeStyles);
+  const hasAudio = !!(audioPlayer && audioStatus);
+
   return (
-    <View style={styles.authorInfo}>
+    <View style={[styles.authorInfo, hasAudio && { alignItems: "center" }]}>
       <CrownedAvatar avatar_url={avatar_url} username={username} size={36} isCrown={isCrown} />
-      <View style={{ flex: 1 }}>
-        <View style={styles.usernameLine}>
-          <Text style={styles.username}>{username}</Text>
-          <Text style={styles.momentTime}>{formatTime(created_at)}</Text>
-        </View>
-        {note && <ExpandableNote text={note} maxLines={2} />}
+      <View style={{ flex: 1, gap: 4 }}>
+        {!hasAudio && (
+          <View style={styles.usernameLine}>
+            <Text style={styles.username}>{username}</Text>
+            <Text style={styles.momentTime}>{formatTime(created_at)}</Text>
+          </View>
+        )}
+        {hasAudio ? (
+          <View style={{ gap: 2 }}>
+            <View style={[styles.usernameLine, { marginBottom: 2 }]}>
+              <Text style={styles.username}>{username}</Text>
+              <Text style={styles.momentTime}>{formatTime(created_at)}</Text>
+            </View>
+            <AudioCaptionPlayer player={audioPlayer!} status={audioStatus!} onScrollLock={onScrollLock} waveform={captionWaveform} />
+          </View>
+        ) : (
+          note && <ExpandableNote text={note} maxLines={2} />
+        )}
       </View>
       <View style={styles.actionsColumn}>
         {!isOwn && (
@@ -76,17 +101,17 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   username: {
     color: colors.text,
     fontFamily: typography.family.bold,
-    fontSize: typography.size.md
+    fontSize: typography.size.md,
   },
   momentTime: {
     color: colors.textMuted,
-    fontFamily: typography.family.semibold,
-    fontSize: typography.size.xs
+    fontSize: typography.size.xs,
+    fontFamily: typography.family.regular,
   },
   actionsColumn: {
-    flexDirection: "column",
-    gap: 12,
+    flexDirection: "row",
     alignItems: "center",
+    gap: spacing.md,
   },
   reactBtnInline: {
     width: 42,

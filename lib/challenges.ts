@@ -32,6 +32,7 @@ export type ChallengeResponse = {
   note: string | null;
   second_note: string | null;
   is_target_response: boolean;
+  waveform?: number[] | null;
   created_at: string;
   url: string;
   username: string;

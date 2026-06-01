@@ -611,7 +611,7 @@ function VcModalMedia({ imagePath, url, note }: { imagePath: string | null; url:
   }
   if (type === "audio") {
     if (!url) return null;
-    return <ChallengeAudioPlayer key={url} url={url} />;
+    return <ChallengeAudioPlayer key={url} url={url} waveform={undefined} />;
   }
   if (type === "drawing") {
     return (

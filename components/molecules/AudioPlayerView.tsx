@@ -9,9 +9,10 @@ interface AudioPlayerViewProps {
   player: ReturnType<typeof useAudioPlayer>;
   status: ReturnType<typeof useAudioPlayerStatus>;
   onScrollLock?: (locked: boolean) => void;
+  waveform?: number[];
 }
 
-const WAVE_HEIGHTS = [18, 32, 48, 36, 60, 80, 52, 68, 42, 62, 88, 72, 50, 38, 68, 82, 58, 44, 28, 52, 72, 56, 78, 46, 36, 62, 50, 66, 42, 28];
+const FALLBACK_WAVE_HEIGHTS = [18, 32, 48, 36, 60, 80, 52, 68, 42, 62, 88, 72, 50, 38, 68, 82, 58, 44, 28, 52, 72, 56, 78, 46, 36, 62, 50, 66, 42, 28];
 
 function fmtAudio(s: number) {
   if (!isFinite(s) || isNaN(s)) return "0:00";
@@ -20,7 +21,22 @@ function fmtAudio(s: number) {
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
-export const AudioPlayerView = ({ player, status, onScrollLock }: AudioPlayerViewProps) => {
+function compressWaveform(data: number[], maxBars: number): number[] {
+  if (!data || data.length === 0) return [];
+  if (data.length <= maxBars) return data;
+  const result: number[] = [];
+  const chunkSize = data.length / maxBars;
+  for (let i = 0; i < maxBars; i++) {
+    const start = Math.floor(i * chunkSize);
+    const end = Math.floor((i + 1) * chunkSize);
+    const slice = data.slice(start, end);
+    const max = slice.reduce((m, val) => Math.max(m, val), 0);
+    result.push(max);
+  }
+  return result;
+}
+
+export const AudioPlayerView = ({ player, status, onScrollLock, waveform }: AudioPlayerViewProps) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
@@ -100,11 +116,16 @@ export const AudioPlayerView = ({ player, status, onScrollLock }: AudioPlayerVie
     })
   ).current;
 
+  // Use provided waveform or fallback to hardcoded
+  const bars = waveform && waveform.length > 0 
+    ? compressWaveform(waveform, 40).map(v => v * 80) 
+    : FALLBACK_WAVE_HEIGHTS;
+
   return (
     <View style={styles.container}>
       <View style={styles.audioWaveContainer} pointerEvents="none">
-        {WAVE_HEIGHTS.map((h, i) => (
-          <View key={i} style={[styles.audioWaveBar, { height: h, opacity: progress > i / WAVE_HEIGHTS.length ? 0.9 : 0.25 }]} />
+        {bars.map((h, i) => (
+          <View key={i} style={[styles.audioWaveBar, { height: Math.max(3.5, h), opacity: progress > i / bars.length ? 1 : 0.25 }]} />
         ))}
       </View>
       <View style={styles.audioPlayerRow}>
@@ -114,7 +135,7 @@ export const AudioPlayerView = ({ player, status, onScrollLock }: AudioPlayerVie
           </Svg>
         </TouchableOpacity>
         <TouchableOpacity onPress={cycleSpeed} style={styles.audioSpeedBtn}>
-          <Text style={styles.audioSpeedText}>{playbackSpeed === 0.5 ? "×0.5" : playbackSpeed === 1 ? "×1" : playbackSpeed === 1.5 ? "×1.5" : "×2"}</Text>
+          <Text style={styles.audioSpeedText}>{playbackSpeed === 0.5 ? "x0.5" : playbackSpeed === 1 ? "x1" : playbackSpeed === 1.5 ? "x1.5" : "x2"}</Text>
         </TouchableOpacity>
         <View style={styles.audioProgressWrapper}>
           <View style={styles.audioSeekHitArea} onLayout={(e) => { seekWidthRef.current = e.nativeEvent.layout.width; }} {...seekPan.panHandlers}>
@@ -146,10 +167,10 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 3
+    gap: 3.5
   },
   audioWaveBar: {
-    width: 3,
+    width: 3.5,
     borderRadius: radii.xs,
     backgroundColor: colors.text
   },
