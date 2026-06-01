@@ -71,7 +71,12 @@ class CameraErrorBoundary extends Component<{ children: React.ReactNode }, { has
 
 function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, onHideMenu, onCaptureSent }: Props) {
   const insets = useSafeAreaInsets();
+  const { width: winWidth, height: winHeight } = useWindowDimensions();
   const { colors } = useTheme();
+
+  // Haut du cadre caméra (9/16, ancré en bas, au-dessus de la nav).
+  // Sur tous les formats d'écran le bouton Défis sera à exactement CHALLENGE_GAP px sous ce bord.
+  const cameraFrameTop = winHeight - NAVBAR_HEIGHT - winWidth * (16 / 9);
   const styles = useThemedStyles(makeStyles);
   const challengeStyles = useThemedStyles(makeChallengeStyles);
   const pickerStyles = useThemedStyles(makePickerStyles);
@@ -865,7 +870,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
           {/* Challenge top area (button or active banner) */}
           {!capturingSecond && !isRecording && !(cameraMode === "DESSIN" && canUndo) && (
             activeChallenge === null ? (
-              <View style={[challengeStyles.topContainer, { paddingTop: Math.max(insets.top, 12) + 12 + CHALLENGE_GAP }]} pointerEvents="box-none">
+              <View style={[challengeStyles.topContainer, { paddingTop: cameraFrameTop + CHALLENGE_GAP }]} pointerEvents="box-none">
                 <TouchableOpacity
                   style={challengeStyles.challengeBtn}
                   onPress={() => setShowChallengesModal(true)}
@@ -876,7 +881,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 </TouchableOpacity>
               </View>
             ) : (
-              <View style={[challengeStyles.topContainer, { top: Math.max(insets.top, 12) + 12, left: 12, right: 12 }]} pointerEvents="box-none">
+              <View style={[challengeStyles.topContainer, { top: cameraFrameTop, left: 12, right: 12 }]} pointerEvents="box-none">
                 <View style={challengeStyles.bannerRow} pointerEvents="box-none">
                   <TouchableOpacity
                     style={challengeStyles.bannerClose}

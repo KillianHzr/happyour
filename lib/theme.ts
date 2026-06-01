@@ -636,6 +636,7 @@ export const textStyles = {
   bodyCode:        resolveTextStyle("body-code",        "Light"),
   singleLineBodyBaseStrong: resolveTextStyle("single-line/body-base-strong", "Light"),
   singleLineBodySmall:      resolveTextStyle("single-line/body-small",       "Light"),
+  singleLineBodyExtraSmallStrong: resolveTextStyle("single-line/body-extra-small-strong", "Light"),
   subheading:      resolveTextStyle("subheading",       "Light"),
   heading:         resolveTextStyle("heading",          "Light"),
   subtitle:        resolveTextStyle("subtitle",         "Light"),

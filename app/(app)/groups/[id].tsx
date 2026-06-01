@@ -31,7 +31,8 @@ import BottomSheet from "../../../components/BottomSheet";
 import LiveReactions from "../../../components/reveal/LiveReactions";
 import MotivationalNotificationsModal from "../../../components/MotivationalNotificationsModal";
 import { scheduleImmediateLocalNotification, scheduleFirstMomentReminder, notifyReaction } from "../../../lib/notifications";
-import { radii, typography, type ThemeColors } from "../../../lib/theme";
+import { radii, spacing, typography, textStyles, type ThemeColors } from "../../../lib/theme";
+import Icon from "../../../components/Icon";
 import { useTheme, useThemedStyles } from "../../../lib/theme-context";
 
 const isEmoji = (str: string) => {
@@ -977,37 +978,7 @@ export default function MainPagerScreen() {
         contentOffset={{ x: SCREEN_WIDTH, y: 0 }}
         style={styles.pager}
       >
-        {/* PAGE 0: PROFILE */}
-        <View style={[styles.page, { zIndex: 2 }]}>
-          <ProfilePage
-            userId={user?.id ?? ""}
-            username={username}
-            avatarUrl={avatarUrl}
-            email={email}
-            allGroups={allGroups}
-            revealConfig={revealConfig}
-            onAvatarUpdate={setAvatarUrl}
-            onUsernameUpdate={setUsername}
-            onStreakUpdate={setStreakDays}
-            isActive={currentPage === 0}
-            refreshKey={profileRefreshKey}
-          />
-        </View>
-
-        {/* PAGE 1: CAMERA */}
-        <Animated.View style={[styles.page, { transform: [{ translateX: cameraTranslateX }, { scale: cameraScale }], opacity: cameraOpacity }]}>
-          <CameraPage
-            groupId={activeGroupId}
-            userId={user?.id ?? ""}
-            isActive={currentPage === 1}
-            allGroups={allGroups}
-            onScrollLock={(v) => { setCameraScrollLocked(v); scrollRef.current?.setNativeProps({ scrollEnabled: !v }); }}
-            onHideMenu={setCameraHideMenu}
-            onCaptureSent={() => setProfileRefreshKey(k => k + 1)}
-          />
-        </Animated.View>
-
-        {/* PAGE 2: VAULT */}
+        {/* PAGE 0: COFFRE */}
         <View style={[styles.page, { zIndex: 2 }]}>
           <VaultPage
             allGroups={allGroups}
@@ -1069,16 +1040,53 @@ export default function MainPagerScreen() {
             onGoToCamera={() => jumpTo(1)}
           />
         </View>
+
+        {/* PAGE 1: CAMERA */}
+        <Animated.View style={[styles.page, { transform: [{ translateX: cameraTranslateX }, { scale: cameraScale }], opacity: cameraOpacity }]}>
+          <CameraPage
+            groupId={activeGroupId}
+            userId={user?.id ?? ""}
+            isActive={currentPage === 1}
+            allGroups={allGroups}
+            onScrollLock={(v) => { setCameraScrollLocked(v); scrollRef.current?.setNativeProps({ scrollEnabled: !v }); }}
+            onHideMenu={setCameraHideMenu}
+            onCaptureSent={() => setProfileRefreshKey(k => k + 1)}
+          />
+        </Animated.View>
+
+        {/* PAGE 2: PROFIL */}
+        <View style={[styles.page, { zIndex: 2 }]}>
+          <ProfilePage
+            userId={user?.id ?? ""}
+            username={username}
+            avatarUrl={avatarUrl}
+            email={email}
+            allGroups={allGroups}
+            revealConfig={revealConfig}
+            onAvatarUpdate={setAvatarUrl}
+            onUsernameUpdate={setUsername}
+            onStreakUpdate={setStreakDays}
+            isActive={currentPage === 2}
+            refreshKey={profileRefreshKey}
+          />
+        </View>
       </Animated.ScrollView>
 
       {/* NAV BAR — masquée pendant une capture ou le reveal */}
       {!cameraHideMenu && !showReveal && (
-        <View style={[styles.tabBarContainer, { paddingBottom: insets.bottom }]}>
-          <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
+        <View style={styles.tabBarContainer}>
           <View style={styles.tabBarContent}>
             <TouchableOpacity style={styles.tab} onPress={() => jumpTo(0)}>
+              <Icon name="lock" size={24} color={currentPage === 0 ? colors.icon : colors.iconSecondary} />
+              <Text style={[styles.tabLabel, currentPage === 0 && styles.tabLabelActive]}>Coffre</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.tab} onPress={() => jumpTo(1)}>
+              <Icon name="circle" size={24} color={currentPage === 1 ? colors.icon : colors.iconSecondary} />
+              <Text style={[styles.tabLabel, currentPage === 1 && styles.tabLabelActive]}>Capture</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.tab} onPress={() => jumpTo(2)}>
               <View style={{ position: "relative" }}>
-                <ProfileIcon color={currentPage === 0 ? colors.text : colors.textTertiary} size={24} />
+                <Icon name="user" size={24} color={currentPage === 2 ? colors.icon : colors.iconSecondary} />
                 {streakDays > 0 && (
                   <View style={styles.streakBadge}>
                     <Svg width="10" height="13" viewBox="0 0 16 21" fill="none">
@@ -1088,15 +1096,7 @@ export default function MainPagerScreen() {
                   </View>
                 )}
               </View>
-              <Text style={[styles.tabLabel, currentPage === 0 && styles.tabLabelActive]}>Profil</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.tab} onPress={() => jumpTo(1)}>
-              <MomentIcon color={currentPage === 1 ? colors.text : colors.textTertiary} size={28} />
-              <Text style={[styles.tabLabel, currentPage === 1 && styles.tabLabelActive]}>Moment</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.tab} onPress={() => jumpTo(2)}>
-              <VaultIcon color={currentPage === 2 ? colors.text : colors.textTertiary} size={24} />
-              <Text style={[styles.tabLabel, currentPage === 2 && styles.tabLabelActive]}>Coffre</Text>
+              <Text style={[styles.tabLabel, currentPage === 2 && styles.tabLabelActive]}>Profil</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1428,10 +1428,11 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   page: { width: SCREEN_WIDTH, height: "100%", backgroundColor: colors.bg },
 
   // Navbar
-  tabBarContainer: { position: "absolute", bottom: 0, left: 0, right: 0, height: NAVBAR_HEIGHT, overflow: "hidden", zIndex: 100, backgroundColor: colors.bg },
-  tabBarContent: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-evenly", paddingTop: 12 },
-  tab: { alignItems: "center", justifyContent: "center", gap: 4, flex: 1 },
-  tabLabel: { fontSize: typography.size.xs, fontFamily: typography.family.semibold, color: colors.textTertiary },
+  // Menu : fond background/default/default, marge 16 x / 12 haut / 25 bas.
+  tabBarContainer: { position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 100, backgroundColor: colors.bg, paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: 25 },
+  tabBarContent: { flexDirection: "row" },
+  tab: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.sm, padding: spacing.sm },
+  tabLabel: { ...textStyles.singleLineBodyExtraSmallStrong, color: colors.textSecondary },
   tabLabelActive: { color: colors.text },
   streakBadge: { position: "absolute", top: -5, right: -8, width: 16, height: 16, borderRadius: radii.sm, justifyContent: "center", alignItems: "center" },
   streakBadgeText: { position: "absolute", fontSize: typography.size.xs, fontFamily: typography.family.bold, color: "#FFFFFF", textAlign: "center", bottom: 1 },
