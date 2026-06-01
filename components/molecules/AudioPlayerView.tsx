@@ -29,8 +29,8 @@ function compressWaveform(data: number[], maxBars: number): number[] {
     const start = Math.floor(i * chunkSize);
     const end = Math.floor((i + 1) * chunkSize);
     const slice = data.slice(start, end);
-    const avg = slice.reduce((sum, val) => sum + val, 0) / (slice.length || 1);
-    result.push(avg);
+    const max = slice.reduce((m, val) => Math.max(m, val), 0);
+    result.push(max);
   }
   return result;
 }
@@ -115,14 +115,14 @@ export const AudioPlayerView = ({ player, status, onScrollLock, waveform }: Audi
 
   // Use provided waveform or fallback to hardcoded
   const bars = waveform && waveform.length > 0 
-    ? compressWaveform(waveform, 40).map(v => Math.max(4, v * 80)) 
+    ? compressWaveform(waveform, 40).map(v => v * 80) 
     : FALLBACK_WAVE_HEIGHTS;
 
   return (
     <View style={styles.container}>
       <View style={styles.audioWaveContainer} pointerEvents="none">
         {bars.map((h, i) => (
-          <View key={i} style={[styles.audioWaveBar, { height: h, opacity: progress > i / bars.length ? 0.9 : 0.25 }]} />
+          <View key={i} style={[styles.audioWaveBar, { height: Math.max(3.5, h), opacity: progress > i / bars.length ? 1 : 0.25 }]} />
         ))}
       </View>
       <View style={styles.audioPlayerRow}>
@@ -164,12 +164,12 @@ const styles = StyleSheet.create({
     flexDirection: "row", 
     alignItems: "center", 
     justifyContent: "center", 
-    gap: 3 
+    gap: 3.5 
   },
   audioWaveBar: { 
-    width: 3, 
+    width: 3.5, 
     borderRadius: radii.xs, 
-    backgroundColor: colors.white 
+    backgroundColor: colors.bgNeutral 
   },
   audioPlayerRow: { 
     flexDirection: "row", 

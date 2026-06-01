@@ -23,7 +23,7 @@ import MicIcon from "../../assets/icons/Mic.svg";
 import { VolumeManager } from "react-native-volume-manager";
 import ChallengesModal from "./ChallengesModal";
 import { type ActiveChallenge } from "../../lib/challenges";
-import { colors, radii, typography, spacing } from "../../lib/theme";
+import { colors, radii, typography, spacing, blur } from "../../lib/theme";
 import { AudioCaptionPlayer } from "../molecules/AudioCaptionPlayer";
 
 const NAVBAR_HEIGHT = 100;
@@ -71,8 +71,8 @@ function compressWaveform(data: number[], maxBars: number): number[] {
     const start = Math.floor(i * chunkSize);
     const end = Math.floor((i + 1) * chunkSize);
     const slice = data.slice(start, end);
-    const avg = slice.reduce((sum, val) => sum + val, 0) / (slice.length || 1);
-    result.push(avg);
+    const max = slice.reduce((m, val) => Math.max(m, val), 0);
+    result.push(max);
   }
   return result;
 }
@@ -150,6 +150,16 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const isHoldRecordingRef = useRef<boolean>(false);
   const [isSwipingToCancel, setIsSwipingToCancel] = useState(false);
   const isSwipingToCancelRef = useRef(false);
+  const cancelScaleAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.spring(cancelScaleAnim, {
+      toValue: isSwipingToCancel ? 1.3 : 1,
+      useNativeDriver: true,
+      tension: 100,
+      friction: 7,
+    }).start();
+  }, [isSwipingToCancel]);
 
   const handleCaptionPressInRef = useRef(handleCaptionPressIn);
   const handleCaptionPressOutRef = useRef(handleCaptionPressOut);
@@ -232,11 +242,11 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   useEffect(() => {
     if (isAudioRecording && recorderState.metering !== undefined) {
       // Normalize metering (-160 to 0) to (0 to 1)
-      const normalized = Math.max(0.1, (recorderState.metering + 160) / 160);
+      const normalized = Math.max(0, (recorderState.metering + 40) / 40);
       setRecordedWaveform(prev => [...prev, normalized]);
     }
     if (isCaptionRecording && recorderState.metering !== undefined) {
-      const normalized = Math.max(0.1, (recorderState.metering + 160) / 160);
+      const normalized = Math.max(0, (recorderState.metering + 40) / 40);
       setCaptionWaveform(prev => [...prev, normalized]);
     }
   }, [recorderState.metering, isAudioRecording, isCaptionRecording]);
@@ -485,7 +495,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       }
 
       await AudioModule.setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-      await audioRecorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
+      await audioRecorder.prepareToRecordAsync(RecordingPresets.LOW_QUALITY);
       
       // Delay to ensure native activity/audio state is ready on Android
       if (Platform.OS === "android") await new Promise(resolve => setTimeout(resolve, 150));
@@ -957,7 +967,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                   </View>
                   <View style={[styles.audioWaveformRow, { width: "100%", paddingHorizontal: 20 }]} pointerEvents="none">
                     {liveWaveform.map((v, i) => (
-                      <View key={i} style={[styles.audioWaveformBar, { height: Math.max(4, v * 52) }]} />
+                      <View key={i} style={[styles.audioWaveformBar, { height: Math.max(3.5, v * 40) }]} />
                     ))}
                   </View>
                 </>
@@ -1275,6 +1285,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                   {activeChallenge === null && (
                     <View style={{ gap: 12 }}>
                       <View style={styles.combinedInputContainer}>
+                        <BlurView intensity={blur.md} tint="dark" style={StyleSheet.absoluteFillObject} />
                         {slot1!.captionAudioUri ? (
                           <View style={{ flex: 1, paddingRight: 8 }}>
                             <AudioCaptionPlayer 
@@ -1295,13 +1306,16 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                                   activeOpacity={0.7}
                                 >
                                   <View style={styles.captionIconContainer}>
-                                    <XIcon color={isSwipingToCancel ? colors.danger : colors.white} size={20} />
+                                    <BlurView intensity={blur.md} tint="dark" style={StyleSheet.absoluteFillObject} />
+                                    <Animated.View style={{ transform: [{ scale: cancelScaleAnim }] }}>
+                                      <XIcon color={isSwipingToCancel ? colors.iconDangerTertiary : colors.white} size={20} />
+                                    </Animated.View>
                                   </View>
                                 </TouchableOpacity>
                                 <View style={styles.captionRecordingOverlay}>
                                   <View style={[styles.audioWaveformRow, { flex: 1 }]} pointerEvents="none">
                                     {liveWaveform.map((v, i) => (
-                                      <View key={i} style={[styles.audioWaveformBar, { height: Math.max(4, v * 52), backgroundColor: colors.white }]} />
+                                      <View key={i} style={[styles.audioWaveformBar, { height: Math.max(3.5, v * 40), backgroundColor: colors.white }]} />
                                     ))}
                                   </View>
                                   <Text style={styles.captionRecordingText}>{captionAudioSeconds}s</Text>
@@ -1322,6 +1336,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                               {...captionPanResponder.panHandlers}
                             >
                               <View style={styles.captionIconContainer}>
+                                <BlurView intensity={blur.md} tint="dark" style={StyleSheet.absoluteFillObject} />
                                 {isCaptionRecording ? (
                                   <CheckIcon color={colors.white} size={20} />
                                 ) : (
@@ -1376,6 +1391,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                   {activeChallenge === null && (
                     <View style={{ gap: 12 }}>
                       <View style={styles.combinedInputContainer}>
+                        <BlurView intensity={blur.md} tint="dark" style={StyleSheet.absoluteFillObject} />
                         {slot1!.captionAudioUri ? (
                           <View style={{ flex: 1, paddingRight: 8 }}>
                             <AudioCaptionPlayer 
@@ -1396,13 +1412,16 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                                   activeOpacity={0.7}
                                 >
                                   <View style={styles.captionIconContainer}>
-                                    <XIcon color={isSwipingToCancel ? colors.danger : colors.white} size={20} />
+                                    <BlurView intensity={blur.md} tint="dark" style={StyleSheet.absoluteFillObject} />
+                                    <Animated.View style={{ transform: [{ scale: cancelScaleAnim }] }}>
+                                      <XIcon color={isSwipingToCancel ? colors.iconDangerTertiary : colors.white} size={20} />
+                                    </Animated.View>
                                   </View>
                                 </TouchableOpacity>
                                 <View style={styles.captionRecordingOverlay}>
                                   <View style={[styles.audioWaveformRow, { flex: 1 }]} pointerEvents="none">
                                     {liveWaveform.map((v, i) => (
-                                      <View key={i} style={[styles.audioWaveformBar, { height: Math.max(4, v * 52), backgroundColor: colors.white }]} />
+                                      <View key={i} style={[styles.audioWaveformBar, { height: Math.max(3.5, v * 40), backgroundColor: colors.white }]} />
                                     ))}
                                   </View>
                                   <Text style={styles.captionRecordingText}>{captionAudioSeconds}s</Text>
@@ -1423,6 +1442,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                               {...captionPanResponder.panHandlers}
                             >
                               <View style={styles.captionIconContainer}>
+                                <BlurView intensity={blur.md} tint="dark" style={StyleSheet.absoluteFillObject} />
                                 {isCaptionRecording ? (
                                   <CheckIcon color={colors.white} size={20} />
                                 ) : (
@@ -1479,9 +1499,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               <TouchableOpacity style={styles.topSquareBtn} onPress={resetAll}><CloseIcon /></TouchableOpacity>
               {hasSlot2 && <TouchableOpacity style={styles.topSquareBtn} onPress={handleTrash}><TrashIcon /></TouchableOpacity>}
             </View>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 3, marginHorizontal: 20 }} pointerEvents="none">
-              {(previewSlot?.waveform && previewSlot.waveform.length > 0 ? compressWaveform(previewSlot.waveform, 40).map(v => Math.max(4, v * 80)) : [18,32,48,36,60,80,52,68,42,62,88,72,50,38,68,82,58,44,28,52]).map((h, i, arr) => (
-                <View key={i} style={{ width: 3, height: h, borderRadius: radii.xs, backgroundColor: colors.white, opacity: audioPreviewStatus.currentTime > 0 && audioPreviewStatus.duration > 0 && (audioPreviewStatus.currentTime / audioPreviewStatus.duration) > i / arr.length ? 0.9 : 0.25 }} />
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 3.5, marginHorizontal: 20 }} pointerEvents="none">
+              {(previewSlot?.waveform && previewSlot.waveform.length > 0 ? compressWaveform(previewSlot.waveform, 40).map(v => v * 80) : [10,14,22,30,38,34,26,20,14,18,28,36,44,40,32,24,16,12,20,30]).map((h, i, arr) => (
+                <View key={i} style={{ width: 3.5, height: h, borderRadius: radii.xs, backgroundColor: colors.bgNeutral, opacity: audioPreviewStatus.currentTime > 0 && audioPreviewStatus.duration > 0 && (audioPreviewStatus.currentTime / audioPreviewStatus.duration) > i / arr.length ? 1 : 0.25 }} />
               ))}
             </View>
             <View style={styles.audioPreviewPlayer}>
@@ -1522,6 +1542,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
             {viewingSlot === 1 && (
               <View style={[styles.previewContent, { bottom: 24 }]}>
                 <View style={styles.combinedInputContainer}>
+                  <BlurView intensity={blur.md} tint="dark" style={StyleSheet.absoluteFillObject} />
                   <TouchableOpacity style={styles.previewNoteBox} onPress={() => setIsEditingNote(true)} activeOpacity={0.7}>
                     {slot1!.note ? (
                       <Text style={styles.previewNoteText} numberOfLines={1}>{slot1!.note}</Text>
@@ -1803,10 +1824,10 @@ const styles = StyleSheet.create({
   audioRedDot: { width: 10, height: 10, borderRadius: radii.full, backgroundColor: "#FF3B30" },
   audioTimerText: { color: colors.white, fontFamily: typography.family.bold, fontSize: typography.size.subtitle, letterSpacing: 2, width: 260, textAlign: "center" },
   audioHintText: { color: "rgba(255,255,255,0.3)", fontFamily: typography.family.regular, fontSize: typography.size.xs, letterSpacing: 0.5, marginTop: 4 },
-  audioWaveformRow: { flexDirection: "row", alignItems: "center", gap: 3.5, height: 52, overflow: "hidden", justifyContent: "flex-start" },
+  audioWaveformRow: { flexDirection: "row", alignItems: "center", gap: 3.5, height: 40, overflow: "hidden", justifyContent: "flex-start" },
   audioWaveformBar: {
     width: 3.5,
-    height: 44,
+    height: 32,
     borderRadius: 4,
     backgroundColor: colors.bgNeutral, // var(--sds-color-background-neutral-default)
   },

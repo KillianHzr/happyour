@@ -1,8 +1,9 @@
 import React, { useRef, useEffect } from "react";
 import { View, StyleSheet, TouchableOpacity, PanResponder, Text } from "react-native";
 import { Svg, Path } from "react-native-svg";
+import { BlurView } from "expo-blur";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
-import { colors, radii, typography } from "../../lib/theme";
+import { colors, radii, typography, blur } from "../../lib/theme";
 import PlayIcon from "../../assets/icons/Play.svg";
 import XIcon from "../../assets/icons/X.svg";
 
@@ -26,8 +27,8 @@ function compressWaveform(data: number[], maxBars: number): number[] {
     const start = Math.floor(i * chunkSize);
     const end = Math.floor((i + 1) * chunkSize);
     const slice = data.slice(start, end);
-    const avg = slice.reduce((sum, val) => sum + val, 0) / (slice.length || 1);
-    result.push(avg);
+    const max = slice.reduce((m, val) => Math.max(m, val), 0);
+    result.push(max);
   }
   return result;
 }
@@ -89,12 +90,13 @@ export const AudioCaptionPlayer = ({ player, status, onRemove, showVocalLabel, o
 
   // Use provided waveform or fallback to hardcoded
   const bars = waveform && waveform.length > 0 
-    ? compressWaveform(waveform, 40).map(v => v * 36) 
+    ? compressWaveform(waveform, 40).map(v => v * 80) 
     : WAVE_BARS;
 
   return (
     <View style={styles.container}>
       <TouchableOpacity onPress={togglePlay} style={styles.playBtn}>
+        <BlurView intensity={blur.md} tint="dark" style={StyleSheet.absoluteFillObject} />
         {status.playing ? (
           <Svg width="14" height="14" viewBox="0 0 24 24" fill={colors.white}>
             <Path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
@@ -118,7 +120,7 @@ export const AudioCaptionPlayer = ({ player, status, onRemove, showVocalLabel, o
               style={[
                 styles.waveBar,
                 {
-                  height: Math.max(3, h / 2.2),
+                  height: Math.max(2, h/3),
                   opacity: progress > i / bars.length ? 1 : 0.25,
                 },
               ]}

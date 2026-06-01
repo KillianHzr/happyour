@@ -123,14 +123,14 @@ export default function ChallengeAudioPlayer({ url, waveform }: ChallengeAudioPl
 
   // Use provided waveform or fallback to hardcoded
   const bars = waveform && waveform.length > 0 
-    ? compressWaveform(waveform, 40).map(v => Math.max(4, v * 80)) 
+    ? compressWaveform(waveform, 40).map(v => v * 32) 
     : WAVE_HEIGHTS;
 
   return (
     <View style={styles.card}>
       <View style={styles.waveRow}>
         {bars.map((h, i) => (
-          <View key={i} style={[styles.bar, { height: h, opacity: progress > i / bars.length ? 0.9 : 0.25 }]} />
+          <View key={i} style={[styles.bar, { height: h, opacity: progress > i / bars.length ? 1 : 0.25 }]} />
         ))}
       </View>
 
@@ -170,7 +170,7 @@ export default function ChallengeAudioPlayer({ url, waveform }: ChallengeAudioPl
 const styles = StyleSheet.create({
   card: { backgroundColor: "rgba(255,255,255,0.06)", borderRadius: radii.xl, padding: 16, gap: 12 },
   waveRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 3.5, height: 90 },
-  bar: { width: 3.5, borderRadius: radii.xs, backgroundColor: colors.white },
+  bar: { width: 3.5, borderRadius: radii.xs, backgroundColor: colors.bgNeutral },
   controls: { flexDirection: "row", alignItems: "center", gap: 12 },
   playBtn: { width: 40, height: 40, borderRadius: radii.full, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center" },
   sliderContainer: { flex: 1 },
