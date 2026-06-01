@@ -81,7 +81,24 @@ const resolveShadow = (effectStyleName: string, mode: "Light" | "Dark" = "Light"
 };
 
 /**
- * Résout un "Text Style" de Figma en style React Native.
+ * Mappe un poids numérique (issu des tokens) vers la police Inter nommée
+ * réellement chargée dans l'app (cf. app/_layout.tsx). Avec des polices Inter
+ * nommées, on règle le poids via le `fontFamily`, pas via `fontWeight`.
+ * Les poids non chargés retombent sur la variante la plus proche.
+ */
+const interFamilyForWeight = (weight: number): string => {
+  if (weight >= 800) return typography.family.extrabold;
+  if (weight >= 700) return typography.family.bold;
+  if (weight >= 600) return typography.family.semibold;
+  if (weight >= 500) return typography.family.medium;
+  return typography.family.regular;
+};
+
+/**
+ * Résout un "Text Style" de Figma en un style RN COMPLET : `fontFamily`
+ * (Inter nommée, dérivée du poids du token), `fontSize` et `lineHeight`.
+ * Une seule variable porte donc tout — si le designer change le text style,
+ * family/taille/interligne suivent automatiquement.
  */
 const resolveTextStyle = (textStyleName: string, mode: "Light" | "Dark" = "Light") => {
   // @ts-ignore
@@ -103,10 +120,13 @@ const resolveTextStyle = (textStyleName: string, mode: "Light" | "Dark" = "Light
     lineHeight = lineHeightObj.value;
   }
 
+  const weightRaw = getVal(style.fontWeight);
+  const weight = typeof weightRaw === "number" ? weightRaw : Number(weightRaw);
+
   return {
+    fontFamily: interFamilyForWeight(Number.isFinite(weight) ? weight : 400),
     fontSize,
     lineHeight,
-    fontWeight: getVal(style.fontWeight) ? (String(getVal(style.fontWeight)) as any) : undefined,
   };
 };
 
@@ -614,6 +634,8 @@ export const textStyles = {
   bodyExtraSmall:       resolveTextStyle("body-extra-small",        "Light"),
   bodyExtraSmallStrong: resolveTextStyle("body-extra-small-strong", "Light"),
   bodyCode:        resolveTextStyle("body-code",        "Light"),
+  singleLineBodyBaseStrong: resolveTextStyle("single-line/body-base-strong", "Light"),
+  singleLineBodySmall:      resolveTextStyle("single-line/body-small",       "Light"),
   subheading:      resolveTextStyle("subheading",       "Light"),
   heading:         resolveTextStyle("heading",          "Light"),
   subtitle:        resolveTextStyle("subtitle",         "Light"),

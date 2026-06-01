@@ -110,6 +110,7 @@ export default function MainPagerScreen() {
   // Pager
   const [currentPage, setCurrentPage] = useState(1);
   const [cameraScrollLocked, setCameraScrollLocked] = useState(false);
+  const [cameraHideMenu, setCameraHideMenu] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   // Modals
@@ -1001,6 +1002,7 @@ export default function MainPagerScreen() {
             isActive={currentPage === 1}
             allGroups={allGroups}
             onScrollLock={(v) => { setCameraScrollLocked(v); scrollRef.current?.setNativeProps({ scrollEnabled: !v }); }}
+            onHideMenu={setCameraHideMenu}
             onCaptureSent={() => setProfileRefreshKey(k => k + 1)}
           />
         </Animated.View>
@@ -1070,7 +1072,7 @@ export default function MainPagerScreen() {
       </Animated.ScrollView>
 
       {/* NAV BAR — masquée pendant une capture ou le reveal */}
-      {!cameraScrollLocked && !showReveal && (
+      {!cameraHideMenu && !showReveal && (
         <View style={[styles.tabBarContainer, { paddingBottom: insets.bottom }]}>
           <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
           <View style={styles.tabBarContent}>

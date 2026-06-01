@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, Component } from "react";
 import {
   View, Text, StyleSheet, Animated, Easing, TouchableOpacity,
-  Alert, KeyboardAvoidingView, Platform, TextInput, Modal, Pressable, PanResponder, ActivityIndicator,
+  Alert, KeyboardAvoidingView, Platform, TextInput, Modal, Pressable, PanResponder, ActivityIndicator, useWindowDimensions,
 } from "react-native";
 import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
@@ -20,14 +20,22 @@ import { SendIcon, FeatherIcon, FlipIcon, CloseIcon, FlashIcon } from "./GroupIc
 import { VolumeManager } from "react-native-volume-manager";
 import ChallengesModal from "./ChallengesModal";
 import { type ActiveChallenge } from "../../lib/challenges";
-import { radii, typography, glassBlurIntensity, type ThemeColors } from "../../lib/theme";
+import { radii, spacing, stroke, typography, textStyles, glassBlurIntensity, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import Shape from "../Shape";
+import Icon, { type IconName } from "../Icon";
 
 const NAVBAR_HEIGHT = 100;
-const CHALLENGE_BTN_HEIGHT = 40;
-// Espace entre le bas du bouton Défis et le haut du cadre de capture.
+// Espace entre le haut du cadre de capture et le bouton Défis (par-dessus la caméra).
 const CHALLENGE_GAP = 16;
+// Zone du sélecteur de mode : 80% de l'écran, plafonnée à cette largeur max.
+// Les 3 modes se partagent 1/3 chacun (flex: 1).
+const MODE_SELECTOR_MAX_WIDTH = 320;
+// Palette de couleurs du dessin (2 lignes de 7). Défaut = #FF561A.
+const DRAWING_COLORS: string[][] = [
+  ["#FFFFFF", "#F23F3A", "#FE76B4", "#FFC548", "#00B487", "#6DD0F0", "#7659FF"],
+  ["#000000", "#9D1233", "#C0169A", "#FF561A", "#0C493A", "#1F48B1", "#1F106D"],
+];
 
 type CameraMode = "PHOTO" | "VIDEO" | "AUDIO" | "DESSIN" | "TEXTE";
 
@@ -47,6 +55,7 @@ type Props = {
   isActive: boolean;
   allGroups: GroupInfo[];
   onScrollLock: (locked: boolean) => void;
+  onHideMenu?: (hidden: boolean) => void;
   onCaptureSent?: () => void;
 };
 
@@ -60,7 +69,7 @@ class CameraErrorBoundary extends Component<{ children: React.ReactNode }, { has
   }
 }
 
-function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, onCaptureSent }: Props) {
+function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, onHideMenu, onCaptureSent }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -111,9 +120,11 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const capturingSecondRef = useRef(false);
 
   const [cameraMode, setCameraMode] = useState<CameraMode>("PHOTO");
-  const [drawingColor, setDrawingColor] = useState("#0C0C0D");
+  const [drawingColor, setDrawingColor] = useState("#FF561A");
   const [drawingStrokeWidth, setDrawingStrokeWidth] = useState(6);
   const [isDrawingActive, setIsDrawingActive] = useState(false);
+  const [showColorPalette, setShowColorPalette] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [facing, setFacing] = useState<CameraType>("back");
   const [flash, setFlash] = useState<FlashMode>("off");
   const [zoom, setZoom] = useState(0);
@@ -182,9 +193,12 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   ).current;
 
   useEffect(() => {
-    const locked = slot1 !== null || isPinching || isDrawingActive || isZoomDragging || isRecording;
-    onScrollLock(locked);
-  }, [slot1, isPinching, isDrawingActive, isZoomDragging, isRecording]);
+    const base = slot1 !== null || isPinching || isZoomDragging || isRecording;
+    // Swipe entre les vues : verrouillé dès qu'on est en DESSIN (même sans dessiner).
+    onScrollLock(base || cameraMode === "DESSIN");
+    // Menu de l'app : masqué seulement en capture (en DESSIN : une fois qu'on dessine).
+    onHideMenu?.(base || (cameraMode === "DESSIN" && canUndo));
+  }, [slot1, isPinching, cameraMode, canUndo, isZoomDragging, isRecording]);
 
   useEffect(() => {
     if (cameraMode === "AUDIO" && isCapturing && !capturedAudioUri) {
@@ -437,8 +451,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       return;
     }
     if (cameraMode === "DESSIN") {
-      if (!isDrawingActive) { setIsDrawingActive(true); return; }
-      if (!drawingRef.current) return;
+      // Envoie le dessin (uniquement s'il y a au moins un trait).
+      if (!canUndo || !drawingRef.current) return;
       setCapturing(true);
       try {
         const uri = await drawingRef.current.capture();
@@ -690,18 +704,54 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
             </Pressable>
           </KeyboardAvoidingView>
         ) : cameraMode === "DESSIN" ? (
-          <View style={[styles.cameraPageContainer, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: 24, paddingHorizontal: 12 }]}>
+          <View style={[styles.cameraPageContainer, { justifyContent: "flex-end", paddingTop: 0, paddingBottom: NAVBAR_HEIGHT, paddingHorizontal: 0 }]}>
             <View style={styles.drawingArea}>
-              {!isDrawingActive ? (
-                <TouchableOpacity style={styles.drawingIdleOverlay} onPress={() => setIsDrawingActive(true)} activeOpacity={0.6}>
-                  <Svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="rgba(0,0,0,0.2)" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round">
-                    <Path d="M12 20h9" /><Path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-                  </Svg>
-                  <Text style={styles.drawingHintText}>Appuie pour commencer à dessiner</Text>
+              <DrawingCanvas ref={drawingRef} color={drawingColor} strokeWidth={drawingStrokeWidth} onHistoryChange={(u, r) => { setCanUndo(u); setCanRedo(r); }} />
+
+              {/* Croix (fermer / annuler le dessin) — haut-gauche, dès qu'on a dessiné */}
+              {canUndo && (
+                <TouchableOpacity style={styles.drawingCloseBtn} onPress={() => drawingRef.current?.clear()} activeOpacity={0.8}>
+                  <CloseIcon />
                 </TouchableOpacity>
-              ) : (
-                <DrawingCanvas ref={drawingRef} color={drawingColor} strokeWidth={drawingStrokeWidth} onHistoryChange={(u, r) => { setCanUndo(u); setCanRedo(r); }} />
               )}
+
+              {/* Colonne haut-droite : couleur / annuler / corbeille (sibling du canvas → tap OK) */}
+              <View style={styles.cameraControls}>
+                <View>
+                  <TouchableOpacity style={styles.cameraCtrlBtn} onPress={() => setShowColorPalette((s) => !s)} activeOpacity={0.8}>
+                    <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} pointerEvents="none" />
+                    <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
+                    <View style={[styles.colorDot, { backgroundColor: drawingColor }]} />
+                  </TouchableOpacity>
+                  {showColorPalette && (
+                    <View style={styles.colorPalette}>
+                      <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} pointerEvents="none" />
+                      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
+                      {DRAWING_COLORS.map((row, ri) => (
+                        <View key={ri} style={styles.colorPaletteRow}>
+                          {row.map((c) => (
+                            <TouchableOpacity
+                              key={c}
+                              onPress={() => { setDrawingColor(c); setShowColorPalette(false); }}
+                              style={[styles.colorSwatch, { backgroundColor: c }, drawingColor.toUpperCase() === c && styles.colorSwatchSelected]}
+                            />
+                          ))}
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+                <TouchableOpacity style={styles.cameraCtrlBtn} onPress={() => drawingRef.current?.undo()} activeOpacity={0.8} disabled={!canUndo}>
+                  <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} pointerEvents="none" />
+                  <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
+                  <Icon name="rollback" size={20} color={canUndo ? colors.icon : colors.iconDisabled} />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.cameraCtrlBtn} onPress={() => setShowClearConfirm(true)} activeOpacity={0.8} disabled={!canUndo}>
+                  <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} pointerEvents="none" />
+                  <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
+                  <Icon name="trash" size={20} color={canUndo ? colors.icon : colors.iconDisabled} />
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         ) : cameraMode === "AUDIO" ? (
@@ -732,11 +782,11 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
             )}
           </View>
         ) : (
-          <View style={[styles.cameraPageContainer, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: (capturingSecond && slot1) ? NAVBAR_HEIGHT + 92 : NAVBAR_HEIGHT + 12, paddingHorizontal: 12 }]}>
+          <View style={[styles.cameraPageContainer, { justifyContent: "flex-end", paddingTop: 0, paddingBottom: (capturingSecond && slot1) ? NAVBAR_HEIGHT + 92 : NAVBAR_HEIGHT, paddingHorizontal: 0 }]}>
             <View style={styles.cameraInner}>
               <>
                 {/* Camera view clipped to rounded rect — only mount when permission is granted */}
-                <View style={[StyleSheet.absoluteFillObject, { borderRadius: radii.xl, overflow: "hidden" }]}>
+                <View style={[StyleSheet.absoluteFillObject, { borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, overflow: "hidden" }]}>
                   {(cameraPermission?.granted ?? Platform.OS === "ios") && (
                     <SeamlessRecorder
                       ref={seamlessRecorderRef}
@@ -764,20 +814,19 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                   <Pressable style={StyleSheet.absoluteFillObject} onPress={handleCamDoubleTap} />
                 </View>
               </>
-              {/* Flash (photo) / Torch (video) button */}
-              {activeChallenge === null && (cameraMode === "PHOTO" || cameraMode === "VIDEO") && !isRecording && (
-                <TouchableOpacity
-                  style={[styles.flashBtn, cameraMode === "VIDEO" && torch && { backgroundColor: "rgba(255,200,0,0.35)" }]}
-                  onPress={() => {
-                    if (cameraMode === "VIDEO") setTorch(t => !t);
-                    else setFlash(prev => prev === "off" ? "on" : prev === "on" ? "auto" : "off");
-                  }}
-                >
-                  {cameraMode === "VIDEO"
-                    ? <TorchIcon active={torch} />
-                    : <FlashIcon mode={flash} />
-                  }
-                </TouchableOpacity>
+              {/* Contrôles caméra (colonne haut-droite) : flash / rotate / zoom */}
+              {(cameraMode === "PHOTO" || cameraMode === "VIDEO") && !isRecording && (
+                <View style={styles.cameraControls}>
+                  <CameraControlButton
+                    icon="flash"
+                    onPress={() => {
+                      if (cameraMode === "VIDEO") setTorch(t => !t);
+                      else setFlash(prev => prev === "off" ? "on" : prev === "on" ? "auto" : "off");
+                    }}
+                  />
+                  <CameraControlButton icon="rotate" onPress={handleFlipCamera} />
+                  <CameraControlButton icon="zoom" onPress={() => {}} />
+                </View>
               )}
             </View>
           </View>
@@ -814,7 +863,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       {isCapturing && (
         <View style={styles.fill} pointerEvents="box-none">
           {/* Challenge top area (button or active banner) */}
-          {!capturingSecond && !(cameraMode === "DESSIN" && isDrawingActive) && (
+          {!capturingSecond && !isRecording && !(cameraMode === "DESSIN" && canUndo) && (
             activeChallenge === null ? (
               <View style={[challengeStyles.topContainer, { paddingTop: Math.max(insets.top, 12) + 12 + CHALLENGE_GAP }]} pointerEvents="box-none">
                 <TouchableOpacity
@@ -822,15 +871,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                   onPress={() => setShowChallengesModal(true)}
                   activeOpacity={0.8}
                 >
-                  <Svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={colors.iconBrandOnBrand} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <Path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
-                    <Path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
-                    <Path d="M4 22h16" />
-                    <Path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
-                    <Path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
-                    <Path d="M18 2H6v7a6 6 0 0 0 12 0V2z" />
-                  </Svg>
                   <Text style={challengeStyles.challengeBtnText}>Défis</Text>
+                  <Shape name="dessin" size={20} color={colors.iconBrandOnBrandSecondary} />
                 </TouchableOpacity>
               </View>
             ) : (
@@ -856,15 +898,6 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
             )
           )}
 
-          {cameraMode === "DESSIN" && isDrawingActive && (
-            <TouchableOpacity
-              pointerEvents="auto"
-              style={[styles.drawingCancelBtn, { top: Math.max(insets.top, 12) + 28 }]}
-              onPress={() => setIsDrawingActive(false)}
-            >
-              <CloseIcon />
-            </TouchableOpacity>
-          )}
           {isRecording && (
             <View style={[styles.recordingTimer, { top: Math.max(insets.top, 40) }]}>
               <View style={styles.recordingDot} />
@@ -872,62 +905,18 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
             </View>
           )}
 
-          <View style={[styles.cameraFooter, { bottom: (cameraMode === "DESSIN" && isDrawingActive) ? insets.bottom + 16 : (capturingSecond && slot1 ? NAVBAR_HEIGHT + 104 : NAVBAR_HEIGHT + 24) }]}>
-            {cameraMode === "DESSIN" && isDrawingActive ? (
-              <View style={styles.drawingToolbar}>
-                <TouchableOpacity style={[styles.drawingUndoBtn, !canUndo && styles.drawingUndoBtnDisabled]} onPress={() => drawingRef.current?.undo()} disabled={!canUndo}>
-                  <Svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={canUndo ? colors.text : colors.textTertiary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <Path d="M1 4v6h6" /><Path d="M3.51 15a9 9 0 1 0 .49-3.51L1 10" />
-                  </Svg>
-                </TouchableOpacity>
-                <View style={styles.drawingColorGrid}>
-                  {[
-                    ["#0C0C0D","#FFFFFF","#FF3B30","#FF9F0A","#FFD60A"],
-                    ["#30D158","#0A84FF","#BF5AF2","#FF2D92","#FF6B35"],
-                    ["#5AC8FA","#34C759","#A2845E","#8E8E93","#1C1C1E"],
-                  ].map((row, ri) => (
-                    <View key={ri} style={styles.drawingColorRow}>
-                      {row.map((c) => (
-                        <TouchableOpacity key={c} onPress={() => setDrawingColor(c)} style={[styles.drawingColorDot, { backgroundColor: c }, drawingColor === c && styles.drawingColorDotActive]} />
-                      ))}
-                    </View>
-                  ))}
-                  <View style={styles.drawingBrushRow}>
-                    {([3, 6, 12] as const).map((size) => (
-                      <TouchableOpacity key={size} onPress={() => setDrawingStrokeWidth(size)} style={styles.drawingBrushBtn}>
-                        <View style={[styles.drawingBrushDot, { width: size * 2.5, height: size * 2.5, borderRadius: size * 1.25, backgroundColor: drawingColor }, drawingStrokeWidth === size && styles.drawingBrushDotActive]} />
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-                <TouchableOpacity style={[styles.drawingUndoBtn, !canRedo && styles.drawingUndoBtnDisabled]} onPress={() => drawingRef.current?.redo()} disabled={!canRedo}>
-                  <Svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={canRedo ? colors.text : colors.textTertiary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <Path d="M23 4v6h-6" /><Path d="M20.49 15a9 9 0 1 1-.49-3.51L23 10" />
-                  </Svg>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={{ alignItems: "center", gap: 6 }}>
-                {(cameraMode === "PHOTO" || cameraMode === "VIDEO") && (
-                  <ZoomSlider zoom={zoom} onZoom={(z) => { setZoom(z); savedZoomRef.current = z; }} onDragStart={() => { setIsZoomDragging(true); onScrollLockRef.current(true); }} onDragEnd={() => setIsZoomDragging(false)} />
-                )}
-                {(activeChallenge === null || capturingSecond) && !isRecording && !isAudioRecording && (
-                  <View style={styles.modeSlider}>
-                    <BlurView intensity={glassBlurIntensity} tint="dark" experimentalBlurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} pointerEvents="none" />
-                    <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
-                    {([
-                      { mode: "VIDEO", label: "Vidéo" },
-                      { mode: "PHOTO", label: "Photo" },
-                      { mode: "DESSIN", label: "Dessin" },
-                    ] as { mode: CameraMode; label: string }[]).map(({ mode, label }) => (
-                      <TouchableOpacity key={mode} onPress={() => { setCameraMode(mode); if (mode !== "DESSIN") setIsDrawingActive(false); }}>
-                        <Text style={[styles.modeText, cameraMode === mode && styles.modeTextActive]}>{label}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-              </View>
-            )}
+          <View style={[styles.cameraFooter, { bottom: (capturingSecond && slot1) ? NAVBAR_HEIGHT + 104 : NAVBAR_HEIGHT + 24 }]}>
+            <View style={{ alignItems: "center", gap: 6 }}>
+              {(cameraMode === "PHOTO" || cameraMode === "VIDEO") && (
+                <ZoomSlider zoom={zoom} onZoom={(z) => { setZoom(z); savedZoomRef.current = z; }} onDragStart={() => { setIsZoomDragging(true); onScrollLockRef.current(true); }} onDragEnd={() => setIsZoomDragging(false)} />
+              )}
+              {(activeChallenge === null || capturingSecond) && !isRecording && !isAudioRecording && !(cameraMode === "DESSIN" && canUndo) && (
+                <ModeSelector
+                  selected={cameraMode}
+                  onSelect={(m) => { setCameraMode(m); }}
+                />
+              )}
+            </View>
 
             <View style={styles.captureRow}>
               {cameraMode !== "TEXTE" && <View style={styles.sideControlPlaceholder} />}
@@ -936,31 +925,22 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 onPress={handleCapture}
                 onTouchStart={handleTouchStart}
                 onTouchMove={handleTouchMove}
-                disabled={isPinching || (cameraMode === "TEXTE" && !textModeContent.trim()) || (cameraMode === "DESSIN" && isDrawingActive && !canUndo)}
+                disabled={isPinching || (cameraMode === "TEXTE" && !textModeContent.trim())}
                 activeOpacity={0.8}
               >
-                <BlurView intensity={glassBlurIntensity} tint="dark" experimentalBlurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} />
+                <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} />
                 <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} />
                 {isRecording || isAudioRecording ? (
-                  <View style={styles.captureStopSquare} />
-                ) : cameraMode === "DESSIN" && isDrawingActive ? (
-                  <Svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke={canUndo ? colors.brand : colors.textTertiary} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <Path d="M20 6L9 17l-5-5" />
-                  </Svg>
+                  <Shape name="stop" size={40} color={colors.brand} />
                 ) : cameraMode === "VIDEO" || cameraMode === "PHOTO" || cameraMode === "DESSIN" ? (
-                  <Shape name={cameraMode === "VIDEO" ? "video" : cameraMode === "PHOTO" ? "photo" : "dessin"} size={40} color={colors.brand} />
+                  <Shape name={cameraMode === "VIDEO" ? "video" : cameraMode === "PHOTO" ? "photo" : "dessin"} size={48} color={colors.brand} />
                 ) : null}
               </TouchableOpacity>}
-              {cameraMode !== "TEXTE" && cameraMode !== "AUDIO" && cameraMode !== "DESSIN" && (
-                <TouchableOpacity style={styles.flipBtn} onPress={handleFlipCamera}>
-                  <FlipIcon />
-                </TouchableOpacity>
-              )}
-              {(cameraMode === "AUDIO" || cameraMode === "DESSIN") && <View style={styles.sideControlPlaceholder} />}
+              {cameraMode !== "TEXTE" && <View style={styles.sideControlPlaceholder} />}
             </View>
           </View>
           {/* ── Barre switch/envoyer pendant la 2e capture ── */}
-          {capturingSecond && slot1 && !(cameraMode === "DESSIN" && isDrawingActive) && (
+          {capturingSecond && slot1 && !(cameraMode === "DESSIN" && canUndo) && (
             <View style={[styles.capturingSecondBar, { bottom: NAVBAR_HEIGHT + 8 }]}>
               <TouchableOpacity
                 style={styles.capturingSecondThumb}
@@ -1200,6 +1180,24 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         onSelectChallenge={handleSelectChallenge}
       />
 
+      {/* ── Confirmation effacer le dessin ── */}
+      <Modal visible={showClearConfirm} transparent animationType="fade" onRequestClose={() => setShowClearConfirm(false)}>
+        <Pressable style={pickerStyles.overlay} onPress={() => setShowClearConfirm(false)}>
+          <Pressable style={pickerStyles.card} onPress={() => {}}>
+            <Text style={pickerStyles.title}>Effacer le dessin ?</Text>
+            <TouchableOpacity
+              style={pickerStyles.sendBtn}
+              onPress={() => { drawingRef.current?.clear(); setShowClearConfirm(false); }}
+            >
+              <Text style={pickerStyles.sendBtnText}>Tout effacer</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowClearConfirm(false)} style={pickerStyles.cancelWrap}>
+              <Text style={pickerStyles.cancelText}>Annuler</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* ── Group Picker ── */}
       <Modal visible={showGroupPicker} transparent animationType="fade" onRequestClose={() => setShowGroupPicker(false)}>
         <Pressable style={pickerStyles.overlay} onPress={() => setShowGroupPicker(false)}>
@@ -1230,6 +1228,112 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         </Pressable>
       </Modal>
     </>
+  );
+}
+
+// Ordre cyclique des modes ; le mode sélectionné est toujours au centre, les
+// deux autres glissent autour (carrousel circulaire).
+const MODE_ORDER: { mode: CameraMode; label: string }[] = [
+  { mode: "VIDEO", label: "Vidéo" },
+  { mode: "PHOTO", label: "Photo" },
+  { mode: "DESSIN", label: "Dessin" },
+];
+const MODE_ITEM_HEIGHT = 30;
+const mod = (n: number, m: number) => ((n % m) + m) % m;
+
+/**
+ * Sélecteur de mode "carrousel" : le fond sélectionné reste fixe au centre,
+ * et les modes roulent vers la gauche/droite pour que le mode choisi vienne
+ * au centre (direction selon qu'il était à gauche ou à droite).
+ */
+function ModeSelector({ selected, onSelect }: { selected: CameraMode; onSelect: (m: CameraMode) => void }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+  // Largeur concrète (80% écran, plafonnée) : indispensable car les items sont en
+  // position absolue et ne donnent aucune largeur intrinsèque.
+  const { width: winWidth } = useWindowDimensions();
+  const pillWidth = Math.min(winWidth * 0.8, MODE_SELECTOR_MAX_WIDTH);
+  const slotWidth = (pillWidth - spacing.sm * 2) / 3;
+
+  // `v` = indice virtuel (non borné). Le mode à l'indice v est MODE_ORDER[mod(v,3)].
+  const initialV = Math.max(0, MODE_ORDER.findIndex((m) => m.mode === selected));
+  const pos = useRef(new Animated.Value(initialV)).current;
+  const [centerV, setCenterV] = useState(initialV);
+  const centerVRef = useRef(initialV);
+  centerVRef.current = centerV;
+  const animating = useRef(false);
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+  const slotWidthRef = useRef(slotWidth);
+  slotWidthRef.current = slotWidth;
+
+  // Fait rouler le carrousel d'un cran vers le mode sélectionné, puis se relance
+  // (gère les taps rapides : on draine les changements en attente à chaque fin).
+  const settleRef = useRef<() => void>(() => {});
+  settleRef.current = () => {
+    if (slotWidthRef.current <= 0 || animating.current) return;
+    const cv = centerVRef.current;
+    if (MODE_ORDER[mod(cv, 3)].mode === selectedRef.current) return; // déjà centré
+    // Avec 3 modes, l'autre mode est toujours à ±1 (le plus court chemin).
+    const delta = MODE_ORDER[mod(cv + 1, 3)].mode === selectedRef.current ? 1 : -1;
+    const newV = cv + delta;
+    animating.current = true;
+    Animated.timing(pos, {
+      toValue: newV,
+      duration: 260,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      animating.current = false;
+      if (finished) {
+        centerVRef.current = newV;
+        setCenterV(newV);
+      }
+      settleRef.current();
+    });
+  };
+
+  useEffect(() => { settleRef.current(); }, [selected, slotWidth]);
+
+  const items: number[] = [];
+  for (let v = centerV - 2; v <= centerV + 2; v++) items.push(v);
+
+  return (
+    <View style={[styles.modeSlider, { width: pillWidth }]}>
+      <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
+      <View style={{ width: "100%", height: MODE_ITEM_HEIGHT }}>
+        <View style={[styles.modeChip, { left: slotWidth, width: slotWidth }]} pointerEvents="none" />
+        <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ translateX: Animated.multiply(pos, -slotWidth) }] }]}>
+          {items.map((v) => {
+            const item = MODE_ORDER[mod(v, 3)];
+            return (
+              <TouchableOpacity
+                key={v}
+                activeOpacity={0.8}
+                onPress={() => onSelect(item.mode)}
+                style={[styles.modeItem, { left: slotWidth + v * slotWidth, width: slotWidth }]}
+              >
+                <Text style={styles.modeText}>{item.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </Animated.View>
+      </View>
+    </View>
+  );
+}
+
+// Bouton de contrôle caméra : carré glass (blur + fill default-opacity) + icône.
+function CameraControlButton({ icon, onPress }: { icon: IconName; onPress: () => void }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+  return (
+    <TouchableOpacity style={styles.cameraCtrlBtn} onPress={onPress} activeOpacity={0.8}>
+      <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
+      <Icon name={icon} size={20} />
+    </TouchableOpacity>
   );
 }
 
@@ -1441,8 +1545,11 @@ function TrashIcon() {
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   fill: { ...StyleSheet.absoluteFillObject },
   cameraPageContainer: { flex: 1, backgroundColor: colors.bg, alignItems: "center" },
-  cameraInner: { flex: 1, width: "100%" },
+  cameraInner: { width: "100%", aspectRatio: 9 / 16 },
   flashBtn: { position: "absolute", top: 16, right: 16, width: 48, height: 48, borderRadius: radii.xl, backgroundColor: colors.opacityLight, justifyContent: "center", alignItems: "center" },
+  // Colonne de contrôles caméra, 16px du haut et de la droite du cadre.
+  cameraControls: { position: "absolute", top: spacing.lg, right: spacing.lg, gap: spacing.sm },
+  cameraCtrlBtn: { width: 40, height: 40, borderRadius: radii.md, overflow: "hidden", justifyContent: "center", alignItems: "center" },
   textModeContainer: { flex: 1, justifyContent: "flex-start", backgroundColor: colors.bg, paddingHorizontal: 32 },
   textModeInput: { color: colors.text, fontFamily: typography.family.bold, textAlign: "center", width: "100%", paddingTop: 0 },
   audioModeContainer: { flex: 1, justifyContent: "center", alignItems: "center", gap: 20, backgroundColor: colors.bg },
@@ -1454,31 +1561,27 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   audioHintText: { color: colors.textTertiary, fontFamily: typography.family.regular, fontSize: typography.size.xs, letterSpacing: 0.5, marginTop: 4 },
   audioWaveformRow: { flexDirection: "row", alignItems: "center", gap: 4, height: 52 },
   audioWaveformBar: { width: 3.5, height: 44, borderRadius: radii.xs, backgroundColor: colors.text },
-  cameraFooter: { position: "absolute", left: 0, right: 0, alignItems: "center", gap: 24 },
-  modeSlider: { flexDirection: "row", gap: 4, overflow: "hidden", paddingHorizontal: 20, paddingVertical: 4, borderRadius: radii.lg, marginBottom: 12 },
-  modeText: { color: colors.textTertiary, fontFamily: typography.family.bold, fontSize: typography.size.xs, paddingVertical: 10, paddingHorizontal: 8 },
-  modeTextActive: { color: colors.text },
-  drawingArea: { width: "100%", aspectRatio: 3 / 4, borderRadius: radii.xl, overflow: "hidden", backgroundColor: "#FFFFFF" },
-  drawingIdleOverlay: { flex: 1, justifyContent: "center", alignItems: "center", gap: 12 },
-  drawingHintText: { color: "rgba(0,0,0,0.25)", fontFamily: typography.family.regular, fontSize: typography.size.xs, letterSpacing: 0.5 },
-  drawingToolbar: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.opacityLight, paddingHorizontal: 12, paddingVertical: 10, borderRadius: radii.lg, marginBottom: 12 },
-  drawingColorGrid: { flexDirection: "column", gap: 6 },
-  drawingColorRow: { flexDirection: "row", gap: 6 },
-  drawingColorDot: { width: 22, height: 22, borderRadius: radii.md, borderWidth: 1.5, borderColor: colors.borderSecondary },
-  drawingColorDotActive: { transform: [{ scale: 1.35 }], borderColor: colors.text, shadowColor: colors.text, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.7, shadowRadius: 5, elevation: 6 },
-  drawingBrushRow: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 16, marginTop: 4 },
-  drawingBrushBtn: { width: 36, height: 36, justifyContent: "center", alignItems: "center" },
-  drawingBrushDot: { borderWidth: 1.5, borderColor: colors.borderSecondary, opacity: 0.7 },
-  drawingBrushDotActive: { opacity: 1, borderColor: colors.text, shadowColor: colors.text, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 4, elevation: 5 },
-  drawingUndoBtn: { width: 32, height: 32, borderRadius: radii.lg, backgroundColor: colors.accentMuted, justifyContent: "center", alignItems: "center" },
-  drawingUndoBtnDisabled: { backgroundColor: colors.card },
-  drawingCancelBtn: { position: "absolute", left: 20, width: 40, height: 40, borderRadius: radii.lg, backgroundColor: colors.opacityLight, justifyContent: "center", alignItems: "center" },
+  cameraFooter: { position: "absolute", left: 0, right: 0, alignItems: "center", gap: spacing.lg },
+  modeSlider: { overflow: "hidden", paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: radii.md },
+  modeChip: { position: "absolute", top: 0, bottom: 0, backgroundColor: colors.bg, borderRadius: radii.sm },
+  modeItem: { position: "absolute", top: 0, bottom: 0, justifyContent: "center", alignItems: "center" },
+  // single-line/body-small : Regular / 14 / lineHeight 100%
+  modeText: { color: colors.text, ...textStyles.singleLineBodySmall },
+  // Zone de dessin : même format que le retour caméra (9/16, coins haut arrondis).
+  drawingArea: { width: "100%", aspectRatio: 9 / 16, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, overflow: "hidden", backgroundColor: "#FFFFFF" },
+  drawingCloseBtn: { position: "absolute", top: spacing.lg, left: spacing.lg, width: 40, height: 40, borderRadius: radii.md, overflow: "hidden", backgroundColor: colors.opacityLight, justifyContent: "center", alignItems: "center" },
+  // Pastille de couleur dans le bouton couleur (8px de padding dans le 40).
+  colorDot: { width: 24, height: 24, borderRadius: radii.full },
+  // Palette : s'ouvre à gauche du bouton (8px d'écart), même fond/radius que le bouton.
+  colorPalette: { position: "absolute", top: 0, right: 40 + spacing.sm, overflow: "hidden", borderRadius: radii.md, padding: spacing.sm, gap: spacing.sm },
+  colorPaletteRow: { flexDirection: "row", gap: spacing.xs },
+  colorSwatch: { width: 24, height: 24, borderRadius: radii.full },
+  colorSwatchSelected: { borderWidth: stroke.sm, borderColor: colors.cardBorder },
   audioIdleTouchable: { flex: 1, justifyContent: "center", alignItems: "center", gap: 20 },
   captureRow: { flexDirection: "row", alignItems: "center", gap: 32 },
   sideControlPlaceholder: { width: 48 },
   flipBtn: { width: 48, height: 48, borderRadius: radii.xl, backgroundColor: colors.accentMuted, justifyContent: "center", alignItems: "center" },
-  captureBtn: { width: 84, height: 84, borderRadius: radii.full, overflow: "hidden", justifyContent: "center", alignItems: "center" },
-  captureStopSquare: { width: 30, height: 30, borderRadius: radii.xs, backgroundColor: "#FF3B30" },
+  captureBtn: { width: 80, height: 80, borderRadius: radii.full, overflow: "hidden", justifyContent: "center", alignItems: "center" },
   recordingTimer: { position: "absolute", alignSelf: "center", flexDirection: "row", alignItems: "center", backgroundColor: colors.opacityLight, paddingHorizontal: 16, paddingVertical: 8, borderRadius: radii.lg, gap: 8 },
   recordingDot: { width: 10, height: 10, borderRadius: radii.full, backgroundColor: "#FF3B30" },
   recordingText: { color: colors.text, fontFamily: typography.family.semibold, fontSize: typography.size.sm },
@@ -1522,19 +1625,17 @@ const makeChallengeStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: "center",
   },
   challengeBtn: {
-    height: CHALLENGE_BTN_HEIGHT,
     backgroundColor: colors.brand,
-    paddingHorizontal: 20,
-    borderRadius: radii.lg,
+    padding: spacing.md,
+    borderRadius: radii.md,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: spacing.sm,
   },
   challengeBtnText: {
-    color: colors.textBrandOnBrand,
-    fontFamily: typography.family.bold,
-    fontSize: typography.size.sm,
+    color: colors.textBrandOnBrandSecondary,
+    ...textStyles.singleLineBodyBaseStrong,
   },
   bannerRow: {
     flexDirection: "row",

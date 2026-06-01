@@ -7,6 +7,7 @@ export interface DrawingCanvasRef {
   capture: () => Promise<string | null>;
   undo: () => void;
   redo: () => void;
+  clear: () => void;
 }
 
 type Point = { x: number; y: number };
@@ -61,6 +62,12 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { color: string; strok
         if (!next) return;
         redoStackRef.current = redoStackRef.current.slice(0, -1);
         setCompletedStrokes((prev) => [...prev, next]);
+      },
+      clear: () => {
+        redoStackRef.current = [];
+        activeStrokeRef.current = null;
+        lastPointRef.current = null;
+        setCompletedStrokes([]);
       },
     }));
 
