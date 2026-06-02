@@ -97,11 +97,11 @@ export const AudioCaptionPlayer = ({ player, status, onRemove, showVocalLabel, o
       <TouchableOpacity onPress={togglePlay} style={styles.playBtn}>
         <BlurView intensity={blur.md} tint="dark" style={StyleSheet.absoluteFillObject} />
         {status.playing ? (
-          <Svg width="14" height="14" viewBox="0 0 24 24" fill={colors.white}>
+          <Svg width="18" height="18" viewBox="0 0 24 24" fill={colors.white}>
             <Path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
           </Svg>
         ) : (
-          <Icon name="play" size={14} color={colors.white} />
+          <Icon name="play" size={18} color={colors.white} />
         )}
       </TouchableOpacity>
       

@@ -219,10 +219,15 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const [audioSeconds, setAudioSeconds] = useState(0);
   const [isCaptionRecording, setIsCaptionRecording] = useState(false);
   const isCaptionRecordingRef = useRef(false);
+  const [isHoldRecording, setIsHoldRecording] = useState(false);
+  const isHoldRecordingRef = useRef(false);
+  const cancelBtnScale = useRef(new Animated.Value(1)).current;
+  const isHoveringCancelRef = useRef(false);
+  const [isHoveringCancel, setIsHoveringCancel] = useState(false);
   const [captionAudioSeconds, setCaptionAudioSeconds] = useState(0);
   const captionAudioTimer = useRef<NodeJS.Timeout | null>(null);
   const recordingStartTimeRef = useRef<number>(0);
-  const isHoldRecordingRef = useRef<boolean>(false);
+  const holdTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [isSwipingToCancel, setIsSwipingToCancel] = useState(false);
   const isSwipingToCancelRef = useRef(false);
   const cancelScaleAnim = useRef(new Animated.Value(1)).current;
@@ -317,11 +322,47 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dx) > 5 || Math.abs(gestureState.dy) > 5,
       onPanResponderGrant: () => {
+        setIsHoldRecording(false);
+        isHoldRecordingRef.current = false;
         handleCaptionPressInRef.current();
+
+        if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+        holdTimerRef.current = setTimeout(() => {
+          if (isCaptionRecordingRef.current) {
+            setIsHoldRecording(true);
+            isHoldRecordingRef.current = true;
+          }
+        }, 400);
       },
       onPanResponderMove: (_, gestureState) => {
-        // Swipe to the left (negative dx) to cancel
-        if (gestureState.dx < -80) {
+        // Détecter si on est en mode "hold" (plus de 300ms)
+        const duration = Date.now() - recordingStartTimeRef.current;
+        if (!isHoldRecordingRef.current && duration > 300) {
+          setIsHoldRecording(true);
+          isHoldRecordingRef.current = true;
+        }
+
+        // Swipe to the left to cancel. 
+        // Le bouton cancel est à gauche. La barre a padding 12 et est à 16 du bord.
+        // On considère qu'on survole si moveX < 80 environ.
+        const hovering = gestureState.moveX < 80;
+        
+        if (hovering !== isHoveringCancelRef.current) {
+          isHoveringCancelRef.current = hovering;
+          setIsHoveringCancel(hovering);
+          
+          // N'animer le scale que si on est en mode "hold"
+          if (isHoldRecordingRef.current) {
+            Animated.spring(cancelBtnScale, {
+              toValue: hovering ? 1.2 : 1,
+              useNativeDriver: true,
+              friction: 8,
+              tension: 50,
+            }).start();
+          }
+        }
+
+        if (gestureState.dx < -80 || hovering) {
           setIsSwipingToCancel(true);
           isSwipingToCancelRef.current = true;
         } else {
@@ -330,6 +371,10 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         }
       },
       onPanResponderRelease: () => {
+        if (holdTimerRef.current) {
+          clearTimeout(holdTimerRef.current);
+          holdTimerRef.current = null;
+        }
         if (isSwipingToCancelRef.current) {
           cancelCaptionAudioRecordingRef.current();
         } else {
@@ -337,11 +382,25 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         }
         setIsSwipingToCancel(false);
         isSwipingToCancelRef.current = false;
+        setIsHoldRecording(false);
+        isHoldRecordingRef.current = false;
+        setIsHoveringCancel(false);
+        isHoveringCancelRef.current = false;
+        cancelBtnScale.setValue(1);
       },
       onPanResponderTerminate: () => {
+        if (holdTimerRef.current) {
+          clearTimeout(holdTimerRef.current);
+          holdTimerRef.current = null;
+        }
         handleCaptionPressOutRef.current();
         setIsSwipingToCancel(false);
         isSwipingToCancelRef.current = false;
+        setIsHoldRecording(false);
+        isHoldRecordingRef.current = false;
+        setIsHoveringCancel(false);
+        isHoveringCancelRef.current = false;
+        cancelBtnScale.setValue(1);
       },
     })
   ).current;
@@ -1432,8 +1491,37 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
           {activeChallenge === null && (
             <Animated.View style={[styles.captionBarOuter, { bottom: captionBarBottomAnim }]}>
               <View style={[styles.captionBar, isEditingCaption && { height: 48 }]}>
-                <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                {Platform.OS === "android" ? (
+                  <NativeBlurView blurAmount={30} blurType="light" blurRounds={2} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                ) : (
+                  <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                )}
                 <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
+
+                {/* Bouton Annuler (X) : à gauche pendant l'enregistrement */}
+                {isCaptionRecording && (
+                  <TouchableOpacity 
+                    onPress={cancelCaptionAudioRecording}
+                    activeOpacity={0.8}
+                    style={{ width: 32, height: 32, marginRight: spacing.sm, justifyContent: "center", alignItems: "center" }}
+                  >
+                    <Animated.View 
+                      style={[
+                        styles.captionMicBtn, 
+                        { 
+                          width: 32,
+                          height: 32,
+                          backgroundColor: colors.bgDangerTertiary, 
+                          marginVertical: 0,
+                          transform: [{ scale: cancelBtnScale }],
+                          zIndex: 1000,
+                        }
+                      ]}
+                    >
+                      <Icon name="x" size={18} color={colors.iconDangerTertiary} />
+                    </Animated.View>
+                  </TouchableOpacity>
+                )}
 
                 {slot1!.captionAudioUri ? (
                   <View style={{ flex: 1 }}>
@@ -1441,9 +1529,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                   </View>
                 ) : isCaptionRecording ? (
                   <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-                    <View style={[styles.audioWaveformRow, { flex: 1 }]} pointerEvents="none">
+                    <View style={[styles.audioWaveformRow, { flex: 1, height: 16 }]} pointerEvents="none">
                       {liveWaveform.map((v, i) => (
-                        <View key={i} style={[styles.audioWaveformBar, { height: Math.max(3.5, v * 40), backgroundColor: colors.text }]} />
+                        <View key={i} style={[styles.audioWaveformBar, { height: Math.max(3.5, v * 16), backgroundColor: colors.text }]} />
                       ))}
                     </View>
                     <Text style={styles.captionRecordingText}>{captionAudioSeconds}s</Text>
@@ -1475,15 +1563,27 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 {previewSlot.mode !== "AUDIO" && !slot1!.captionAudioUri && (
                   isEditingCaption ? (
                     <TouchableOpacity style={styles.captionConfirmBtn} onPress={confirmEditCaption} activeOpacity={0.8}>
-                      <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                      {Platform.OS === "android" ? (
+                        <NativeBlurView blurAmount={30} blurType="light" blurRounds={2} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                      ) : (
+                        <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                      )}
                       <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
-                      <Icon name="check" size={20} color={colors.icon} />
+                      <Icon name="check" size={16} color={colors.icon} />
                     </TouchableOpacity>
                   ) : (!slot1!.note.trim() || isCaptionRecording) ? (
                     <View style={[styles.captionMicBtn, isSwipingToCancel && { opacity: 0.5 }]} {...captionPanResponder.panHandlers}>
-                      <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                      {Platform.OS === "android" ? (
+                        <NativeBlurView blurAmount={30} blurType="light" blurRounds={2} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                      ) : (
+                        <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                      )}
                       <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
-                      <Icon name={isCaptionRecording ? "check" : "mic"} size={20} color={colors.icon} />
+                      <Icon 
+                        name={(isCaptionRecording && !isHoldRecording) ? "check" : "mic"} 
+                        size={(isCaptionRecording && !isHoldRecording) ? 16 : 18} 
+                        color={colors.icon} 
+                      />
                     </View>
                   ) : null
                 )}
