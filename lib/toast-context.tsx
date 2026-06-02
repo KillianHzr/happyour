@@ -7,7 +7,7 @@ import {
   Platform,
   StatusBar,
 } from "react-native";
-import { BlurView } from "expo-blur";
+import BlurView from "../components/atoms/BlurView";
 import Svg, { Path, Circle } from "react-native-svg";
 import { radii, typography } from "./theme";
 

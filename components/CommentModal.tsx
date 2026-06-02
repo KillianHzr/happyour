@@ -17,7 +17,7 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
 } from "react-native";
-import { BlurView } from "expo-blur";
+import BlurView from "./atoms/BlurView";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { supabase } from "../lib/supabase";

@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from "react";
 import { View, StyleSheet, TouchableOpacity, PanResponder, Text } from "react-native";
 import { Svg, Path } from "react-native-svg";
-import { BlurView } from "expo-blur";
+import BlurView from "../atoms/BlurView";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { colors, radii, typography, blur } from "../../lib/theme";
 import Icon from "../Icon";

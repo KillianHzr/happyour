@@ -16,7 +16,7 @@ import {
 import { useLocalSearchParams, router } from "expo-router";
 import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
-import { BlurView } from "expo-blur";
+import BlurView from "../../../../components/atoms/BlurView";
 import { decode } from "base64-arraybuffer";
 import * as FileSystem from "expo-file-system/legacy";
 import { supabase } from "../../../../lib/supabase";

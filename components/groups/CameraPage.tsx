@@ -5,7 +5,6 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
-import { BlurView } from "expo-blur";
 import { type CameraType, type FlashMode, useCameraPermissions } from "expo-camera";
 import { manipulateAsync, FlipType, SaveFormat } from "expo-image-manipulator";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -25,6 +24,8 @@ import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import Shape, { type ShapeName } from "../Shape";
 import Icon, { type IconName } from "../Icon";
 import { AudioCaptionPlayer } from "../molecules/AudioCaptionPlayer";
+import BlurView from "../atoms/BlurView";
+import { BlurView as NativeBlurView } from "@sbaiahmed1/react-native-blur";
 
 const NAVBAR_HEIGHT = 100;
 
@@ -131,6 +132,31 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   }, []);
 
   const [showGroupPicker, setShowGroupPicker] = useState(false);
+  const pickerOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (showGroupPicker && Platform.OS === "android") {
+      pickerOpacity.setValue(0);
+      Animated.timing(pickerOpacity, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [showGroupPicker]);
+
+  // Logic pour fermer avec animation si besoin (optionnel ici car fade out par défaut sur le parent si on changeait showGroupPicker différemment)
+  const closeGroupPicker = () => {
+    if (Platform.OS === "android") {
+      Animated.timing(pickerOpacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start(() => setShowGroupPicker(false));
+    } else {
+      setShowGroupPicker(false);
+    }
+  };
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [showChallengesModal, setShowChallengesModal] = useState(false);
   const [activeChallenge, setActiveChallenge] = useState<ActiveChallenge | null>(null);
@@ -1527,7 +1553,6 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               </View>
             )}
             <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod="dimezisBlurView" style={StyleSheet.absoluteFillObject}>
-              <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.opacityDark }]} pointerEvents="none" />
               <GroupPickerContent
                 shapes={previewCaptureShapes}
                 groups={allGroups}
@@ -1542,7 +1567,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
           </View>
         </Modal>
       ) : showGroupPicker ? (
-        <View style={[StyleSheet.absoluteFillObject, { zIndex: 999 }]}>
+        <Animated.View style={[StyleSheet.absoluteFillObject, { zIndex: 999, opacity: pickerOpacity }]}>
           {/* Preview plein écran derrière l'overlay */}
           {slot1 && (
             <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
@@ -1559,18 +1584,30 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               )}
             </View>
           )}
-          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(10,10,12,0.82)" }]} pointerEvents="none" />
+          {/* Flou intense à 50 uniquement pour Android ici */}
+          <NativeBlurView
+            blurAmount={50}
+            blurType="dark" 
+            blurRounds={3} 
+            style={StyleSheet.absoluteFillObject}
+          />
+          {/* Voile pour éclaircir/harmoniser comme sur iOS */}
+          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(255,255,255,0.05)" }]} pointerEvents="none" />
+          
           <GroupPickerContent
             shapes={previewCaptureShapes}
             groups={allGroups}
             selectedGroupIds={selectedGroupIds}
             onToggle={toggleGroup}
-            onConfirm={() => confirmUpload(selectedGroupIds)}
-            onCancel={() => setShowGroupPicker(false)}
+            onConfirm={() => {
+              confirmUpload(selectedGroupIds);
+              closeGroupPicker();
+            }}
+            onCancel={closeGroupPicker}
             pickerStyles={pickerStyles}
             colors={colors}
           />
-        </View>
+        </Animated.View>
       ) : null}
 
     </>

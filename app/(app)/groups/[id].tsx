@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { View, Text, StyleSheet, Dimensions, Animated, TouchableOpacity, Alert, TextInput, AppState, Modal, KeyboardAvoidingView, Platform, Pressable } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
-import { BlurView } from "expo-blur";
+import BlurView from "../../../components/atoms/BlurView";
 import { supabase } from "../../../lib/supabase";
 import { r2Storage } from "../../../lib/r2";
 import { useAuth } from "../../../lib/auth-context";
