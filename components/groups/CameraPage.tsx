@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, Component } from "react";
 import {
-  View, Text, StyleSheet, Animated, Easing, TouchableOpacity,
-  Alert, KeyboardAvoidingView, Platform, TextInput, Modal, Pressable, PanResponder, ActivityIndicator, useWindowDimensions,
+  View, Text, StyleSheet, Animated, Easing, LayoutAnimation, TouchableOpacity,
+  Alert, Keyboard, KeyboardAvoidingView, Platform, TextInput, Modal, Pressable, PanResponder, UIManager, useWindowDimensions,
 } from "react-native";
 import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
@@ -22,16 +22,39 @@ import ChallengesModal from "./ChallengesModal";
 import { type ActiveChallenge } from "../../lib/challenges";
 import { radii, spacing, stroke, blur, typography, textStyles, glassBlurIntensity, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
-import Shape from "../Shape";
+import Shape, { type ShapeName } from "../Shape";
 import Icon, { type IconName } from "../Icon";
 import { AudioCaptionPlayer } from "../molecules/AudioCaptionPlayer";
 
 const NAVBAR_HEIGHT = 100;
+
+// LayoutAnimation pour les transitions de la barre de légende (entrée/sortie édition)
+if (Platform.OS === "android") {
+  UIManager.setLayoutAnimationEnabledExperimental?.(true);
+}
+const CAPTION_TRANSITION = {
+  duration: 220,
+  create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+  update: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.bounds },
+  delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
+};
 // Espace entre le haut du cadre de capture et le bouton Défis (par-dessus la caméra).
 const CHALLENGE_GAP = 16;
+// Sur iOS, expo-blur fonctionne nativement (UIVisualEffectView).
+// Sur Android, dimezisBlurView exige un blurTarget depuis expo-blur v55 — on passe "none"
+// pour éviter le warning et garder uniquement le voile opacityLight comme fond glass.
+const BLUR_METHOD = Platform.OS === "ios" ? ("dimezisBlurView" as const) : ("none" as const);
 // Zone du sélecteur de mode : 80% de l'écran, plafonnée à cette largeur max.
-// Les 3 modes se partagent 1/3 chacun (flex: 1).
 const MODE_SELECTOR_MAX_WIDTH = 320;
+// Paliers de zoom accessibles via le bouton cyclique.
+// x0.5/x1 → zoom=0 (min), x2 → 0.25, x5 → 1.0 (max).
+const ZOOM_PRESETS = [
+  { label: "x0.5", value: 0 },
+  { label: "x1",   value: 0 },
+  { label: "x2",   value: 0.25 },
+  { label: "x5",   value: 1.0 },
+] as const;
+type ZoomPresetIdx = 0 | 1 | 2 | 3;
 // Palette de couleurs du dessin (2 lignes de 7). Défaut = #FF561A.
 const DRAWING_COLORS: string[][] = [
   ["#FFFFFF", "#F23F3A", "#FE76B4", "#FFC548", "#00B487", "#6DD0F0", "#7659FF"],
@@ -60,7 +83,7 @@ type Props = {
   allGroups: GroupInfo[];
   onScrollLock: (locked: boolean) => void;
   onHideMenu?: (hidden: boolean) => void;
-  onCaptureSent?: () => void;
+  onCaptureSent?: (info: { mode: string; groupName: string }) => void;
 };
 
 class CameraErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean; error: string }> {
@@ -152,6 +175,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const [facing, setFacing] = useState<CameraType>("back");
   const [flash, setFlash] = useState<FlashMode>("off");
   const [zoom, setZoom] = useState(0);
+  const [zoomPresetIdx, setZoomPresetIdx] = useState<ZoomPresetIdx>(1);
   const [torch, setTorch] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isVideoProcessing, setIsVideoProcessing] = useState(false);
@@ -159,7 +183,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const [isZoomDragging, setIsZoomDragging] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [capturing, setCapturing] = useState(false);
-  const [isEditingNote, setIsEditingNote] = useState(false);
+  const [isEditingCaption, setIsEditingCaption] = useState(false);
+  const isEditingCaptionRef = useRef(false);
+  const captionEditInputRef = useRef<any>(null);
   const [textModeContent, setTextModeContent] = useState("");
   const [isAudioRecording, setIsAudioRecording] = useState(false);
   const [canUndo, setCanUndo] = useState(false);
@@ -174,6 +200,72 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const [isSwipingToCancel, setIsSwipingToCancel] = useState(false);
   const isSwipingToCancelRef = useRef(false);
   const cancelScaleAnim = useRef(new Animated.Value(1)).current;
+  // Animated values for caption editing — preview shrinks to make room for keyboard
+  const previewWidthAnim = useRef(new Animated.Value(winWidth)).current;
+  const previewBottomRadiusAnim = useRef(new Animated.Value(0)).current;
+  // Position verticale de la barre de légende (absolue dans previewFullContainer).
+  // État normal : NAVBAR_HEIGHT + spacing.lg (overlay bas de la frame).
+  // État édition : kbH + spacing.lg (16px au-dessus du clavier).
+  const captionBarBottomAnim = useRef(new Animated.Value(NAVBAR_HEIGHT + spacing.lg)).current;
+
+  // Keep ref in sync so keyboard listeners don't capture stale state
+  useEffect(() => { isEditingCaptionRef.current = isEditingCaption; }, [isEditingCaption]);
+
+  // Keyboard listeners: animate preview width + border radius + spacer in sync with keyboard
+  useEffect(() => {
+    const kbShow = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const kbHide = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const EDIT_CAPTION_H = 48;        // hauteur fixe de la barre d'édition hors frame
+    const MARGIN_ABOVE_KB = spacing.lg; // 16px au-dessus du clavier
+    const GAP = spacing.sm;             // 8px entre le bas de la frame et le haut de la barre
+
+    const onShow = Keyboard.addListener(kbShow, (e) => {
+      if (!isEditingCaptionRef.current) return;
+      const kbH = e.endCoordinates.height;
+      const dur = (e as any).duration > 10 ? (e as any).duration : 280;
+      // Ancre fixe = espace au-dessus de la frame en état normal
+      const topFixed = Math.max(0, winHeight - winWidth * 16 / 9 - NAVBAR_HEIGHT);
+      // La barre d'édition se positionne juste au-dessus du clavier
+      const captionBarBottom = kbH + MARGIN_ABOVE_KB;
+      // La frame doit finir juste au-dessus de la barre d'édition (+ gap)
+      const mediaFrameBottom = winHeight - captionBarBottom - EDIT_CAPTION_H - GAP;
+      const targetMediaH = Math.max(winWidth * 0.4 * 16 / 9, mediaFrameBottom - topFixed);
+      const targetW = Math.floor(targetMediaH * 9 / 16);
+      Animated.parallel([
+        Animated.timing(previewWidthAnim, { toValue: targetW, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(previewBottomRadiusAnim, { toValue: radii.lg, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(captionBarBottomAnim, { toValue: captionBarBottom, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+      ]).start();
+    });
+
+    const onHide = Keyboard.addListener(kbHide, (e) => {
+      const dur = (e as any).duration > 10 ? (e as any).duration : 250;
+      Animated.parallel([
+        Animated.timing(previewWidthAnim, { toValue: winWidth, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(previewBottomRadiusAnim, { toValue: 0, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(captionBarBottomAnim, { toValue: NAVBAR_HEIGHT + spacing.lg, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+      ]).start(() => {
+        if (isEditingCaptionRef.current) {
+          LayoutAnimation.configureNext(CAPTION_TRANSITION);
+          isEditingCaptionRef.current = false;
+          setIsEditingCaption(false);
+        }
+      });
+    });
+
+    return () => { onShow.remove(); onHide.remove(); };
+  }, [winWidth, winHeight, insets.top, insets.bottom]);
+
+  const startEditCaption = () => {
+    LayoutAnimation.configureNext(CAPTION_TRANSITION);
+    isEditingCaptionRef.current = true;
+    setIsEditingCaption(true);
+  };
+
+  const confirmEditCaption = () => {
+    Keyboard.dismiss(); // triggers keyboardWillHide → animation → resets isEditingCaption
+  };
 
   useEffect(() => {
     Animated.spring(cancelScaleAnim, {
@@ -238,6 +330,21 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const isSlot1WithSlot2 = slot1 !== null && !capturingSecond && viewingSlot === 1 && hasSlot2;
   const isSlot2Preview = slot1 !== null && !capturingSecond && viewingSlot === 2;
   const showBottomSlotBar = isSlot1Preview || isSlot1WithSlot2 || isSlot2Preview;
+
+  // Shapes à afficher dans le picker multi-groupe : type de capture + type de légende.
+  const previewCaptureShapes: ShapeName[] = slot1 ? (() => {
+    const s: ShapeName[] = [];
+    if (slot1.mode === "PHOTO") s.push("photo");
+    else if (slot1.mode === "VIDEO") s.push("video");
+    else if (slot1.mode === "DESSIN") s.push("dessin");
+    else if (slot1.mode === "AUDIO") s.push("audio");
+    else if (slot1.mode === "TEXTE") s.push("texte");
+    if (slot1.mode === "PHOTO" || slot1.mode === "VIDEO" || slot1.mode === "DESSIN") {
+      if (slot1.captionAudioUri) s.push("audio");
+      else if (slot1.note?.trim()) s.push("texte");
+    }
+    return s;
+  })() : [];
   const videoPreviewPlayer = useVideoPlayer(previewSlot?.mode === "VIDEO" ? (previewSlot.uri ?? null) : null, p => { p.loop = true; p.play(); });
 
   const audioWaveAnims = useRef(
@@ -362,6 +469,12 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     setActiveChallenge(null);
     setZoom(0);
     savedZoomRef.current = 0;
+    if (isEditingCaptionRef.current) {
+      isEditingCaptionRef.current = false;
+      setIsEditingCaption(false);
+      captionBarBottomAnim.setValue(NAVBAR_HEIGHT + spacing.lg);
+      Keyboard.dismiss();
+    }
   };
 
   const handleSelectChallenge = (challenge: ActiveChallenge) => {
@@ -449,8 +562,17 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const handleFlipCamera = () => {
     setZoom(0);
     savedZoomRef.current = 0;
+    setZoomPresetIdx(1);
     setFacing(prev => prev === "back" ? "front" : "back");
     if (isRecording) seamlessRecorderRef.current?.switchCamera();
+  };
+
+  const handleZoomPreset = () => {
+    const nextIdx = ((zoomPresetIdx + 1) % ZOOM_PRESETS.length) as ZoomPresetIdx;
+    setZoomPresetIdx(nextIdx);
+    const newZoom = ZOOM_PRESETS[nextIdx].value;
+    setZoom(newZoom);
+    savedZoomRef.current = newZoom;
   };
 
   const handleFlipCameraRef = useRef(handleFlipCamera);
@@ -489,8 +611,11 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       prevPinchDistRef.current = null;
       lastCameraTapRef.current = 0;
       if (pinchRafRef.current !== null) { cancelAnimationFrame(pinchRafRef.current); pinchRafRef.current = null; }
-      setZoom(savedZoomRef.current);
+      const z = savedZoomRef.current;
+      setZoom(z);
       setIsPinching(false);
+      // Sync bouton zoom au palier le plus proche
+      setZoomPresetIdx(z < 0.125 ? 1 : z < 0.625 ? 2 : 3);
     }
   };
   const handleCamTerminate = () => {
@@ -574,29 +699,32 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
 
   const stopAudioRecording = stopAudioRecordingDirect;
 
+  const captionRecorderStarted = useRef(false);
+
   const startCaptionAudioRecording = async () => {
     if (isCaptionRecordingRef.current) return;
     isCaptionRecordingRef.current = true;
+    captionRecorderStarted.current = false;
     try {
       const perm = await AudioModule.requestRecordingPermissionsAsync();
-      if (!perm.granted) { 
+      if (!perm.granted) {
         isCaptionRecordingRef.current = false;
-        Alert.alert("Permission refusée", "L'accès au micro est requis."); 
-        return; 
+        Alert.alert("Permission refusée", "L'accès au micro est requis.");
+        return;
       }
 
       await AudioModule.setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await audioRecorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
-      
+
       // Delay for Android activity sync
       if (Platform.OS === "android") await new Promise(resolve => setTimeout(resolve, 150));
 
       if (!isCaptionRecordingRef.current) {
-        await audioRecorder.stop().catch(() => {});
         return;
       }
 
       await audioRecorder.record();
+      captionRecorderStarted.current = true;
       setCaptionWaveform([]);
       setIsCaptionRecording(true);
       setCaptionAudioSeconds(0);
@@ -618,10 +746,13 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const stopCaptionAudioRecording = async () => {
     if (!isCaptionRecordingRef.current && !isCaptionRecording) return;
     isCaptionRecordingRef.current = false;
-    try { 
-      await audioRecorder.stop(); 
-    } catch (e) {
-      console.error("Error stopping caption recording:", e);
+    if (captionRecorderStarted.current) {
+      captionRecorderStarted.current = false;
+      try {
+        await audioRecorder.stop();
+      } catch (e) {
+        console.error("Error stopping caption recording:", e);
+      }
     }
     if (captionAudioTimer.current) { clearInterval(captionAudioTimer.current); captionAudioTimer.current = null; }
     audioWaveAnims.forEach(({ anim }) => { anim.stopAnimation(); anim.setValue(0.15); });
@@ -729,9 +860,13 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     } finally { setCapturing(false); }
   };
 
+  const toggleGroup = (gId: string) => {
+    setSelectedGroupIds(prev => prev.includes(gId) ? prev.filter(g => g !== gId) : [...prev, gId]);
+  };
+
   const openGroupPicker = () => {
     if (activeChallenge !== null) { confirmUpload([activeChallenge.groupId]); return; }
-    if (allGroups.length <= 1) { confirmUpload([groupId]); return; }
+    if (allGroups.length <= 1) { confirmUpload([allGroups[0]?.id ?? groupId]); return; }
     setSelectedGroupIds([groupId]);
     setShowGroupPicker(true);
   };
@@ -821,15 +956,12 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     };
   }, [isActive]);
 
-  const toggleGroup = (id: string) => {
-    setSelectedGroupIds(prev => prev.includes(id) ? prev.filter(g => g !== id) : [...prev, id]);
-  };
-
   const confirmUpload = (groupIds: string[]) => {
-    if (!slot1) return;
+    if (!slot1 || groupIds.length === 0) return;
+    setShowGroupPicker(false);
     const ts = Date.now();
+
     groupIds.forEach((gId, i) => {
-      // Primary file (slot1)
       let fileName: string | null = null;
       let fileUri: string | null = null;
       let contentType: string | null = null;
@@ -857,7 +989,6 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
 
       const dbData = { group_id: gId, user_id: userId, note: dbNote };
 
-      // Caption Audio
       let captionAudioFile = null;
       if (slot1.captionAudioUri) {
         captionAudioFile = {
@@ -867,42 +998,24 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         };
       }
 
-      // Secondary file (slot2)
-      let secondFile = null;
-      if (slot2) {
-        if (slot2.mode === "TEXTE") {
-          secondFile = { fileName: null, fileUri: null, contentType: null };
-        } else if (slot2.mode === "AUDIO" && slot2.audioUri) {
-          secondFile = { fileName: `${gId}/${userId}_${ts + i + 1000}.m4a`, fileUri: slot2.audioUri, contentType: "audio/m4a" };
-        } else if (slot2.mode === "VIDEO" && slot2.uri) {
-          secondFile = { fileName: `${gId}/${userId}_${ts + i + 1000}.mp4`, fileUri: slot2.uri, contentType: "video/mp4" };
-        } else if ((slot2.mode === "PHOTO" || slot2.mode === "DESSIN") && slot2.uri) {
-          const suffix2 = slot2.mode === "DESSIN" ? "_draw" : "";
-          secondFile = { fileName: `${gId}/${userId}_${ts + i + 1000}${suffix2}.jpg`, fileUri: slot2.uri, contentType: "image/jpeg" };
-        }
-      }
-
       if (activeChallenge !== null) {
         startChallengeUpload(
           activeChallenge.challengeId,
           fileName, fileUri, contentType,
           { group_id: gId, user_id: userId, note: dbNote },
-          secondFile ?? undefined,
+          undefined,
           activeChallenge.isTarget,
           slot1.waveform
         );
       } else {
-        startUpload(fileName, fileUri, contentType, dbData, secondFile ?? undefined, captionAudioFile ?? undefined, slot1.waveform, slot1.captionWaveform);
+        startUpload(fileName, fileUri, contentType, dbData, undefined, captionAudioFile ?? undefined, slot1.waveform, slot1.captionWaveform);
       }
     });
-    onCaptureSent?.();
-    resetAll();
-  };
 
-  const handleConfirmGroupPicker = () => {
-    if (selectedGroupIds.length === 0) return;
-    setShowGroupPicker(false);
-    confirmUpload(selectedGroupIds);
+    const firstName = allGroups.find(g => g.id === groupIds[0])?.name ?? groupIds[0];
+    const groupName = groupIds.length === 1 ? firstName : `${groupIds.length} groupes`;
+    onCaptureSent?.({ mode: slot1.mode, groupName });
+    resetAll();
   };
 
   // ── Slot thumbnail renderer ──
@@ -936,6 +1049,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
 
   return (
     <>
+      <View style={{ flex: 1 }}>
       {/* ── Camera / capture views ── */}
       {isCapturing && (
         cameraMode === "TEXTE" ? (
@@ -975,13 +1089,13 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               <View style={styles.cameraControls}>
                 <View>
                   <TouchableOpacity style={styles.cameraCtrlBtn} onPress={() => setShowColorPalette((s) => !s)} activeOpacity={0.8}>
-                    <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} pointerEvents="none" />
+                    <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
                     <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
                     <View style={[styles.colorDot, { backgroundColor: drawingColor }]} />
                   </TouchableOpacity>
                   {showColorPalette && (
                     <View style={styles.colorPalette}>
-                      <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} pointerEvents="none" />
+                      <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
                       <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
                       {DRAWING_COLORS.map((row, ri) => (
                         <View key={ri} style={styles.colorPaletteRow}>
@@ -998,12 +1112,12 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                   )}
                 </View>
                 <TouchableOpacity style={styles.cameraCtrlBtn} onPress={() => drawingRef.current?.undo()} activeOpacity={0.8} disabled={!canUndo}>
-                  <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} pointerEvents="none" />
+                  <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
                   <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
                   <Icon name="rollback" size={20} color={canUndo ? colors.icon : colors.iconDisabled} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.cameraCtrlBtn} onPress={() => setShowClearConfirm(true)} activeOpacity={0.8} disabled={!canUndo}>
-                  <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} pointerEvents="none" />
+                  <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
                   <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
                   <Icon name="trash" size={20} color={canUndo ? colors.icon : colors.iconDisabled} />
                 </TouchableOpacity>
@@ -1045,12 +1159,14 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
             </TouchableOpacity>
           </View>
         ) : (
-          <View style={[styles.cameraPageContainer, { justifyContent: "flex-end", paddingTop: 0, paddingBottom: (capturingSecond && slot1) ? NAVBAR_HEIGHT + 92 : NAVBAR_HEIGHT, paddingHorizontal: 0 }]}>
+          <View style={[styles.cameraPageContainer, { justifyContent: "flex-end", paddingTop: 0, paddingBottom: NAVBAR_HEIGHT, paddingHorizontal: 0 }]}>
             <View style={styles.cameraInner}>
               <>
-                {/* Camera view clipped to rounded rect — only mount when permission is granted */}
+                {/* Camera view clipped to rounded rect — only mount when active + permission granted.
+                    Gating on isActive prevents mounting while the tab is off-screen, which on iOS
+                    can trigger a race where stopRunning() queues after startRunning() on sessionQueue. */}
                 <View style={[StyleSheet.absoluteFillObject, { borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, overflow: "hidden" }]}>
-                  {(cameraPermission?.granted ?? Platform.OS === "ios") && (
+                  {isActive && (cameraPermission?.granted ?? Platform.OS === "ios") && (
                     <SeamlessRecorder
                       ref={seamlessRecorderRef}
                       facing={facing}
@@ -1081,14 +1197,14 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               {(cameraMode === "PHOTO" || cameraMode === "VIDEO") && !isRecording && (
                 <View style={styles.cameraControls}>
                   <CameraControlButton
-                    icon="flash"
+                    icon={(cameraMode === "VIDEO" ? torch : flash !== "off") ? "flash-on" : "flash"}
                     onPress={() => {
                       if (cameraMode === "VIDEO") setTorch(t => !t);
-                      else setFlash(prev => prev === "off" ? "on" : prev === "on" ? "auto" : "off");
+                      else setFlash(prev => prev === "off" ? "on" : "off");
                     }}
                   />
                   <CameraControlButton icon="rotate" onPress={handleFlipCamera} />
-                  <CameraControlButton icon="zoom" onPress={() => {}} />
+                  <ZoomPresetButton label={ZOOM_PRESETS[zoomPresetIdx].label} onPress={handleZoomPreset} />
                 </View>
               )}
             </View>
@@ -1096,31 +1212,6 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         )
       )}
 
-      {/* ── Écran traitement vidéo supprimé (SeamlessRecorder = zéro post-processing) ── */}
-      {false && (
-        <View style={[styles.previewContainer, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 8, paddingHorizontal: 12 }]}>
-          <View style={[styles.previewImageWrapper, { backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", gap: 16 }]}>
-            <ActivityIndicator size="large" color={colors.text} />
-            <Text style={styles.processingText}>Traitement…</Text>
-          </View>
-          <View style={[slotBarStyles.bar, { opacity: 0.35 }]} pointerEvents="none">
-            <View style={slotBarStyles.addBtn}>
-              <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                <Path d="M12 5V19" stroke={colors.bg} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <Path d="M5 12H19" stroke={colors.bg} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </Svg>
-              <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                <Path d="M20 9H11C9.89543 9 9 9.89543 9 11V20C9 21.1046 9.89543 22 11 22H20C21.1046 22 20 21.1046 22 20V11C22 9.89543 21.1046 9 20 9Z" stroke={colors.bg} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <Path d="M5 15H4C3.46957 15 2.96086 14.7893 2.58579 14.4142C2.21071 14.0391 2 13.5304 2 13V4C2 3.46957 2.21071 2.96086 2.58579 2.58579C2.96086 2.21071 3.46957 2 4 2H13C13.5304 2 14.0391 2.21071 14.4142 2.58579C14.7893 2.96086 15 3.46957 15 4V5" stroke={colors.bg} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </Svg>
-            </View>
-            <View style={slotBarStyles.sendBtn}>
-              <SendIcon color={colors.bg} />
-              <Text style={slotBarStyles.sendText}>Envoyer</Text>
-            </View>
-          </View>
-        </View>
-      )}
 
       {/* ── Camera UI overlay ── */}
       {isCapturing && (
@@ -1170,9 +1261,6 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
 
           <View style={[styles.cameraFooter, { bottom: (capturingSecond && slot1) ? NAVBAR_HEIGHT + 104 : NAVBAR_HEIGHT + 24 }]}>
             <View style={{ alignItems: "center", gap: 6 }}>
-              {(cameraMode === "PHOTO" || cameraMode === "VIDEO") && (
-                <ZoomSlider zoom={zoom} onZoom={(z) => { setZoom(z); savedZoomRef.current = z; }} onDragStart={() => { setIsZoomDragging(true); onScrollLockRef.current(true); }} onDragEnd={() => setIsZoomDragging(false)} />
-              )}
               {(activeChallenge === null || capturingSecond) && !isRecording && !isAudioRecording && !(cameraMode === "DESSIN" && canUndo) && (
                 <ModeSelector
                   selected={cameraMode}
@@ -1191,7 +1279,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 disabled={isPinching || (cameraMode === "TEXTE" && !textModeContent.trim())}
                 activeOpacity={0.8}
               >
-                <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} />
+                <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} />
                 <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} />
                 {isRecording || isAudioRecording ? (
                   <Shape name="stop" size={40} color={colors.brand} />
@@ -1202,264 +1290,89 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               {cameraMode !== "TEXTE" && <View style={styles.sideControlPlaceholder} />}
             </View>
           </View>
-          {/* ── Barre switch/envoyer pendant la 2e capture ── */}
-          {capturingSecond && slot1 && !(cameraMode === "DESSIN" && canUndo) && (
-            <View style={[styles.capturingSecondBar, { bottom: NAVBAR_HEIGHT + 8 }]}>
-              <TouchableOpacity
-                style={styles.capturingSecondThumb}
-                onPress={() => { setCapturingSecond(false); capturingSecondRef.current = false; setViewingSlot(1); }}
-                activeOpacity={0.8}
-              >
-                {renderSlotThumbnail(slot1)}
-                <View style={[slotBarStyles.badge, { top: 6, right: 6 }]}><Text style={slotBarStyles.badgeText}>1</Text></View>
-                <View style={slotBarStyles.swapOverlay}>
-                  <Svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={colors.text} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <Path d="M7 16V4m0 0L3 8m4-4l4 4" /><Path d="M17 8v12m0 0l4-4m-4 4l-4-4" />
-                  </Svg>
-                </View>
-              </TouchableOpacity>
-              {cameraMode === "TEXTE" && slot2 && (
-                <TouchableOpacity style={slotBarStyles.sendBtn} onPress={openGroupPicker}>
-                  <SendIcon color={colors.bg} />
-                  <Text style={slotBarStyles.sendText}>Envoyer</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
           {isVideoProcessing && (
             <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFillObject} pointerEvents="box-none" />
           )}
         </View>
       )}
 
-      {/* ── Preview: Photo / Drawing / Text ── */}
-      {!isCapturing && isActive && previewSlot && previewSlot.mode !== "AUDIO" && (
-        <View style={[styles.previewContainer, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 8, paddingHorizontal: 12 }]}>
-          {previewSlot.mode === "TEXTE" ? (
-            <View style={[styles.previewImageWrapper, { backgroundColor: "#0A0A0A" }]}>
-              {activeChallenge !== null && (
-                <View style={challengeStyles.previewBannerOverlay} pointerEvents="box-none">
-                  <View style={challengeStyles.bannerRow}>
-                    <TouchableOpacity style={challengeStyles.bannerClose} onPress={() => setActiveChallenge(null)} activeOpacity={0.7}>
-                      <Svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                        <Path d="M18 6L6 18M6 6l12 12" stroke={colors.text} strokeWidth="2.5" strokeLinecap="round" />
-                      </Svg>
-                    </TouchableOpacity>
-                    <View style={challengeStyles.bannerTextWrapper}>
-                      <Text style={challengeStyles.bannerText} numberOfLines={2}>{activeChallenge.promptText}</Text>
-                      {activeChallenge.proposedByUsername && (
-                        <Text style={challengeStyles.bannerProposerText}>↳ {activeChallenge.proposedByUsername}</Text>
-                      )}
-                    </View>
-                  </View>
-                </View>
-              )}
-              <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 32 }}>
+      {/* ── Preview Unifié (même frame 9:16 que la capture) ── */}
+      {!isCapturing && isActive && previewSlot && (
+        <View style={styles.previewFullContainer}>
+          {/* Spacer supérieur à hauteur FIXE — ancre le bord haut de la frame quelle que soit la situation (clavier, send area masquée…) */}
+          <View style={{ height: Math.max(0, winHeight - winWidth * 16 / 9 - NAVBAR_HEIGHT) }} pointerEvents="none" />
+
+          {/* Frame média — largeur animée, ratio 9:16 via aspectRatio, centrée */}
+          <Animated.View style={[
+            styles.previewMediaFrame,
+            {
+              width: previewWidthAnim,
+              borderBottomLeftRadius: previewBottomRadiusAnim,
+              borderBottomRightRadius: previewBottomRadiusAnim,
+            }
+          ]}>
+            {/* ── Contenu selon le mode ── */}
+            {previewSlot.mode === "TEXTE" && (
+              <View style={{ flex: 1, backgroundColor: "#0A0A0A", justifyContent: "center", alignItems: "center", padding: 32 }}>
                 <Text style={{ color: colors.text, fontFamily: typography.family.bold, textAlign: "center", fontSize: previewSlot.textContent.length <= 120 ? 32 : previewSlot.textContent.length <= 260 ? 26 : previewSlot.textContent.length <= 450 ? 21 : 17 }}>
                   {previewSlot.textContent}
                 </Text>
               </View>
-              <View style={[styles.previewTopBtns, activeChallenge !== null && { top: 70 }]}>
-                <TouchableOpacity style={styles.topSquareBtn} onPress={resetAll}><CloseIcon /></TouchableOpacity>
-                {hasSlot2 && <TouchableOpacity style={styles.topSquareBtn} onPress={handleTrash}><TrashIcon /></TouchableOpacity>}
-              </View>
-              {viewingSlot === 1 && (
-                <View style={[styles.previewContent, { bottom: 24 }]}>
-                  {activeChallenge === null && (
-                    <View style={{ gap: 12 }}>
-                      <View style={styles.combinedInputContainer}>
-                        <BlurView intensity={blur.md} tint="dark" style={StyleSheet.absoluteFillObject} />
-                        {slot1!.captionAudioUri ? (
-                          <View style={{ flex: 1, paddingRight: 8 }}>
-                            <AudioCaptionPlayer 
-                              player={captionAudioPlayer} 
-                              status={captionAudioStatus} 
-                              showVocalLabel 
-                              onRemove={() => setSlot1(prev => prev ? { ...prev, captionAudioUri: null } : prev)} 
-                              waveform={slot1!.captionWaveform}
-                            />
-                          </View>
-                        ) : (
-                          <>
-                            {isCaptionRecording ? (
-                              <View style={styles.recordingContainer}>
-                                <TouchableOpacity
-                                  style={{ paddingRight: 12 }}
-                                  onPress={cancelCaptionAudioRecordingRef.current}
-                                  activeOpacity={0.7}
-                                >
-                                  <View style={styles.captionIconContainer}>
-                                    <BlurView intensity={blur.md} tint="dark" style={StyleSheet.absoluteFillObject} />
-                                    <Animated.View style={{ transform: [{ scale: cancelScaleAnim }] }}>
-                                      <Icon name="x" size={20} color={isSwipingToCancel ? colors.iconDangerTertiary : colors.white} />
-                                    </Animated.View>
-                                  </View>
-                                </TouchableOpacity>
-                                <View style={styles.captionRecordingOverlay}>
-                                  <View style={[styles.audioWaveformRow, { flex: 1 }]} pointerEvents="none">
-                                    {liveWaveform.map((v, i) => (
-                                      <View key={i} style={[styles.audioWaveformBar, { height: Math.max(3.5, v * 40), backgroundColor: colors.white }]} />
-                                    ))}
-                                  </View>
-                                  <Text style={styles.captionRecordingText}>{captionAudioSeconds}s</Text>
-                                </View>
-                              </View>
-                            ) : (
-                              <TouchableOpacity style={styles.previewNoteBox} onPress={() => setIsEditingNote(true)} activeOpacity={0.7}>
-                                {slot1!.note ? (
-                                  <Text style={styles.previewNoteText} numberOfLines={1}>{slot1!.note}</Text>
-                                ) : (
-                                  <Text style={styles.addNoteBtnText}>Ajouter une légende...</Text>
-                                )}
-                              </TouchableOpacity>
-                            )}
-
-                            <View
-                              style={[isCaptionRecording ? styles.captionStopBtn : styles.captionRecordBtn, isSwipingToCancel && { opacity: 0.5 }]}
-                              {...captionPanResponder.panHandlers}
-                            >
-                              <View style={styles.captionIconContainer}>
-                                <BlurView intensity={blur.md} tint="dark" style={StyleSheet.absoluteFillObject} />
-                                {isCaptionRecording ? (
-                                  <Icon name="check" size={20} color={colors.text} />
-                                ) : (
-                                  <Icon name="mic" size={20} color={colors.text} />
-                                )}
-                              </View>
-                            </View>
-                          </>
-                        )}
-                      </View>
-                    </View>
-                  )}
+            )}
+            {previewSlot.mode === "AUDIO" && (
+              <View style={{ flex: 1, backgroundColor: "#0A0A0A", justifyContent: "center", alignItems: "center" }}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 3.5, marginHorizontal: 20 }} pointerEvents="none">
+                  {(previewSlot.waveform && previewSlot.waveform.length > 0 ? compressWaveform(previewSlot.waveform, 40).map(v => v * 80) : [10,14,22,30,38,34,26,20,14,18,28,36,44,40,32,24,16,12,20,30]).map((h, i, arr) => (
+                    <View key={i} style={{ width: 3.5, height: h, borderRadius: radii.xs, backgroundColor: colors.text, opacity: audioPreviewStatus.currentTime > 0 && audioPreviewStatus.duration > 0 && (audioPreviewStatus.currentTime / audioPreviewStatus.duration) > i / arr.length ? 0.9 : 0.25 }} />
+                  ))}
                 </View>
-              )}
-            </View>
-          ) : (
-            <View style={[styles.previewImageWrapper, previewSlot.mode === "DESSIN" && { backgroundColor: colors.bg }]}>
-              {activeChallenge !== null && (
-                <View style={challengeStyles.previewBannerOverlay} pointerEvents="box-none">
-                  <View style={challengeStyles.bannerRow}>
-                    <TouchableOpacity style={challengeStyles.bannerClose} onPress={() => setActiveChallenge(null)} activeOpacity={0.7}>
-                      <Svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                        <Path d="M18 6L6 18M6 6l12 12" stroke={colors.text} strokeWidth="2.5" strokeLinecap="round" />
-                      </Svg>
-                    </TouchableOpacity>
-                    <View style={challengeStyles.bannerTextWrapper}>
-                      <Text style={challengeStyles.bannerText} numberOfLines={2}>{activeChallenge.promptText}</Text>
-                      {activeChallenge.proposedByUsername && (
-                        <Text style={challengeStyles.bannerProposerText}>↳ {activeChallenge.proposedByUsername}</Text>
+                <View style={styles.audioPreviewPlayer}>
+                  <TouchableOpacity style={styles.audioPreviewPlayBtn} onPress={() => {
+                    if (audioPreviewStatus.playing) { audioPreviewPlayer.pause(); }
+                    else {
+                      if (audioPreviewDurationRef.current > 0 && (audioPreviewStatus.currentTime ?? 0) >= audioPreviewDurationRef.current - 0.1) { audioPreviewPlayer.seekTo(0); }
+                      audioPreviewPlayer.play();
+                    }
+                  }}>
+                    <Svg width="28" height="28" viewBox="0 0 24 24" fill={colors.text}>
+                      {audioPreviewStatus.playing ? <Path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /> : <Path d="M8 5v14l11-7z" />}
+                    </Svg>
+                  </TouchableOpacity>
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <View
+                      ref={audioPreviewSeekRef}
+                      style={styles.audioPreviewSeekHitArea}
+                      onLayout={() => { audioPreviewSeekRef.current?.measure((_x: number, _y: number, width: number, _h: number, pageX: number) => { audioPreviewSeekLayoutRef.current = { pageX, width }; }); }}
+                      {...audioPreviewPan.panHandlers}
+                    >
+                      <View style={styles.audioPreviewTrack}>
+                        <View style={[styles.audioPreviewFill, { width: `${audioPreviewStatus.duration > 0 ? (audioPreviewStatus.currentTime / audioPreviewStatus.duration) * 100 : 0}%` as any }]} />
+                      </View>
+                      {audioPreviewStatus.currentTime > 0 && (
+                        <View style={[styles.audioPreviewThumb, { left: `${Math.min(audioPreviewStatus.duration > 0 ? (audioPreviewStatus.currentTime / audioPreviewStatus.duration) * 100 : 0, 100)}%` as any }]} pointerEvents="none" />
                       )}
+                    </View>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                      <Text style={styles.audioPreviewTime}>{Math.floor((audioPreviewStatus.currentTime ?? 0) / 60)}:{(Math.floor(audioPreviewStatus.currentTime ?? 0) % 60).toString().padStart(2, "0")}</Text>
+                      <Text style={styles.audioPreviewTime}>{Math.floor((audioPreviewStatus.duration ?? 0) / 60)}:{(Math.floor(audioPreviewStatus.duration ?? 0) % 60).toString().padStart(2, "0")}</Text>
                     </View>
                   </View>
                 </View>
-              )}
-              {previewSlot.mode === "DESSIN" ? (
-                <View style={styles.drawingPreviewCenter}>
-                  <Image source={{ uri: previewSlot.uri ?? "" }} style={styles.drawingPreviewImage} contentFit="fill" />
-                </View>
-              ) : previewSlot.mode === "VIDEO" ? (
-                <View style={[StyleSheet.absoluteFillObject, { overflow: "hidden" }]} pointerEvents="none">
-                  <VideoView player={videoPreviewPlayer} style={StyleSheet.absoluteFillObject} contentFit="cover" nativeControls={false} />
-                </View>
-              ) : (
-                <Image source={{ uri: previewSlot.uri ?? "" }} style={styles.previewImage} contentFit="cover" />
-              )}
-              <View style={[styles.previewTopBtns, activeChallenge !== null && { top: 70 }]}>
-                <TouchableOpacity style={styles.topSquareBtn} onPress={resetAll}><CloseIcon /></TouchableOpacity>
-                {hasSlot2 && <TouchableOpacity style={styles.topSquareBtn} onPress={handleTrash}><TrashIcon /></TouchableOpacity>}
               </View>
-              {viewingSlot === 1 && (
-                <View style={[styles.previewContent, { bottom: 24 }]}>
-                  {activeChallenge === null && (
-                    <View style={{ gap: 12 }}>
-                      <View style={styles.combinedInputContainer}>
-                        <BlurView intensity={blur.md} tint="dark" style={StyleSheet.absoluteFillObject} />
-                        {slot1!.captionAudioUri ? (
-                          <View style={{ flex: 1, paddingRight: 8 }}>
-                            <AudioCaptionPlayer 
-                              player={captionAudioPlayer} 
-                              status={captionAudioStatus} 
-                              showVocalLabel 
-                              onRemove={() => setSlot1(prev => prev ? { ...prev, captionAudioUri: null } : prev)} 
-                              waveform={slot1!.captionWaveform}
-                            />
-                          </View>
-                        ) : (
-                          <>
-                            {isCaptionRecording ? (
-                              <View style={styles.recordingContainer}>
-                                <TouchableOpacity
-                                  style={{ paddingRight: 12 }}
-                                  onPress={cancelCaptionAudioRecordingRef.current}
-                                  activeOpacity={0.7}
-                                >
-                                  <View style={styles.captionIconContainer}>
-                                    <BlurView intensity={blur.md} tint="dark" style={StyleSheet.absoluteFillObject} />
-                                    <Animated.View style={{ transform: [{ scale: cancelScaleAnim }] }}>
-                                      <Icon name="x" size={20} color={isSwipingToCancel ? colors.iconDangerTertiary : colors.white} />
-                                    </Animated.View>
-                                  </View>
-                                </TouchableOpacity>
-                                <View style={styles.captionRecordingOverlay}>
-                                  <View style={[styles.audioWaveformRow, { flex: 1 }]} pointerEvents="none">
-                                    {liveWaveform.map((v, i) => (
-                                      <View key={i} style={[styles.audioWaveformBar, { height: Math.max(3.5, v * 40), backgroundColor: colors.white }]} />
-                                    ))}
-                                  </View>
-                                  <Text style={styles.captionRecordingText}>{captionAudioSeconds}s</Text>
-                                </View>
-                              </View>
-                            ) : (
-                              <TouchableOpacity style={styles.previewNoteBox} onPress={() => setIsEditingNote(true)} activeOpacity={0.7}>
-                                {slot1!.note ? (
-                                  <Text style={styles.previewNoteText} numberOfLines={1}>{slot1!.note}</Text>
-                                ) : (
-                                  <Text style={styles.addNoteBtnText}>Ajouter une légende...</Text>
-                                )}
-                              </TouchableOpacity>
-                            )}
+            )}
+            {previewSlot.mode === "DESSIN" && (
+              <Image source={{ uri: previewSlot.uri ?? "" }} style={{ width: "100%", height: "100%" }} contentFit="fill" />
+            )}
+            {previewSlot.mode === "VIDEO" && (
+              <View style={[StyleSheet.absoluteFillObject, { overflow: "hidden" }]} pointerEvents="none">
+                <VideoView player={videoPreviewPlayer} style={StyleSheet.absoluteFillObject} contentFit="cover" nativeControls={false} />
+              </View>
+            )}
+            {previewSlot.mode === "PHOTO" && (
+              <Image source={{ uri: previewSlot.uri ?? "" }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+            )}
 
-                            <View
-                              style={[isCaptionRecording ? styles.captionStopBtn : styles.captionRecordBtn, isSwipingToCancel && { opacity: 0.5 }]}
-                              {...captionPanResponder.panHandlers}
-                            >
-                              <View style={styles.captionIconContainer}>
-                                <BlurView intensity={blur.md} tint="dark" style={StyleSheet.absoluteFillObject} />
-                                {isCaptionRecording ? (
-                                  <Icon name="check" size={20} color={colors.text} />
-                                ) : (
-                                  <Icon name="mic" size={20} color={colors.text} />
-                                )}
-                              </View>
-                            </View>
-                          </>
-                        )}
-                      </View>
-                    </View>
-                  )}
-                </View>
-              )}
-            </View>
-          )}
-          {showBottomSlotBar && <SlotBar isSlot1Preview={isSlot1Preview} isSlot1WithSlot2={isSlot1WithSlot2} isSlot2Preview={isSlot2Preview} slot1={slot1} slot2={slot2} renderSlotThumbnail={renderSlotThumbnail} onAddSecond={() => { setTextModeContent(""); setIsDrawingActive(false); setCapturingSecond(true); capturingSecondRef.current = true; }} onSend={openGroupPicker} onViewSlot1={() => setViewingSlot(1)} onViewSlot2={() => setViewingSlot(2)} />}
-          <Modal visible={isEditingNote} transparent animationType="fade">
-            <BlurView intensity={100} tint="dark" style={styles.fill}>
-              <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.noteEditorContainer}>
-                <TextInput style={styles.largeNoteInput} placeholder="Note..." placeholderTextColor="rgba(255,255,255,0.3)" value={slot1?.note ?? ""} onChangeText={updateSlot1Note} maxLength={140} multiline autofocus="off" />
-                <TouchableOpacity style={styles.doneNoteBtn} onPress={() => setIsEditingNote(false)}>
-                  <Text style={styles.doneNoteText}>Terminé</Text>
-                </TouchableOpacity>
-              </KeyboardAvoidingView>
-            </BlurView>
-          </Modal>
-        </View>
-      )}
-
-      {/* ── Preview: Audio ── */}
-      {!isCapturing && isActive && previewSlot?.mode === "AUDIO" && (
-        <View style={[styles.previewContainer, { paddingTop: Math.max(insets.top, 12) + 12, paddingBottom: NAVBAR_HEIGHT + 8, paddingHorizontal: 12 }]}>
-          <View style={[styles.previewImageWrapper, { justifyContent: "center", alignItems: "center" }]}>
+            {/* Banner défi */}
             {activeChallenge !== null && (
               <View style={challengeStyles.previewBannerOverlay} pointerEvents="box-none">
                 <View style={challengeStyles.bannerRow}>
@@ -1477,79 +1390,92 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 </View>
               </View>
             )}
-            <View style={[styles.fill, { backgroundColor: "#0A0A0A" }]} />
-            <View style={[styles.previewTopBtns, activeChallenge !== null && { top: 70 }]}>
-              <TouchableOpacity style={styles.topSquareBtn} onPress={resetAll}><CloseIcon /></TouchableOpacity>
-              {hasSlot2 && <TouchableOpacity style={styles.topSquareBtn} onPress={handleTrash}><TrashIcon /></TouchableOpacity>}
-            </View>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 3.5, marginHorizontal: 20 }} pointerEvents="none">
-              {(previewSlot?.waveform && previewSlot.waveform.length > 0 ? compressWaveform(previewSlot.waveform, 40).map(v => v * 80) : [10,14,22,30,38,34,26,20,14,18,28,36,44,40,32,24,16,12,20,30]).map((h, i, arr) => (
-                <View key={i} style={{ width: 3.5, height: h, borderRadius: radii.xs, backgroundColor: colors.text, opacity: audioPreviewStatus.currentTime > 0 && audioPreviewStatus.duration > 0 && (audioPreviewStatus.currentTime / audioPreviewStatus.duration) > i / arr.length ? 0.9 : 0.25 }} />
-              ))}
-            </View>
-            <View style={styles.audioPreviewPlayer}>
-              <TouchableOpacity
-                style={styles.audioPreviewPlayBtn}
-                onPress={() => {
-                  if (audioPreviewStatus.playing) { audioPreviewPlayer.pause(); }
-                  else {
-                    if (audioPreviewDurationRef.current > 0 && (audioPreviewStatus.currentTime ?? 0) >= audioPreviewDurationRef.current - 0.1) { audioPreviewPlayer.seekTo(0); }
-                    audioPreviewPlayer.play();
-                  }
-                }}
-              >
-                <Svg width="28" height="28" viewBox="0 0 24 24" fill={colors.text}>
-                  {audioPreviewStatus.playing ? <Path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" /> : <Path d="M8 5v14l11-7z" />}
-                </Svg>
-              </TouchableOpacity>
-              <View style={{ flex: 1, gap: 4 }}>
-                <View
-                  ref={audioPreviewSeekRef}
-                  style={styles.audioPreviewSeekHitArea}
-                  onLayout={() => { audioPreviewSeekRef.current?.measure((_x: number, _y: number, width: number, _h: number, pageX: number) => { audioPreviewSeekLayoutRef.current = { pageX, width }; }); }}
-                  {...audioPreviewPan.panHandlers}
-                >
-                  <View style={styles.audioPreviewTrack}>
-                    <View style={[styles.audioPreviewFill, { width: `${audioPreviewStatus.duration > 0 ? (audioPreviewStatus.currentTime / audioPreviewStatus.duration) * 100 : 0}%` as any }]} />
-                  </View>
-                  {audioPreviewStatus.currentTime > 0 && (
-                    <View style={[styles.audioPreviewThumb, { left: `${Math.min(audioPreviewStatus.duration > 0 ? (audioPreviewStatus.currentTime / audioPreviewStatus.duration) * 100 : 0, 100)}%` as any }]} pointerEvents="none" />
-                  )}
-                </View>
-                <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                  <Text style={styles.audioPreviewTime}>{Math.floor((audioPreviewStatus.currentTime ?? 0) / 60)}:{(Math.floor(audioPreviewStatus.currentTime ?? 0) % 60).toString().padStart(2, "0")}</Text>
-                  <Text style={styles.audioPreviewTime}>{Math.floor((audioPreviewStatus.duration ?? 0) / 60)}:{(Math.floor(audioPreviewStatus.duration ?? 0) % 60).toString().padStart(2, "0")}</Text>
-                </View>
-              </View>
-            </View>
-            {viewingSlot === 1 && (
-              <View style={[styles.previewContent, { bottom: 24 }]}>
-                <View style={styles.combinedInputContainer}>
-                  <BlurView intensity={blur.md} tint="dark" style={StyleSheet.absoluteFillObject} />
-                  <TouchableOpacity style={styles.previewNoteBox} onPress={() => setIsEditingNote(true)} activeOpacity={0.7}>
-                    {slot1!.note ? (
-                      <Text style={styles.previewNoteText} numberOfLines={1}>{slot1!.note}</Text>
-                    ) : (
-                      <Text style={styles.addNoteBtnText}>Ajouter une légende...</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
+
+            {/* Bouton fermer — masqué pendant l'édition de la description */}
+            {!isEditingCaption && (
+              <View style={styles.previewTopBtns}>
+                <TouchableOpacity style={styles.topSquareBtn} onPress={resetAll}><CloseIcon /></TouchableOpacity>
               </View>
             )}
-          </View>
-          {showBottomSlotBar && <SlotBar isSlot1Preview={isSlot1Preview} isSlot1WithSlot2={isSlot1WithSlot2} isSlot2Preview={isSlot2Preview} slot1={slot1} slot2={slot2} renderSlotThumbnail={renderSlotThumbnail} onAddSecond={() => { setTextModeContent(""); setIsDrawingActive(false); setCapturingSecond(true); capturingSecondRef.current = true; }} onSend={openGroupPicker} onViewSlot1={() => setViewingSlot(1)} onViewSlot2={() => setViewingSlot(2)} />}
-          <Modal visible={isEditingNote} transparent animationType="fade">
-            <BlurView intensity={100} tint="dark" style={styles.fill}>
-              <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.noteEditorContainer}>
-                <TextInput style={styles.largeNoteInput} placeholder="Note..." placeholderTextColor="rgba(255,255,255,0.3)" value={slot1?.note ?? ""} onChangeText={updateSlot1Note} maxLength={140} multiline autofocus="off" />
-                <TouchableOpacity style={styles.doneNoteBtn} onPress={() => setIsEditingNote(false)}>
-                  <Text style={styles.doneNoteText}>Terminé</Text>
-                </TouchableOpacity>
-              </KeyboardAvoidingView>
-            </BlurView>
-          </Modal>
+
+          </Animated.View>
+
+          {/* Barre de légende — un seul élément, toujours position:absolute dans previewFullContainer.
+               État normal : bottom = NAVBAR_HEIGHT+16 (overlay bas de la frame).
+               État édition : bottom = kbH+16 (au-dessus du clavier), frame rétrécie au-dessus. */}
+          {activeChallenge === null && (
+            <Animated.View style={[styles.captionBarOuter, { bottom: captionBarBottomAnim }]}>
+              <View style={[styles.captionBar, isEditingCaption && { height: 48 }]}>
+                <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
+
+                {slot1!.captionAudioUri ? (
+                  <View style={{ flex: 1 }}>
+                    <AudioCaptionPlayer player={captionAudioPlayer} status={captionAudioStatus} showVocalLabel onRemove={() => setSlot1(prev => prev ? { ...prev, captionAudioUri: null } : prev)} waveform={slot1!.captionWaveform} />
+                  </View>
+                ) : isCaptionRecording ? (
+                  <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                    <View style={[styles.audioWaveformRow, { flex: 1 }]} pointerEvents="none">
+                      {liveWaveform.map((v, i) => (
+                        <View key={i} style={[styles.audioWaveformBar, { height: Math.max(3.5, v * 40), backgroundColor: colors.text }]} />
+                      ))}
+                    </View>
+                    <Text style={styles.captionRecordingText}>{captionAudioSeconds}s</Text>
+                  </View>
+                ) : isEditingCaption ? (
+                  <TextInput
+                    ref={captionEditInputRef}
+                    style={styles.captionEditInput}
+                    value={slot1!.note}
+                    onChangeText={updateSlot1Note}
+                    placeholder="Ajouter une description"
+                    placeholderTextColor={colors.textSecondary}
+                    multiline
+                    maxLength={140}
+                    scrollEnabled
+                    autoFocus
+                    blurOnSubmit={false}
+                  />
+                ) : (
+                  <TouchableOpacity style={styles.captionTextArea} onPress={startEditCaption} activeOpacity={0.7}>
+                    {slot1!.note ? (
+                      <Text style={styles.captionNoteText}>{slot1!.note}</Text>
+                    ) : (
+                      <Text style={styles.captionPlaceholder}>Ajouter une description</Text>
+                    )}
+                  </TouchableOpacity>
+                )}
+
+                {previewSlot.mode !== "AUDIO" && !slot1!.captionAudioUri && (
+                  isEditingCaption ? (
+                    <TouchableOpacity style={styles.captionConfirmBtn} onPress={confirmEditCaption} activeOpacity={0.8}>
+                      <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
+                      <Icon name="check" size={20} color={colors.icon} />
+                    </TouchableOpacity>
+                  ) : (!slot1!.note.trim() || isCaptionRecording) ? (
+                    <View style={[styles.captionMicBtn, isSwipingToCancel && { opacity: 0.5 }]} {...captionPanResponder.panHandlers}>
+                      <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
+                      <Icon name={isCaptionRecording ? "check" : "mic"} size={20} color={colors.icon} />
+                    </View>
+                  ) : null
+                )}
+              </View>
+            </Animated.View>
+          )}
+
+          {/* Bouton Partager — masqué pendant l'édition */}
+          {!isEditingCaption && (
+            <View style={styles.previewSendArea}>
+              <PrimaryButton label="Partager" onPress={openGroupPicker} />
+            </View>
+          )}
+
         </View>
       )}
+
+      </View>{/* /bgViewRef */}
 
       {/* ── Challenges Modal ── */}
       <ChallengesModal
@@ -1578,36 +1504,165 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         </Pressable>
       </Modal>
 
-      {/* ── Group Picker ── */}
-      <Modal visible={showGroupPicker} transparent animationType="fade" onRequestClose={() => setShowGroupPicker(false)}>
-        <Pressable style={pickerStyles.overlay} onPress={() => setShowGroupPicker(false)}>
-          <Pressable style={pickerStyles.card} onPress={() => {}}>
-            <Text style={pickerStyles.title}>Envoyer dans...</Text>
-            {allGroups.map((g) => {
-              const selected = selectedGroupIds.includes(g.id);
-              return (
-                <TouchableOpacity key={g.id} style={pickerStyles.row} onPress={() => toggleGroup(g.id)} activeOpacity={0.7}>
-                  <View style={[pickerStyles.checkbox, selected && pickerStyles.checkboxOn]}>
-                    {selected && (
-                      <Svg width="11" height="11" viewBox="0 0 24 24" fill="none">
-                        <Path d="M20 6L9 17L4 12" stroke={colors.bg} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </Svg>
-                    )}
+      {/* ── Group Picker ──
+           iOS  : Modal + dimezisBlurView (UIVisualEffectView, blur natif, marche sans blurTarget).
+           Android : overlay absolu + dimezisBlurView avec blurTarget → vrai blur GPU. */}
+      {Platform.OS === "ios" ? (
+        <Modal visible={showGroupPicker} transparent animationType="fade" onRequestClose={() => setShowGroupPicker(false)} statusBarTranslucent>
+          <View style={StyleSheet.absoluteFillObject}>
+            {/* Preview plein écran derrière le blur */}
+            {slot1 && (
+              <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+                {(slot1.mode === "PHOTO" || slot1.mode === "DESSIN") && slot1.uri ? (
+                  <Image source={{ uri: slot1.uri }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
+                ) : slot1.mode === "VIDEO" && slot1.uri ? (
+                  <VideoSlotThumbnail uri={slot1.uri} />
+                ) : slot1.mode === "TEXTE" ? (
+                  <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#0A0A0A", justifyContent: "center", alignItems: "center", padding: 32 }]}>
+                    <Text style={{ color: "#FFFFFF", fontFamily: typography.family.bold, textAlign: "center", fontSize: 24 }} numberOfLines={6}>{slot1.textContent}</Text>
                   </View>
-                  <Text style={pickerStyles.groupName}>{g.name}</Text>
-                </TouchableOpacity>
-              );
-            })}
-            <TouchableOpacity style={[pickerStyles.sendBtn, selectedGroupIds.length === 0 && { opacity: 0.35 }]} onPress={handleConfirmGroupPicker} disabled={selectedGroupIds.length === 0}>
-              <Text style={pickerStyles.sendBtnText}>Envoyer</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setShowGroupPicker(false)} style={pickerStyles.cancelWrap}>
-              <Text style={pickerStyles.cancelText}>Annuler</Text>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
+                ) : (
+                  <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#0A0A0A" }]} />
+                )}
+              </View>
+            )}
+            <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod="dimezisBlurView" style={StyleSheet.absoluteFillObject}>
+              <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.opacityDark }]} pointerEvents="none" />
+              <GroupPickerContent
+                shapes={previewCaptureShapes}
+                groups={allGroups}
+                selectedGroupIds={selectedGroupIds}
+                onToggle={toggleGroup}
+                onConfirm={() => confirmUpload(selectedGroupIds)}
+                onCancel={() => setShowGroupPicker(false)}
+                pickerStyles={pickerStyles}
+                colors={colors}
+              />
+            </BlurView>
+          </View>
+        </Modal>
+      ) : showGroupPicker ? (
+        <View style={[StyleSheet.absoluteFillObject, { zIndex: 999 }]}>
+          {/* Preview plein écran derrière l'overlay */}
+          {slot1 && (
+            <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+              {(slot1.mode === "PHOTO" || slot1.mode === "DESSIN") && slot1.uri ? (
+                <Image source={{ uri: slot1.uri }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
+              ) : slot1.mode === "VIDEO" && slot1.uri ? (
+                <VideoSlotThumbnail uri={slot1.uri} />
+              ) : slot1.mode === "TEXTE" ? (
+                <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#0A0A0A", justifyContent: "center", alignItems: "center", padding: 32 }]}>
+                  <Text style={{ color: "#FFFFFF", fontFamily: typography.family.bold, textAlign: "center", fontSize: 24 }} numberOfLines={6}>{slot1.textContent}</Text>
+                </View>
+              ) : (
+                <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#0A0A0A" }]} />
+              )}
+            </View>
+          )}
+          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(10,10,12,0.82)" }]} pointerEvents="none" />
+          <GroupPickerContent
+            shapes={previewCaptureShapes}
+            groups={allGroups}
+            selectedGroupIds={selectedGroupIds}
+            onToggle={toggleGroup}
+            onConfirm={() => confirmUpload(selectedGroupIds)}
+            onCancel={() => setShowGroupPicker(false)}
+            pickerStyles={pickerStyles}
+            colors={colors}
+          />
+        </View>
+      ) : null}
+
     </>
+  );
+}
+
+// Bouton primaire réutilisable : brand / disabled / hover.
+function PrimaryButton({ label, onPress, disabled = false }: { label: string; onPress: () => void; disabled?: boolean }) {
+  const btnStyles = useThemedStyles(makePrimaryButtonStyles);
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        btnStyles.btn,
+        disabled && btnStyles.btnDisabled,
+        !disabled && pressed && btnStyles.btnHover,
+      ]}
+      onPress={onPress}
+      disabled={disabled}
+    >
+      {({ pressed }) => (
+        <Text style={[
+          btnStyles.text,
+          disabled && btnStyles.textDisabled,
+          !disabled && pressed && btnStyles.textHover,
+        ]}>{label}</Text>
+      )}
+    </Pressable>
+  );
+}
+
+const makePrimaryButtonStyles = (colors: ThemeColors) => StyleSheet.create({
+  btn: { backgroundColor: colors.brand, borderRadius: radii.lg, paddingHorizontal: 24, paddingVertical: 16, alignItems: "center", width: "100%" },
+  btnDisabled: { backgroundColor: colors.bgDisabled },
+  btnHover: { backgroundColor: colors.brandHover },
+  text: { ...textStyles.singleLineSubheadingStrong, color: colors.textBrandOnBrandSecondary, lineHeight: undefined },
+  textDisabled: { color: colors.textOnDisabled },
+  textHover: { color: colors.textBrandOnBrand },
+});
+
+// Case à cocher du picker de groupe.
+function GroupCheckbox({ checked }: { checked: boolean }) {
+  const { colors } = useTheme();
+  return (
+    <View style={{
+      width: 24, height: 24, borderRadius: 4,
+      borderWidth: 1, borderColor: colors.borderBrandTertiary,
+      backgroundColor: checked ? colors.brand : colors.bg,
+      justifyContent: "center", alignItems: "center",
+    }}>
+      {checked && <Icon name="check" size={16} color={colors.icon} />}
+    </View>
+  );
+}
+
+// Contenu du picker de groupe (partagé iOS/Android).
+function GroupPickerContent({ shapes, groups, selectedGroupIds, onToggle, onConfirm, onCancel, pickerStyles, colors }: {
+  shapes: ShapeName[];
+  groups: GroupInfo[];
+  selectedGroupIds: string[];
+  onToggle: (gId: string) => void;
+  onConfirm: () => void;
+  onCancel: () => void;
+  pickerStyles: ReturnType<typeof makePickerStyles>;
+  colors: ThemeColors;
+}) {
+  return (
+    <View style={pickerStyles.fullscreenContent}>
+      <View style={pickerStyles.shapesRow}>
+        {shapes.map((name, i) => (
+          <Shape key={i} name={name} size={80} color={colors.text} />
+        ))}
+      </View>
+      <Text style={pickerStyles.shareInText}>Partager dans</Text>
+      <View style={pickerStyles.groupBtnsCol}>
+        {groups.map(g => (
+          <TouchableOpacity key={g.id} style={pickerStyles.groupBtn} onPress={() => onToggle(g.id)} activeOpacity={0.85}>
+            <GroupCheckbox checked={selectedGroupIds.includes(g.id)} />
+            <Text style={pickerStyles.groupBtnText}>{g.name}</Text>
+          </TouchableOpacity>
+        ))}
+        <TouchableOpacity onPress={onCancel} activeOpacity={0.7}>
+          <Text style={pickerStyles.groupPickerCancel}>Annuler</Text>
+        </TouchableOpacity>
+      </View>
+      <View style={pickerStyles.pickerSendArea}>
+        <PrimaryButton
+          label="Partager"
+          onPress={onConfirm}
+          disabled={selectedGroupIds.length === 0}
+        />
+      </View>
+    </View>
   );
 }
 
@@ -1680,7 +1735,7 @@ function ModeSelector({ selected, onSelect }: { selected: CameraMode; onSelect: 
 
   return (
     <View style={[styles.modeSlider, { width: pillWidth }]}>
-      <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
       <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
       <View style={{ width: "100%", height: MODE_ITEM_HEIGHT }}>
         <View style={[styles.modeChip, { left: slotWidth, width: slotWidth }]} pointerEvents="none" />
@@ -1710,9 +1765,22 @@ function CameraControlButton({ icon, onPress }: { icon: IconName; onPress: () =>
   const styles = useThemedStyles(makeStyles);
   return (
     <TouchableOpacity style={styles.cameraCtrlBtn} onPress={onPress} activeOpacity={0.8}>
-      <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod="dimezisBlurView" style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
       <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
       <Icon name={icon} size={20} />
+    </TouchableOpacity>
+  );
+}
+
+// Bouton zoom cyclique : affiche le palier courant en texte (x0.5/x1/x2/x5).
+function ZoomPresetButton({ label, onPress }: { label: string; onPress: () => void }) {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+  return (
+    <TouchableOpacity style={styles.cameraCtrlBtn} onPress={onPress} activeOpacity={0.8}>
+      <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
+      <Text style={styles.zoomPresetText}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -1966,19 +2034,21 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   recordingDot: { width: 10, height: 10, borderRadius: radii.full, backgroundColor: "#FF3B30" },
   recordingText: { color: colors.text, fontFamily: typography.family.semibold, fontSize: typography.size.sm },
   processingText: { color: colors.secondary, fontFamily: typography.family.semibold, fontSize: typography.size.sm },
-  // Preview
-  previewContainer: { flex: 1, backgroundColor: colors.bg, alignItems: "center" },
-  previewImageWrapper: { flex: 1, width: "100%", borderRadius: radii.xl, overflow: "hidden", backgroundColor: colors.card },
-  previewImage: { width: "100%", height: "100%" },
-  drawingPreviewCenter: { ...StyleSheet.absoluteFillObject, justifyContent: "flex-start", alignItems: "center" },
-  drawingPreviewImage: { width: "100%", aspectRatio: 3 / 4, borderRadius: radii.xl, overflow: "hidden", backgroundColor: "#FFFFFF" },
+  // Preview unifié (même layout que capture : 9:16, ancré en bas)
+  previewFullContainer: { flex: 1, backgroundColor: colors.bg },
+  previewMediaFrame: { aspectRatio: 9 / 16, overflow: "hidden", borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, alignSelf: "center" },
+  previewSendArea: { height: NAVBAR_HEIGHT, backgroundColor: colors.bg, paddingHorizontal: spacing.lg, paddingTop: spacing.lg, justifyContent: "flex-start" },
+  // Texte du bouton zoom cyclique : single-line/body-small-strong, text/default/default
+  zoomPresetText: { ...textStyles.singleLineBodySmallStrong, color: colors.text },
   previewTopBtns: { position: "absolute", top: 16, left: 16, right: 16, flexDirection: "row", justifyContent: "space-between" },
   topSquareBtn: { width: 38, height: 38, borderRadius: radii.sm, backgroundColor: colors.opacityLight, justifyContent: "center", alignItems: "center" },
-  previewContent: { position: "absolute", left: 24, right: 24 },
-  previewNoteBox: { backgroundColor: colors.opacityLight, padding: 16, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.cardBorder },
-  previewNoteText: { color: colors.text, fontSize: typography.size.md, fontFamily: typography.family.semibold, textAlign: "center" },
-  addNoteBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, padding: 16, borderRadius: radii.lg, backgroundColor: colors.opacityLight, borderStyle: "dashed", borderWidth: 1, borderColor: colors.borderSecondary },
-  addNoteBtnText: { color: colors.secondary, fontSize: typography.size.sm, fontFamily: typography.family.semibold },
+  previewContent: { position: "absolute", left: spacing.lg, right: spacing.lg },
+  // Barre légende unifiée (texte + micro)
+  captionBar: { overflow: "hidden", borderRadius: radii.md, padding: spacing.md, flexDirection: "row", alignItems: "stretch", minHeight: 48 },
+  captionTextArea: { flex: 1, justifyContent: "center" },
+  captionPlaceholder: { ...textStyles.bodyBase, color: colors.textSecondary },
+  captionNoteText: { ...textStyles.bodyBase, color: colors.text },
+  captionMicBtn: { aspectRatio: 1, marginVertical: spacing.sm - spacing.md, borderRadius: radii.sm, overflow: "hidden", justifyContent: "center", alignItems: "center" },
   noteEditorContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: 40 },
   largeNoteInput: { width: "100%", color: colors.text, fontSize: typography.size.xxl, fontFamily: typography.family.bold, textAlign: "center", marginBottom: 40 },
   doneNoteBtn: { backgroundColor: colors.text, paddingHorizontal: 32, paddingVertical: 14, borderRadius: radii.xl },
@@ -1991,27 +2061,13 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   audioPreviewFill: { height: 3, backgroundColor: colors.text, borderRadius: radii.xs },
   audioPreviewThumb: { position: "absolute", width: 13, height: 13, borderRadius: radii.sm, backgroundColor: colors.text, marginLeft: -6, top: 14 - 5 },
   audioPreviewTime: { fontSize: typography.size.xs, color: colors.textSecondary, fontFamily: typography.family.regular },
-  // Barre full-width de switch/envoi pendant la 2e capture
-  capturingSecondBar: { position: "absolute", left: 12, right: 12, height: 72, flexDirection: "row", gap: 12 },
-  capturingSecondThumb: { flex: 1, borderRadius: radii.lg, overflow: "hidden" },
-  // Caption Audio
-  combinedInputContainer: { flexDirection: "row", alignItems: "center", borderRadius: radii.lg, overflow: "hidden", minHeight: 48, paddingHorizontal: spacing.sm, gap: spacing.sm },
-  recordingContainer: { flexDirection: "row", alignItems: "center", flex: 1, gap: spacing.sm },
-  captionRecordBtn: { width: 44, height: 44, justifyContent: "center", alignItems: "center" },
-  captionRecordBtnActive: { backgroundColor: "#FF3B30" },
-  captionStopBtn: { width: 44, height: 44, justifyContent: "center", alignItems: "center" },
-  captionIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: radii.sm, // sds-size-radius-200 mapped to radii.sm
-    backgroundColor: colors.opacityLight, // background-default-default-opacity
-    justifyContent: "center",
-    alignItems: "center",
-    // blur/glass effect (approximated for RN)
-    overflow: "hidden",
-  },
-  captionRecordingOverlay: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
-  captionRecordingText: { color: colors.white, fontFamily: typography.family.bold, fontSize: typography.size.xs, minWidth: 24 },
+  captionRecordingText: { color: colors.textSecondary, fontFamily: typography.family.bold, fontSize: typography.size.xs, minWidth: 24 },
+  // Unique barre de légende, toujours position:absolute dans previewFullContainer
+  captionBarOuter: { position: "absolute", left: spacing.lg, right: spacing.lg },
+  // TextInput : même police que captionNoteText, sans lineHeight pour que le placeholder s'aligne correctement
+  captionEditInput: { flex: 1, fontFamily: typography.family.regular, fontSize: typography.size.md, color: colors.text, textAlignVertical: "top", paddingVertical: 0 },
+  // Bouton confirmation : taille fixe 32×32, centré verticalement quelle que soit la hauteur de la barre
+  captionConfirmBtn: { width: 32, height: 32, borderRadius: radii.sm, overflow: "hidden", justifyContent: "center", alignItems: "center", alignSelf: "center" },
 });
 
 const makeChallengeStyles = (colors: ThemeColors) => StyleSheet.create({
@@ -2081,17 +2137,23 @@ const makeChallengeStyles = (colors: ThemeColors) => StyleSheet.create({
 });
 
 const makePickerStyles = (colors: ThemeColors) => StyleSheet.create({
+  // Confirm effacer dessin (conservé)
   overlay: { flex: 1, backgroundColor: colors.opacityLight, justifyContent: "center", alignItems: "center", padding: 28 },
   card: { backgroundColor: colors.card, borderRadius: radii.lg, padding: 24, width: "100%" },
   title: { fontSize: typography.size.lg, fontFamily: typography.family.bold, color: colors.text, marginBottom: 20 },
-  row: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.cardBorder },
-  checkbox: { width: 22, height: 22, borderRadius: radii.xs, borderWidth: 2, borderColor: colors.borderSecondary, justifyContent: "center", alignItems: "center" },
-  checkboxOn: { backgroundColor: colors.text, borderColor: colors.text },
-  groupName: { color: colors.text, fontFamily: typography.family.semibold, fontSize: typography.size.md, flex: 1 },
   sendBtn: { backgroundColor: colors.text, borderRadius: radii.md, paddingVertical: 14, alignItems: "center", marginTop: 20, marginBottom: 8 },
   sendBtnText: { color: colors.bg, fontSize: typography.size.md, fontFamily: typography.family.bold },
   cancelWrap: { alignItems: "center", paddingVertical: 8 },
   cancelText: { color: colors.textTertiary, fontFamily: typography.family.semibold, fontSize: typography.size.sm },
+  // Group picker fullscreen
+  fullscreenContent: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: spacing.lg, gap: 48, paddingBottom: NAVBAR_HEIGHT },
+  pickerSendArea: { position: "absolute", bottom: 0, left: 0, right: 0, height: NAVBAR_HEIGHT, paddingHorizontal: spacing.lg, paddingTop: spacing.lg, justifyContent: "flex-start" },
+  shapesRow: { flexDirection: "row", alignItems: "center", gap: 16 },
+  shareInText: { ...textStyles.subtitleStrong, color: colors.text, paddingTop: 24, lineHeight: undefined },
+  groupBtnsCol: { gap: 16, width: "100%", alignItems: "center" },
+  groupBtn: { width: "100%", paddingHorizontal: 24, paddingVertical: 16, borderRadius: radii.lg, backgroundColor: colors.opacityLight, flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  groupBtnText: { ...textStyles.singleLineSubheadingStrong, color: colors.textNeutral, lineHeight: undefined },
+  groupPickerCancel: { ...textStyles.singleLineBodyBaseStrong, color: colors.textSecondary },
 });
 
 export default function CameraPage(props: Props) {

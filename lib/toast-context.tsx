@@ -9,7 +9,6 @@ import {
 } from "react-native";
 import { BlurView } from "expo-blur";
 import Svg, { Path, Circle } from "react-native-svg";
-import { useUpload } from "./upload-context";
 import { radii, typography } from "./theme";
 
 
@@ -116,14 +115,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
 // --- Host ---
 function ToastHost({ toasts, onDismiss }: { toasts: ToastData[]; onDismiss: (id: number) => void }) {
-  const { uploads } = useUpload();
   const topInset = Platform.OS === "ios" ? 54 : (StatusBar.currentHeight ?? 24) + 10;
 
   return (
     <View style={[styles.rootOverlay, { top: topInset }]} pointerEvents="box-none">
-      {uploads.map((upload) => (
-        <UploadBanner key={upload.id} upload={upload} />
-      ))}
       {toasts.map((toast) => (
         <ToastItem key={toast.id} toast={toast} onDismiss={() => onDismiss(toast.id)} />
       ))}

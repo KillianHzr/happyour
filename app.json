@@ -18,7 +18,7 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "16"
+      "buildNumber": "17"
     },
     "android": {
       "package": "com.happyour.app",
@@ -43,7 +43,7 @@
         "android.permission.READ_MEDIA_VIDEO",
         "android.permission.READ_MEDIA_AUDIO"
       ],
-      "versionCode": 31
+      "versionCode": 34
     },
     "web": {
       "favicon": "./assets/favicon.png"

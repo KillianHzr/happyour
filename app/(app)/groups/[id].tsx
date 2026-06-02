@@ -33,7 +33,27 @@ import MotivationalNotificationsModal from "../../../components/MotivationalNoti
 import { scheduleImmediateLocalNotification, scheduleFirstMomentReminder, notifyReaction } from "../../../lib/notifications";
 import { radii, spacing, typography, textStyles, type ThemeColors } from "../../../lib/theme";
 import Icon from "../../../components/Icon";
+import Shape, { type ShapeName } from "../../../components/Shape";
 import { useTheme, useThemedStyles } from "../../../lib/theme-context";
+
+const captureToastShape = (mode: string): ShapeName => {
+  if (mode === "VIDEO") return "video";
+  if (mode === "DESSIN") return "dessin";
+  if (mode === "AUDIO") return "audio";
+  if (mode === "TEXTE") return "texte";
+  return "photo";
+};
+
+const captureToastMsg = (mode: string, groupName: string): string => {
+  const labels: Record<string, string> = {
+    PHOTO: "Photo partagée",
+    VIDEO: "Vidéo partagée",
+    DESSIN: "Dessin partagé",
+    AUDIO: "Audio partagé",
+    TEXTE: "Texte partagé",
+  };
+  return `${labels[mode] ?? "Moment partagé"} dans ${groupName}`;
+};
 
 const isEmoji = (str: string) => {
   const regexExp = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/gi;
@@ -104,6 +124,9 @@ export default function MainPagerScreen() {
   const [email, setEmail] = useState("");
   const [streakDays, setStreakDays] = useState(0);
   const [profileRefreshKey, setProfileRefreshKey] = useState(0);
+  const [captureToast, setCaptureToast] = useState<{ mode: string; groupName: string } | null>(null);
+  const captureToastTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const captureToastAnim = useRef({ opacity: new Animated.Value(0), translateY: new Animated.Value(-12) }).current;
 
   const [dailyNotifs, setDailyNotifs] = useState(3);
   const [notifPeriods, setNotifPeriods] = useState<("morning" | "afternoon" | "evening")[]>(["morning", "afternoon", "evening"]);
@@ -126,6 +149,31 @@ export default function MainPagerScreen() {
   const lastSyncRef = useRef<number>(0);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
+
+  // Toast capture
+  const cameraFrameTop = SCREEN_HEIGHT - NAVBAR_HEIGHT - SCREEN_WIDTH * (16 / 9);
+
+  const dismissCaptureToast = () => {
+    if (captureToastTimerRef.current) clearTimeout(captureToastTimerRef.current);
+    Animated.parallel([
+      Animated.timing(captureToastAnim.opacity, { toValue: 0, duration: 220, useNativeDriver: true }),
+      Animated.timing(captureToastAnim.translateY, { toValue: -12, duration: 220, useNativeDriver: true }),
+    ]).start(() => setCaptureToast(null));
+  };
+
+  const showCaptureToast = (info: { mode: string; groupName: string }) => {
+    if (captureToastTimerRef.current) clearTimeout(captureToastTimerRef.current);
+    captureToastAnim.opacity.setValue(0);
+    captureToastAnim.translateY.setValue(-12);
+    setCaptureToast(info);
+    Animated.parallel([
+      Animated.spring(captureToastAnim.opacity, { toValue: 1, useNativeDriver: true, tension: 60, friction: 10 }),
+      Animated.spring(captureToastAnim.translateY, { toValue: 0, useNativeDriver: true, tension: 60, friction: 10 }),
+    ]).start();
+    captureToastTimerRef.current = setTimeout(dismissCaptureToast, 3000);
+  };
+
+  useEffect(() => () => { if (captureToastTimerRef.current) clearTimeout(captureToastTimerRef.current); }, []);
 
   // Reactions
   const [activeReactionPhotoId, setActiveReactionPhotoId] = useState<string | null>(null);
@@ -1053,7 +1101,7 @@ export default function MainPagerScreen() {
             allGroups={allGroups}
             onScrollLock={(v) => { setCameraScrollLocked(v); scrollRef.current?.setNativeProps({ scrollEnabled: !v }); }}
             onHideMenu={setCameraHideMenu}
-            onCaptureSent={() => setProfileRefreshKey(k => k + 1)}
+            onCaptureSent={(info) => { setProfileRefreshKey(k => k + 1); showCaptureToast(info); }}
           />
         </Animated.View>
 
@@ -1103,6 +1151,24 @@ export default function MainPagerScreen() {
             </TouchableOpacity>
           </View>
         </View>
+      )}
+
+      {/* ── Toast capture ── */}
+      {captureToast && (
+        <Animated.View
+          style={[
+            styles.captureToast,
+            { top: cameraFrameTop + spacing.lg },
+            { opacity: captureToastAnim.opacity, transform: [{ translateY: captureToastAnim.translateY }] },
+          ]}
+          pointerEvents="box-none"
+        >
+          <Shape name={captureToastShape(captureToast.mode)} size={20} color={colors.iconBrandTertiary} />
+          <Text style={styles.captureToastText}>{captureToastMsg(captureToast.mode, captureToast.groupName)}</Text>
+          <TouchableOpacity onPress={dismissCaptureToast} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Icon name="x" size={20} color={colors.icon} />
+          </TouchableOpacity>
+        </Animated.View>
       )}
 
       {/* ── REVEAL OVERLAY ── */}
@@ -1429,6 +1495,21 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   loaderWrap: { flex: 1, backgroundColor: colors.bg, justifyContent: "center", alignItems: "center" },
   pager: { flex: 1 },
   page: { width: SCREEN_WIDTH, height: "100%", backgroundColor: colors.bg },
+
+  // Toast capture
+  captureToast: {
+    position: "absolute",
+    left: spacing.lg,
+    right: spacing.lg,
+    zIndex: 150,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 16,
+    borderRadius: radii.sm,
+    backgroundColor: colors.card,
+  },
+  captureToastText: { flex: 1, color: colors.text, ...textStyles.bodyStrong },
 
   // Navbar
   // Menu : fond background/default/default, marge 16 x / 12 haut / 25 bas.
