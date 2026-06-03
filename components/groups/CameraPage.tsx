@@ -1248,6 +1248,12 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
             <View style={styles.drawingArea}>
               <DrawingCanvas ref={drawingRef} color={drawingColor} strokeWidth={drawingStrokeWidth} onHistoryChange={(u, r) => { setCanUndo(u); setCanRedo(r); }} />
 
+              {!canUndo && (
+                <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center" }]} pointerEvents="none">
+                  <Text style={{ ...textStyles.bodyBase, color: colors.textNeutralTertiary, textAlign: "center" }}>Commence à crobarder</Text>
+                </View>
+              )}
+
               {/* Croix (fermer / annuler le dessin) — haut-gauche, dès qu'on a dessiné */}
               {canUndo && (
                 <TouchableOpacity style={styles.drawingCloseBtn} onPress={() => drawingRef.current?.clear()} activeOpacity={0.8}>
