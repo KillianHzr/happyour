@@ -201,6 +201,14 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const lottieRef = useRef<LottieView>(null);
   const [activeLottie, setActiveLottie] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (activeLottie === "video-draw-forward") {
+      lottieRef.current?.play(0, 60); // Ajuste les frames selon ton fichier (0 à fin)
+    } else if (activeLottie === "video-draw-backward") {
+      lottieRef.current?.play(60, 0); // Force le départ de la fin vers le début
+    }
+  }, [activeLottie]);
+
   const [drawingColor, setDrawingColor] = useState("#FF561A");
   const [drawingStrokeWidth, setDrawingStrokeWidth] = useState(6);
   const [isDrawingActive, setIsDrawingActive] = useState(false);
@@ -1431,7 +1439,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                   selected={cameraMode}
                   onSelect={(m) => { 
                     if (cameraMode === "VIDEO" && m === "DESSIN") {
-                      setActiveLottie("video-draw");
+                      setActiveLottie("video-draw-forward");
+                    } else if (cameraMode === "DESSIN" && m === "VIDEO") {
+                      setActiveLottie("video-draw-backward");
                     }
                     setCameraMode(m); 
                   }}
@@ -1453,23 +1463,17 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} />
                 {isRecording || isAudioRecording ? (
                   <Shape name="stop" size={40} color={colors.brand} />
-                ) : activeLottie === "video-draw" ? (
+                ) : (cameraMode === "VIDEO" || cameraMode === "DESSIN" || activeLottie?.startsWith("video-draw")) ? (
                   <LottieView
+                    ref={lottieRef}
                     source={require("../../assets/animations/video-draw.json")}
-                    autoPlay
                     loop={false}
                     speed={2}
                     style={{ width: 80, height: 80 }}
                     onAnimationFinish={() => setActiveLottie(null)}
                   />
-                ) : cameraMode === "VIDEO" ? (
-                  <LottieView
-                    source={require("../../assets/animations/video-draw.json")}
-                    progress={0}
-                    style={{ width: 80, height: 80 }}
-                  />
-                ) : cameraMode === "PHOTO" || cameraMode === "DESSIN" ? (
-                  <Shape name={cameraMode === "PHOTO" ? "photo" : "dessin"} size={48} color={colors.brand} />
+                ) : cameraMode === "PHOTO" ? (
+                  <Shape name="photo" size={48} color={colors.brand} />
                 ) : null}
               </TouchableOpacity>}
               {cameraMode !== "TEXTE" && <View style={styles.sideControlPlaceholder} />}
