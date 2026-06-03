@@ -262,7 +262,7 @@ export default function CommentModal({ visible, onClose, onSeen, photoId, photoO
 
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "padding"}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
             style={{ width: "100%" }} 
           >
             <Animated.View 

@@ -19,15 +19,20 @@ import { SendIcon, FeatherIcon, FlipIcon, CloseIcon, FlashIcon } from "./GroupIc
 import { VolumeManager } from "react-native-volume-manager";
 import ChallengesModal from "./ChallengesModal";
 import { type ActiveChallenge } from "../../lib/challenges";
-import { radii, spacing, stroke, blur, typography, textStyles, glassBlurIntensity, type ThemeColors } from "../../lib/theme";
+import { radii, spacing, stroke, blur, typography, textStyles, glassBlurIntensity, buildColors, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import Shape, { type ShapeName } from "../Shape";
 import Icon, { type IconName } from "../Icon";
 import { AudioCaptionPlayer } from "../molecules/AudioCaptionPlayer";
+import LottieView from "lottie-react-native";
 import BlurView from "../atoms/BlurView";
 import { BlurView as NativeBlurView } from "@sbaiahmed1/react-native-blur";
 
 const NAVBAR_HEIGHT = 100;
+// Constantes de la barre de description (utilisées dans onShow ET startEditCaption)
+const EDIT_CAPTION_H = 48;
+const MARGIN_ABOVE_KB = spacing.lg;  // 16px
+const CAPTION_GAP = spacing.sm;      // 8px
 
 // LayoutAnimation pour les transitions de la barre de légende (entrée/sortie édition)
 if (Platform.OS === "android") {
@@ -193,6 +198,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const capturingSecondRef = useRef(false);
 
   const [cameraMode, setCameraMode] = useState<CameraMode>("PHOTO");
+  const lottieRef = useRef<LottieView>(null);
+  const [activeLottie, setActiveLottie] = useState<string | null>(null);
+
   const [drawingColor, setDrawingColor] = useState("#FF561A");
   const [drawingStrokeWidth, setDrawingStrokeWidth] = useState(6);
   const [isDrawingActive, setIsDrawingActive] = useState(false);
@@ -235,34 +243,49 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const previewWidthAnim = useRef(new Animated.Value(winWidth)).current;
   const previewBottomRadiusAnim = useRef(new Animated.Value(0)).current;
   // Position verticale de la barre de légende (absolue dans previewFullContainer).
-  // État normal : NAVBAR_HEIGHT + spacing.lg (overlay bas de la frame).
-  // État édition : kbH + spacing.lg (16px au-dessus du clavier).
   const captionBarBottomAnim = useRef(new Animated.Value(NAVBAR_HEIGHT + spacing.lg)).current;
+  // Dernière hauteur clavier connue sur Android (ajusté une fois après keyboardDidShow).
+  const lastKbHRef = useRef<number | null>(null);
 
   // Keep ref in sync so keyboard listeners don't capture stale state
   useEffect(() => { isEditingCaptionRef.current = isEditingCaption; }, [isEditingCaption]);
 
-  // Keyboard listeners: animate preview width + border radius + spacer in sync with keyboard
+  // Keyboard listeners — iOS: keyboardWillShow/Hide (avant animation, sync parfait).
+  // Android: keyboardDidShow stocke kbH + correction ; l'animation principale est dans
+  // startEditCaption/confirmEditCaption pour rester synchronisée avec le clavier.
   useEffect(() => {
     const kbShow = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const kbHide = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
 
-    const EDIT_CAPTION_H = 48;        // hauteur fixe de la barre d'édition hors frame
-    const MARGIN_ABOVE_KB = spacing.lg; // 16px au-dessus du clavier
-    const GAP = spacing.sm;             // 8px entre le bas de la frame et le haut de la barre
-
     const onShow = Keyboard.addListener(kbShow, (e) => {
       if (!isEditingCaptionRef.current) return;
       const kbH = e.endCoordinates.height;
+
+      if (Platform.OS === "android") {
+        // Le build a adjustResize en manifest mais sur Android edge-to-edge moderne
+        // la fenêtre ne rétrécit pas : le clavier overlay le contenu (adjustNothing effectif).
+        // On utilise la même formule qu'iOS : captionBarBottom = kbH + MARGIN_ABOVE_KB.
+        // Cette correction rapide affine l'estimation de startEditCaption.
+        lastKbHRef.current = kbH;
+        const topFixed = Math.max(0, winHeight - winWidth * 16 / 9 - NAVBAR_HEIGHT);
+        const captionBarBottom = kbH + MARGIN_ABOVE_KB;
+        const mediaFrameBottom = winHeight - captionBarBottom - EDIT_CAPTION_H - CAPTION_GAP;
+        const targetH = Math.max(winWidth * 0.4 * 16 / 9, mediaFrameBottom - topFixed);
+        const targetW = Math.floor(targetH * 9 / 16);
+        Animated.parallel([
+          Animated.timing(previewWidthAnim, { toValue: targetW, duration: 150, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+          Animated.timing(captionBarBottomAnim, { toValue: captionBarBottom, duration: 150, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        ]).start();
+        return;
+      }
+
+      // iOS : keyboardWillShow arrive avant l'animation du clavier — sync parfait.
       const dur = (e as any).duration > 10 ? (e as any).duration : 280;
-      // Ancre fixe = espace au-dessus de la frame en état normal
       const topFixed = Math.max(0, winHeight - winWidth * 16 / 9 - NAVBAR_HEIGHT);
-      // La barre d'édition se positionne juste au-dessus du clavier
       const captionBarBottom = kbH + MARGIN_ABOVE_KB;
-      // La frame doit finir juste au-dessus de la barre d'édition (+ gap)
-      const mediaFrameBottom = winHeight - captionBarBottom - EDIT_CAPTION_H - GAP;
-      const targetMediaH = Math.max(winWidth * 0.4 * 16 / 9, mediaFrameBottom - topFixed);
-      const targetW = Math.floor(targetMediaH * 9 / 16);
+      const mediaFrameBottom = winHeight - captionBarBottom - EDIT_CAPTION_H - CAPTION_GAP;
+      const targetH = Math.max(winWidth * 0.4 * 16 / 9, mediaFrameBottom - topFixed);
+      const targetW = Math.floor(targetH * 9 / 16);
       Animated.parallel([
         Animated.timing(previewWidthAnim, { toValue: targetW, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         Animated.timing(previewBottomRadiusAnim, { toValue: radii.lg, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
@@ -271,6 +294,26 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     });
 
     const onHide = Keyboard.addListener(kbHide, (e) => {
+      if (Platform.OS === "android") {
+        // Animation déjà lancée dans confirmEditCaption. onHide gère les fermetures
+        // externes (bouton retour) et s'assure que l'état est bien réinitialisé.
+        if (isEditingCaptionRef.current) {
+          isEditingCaptionRef.current = false;
+          setIsEditingCaption(false);
+        }
+        // Assure le retour aux valeurs normales (no-op si déjà fait par confirmEditCaption).
+        previewWidthAnim.stopAnimation();
+        captionBarBottomAnim.stopAnimation();
+        previewBottomRadiusAnim.stopAnimation();
+        Animated.parallel([
+          Animated.timing(captionBarBottomAnim, { toValue: NAVBAR_HEIGHT + spacing.lg, duration: 250, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+          Animated.timing(previewWidthAnim, { toValue: winWidth, duration: 250, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+          Animated.timing(previewBottomRadiusAnim, { toValue: 0, duration: 250, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        ]).start();
+        return;
+      }
+
+      // iOS : keyboardWillHide, sync avec fermeture du clavier.
       const dur = (e as any).duration > 10 ? (e as any).duration : 250;
       Animated.parallel([
         Animated.timing(previewWidthAnim, { toValue: winWidth, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
@@ -289,13 +332,45 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   }, [winWidth, winHeight, insets.top, insets.bottom]);
 
   const startEditCaption = () => {
-    LayoutAnimation.configureNext(CAPTION_TRANSITION);
+    if (Platform.OS !== "android") {
+      LayoutAnimation.configureNext(CAPTION_TRANSITION);
+    }
     isEditingCaptionRef.current = true;
     setIsEditingCaption(true);
+
+    if (Platform.OS === "android") {
+      // Démarre IMMÉDIATEMENT avec le kbH estimé (mesure réelle du dernier keyboardDidShow,
+      // ou 300px par défaut). keyboardDidShow corrigera si l'estimation est légèrement inexacte.
+      // Même formule qu'iOS : captionBarBottom = kbH + MARGIN_ABOVE_KB.
+      const estimatedKbH = lastKbHRef.current ?? 300;
+      const topFixed = Math.max(0, winHeight - winWidth * 16 / 9 - NAVBAR_HEIGHT);
+      const captionBarBottom = estimatedKbH + MARGIN_ABOVE_KB;
+      const mediaFrameBottom = winHeight - captionBarBottom - EDIT_CAPTION_H - CAPTION_GAP;
+      const targetH = Math.max(winWidth * 0.4 * 16 / 9, mediaFrameBottom - topFixed);
+      const targetW = Math.floor(targetH * 9 / 16);
+      Animated.parallel([
+        Animated.timing(captionBarBottomAnim, { toValue: captionBarBottom, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(previewWidthAnim, { toValue: targetW, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(previewBottomRadiusAnim, { toValue: radii.lg, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+      ]).start();
+    }
   };
 
   const confirmEditCaption = () => {
-    Keyboard.dismiss(); // triggers keyboardWillHide → animation → resets isEditingCaption
+    if (Platform.OS === "android") {
+      // Fermeture en parallèle avec la fermeture du clavier (~300ms).
+      Animated.parallel([
+        Animated.timing(captionBarBottomAnim, { toValue: NAVBAR_HEIGHT + spacing.lg, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(previewWidthAnim, { toValue: winWidth, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(previewBottomRadiusAnim, { toValue: 0, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+      ]).start(() => {
+        if (isEditingCaptionRef.current) {
+          isEditingCaptionRef.current = false;
+          setIsEditingCaption(false);
+        }
+      });
+    }
+    Keyboard.dismiss();
   };
 
   useEffect(() => {
@@ -558,6 +633,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       isEditingCaptionRef.current = false;
       setIsEditingCaption(false);
       captionBarBottomAnim.setValue(NAVBAR_HEIGHT + spacing.lg);
+      previewWidthAnim.setValue(winWidth);
+      previewBottomRadiusAnim.setValue(0);
       Keyboard.dismiss();
     }
   };
@@ -1349,7 +1426,12 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               {(activeChallenge === null || capturingSecond) && !isRecording && !isAudioRecording && !(cameraMode === "DESSIN" && canUndo) && (
                 <ModeSelector
                   selected={cameraMode}
-                  onSelect={(m) => { setCameraMode(m); }}
+                  onSelect={(m) => { 
+                    if (cameraMode === "VIDEO" && m === "DESSIN") {
+                      setActiveLottie("video-draw");
+                    }
+                    setCameraMode(m); 
+                  }}
                 />
               )}
             </View>
@@ -1368,8 +1450,23 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} />
                 {isRecording || isAudioRecording ? (
                   <Shape name="stop" size={40} color={colors.brand} />
-                ) : cameraMode === "VIDEO" || cameraMode === "PHOTO" || cameraMode === "DESSIN" ? (
-                  <Shape name={cameraMode === "VIDEO" ? "video" : cameraMode === "PHOTO" ? "photo" : "dessin"} size={48} color={colors.brand} />
+                ) : activeLottie === "video-draw" ? (
+                  <LottieView
+                    source={require("../../assets/animations/video-draw.json")}
+                    autoPlay
+                    loop={false}
+                    speed={2}
+                    style={{ width: 80, height: 80 }}
+                    onAnimationFinish={() => setActiveLottie(null)}
+                  />
+                ) : cameraMode === "VIDEO" ? (
+                  <LottieView
+                    source={require("../../assets/animations/video-draw.json")}
+                    progress={0}
+                    style={{ width: 80, height: 80 }}
+                  />
+                ) : cameraMode === "PHOTO" || cameraMode === "DESSIN" ? (
+                  <Shape name={cameraMode === "PHOTO" ? "photo" : "dessin"} size={48} color={colors.brand} />
                 ) : null}
               </TouchableOpacity>}
               {cameraMode !== "TEXTE" && <View style={styles.sideControlPlaceholder} />}
@@ -1384,7 +1481,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       {/* ── Preview Unifié (même frame 9:16 que la capture) ── */}
       {!isCapturing && isActive && previewSlot && (
         <View style={styles.previewFullContainer}>
-          {/* Spacer supérieur à hauteur FIXE — ancre le bord haut de la frame quelle que soit la situation (clavier, send area masquée…) */}
+          {/* Spacer supérieur — ancre le bord haut de la frame. Avec adjustResize (Android), winHeight
+               diminue naturellement quand le clavier apparaît, donc ce spacer se rétrécit sans animation. */}
           <View style={{ height: Math.max(0, winHeight - winWidth * 16 / 9 - NAVBAR_HEIGHT) }} pointerEvents="none" />
 
           {/* Frame média — largeur animée, ratio 9:16 via aspectRatio, centrée */}
@@ -1490,7 +1588,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                État édition : bottom = kbH+16 (au-dessus du clavier), frame rétrécie au-dessus. */}
           {activeChallenge === null && (
             <Animated.View style={[styles.captionBarOuter, { bottom: captionBarBottomAnim }]}>
-              <View style={[styles.captionBar, isEditingCaption && { height: 48 }]}>
+              <View style={styles.captionBar}>
                 {Platform.OS === "android" ? (
                   <NativeBlurView blurAmount={30} blurType="light" blurRounds={2} style={StyleSheet.absoluteFill} pointerEvents="none" />
                 ) : (
@@ -1503,16 +1601,13 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                   <TouchableOpacity 
                     onPress={cancelCaptionAudioRecording}
                     activeOpacity={0.8}
-                    style={{ width: 32, height: 32, marginRight: spacing.sm, justifyContent: "center", alignItems: "center" }}
+                    style={{ marginRight: spacing.sm }}
                   >
                     <Animated.View 
                       style={[
                         styles.captionMicBtn, 
                         { 
-                          width: 32,
-                          height: 32,
                           backgroundColor: colors.bgDangerTertiary, 
-                          marginVertical: 0,
                           transform: [{ scale: cancelBtnScale }],
                           zIndex: 1000,
                         }
@@ -1563,9 +1658,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 {previewSlot.mode !== "AUDIO" && !slot1!.captionAudioUri && (
                   isEditingCaption ? (
                     <TouchableOpacity style={styles.captionConfirmBtn} onPress={confirmEditCaption} activeOpacity={0.8}>
-                      {Platform.OS === "android" ? (
-                        <NativeBlurView blurAmount={30} blurType="light" blurRounds={2} style={StyleSheet.absoluteFill} pointerEvents="none" />
-                      ) : (
+                      {Platform.OS === "ios" && (
                         <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
                       )}
                       <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
@@ -1573,9 +1666,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                     </TouchableOpacity>
                   ) : (!slot1!.note.trim() || isCaptionRecording) ? (
                     <View style={[styles.captionMicBtn, isSwipingToCancel && { opacity: 0.5 }]} {...captionPanResponder.panHandlers}>
-                      {Platform.OS === "android" ? (
-                        <NativeBlurView blurAmount={30} blurType="light" blurRounds={2} style={StyleSheet.absoluteFill} pointerEvents="none" />
-                      ) : (
+                      {Platform.OS === "ios" && (
                         <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
                       )}
                       <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
@@ -1749,15 +1840,16 @@ const makePrimaryButtonStyles = (colors: ThemeColors) => StyleSheet.create({
 
 // Case à cocher du picker de groupe.
 function GroupCheckbox({ checked }: { checked: boolean }) {
-  const { colors } = useTheme();
+  // On force le mode "Light" pour les tokens de la checkbox uniquement dans ce contexte (overlay sombre).
+  const lightColors = buildColors("Light");
   return (
     <View style={{
       width: 24, height: 24, borderRadius: 4,
-      borderWidth: 1, borderColor: colors.borderBrandTertiary,
-      backgroundColor: checked ? colors.brand : colors.bg,
+      borderWidth: 1, borderColor: lightColors.borderBrandTertiary,
+      backgroundColor: checked ? lightColors.brand : lightColors.bg,
       justifyContent: "center", alignItems: "center",
     }}>
-      {checked && <Icon name="check" size={16} color={colors.icon} />}
+      {checked && <Icon name="check" size={16} color={lightColors.icon} />}
     </View>
   );
 }
@@ -1788,9 +1880,11 @@ function GroupPickerContent({ shapes, groups, selectedGroupIds, onToggle, onConf
             <Text style={pickerStyles.groupBtnText}>{g.name}</Text>
           </TouchableOpacity>
         ))}
-        <TouchableOpacity onPress={onCancel} activeOpacity={0.7}>
-          <Text style={pickerStyles.groupPickerCancel}>Annuler</Text>
-        </TouchableOpacity>
+        <View style={pickerStyles.groupCancelBtnContainer}>
+          <TouchableOpacity onPress={onCancel} activeOpacity={0.7}>
+            <Text style={pickerStyles.groupPickerCancel}>Annuler</Text>
+          </TouchableOpacity>
+        </View>
       </View>
       <View style={pickerStyles.pickerSendArea}>
         <PrimaryButton
@@ -2181,11 +2275,11 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   topSquareBtn: { width: 38, height: 38, borderRadius: radii.sm, backgroundColor: colors.opacityLight, justifyContent: "center", alignItems: "center" },
   previewContent: { position: "absolute", left: spacing.lg, right: spacing.lg },
   // Barre légende unifiée (texte + micro)
-  captionBar: { overflow: "hidden", borderRadius: radii.md, padding: spacing.md, flexDirection: "row", alignItems: "stretch", minHeight: 48 },
+  captionBar: { overflow: "hidden", borderRadius: radii.md, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, flexDirection: "row", alignItems: "center", minHeight: 48 },
   captionTextArea: { flex: 1, justifyContent: "center" },
-  captionPlaceholder: { ...textStyles.bodyBase, color: colors.textSecondary },
-  captionNoteText: { ...textStyles.bodyBase, color: colors.text },
-  captionMicBtn: { aspectRatio: 1, marginVertical: spacing.sm - spacing.md, borderRadius: radii.sm, overflow: "hidden", justifyContent: "center", alignItems: "center" },
+  captionPlaceholder: { ...textStyles.bodyBase, color: colors.textSecondary, lineHeight: undefined },
+  captionNoteText: { ...textStyles.bodyBase, color: colors.text, lineHeight: undefined },
+  captionMicBtn: { width: 32, height: 32, borderRadius: radii.sm, overflow: "hidden", justifyContent: "center", alignItems: "center" },
   noteEditorContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: 40 },
   largeNoteInput: { width: "100%", color: colors.text, fontSize: typography.size.xxl, fontFamily: typography.family.bold, textAlign: "center", marginBottom: 40 },
   doneNoteBtn: { backgroundColor: colors.text, paddingHorizontal: 32, paddingVertical: 14, borderRadius: radii.xl },
@@ -2202,7 +2296,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   // Unique barre de légende, toujours position:absolute dans previewFullContainer
   captionBarOuter: { position: "absolute", left: spacing.lg, right: spacing.lg },
   // TextInput : même police que captionNoteText, sans lineHeight pour que le placeholder s'aligne correctement
-  captionEditInput: { flex: 1, fontFamily: typography.family.regular, fontSize: typography.size.md, color: colors.text, textAlignVertical: "top", paddingVertical: 0 },
+  captionEditInput: { ...textStyles.bodyBase, flex: 1, color: colors.text, textAlignVertical: "top", paddingVertical: 0, lineHeight: undefined },
   // Bouton confirmation : taille fixe 32×32, centré verticalement quelle que soit la hauteur de la barre
   captionConfirmBtn: { width: 32, height: 32, borderRadius: radii.sm, overflow: "hidden", justifyContent: "center", alignItems: "center", alignSelf: "center" },
 });
@@ -2283,13 +2377,14 @@ const makePickerStyles = (colors: ThemeColors) => StyleSheet.create({
   cancelWrap: { alignItems: "center", paddingVertical: 8 },
   cancelText: { color: colors.textTertiary, fontFamily: typography.family.semibold, fontSize: typography.size.sm },
   // Group picker fullscreen
-  fullscreenContent: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: spacing.lg, gap: 48, paddingBottom: NAVBAR_HEIGHT },
+  fullscreenContent: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: spacing.lg },
   pickerSendArea: { position: "absolute", bottom: 0, left: 0, right: 0, height: NAVBAR_HEIGHT, paddingHorizontal: spacing.lg, paddingTop: spacing.lg, justifyContent: "flex-start" },
-  shapesRow: { flexDirection: "row", alignItems: "center", gap: 16 },
-  shareInText: { ...textStyles.subtitleStrong, color: colors.text, paddingTop: 24, lineHeight: undefined },
+  shapesRow: { flexDirection: "row", alignItems: "center", gap: 16, marginBottom: spacing.xl },
+  shareInText: { ...textStyles.subtitleStrong, color: colors.text, lineHeight: undefined, marginBottom: 48 },
   groupBtnsCol: { gap: 16, width: "100%", alignItems: "center" },
   groupBtn: { width: "100%", paddingHorizontal: 24, paddingVertical: 16, borderRadius: radii.lg, backgroundColor: colors.opacityLight, flexDirection: "row", alignItems: "center", gap: spacing.sm },
   groupBtnText: { ...textStyles.singleLineSubheadingStrong, color: colors.textNeutral, lineHeight: undefined },
+  groupCancelBtnContainer: { width: "100%", paddingHorizontal: 24, paddingVertical: 16, alignItems: "center", justifyContent: "center" },
   groupPickerCancel: { ...textStyles.singleLineBodyBaseStrong, color: colors.textSecondary },
 });
 
