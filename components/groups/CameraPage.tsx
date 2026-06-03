@@ -687,9 +687,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     recordingSecondsRef.current = 0;
     recordingTimer.current = setInterval(() => {
       setRecordingSeconds(s => {
-        const next = s >= 14 ? s : s + 1;
+        const next = s >= 29 ? s : s + 1;
         recordingSecondsRef.current = next;
-        if (s >= 14) stopVideoRecordingRef.current();
+        if (s >= 29) stopVideoRecordingRef.current();
         return next;
       });
     }, 1000);
@@ -1415,9 +1415,12 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
           )}
 
           {isRecording && (
-            <View style={[styles.recordingTimer, { top: Math.max(insets.top, 40) }]}>
-              <View style={styles.recordingDot} />
-              <Text style={styles.recordingText}>{recordingSeconds}s / 15s</Text>
+            <View style={[challengeStyles.topContainer, { paddingTop: cameraFrameTop + CHALLENGE_GAP }]} pointerEvents="none">
+              <View style={[challengeStyles.challengeBtn, { backgroundColor: colors.bgDanger }]}>
+                <Text style={[challengeStyles.challengeBtnText, { color: colors.textDangerOnDanger }]}>
+                  {`${Math.floor(recordingSeconds / 60).toString().padStart(2, "0")}:${(recordingSeconds % 60).toString().padStart(2, "0")}/30s`}
+                </Text>
+              </View>
             </View>
           )}
 
@@ -2261,9 +2264,6 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   sideControlPlaceholder: { width: 48 },
   flipBtn: { width: 48, height: 48, borderRadius: radii.xl, backgroundColor: colors.accentMuted, justifyContent: "center", alignItems: "center" },
   captureBtn: { width: 80, height: 80, borderRadius: radii.full, overflow: "hidden", justifyContent: "center", alignItems: "center" },
-  recordingTimer: { position: "absolute", alignSelf: "center", flexDirection: "row", alignItems: "center", backgroundColor: colors.opacityLight, paddingHorizontal: 16, paddingVertical: 8, borderRadius: radii.lg, gap: 8 },
-  recordingDot: { width: 10, height: 10, borderRadius: radii.full, backgroundColor: "#FF3B30" },
-  recordingText: { color: colors.text, fontFamily: typography.family.semibold, fontSize: typography.size.sm },
   processingText: { color: colors.secondary, fontFamily: typography.family.semibold, fontSize: typography.size.sm },
   // Preview unifié (même layout que capture : 9:16, ancré en bas)
   previewFullContainer: { flex: 1, backgroundColor: colors.bg },
