@@ -119,6 +119,8 @@ export default function PhotoFeed({
   const [activePhotoId, setActivePhotoId] = useState<string | null>(null);
   const [activePhotoOwnerId, setActivePhotoOwnerId] = useState<string | null>(null);
 
+  const activePhoto = useMemo(() => photos.find(p => p.id === activePhotoId), [photos, activePhotoId]);
+
   const openComments = (photoId: string, ownerId?: string) => {
     setActivePhotoId(photoId);
     if (ownerId) setActivePhotoOwnerId(ownerId);
@@ -357,6 +359,7 @@ export default function PhotoFeed({
           onSeen={onOpenComments || openComments}
           photoId={activePhotoId}
           photoOwnerId={activePhotoOwnerId}
+          reactions={activePhoto?.reactions || []}
         />
       )}
     </View>

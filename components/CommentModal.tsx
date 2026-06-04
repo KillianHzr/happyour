@@ -17,6 +17,7 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
 } from "react-native";
+import { Image } from "expo-image";
 import BlurView from "./atoms/BlurView";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -27,11 +28,18 @@ import { useAuth } from "../lib/auth-context";
 import { CloseIcon } from "./atoms/CloseIcon";
 import { CommentItem, Comment } from "./molecules/CommentItem";
 import { CommentInput } from "./molecules/CommentInput";
-import { radii, typography, type ThemeColors } from "../lib/theme";
+import { TextSticker } from "./atoms/TextSticker";
+import { radii, typography, type ThemeColors, shadows } from "../lib/theme";
 import { useTheme, useThemedStyles } from "../lib/theme-context";
+import { Reaction } from "../lib/feed-types";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const MODAL_HEIGHT = SCREEN_HEIGHT * 0.75;
+
+const isEmoji = (str: string) => {
+  const regexExp = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/gi;
+  return regexExp.test(str);
+};
 
 interface CommentModalProps {
   visible: boolean;
@@ -39,9 +47,10 @@ interface CommentModalProps {
   onSeen?: (photoId: string) => void;
   photoId: string;
   photoOwnerId: string;
+  reactions?: Reaction[];
 }
 
-export default function CommentModal({ visible, onClose, onSeen, photoId, photoOwnerId }: CommentModalProps) {
+export default function CommentModal({ visible, onClose, onSeen, photoId, photoOwnerId, reactions = [] }: CommentModalProps) {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const { colors, mode } = useTheme();
@@ -56,9 +65,38 @@ export default function CommentModal({ visible, onClose, onSeen, photoId, photoO
   const [mounted, setMounted] = useState(visible);
   const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
+  const stickersOpacity = useRef(new Animated.Value(0)).current;
+  const stickersScale = useRef(new Animated.Value(0.9)).current;
   const animGenRef = useRef(0);
 
   const isOwner = user?.id === photoOwnerId;
+
+  // Filter for custom text reactions
+  const textReactions = useMemo(() => {
+    return reactions.filter(r => !isEmoji(r.sticker_id));
+  }, [reactions]);
+
+  const IMAGE_AREA_HEIGHT = SCREEN_HEIGHT - MODAL_HEIGHT;
+
+  // Stable random positions for stickers
+  const stickersData = useMemo(() => {
+    return textReactions.map((reaction, index) => {
+      const isLeft = index % 2 === 0;
+      const x = 10;
+      const centerY = IMAGE_AREA_HEIGHT / 2;
+      const scatterY = (Math.random() - 0.5) * 60; // ±30px
+      const rotation = (Math.random() - 0.5) * 10; // -5 to +5 degrees
+      
+      return {
+        id: reaction.id,
+        reaction,
+        x,
+        y: centerY + scatterY,
+        rotation,
+        isLeft
+      };
+    });
+  }, [textReactions, IMAGE_AREA_HEIGHT]);
 
   const markAsSeen = useCallback(async () => {
     if (!user || !photoId) return;
@@ -96,12 +134,36 @@ export default function CommentModal({ visible, onClose, onSeen, photoId, photoO
           easing: Easing.out(Easing.cubic),
         }),
       ]).start();
+
+      // Delayed pop-in for stickers
+      Animated.sequence([
+        Animated.delay(150),
+        Animated.parallel([
+          Animated.timing(stickersOpacity, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+            easing: Easing.out(Easing.quad),
+          }),
+          Animated.spring(stickersScale, {
+            toValue: 1,
+            useNativeDriver: true,
+            tension: 50,
+            friction: 7,
+          }),
+        ])
+      ]).start();
     });
-  }, [overlayOpacity, translateY]);
+  }, [overlayOpacity, translateY, stickersOpacity, stickersScale]);
 
   const animateOut = useCallback((callback?: () => void) => {
     Keyboard.dismiss();
     const myGen = ++animGenRef.current;
+    
+    // Hide stickers immediately
+    stickersOpacity.setValue(0);
+    stickersScale.setValue(0.9);
+
     Animated.parallel([
       Animated.timing(overlayOpacity, {
         toValue: 0,
@@ -121,7 +183,7 @@ export default function CommentModal({ visible, onClose, onSeen, photoId, photoO
         callback?.();
       }
     });
-  }, [overlayOpacity, translateY]);
+  }, [overlayOpacity, translateY, stickersOpacity, stickersScale]);
 
   useEffect(() => {
     if (visible) {
@@ -260,6 +322,46 @@ export default function CommentModal({ visible, onClose, onSeen, photoId, photoO
           <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
         </Animated.View>
 
+        <Animated.View 
+          style={[
+            styles.stickerLayer, 
+            { 
+              opacity: stickersOpacity,
+              transform: [{ scale: stickersScale }]
+            }
+          ]} 
+          pointerEvents="none"
+        >
+          {stickersData.map((item) => (
+            <View 
+              key={item.id}
+              style={[
+                styles.stickerContainer,
+                {
+                  top: item.y,
+                  left: item.isLeft ? item.x : undefined,
+                  right: !item.isLeft ? item.x : undefined,
+                  transform: [{ rotate: `${item.rotation}deg` }, { translateY: -20 }],
+                  alignItems: item.isLeft ? 'flex-start' : 'flex-end',
+                }
+              ]}
+            >
+              <View>
+                <TextSticker text={item.reaction.sticker_id} fontSize={28} />
+                <View style={styles.stickerAvatar}>
+                  {item.reaction.avatar_url ? (
+                    <Image source={{ uri: item.reaction.avatar_url }} style={StyleSheet.absoluteFill} />
+                  ) : (
+                    <Text style={styles.avatarFallbackText}>
+                      {(item.reaction.username || "?")[0].toUpperCase()}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            </View>
+          ))}
+        </Animated.View>
+
         <View style={styles.modalOverlay}>
           <KeyboardAvoidingView
             behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -346,6 +448,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   modalOverlay: {
     flex: 1,
     justifyContent: "flex-end",
+    zIndex: 10,
   },
   backdrop: {
     backgroundColor: colors.opacityLight,
@@ -435,5 +538,31 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: typography.family.semibold,
     fontSize: typography.size.sm,
     color: colors.textTertiary,
+  },
+  stickerLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 5,
+  },
+  stickerContainer: {
+    position: 'absolute',
+  },
+  stickerAvatar: {
+    position: 'absolute',
+    top: -10,
+    left: -10,
+    width: 24,
+    height: 24,
+    borderRadius: radii.xs,
+    backgroundColor: colors.brand,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadows.sm,
+    zIndex: 10,
+    overflow: 'hidden',
+  },
+  avatarFallbackText: {
+    color: colors.white,
+    fontFamily: typography.family.bold,
+    fontSize: 10,
   },
 });
