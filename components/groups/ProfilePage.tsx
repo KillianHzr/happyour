@@ -863,13 +863,13 @@ export default function ProfilePage({
 
       {/* ── Week reveal modal ── */}
       <Modal visible={showWeekReveal} animationType="slide" onRequestClose={() => setShowWeekReveal(false)}>
-        <View style={{ flex: 1, backgroundColor: colors.bg }}>
-          <TouchableOpacity
-            style={[styles.modalBackBtn, { top: insets.top + 12 }]}
-            onPress={() => setShowWeekReveal(false)}
-          >
-            <BackArrow />
-          </TouchableOpacity>
+          <View style={{ flex: 1, backgroundColor: "#1E1E1E" }}>
+            <TouchableOpacity
+              style={[styles.modalBackBtn, { top: insets.top + 12 }]}
+              onPress={() => setShowWeekReveal(false)}
+            >
+              <BackArrow />
+            </TouchableOpacity>
             <PhotoFeed
               photos={weekRevealPhotos}
               currentUserId={userId}
@@ -883,62 +883,62 @@ export default function ProfilePage({
               introSubtitle={weekRevealIntroSubtitle}
               hideEnd={true}
             />
-          {weekRevealIntroSubtitle !== "" && (
-            <View style={[styles.weekLabelPill, { top: insets.top + 8 }]} pointerEvents="none">
-              <Text style={styles.weekLabelPillText}>{weekRevealIntroSubtitle}</Text>
-            </View>
-          )}
-        </View>
+            {weekRevealIntroSubtitle !== "" && (
+              <View style={[styles.weekLabelPill, { top: insets.top + 8 }]} pointerEvents="none">
+                <Text style={styles.weekLabelPillText}>{weekRevealIntroSubtitle}</Text>
+              </View>
+            )}
+          </View>
       </Modal>
 
       {/* ── Random moment modal ── */}
       <Modal visible={showRandomReveal} animationType="slide" onRequestClose={() => setShowRandomReveal(false)}>
-        <View style={{ flex: 1, backgroundColor: colors.bg }}>
-          <TouchableOpacity
-            style={[styles.modalBackBtn, { top: insets.top + 12 }]}
-            onPress={() => setShowRandomReveal(false)}
-          >
-            <BackArrow />
-          </TouchableOpacity>
+          <View style={{ flex: 1, backgroundColor: "#1E1E1E" }}>
+            <TouchableOpacity
+              style={[styles.modalBackBtn, { top: insets.top + 12 }]}
+              onPress={() => setShowRandomReveal(false)}
+            >
+              <BackArrow />
+            </TouchableOpacity>
 
-          <Animated.View style={{ flex: 1, opacity: randomFadeAnim, transform: [{ translateY: randomSlideAnim }] }}>
-            {randomPhoto && (
-              <PhotoFeed
-                photos={[randomPhoto]}
-                currentUserId={userId}
-                nextUnlockDate={new Date(Date.now() + 7 * 86400000)}
-                revealEndDate={undefined}
-                crownWinnerId={null}
-                onScrollLock={() => {}}
-                onOpenPicker={() => {}}
-                onOpenComments={() => {}}
-                hideIntro={true}
-                hideEnd={true}
-              />
-            )}
-          </Animated.View>
-
-          {randomWeekLabel !== "" && (
-            <View style={[styles.weekLabelPill, { top: insets.top + 8 }]} pointerEvents="none">
-              <Text style={styles.weekLabelPillText}>{randomWeekLabel}</Text>
-            </View>
-          )}
-
-          {loadingRandom && (
-            <View style={styles.randomLoadingOverlay}>
-              <ActivityIndicator size="large" color={colors.textSecondary} />
-            </View>
-          )}
-
-          {randomPhoto && (
-            <Animated.View style={{ opacity: shuffleBtnOpacity, position: "absolute", alignSelf: "center", bottom: insets.bottom + 20, zIndex: 10 }}>
-              <TouchableOpacity style={styles.shuffleBtn} onPress={handleAnotherMoment} disabled={randomBusy}>
-                <RandomIcon />
-                <Text style={styles.shuffleBtnText}>Autre moment</Text>
-              </TouchableOpacity>
+            <Animated.View style={{ flex: 1, opacity: randomFadeAnim, transform: [{ translateY: randomSlideAnim }] }}>
+              {randomPhoto && (
+                <PhotoFeed
+                  photos={[randomPhoto]}
+                  currentUserId={userId}
+                  nextUnlockDate={new Date(Date.now() + 7 * 86400000)}
+                  revealEndDate={undefined}
+                  crownWinnerId={null}
+                  onScrollLock={() => {}}
+                  onOpenPicker={() => {}}
+                  onOpenComments={() => {}}
+                  hideIntro={true}
+                  hideEnd={true}
+                />
+              )}
             </Animated.View>
-          )}
-        </View>
+
+            {randomWeekLabel !== "" && (
+              <View style={[styles.weekLabelPill, { top: insets.top + 8 }]} pointerEvents="none">
+                <Text style={styles.weekLabelPillText}>{randomWeekLabel}</Text>
+              </View>
+            )}
+
+            {loadingRandom && (
+              <View style={styles.randomLoadingOverlay}>
+                <ActivityIndicator size="large" color={colors.textSecondary} />
+              </View>
+            )}
+
+            {randomPhoto && (
+              <Animated.View style={{ opacity: shuffleBtnOpacity, position: "absolute", alignSelf: "center", bottom: insets.bottom + 20, zIndex: 10 }}>
+                <TouchableOpacity style={styles.shuffleBtn} onPress={handleAnotherMoment} disabled={randomBusy}>
+                  <RandomIcon />
+                  <Text style={styles.shuffleBtnText}>Autre moment</Text>
+                </TouchableOpacity>
+              </Animated.View>
+            )}
+          </View>
       </Modal>
 
       {/* ── Edit username sheet ── */}

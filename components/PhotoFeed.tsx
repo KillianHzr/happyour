@@ -11,6 +11,9 @@ import {
 import Reanimated, {
   useSharedValue,
   useAnimatedScrollHandler,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
   type SharedValue,
 } from "react-native-reanimated";
 import * as FileSystem from "expo-file-system/legacy";
@@ -30,7 +33,7 @@ import { RevealIntroPage } from "./organisms/RevealIntroPage";
 import { CrownRevealPage } from "./organisms/CrownRevealPage";
 import { AnimatedPageWrapper } from "./molecules/AnimatedPageWrapper";
 import { radii, typography, type ThemeColors } from "../lib/theme";
-import { useTheme, useThemedStyles } from "../lib/theme-context";
+import { useTheme, useThemedStyles, ForceTheme } from "../lib/theme-context";
 
 export { PhotoEntry, Reaction };
 
@@ -80,7 +83,15 @@ function formatDayLabel(dateStr: string) {
 
 const AnimatedFlatList = Reanimated.createAnimatedComponent(FlatList) as typeof FlatList<FeedItem>;
 
-export default function PhotoFeed({
+export default function PhotoFeed(props: Props) {
+  return (
+    <ForceTheme mode="Dark">
+      <PhotoFeedContent {...props} />
+    </ForceTheme>
+  );
+}
+
+function PhotoFeedContent({
   photos,
   currentUserId,
   nextUnlockDate,
@@ -121,11 +132,54 @@ export default function PhotoFeed({
 
   const activePhoto = useMemo(() => photos.find(p => p.id === activePhotoId), [photos, activePhotoId]);
 
+  // Shrink animation shared values
+  const contentScale = useSharedValue(1);
+  const contentTranslateY = useSharedValue(0);
+  const contentBorderRadius = useSharedValue(0);
+
   const openComments = (photoId: string, ownerId?: string) => {
     setActivePhotoId(photoId);
     if (ownerId) setActivePhotoOwnerId(ownerId);
     setCommentModalVisible(true);
   };
+
+  useEffect(() => {
+    const config = { duration: 250, easing: Easing.out(Easing.cubic) };
+    
+    if (commentModalVisible) {
+      // TARGET DIMENSIONS: ~214px wide, ~380px high
+      const TARGET_HEIGHT = 380;
+      const scale = TARGET_HEIGHT / SCREEN_HEIGHT;
+      
+      // MODAL POSITION: bottom 392px
+      const MODAL_HEIGHT = 392;
+      const targetBottom = SCREEN_HEIGHT - MODAL_HEIGHT - 40; // 40px above modal
+      
+      // MATH:
+      // Scale happens from center (SCREEN_HEIGHT / 2)
+      // Visual bottom of scaled view = (SCREEN_HEIGHT / 2 + ty) + (TARGET_HEIGHT / 2)
+      // We want Visual bottom = targetBottom
+      // ty = targetBottom - (SCREEN_HEIGHT / 2) - (TARGET_HEIGHT / 2)
+      const ty = targetBottom - (SCREEN_HEIGHT / 2) - (TARGET_HEIGHT / 2);
+
+      contentScale.value = withTiming(scale, config);
+      contentTranslateY.value = withTiming(ty, config);
+      contentBorderRadius.value = withTiming(radii.xl, config);
+    } else {
+      contentScale.value = withTiming(1, config);
+      contentTranslateY.value = withTiming(0, config);
+      contentBorderRadius.value = withTiming(0, config);
+    }
+  }, [commentModalVisible]);
+
+  const animatedContentStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: contentTranslateY.value },
+      { scale: contentScale.value },
+    ],
+    borderRadius: contentBorderRadius.value,
+    overflow: 'hidden',
+  }));
 
   useEffect(() => {
     const videos = photos.filter((p) => p.url && p.image_path.endsWith(".mp4") && p.url.startsWith("http"));
@@ -278,6 +332,7 @@ export default function PhotoFeed({
             }} 
             onOpenPicker={onOpenPicker} 
             onOpenComments={(pid, oid) => { openComments(pid, oid); onOpenComments?.(pid, oid); }} 
+            isShrunken={commentModalVisible}
           />
         );
       } else if (isVideo) {
@@ -290,6 +345,7 @@ export default function PhotoFeed({
             cachedUrl={videoCache[moment.url] ?? moment.url} 
             onOpenPicker={onOpenPicker} 
             onOpenComments={(pid, oid) => { openComments(pid, oid); onOpenComments?.(pid, oid); }} 
+            isShrunken={commentModalVisible}
           />
         );
       } else {
@@ -301,6 +357,7 @@ export default function PhotoFeed({
             onOpenPicker={onOpenPicker} 
             onOpenComments={(pid, oid) => { openComments(pid, oid); onOpenComments?.(pid, oid); }} 
             isVisible={index === visibleIndex} 
+            isShrunken={commentModalVisible}
           />
         );
       }
@@ -311,46 +368,49 @@ export default function PhotoFeed({
 
   return (
     <View style={styles.list}>
-      <AnimatedFlatList
-        ref={flatListRef}
-        data={items}
-        renderItem={renderItem}
-        keyExtractor={(_, i) => i.toString()}
-        pagingEnabled={true}
-        snapToInterval={SCREEN_HEIGHT}
-        snapToAlignment="start"
-        decelerationRate="fast"
-        disableIntervalMomentum={true}
-        showsVerticalScrollIndicator={false}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-        getItemLayout={(_, i) => ({ length: SCREEN_HEIGHT, offset: SCREEN_HEIGHT * i, index: i })}
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={viewabilityConfig}
-        windowSize={5}
-        maxToRenderPerBatch={2}
-        initialNumToRender={2}
-        removeClippedSubviews={Platform.OS === "android"}
-        overScrollMode="never"
-        style={styles.list}
-      />
-      {revealEndDate && revealTimeLeft !== "" && (
-        <View style={[styles.revealCountdownBar, { top: insets.top + 8 }]} pointerEvents="none">
-          <View style={[styles.revealCountdownPill, revealMsLeft < 4 * 3600000 && styles.revealCountdownPillRed]}>
-            <Svg width="12" height="12" viewBox="0 0 24 24" fill="none" style={{ marginRight: 5 }}>
-              <Path 
-                d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" 
-                stroke={revealMsLeft < 4 * 3600000 ? "#FFFFFF" : colors.secondary}
-                strokeWidth="2" 
-                strokeLinecap="round" 
-              />
-            </Svg>
-            <Text style={[styles.revealCountdownText, revealMsLeft < 4 * 3600000 && styles.revealCountdownTextRed]}>
-              {revealTimeLeft}
-            </Text>
+      <Reanimated.View style={[styles.contentWrapper, animatedContentStyle]}>
+        <AnimatedFlatList
+          ref={flatListRef}
+          data={items}
+          renderItem={renderItem}
+          keyExtractor={(_, i) => i.toString()}
+          pagingEnabled={true}
+          snapToInterval={SCREEN_HEIGHT}
+          snapToAlignment="start"
+          decelerationRate="fast"
+          disableIntervalMomentum={true}
+          showsVerticalScrollIndicator={false}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
+          getItemLayout={(_, i) => ({ length: SCREEN_HEIGHT, offset: SCREEN_HEIGHT * i, index: i })}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewabilityConfig}
+          windowSize={5}
+          maxToRenderPerBatch={2}
+          initialNumToRender={2}
+          removeClippedSubviews={Platform.OS === "android"}
+          overScrollMode="never"
+          style={styles.list}
+          scrollEnabled={!commentModalVisible}
+        />
+        {revealEndDate && revealTimeLeft !== "" && (
+          <View style={[styles.revealCountdownBar, { top: insets.top + 8 }]} pointerEvents="none">
+            <View style={[styles.revealCountdownPill, revealMsLeft < 4 * 3600000 && styles.revealCountdownPillRed]}>
+              <Svg width="12" height="12" viewBox="0 0 24 24" fill="none" style={{ marginRight: 5 }}>
+                <Path 
+                  d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" 
+                  stroke={revealMsLeft < 4 * 3600000 ? "#FFFFFF" : colors.secondary}
+                  strokeWidth="2" 
+                  strokeLinecap="round" 
+                />
+              </Svg>
+              <Text style={[styles.revealCountdownText, revealMsLeft < 4 * 3600000 && styles.revealCountdownTextRed]}>
+                {revealTimeLeft}
+              </Text>
+            </View>
           </View>
-        </View>
-      )}
+        )}
+      </Reanimated.View>
       
       {activePhotoId && activePhotoOwnerId && (
         <CommentModal
@@ -368,6 +428,10 @@ export default function PhotoFeed({
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   list: { flex: 1, backgroundColor: colors.bg },
+  contentWrapper: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
   fullscreenPage: {
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT,
@@ -447,3 +511,4 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     color: '#FFFFFF',
   },
 });
+

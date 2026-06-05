@@ -2,7 +2,7 @@ import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { UserAvatar } from "../atoms/Avatar";
 import { TrashIcon } from "../atoms/TrashIcon";
-import { radii, spacing, typography, type ThemeColors } from "../../lib/theme";
+import { radii as themeRadii, spacing as themeSpacing, typography, type ThemeColors, type ThemeShadows } from "../../lib/theme";
 import { useThemedStyles } from "../../lib/theme-context";
 
 export interface Comment {
@@ -31,7 +31,7 @@ export const CommentItem = ({ item, isMyComment, onDelete }: CommentItemProps) =
         <UserAvatar
           avatar_url={item.profiles.avatar_url}
           username={item.profiles.username}
-          size={38}
+          size={32}
         />
       </View>
       <View style={styles.commentContent}>
@@ -55,39 +55,33 @@ export const CommentItem = ({ item, isMyComment, onDelete }: CommentItemProps) =
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   commentRow: {
     flexDirection: "row",
-    marginBottom: spacing.xl,
-    gap: spacing.md,
+    marginBottom: themeSpacing.xl,
+    gap: themeSpacing.xxl, // var(--sds-size-space-800) = 32
   },
   avatarContainer: {
-    width: 38,
-    height: 38,
-    borderRadius: radii.lg,
+    width: 32,
+    height: 32,
+    borderRadius: themeRadii.sm, // var(--sds-size-radius-200)
     overflow: "hidden",
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
   },
   commentContent: {
     flex: 1,
-    gap: spacing.xs,
-    backgroundColor: colors.card,
-    padding: spacing.md,
-    borderRadius: radii.lg,
-    borderTopLeftRadius: radii.xs,
     flexDirection: "row",
     alignItems: "center",
   },
   username: {
-    fontFamily: typography.family.bold,
+    fontFamily: typography.family.semibold, // var(--sds-typography-body-font-weight-strong)
     fontSize: typography.size.sm,
-    color: colors.textMuted,
+    color: colors.text, // var(--sds-color-text-default-default)
+    marginBottom: themeSpacing.xxs,
   },
   deleteBtn: {
-    padding: spacing.xs,
+    padding: themeSpacing.xs,
   },
   content: {
-    fontFamily: typography.family.regular,
+    fontFamily: typography.family.regular, // var(--sds-typography-body-font-weight-regular)
     fontSize: typography.size.md,
-    color: colors.text,
+    color: colors.text, // var(--sds-color-text-default-default)
     lineHeight: 20,
   },
 });

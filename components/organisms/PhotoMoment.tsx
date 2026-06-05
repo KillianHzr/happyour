@@ -25,6 +25,7 @@ interface PhotoMomentProps {
   onOpenPicker?: (photoId: string) => void;
   onOpenComments?: (photoId: string, ownerId: string) => void;
   isVisible?: boolean;
+  isShrunken?: boolean;
 }
 
 const NAVBAR_HEIGHT = 100;
@@ -35,7 +36,8 @@ export const PhotoMoment = ({
   crownWinnerId,
   onOpenPicker,
   onOpenComments,
-  isVisible
+  isVisible,
+  isShrunken = false
 }: PhotoMomentProps) => {
   const insets = useSafeAreaInsets();
   const { mode } = useTheme();
@@ -49,7 +51,7 @@ export const PhotoMoment = ({
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const animatedUiStyle = useAnimatedStyle(() => ({
-    opacity: uiOpacity.value,
+    opacity: isShrunken ? 0 : uiOpacity.value,
   }));
 
   const hasSecond = !!moment.second_image_path;

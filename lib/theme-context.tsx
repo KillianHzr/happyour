@@ -127,6 +127,31 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
+/** 
+ * Composant utilitaire pour forcer un mode (Light/Dark) sur une sous-arborescence.
+ * Très utile pour les modales ou sections qui doivent rester sombres même en mode clair.
+ */
+export function ForceTheme({ mode, children }: { mode: ThemeMode; children: React.ReactNode }) {
+  const parent = useTheme();
+
+  const colors = useMemo(() => buildColors(mode), [mode]);
+  const shadows = useMemo(() => buildShadows(mode), [mode]);
+  const theme = useMemo(() => buildTheme(colors, shadows), [colors, shadows]);
+
+  const value = useMemo<ThemeContextValue>(
+    () => ({
+      ...parent,
+      mode,
+      colors,
+      shadows,
+      theme,
+    }),
+    [parent, mode, colors, shadows, theme]
+  );
+
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+}
+
 /** Hook principal : couleurs/ombres/styles réactifs au mode + préférence. */
 export function useTheme(): ThemeContextValue {
   const ctx = useContext(ThemeContext);

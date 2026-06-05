@@ -29,12 +29,12 @@ import { CloseIcon } from "./atoms/CloseIcon";
 import { CommentItem, Comment } from "./molecules/CommentItem";
 import { CommentInput } from "./molecules/CommentInput";
 import { TextSticker } from "./atoms/TextSticker";
-import { radii, typography, type ThemeColors, shadows } from "../lib/theme";
-import { useTheme, useThemedStyles } from "../lib/theme-context";
+import { radii as themeRadii, spacing as themeSpacing, typography, type ThemeColors, shadows } from "../lib/theme";
+import { useTheme, useThemedStyles, ForceTheme } from "../lib/theme-context";
 import { Reaction } from "../lib/feed-types";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
-const MODAL_HEIGHT = SCREEN_HEIGHT * 0.75;
+const MODAL_HEIGHT = 392;
 
 const isEmoji = (str: string) => {
   const regexExp = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/gi;
@@ -50,10 +50,45 @@ interface CommentModalProps {
   reactions?: Reaction[];
 }
 
-export default function CommentModal({ visible, onClose, onSeen, photoId, photoOwnerId, reactions = [] }: CommentModalProps) {
+export default function CommentModal(props: CommentModalProps) {
+  const { visible, onClose } = props;
+  const [mounted, setMounted] = useState(visible);
+
+  useEffect(() => {
+    if (visible) {
+      setMounted(true);
+    }
+  }, [visible]);
+
+  if (!mounted) return null;
+
+  return (
+    <Modal
+      visible={mounted}
+      transparent
+      animationType="none"
+      onRequestClose={onClose}
+    >
+      <CommentModalContent 
+        {...props} 
+        onCloseComplete={() => setMounted(false)} 
+      />
+    </Modal>
+  );
+}
+
+function CommentModalContent({ 
+  visible, 
+  onClose, 
+  onSeen, 
+  photoId, 
+  photoOwnerId, 
+  reactions = [],
+  onCloseComplete
+}: CommentModalProps & { onCloseComplete: () => void }) {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
-  const { colors, mode } = useTheme();
+  const { colors, mode } = useTheme(); 
   const styles = useThemedStyles(makeStyles);
 
   const [comments, setComments] = useState<Comment[]>([]);
@@ -62,7 +97,6 @@ export default function CommentModal({ visible, onClose, onSeen, photoId, photoO
   const [content, setContent] = useState("");
   const [userComment, setUserComment] = useState<Comment | null>(null);
   
-  const [mounted, setMounted] = useState(visible);
   const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const stickersOpacity = useRef(new Animated.Value(0)).current;
@@ -71,32 +105,42 @@ export default function CommentModal({ visible, onClose, onSeen, photoId, photoO
 
   const isOwner = user?.id === photoOwnerId;
 
-  // Filter for custom text reactions
   const textReactions = useMemo(() => {
     return reactions.filter(r => !isEmoji(r.sticker_id));
   }, [reactions]);
 
-  const IMAGE_AREA_HEIGHT = SCREEN_HEIGHT - MODAL_HEIGHT;
+  // SHRUNKEN POST BOUNDS (Synchronized with PhotoFeed.tsx)
+  const POST_WIDTH = 214;
+  const POST_HEIGHT = 380;
+  const POST_BOTTOM_GAP = 40;
 
-  // Stable random positions for stickers
+  const postBottom = SCREEN_HEIGHT - MODAL_HEIGHT - POST_BOTTOM_GAP;
+  const postTop = postBottom - POST_HEIGHT;
+  const postCenterX = SCREEN_WIDTH / 2;
+  const postLeft = postCenterX - (POST_WIDTH / 2);
+  const postRight = postCenterX + (POST_WIDTH / 2);
+
   const stickersData = useMemo(() => {
     return textReactions.map((reaction, index) => {
       const isLeft = index % 2 === 0;
-      const x = 10;
-      const centerY = IMAGE_AREA_HEIGHT / 2;
-      const scatterY = (Math.random() - 0.5) * 60; // ±30px
-      const rotation = (Math.random() - 0.5) * 10; // -5 to +5 degrees
-      
+
+      // Vertical: Distribute along the 380px height of the post
+      const centerY = postTop + (POST_HEIGHT / 2);
+      const scatterY = (Math.random() - 0.5) * (POST_HEIGHT * 0.7); 
+      const rotation = (Math.random() - 0.5) * 20;
+
       return {
         id: reaction.id,
         reaction,
-        x,
+        // Anchor exactly to the post edge
+        anchorX: isLeft ? postLeft : postRight,
         y: centerY + scatterY,
         rotation,
         isLeft
       };
     });
-  }, [textReactions, IMAGE_AREA_HEIGHT]);
+  }, [textReactions, postTop, postLeft, postRight]);
+
 
   const markAsSeen = useCallback(async () => {
     if (!user || !photoId) return;
@@ -117,7 +161,6 @@ export default function CommentModal({ visible, onClose, onSeen, photoId, photoO
   }, [user?.id, photoId, onSeen]);
 
   const animateIn = useCallback(() => {
-    setMounted(true);
     animGenRef.current++;
     requestAnimationFrame(() => {
       Animated.parallel([
@@ -135,7 +178,6 @@ export default function CommentModal({ visible, onClose, onSeen, photoId, photoO
         }),
       ]).start();
 
-      // Delayed pop-in for stickers
       Animated.sequence([
         Animated.delay(150),
         Animated.parallel([
@@ -160,7 +202,6 @@ export default function CommentModal({ visible, onClose, onSeen, photoId, photoO
     Keyboard.dismiss();
     const myGen = ++animGenRef.current;
     
-    // Hide stickers immediately
     stickersOpacity.setValue(0);
     stickersScale.setValue(0.9);
 
@@ -179,18 +220,18 @@ export default function CommentModal({ visible, onClose, onSeen, photoId, photoO
       }),
     ]).start(({ finished }) => {
       if (finished && animGenRef.current === myGen) {
-        setMounted(false);
+        onCloseComplete();
         callback?.();
       }
     });
-  }, [overlayOpacity, translateY, stickersOpacity, stickersScale]);
+  }, [overlayOpacity, translateY, stickersOpacity, stickersScale, onCloseComplete]);
 
   useEffect(() => {
     if (visible) {
       animateIn();
       fetchComments();
       markAsSeen();
-    } else if (mounted) {
+    } else {
       animateOut();
     }
   }, [visible]);
@@ -306,67 +347,66 @@ export default function CommentModal({ visible, onClose, onSeen, photoId, photoO
     />
   );
 
-  if (!mounted) return null;
-
   return (
-    <Modal
-      visible={mounted}
-      transparent
-      animationType="none"
-      onRequestClose={handleClose}
-    >
-      <View style={styles.root}>
-        <Animated.View 
-          style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: overlayOpacity }]} 
-        >
-          <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
-        </Animated.View>
+    <View style={styles.root}>
+      <Animated.View 
+        style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: overlayOpacity }]} 
+      >
+        <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
+      </Animated.View>
 
-        <Animated.View 
-          style={[
-            styles.stickerLayer, 
-            { 
-              opacity: stickersOpacity,
-              transform: [{ scale: stickersScale }]
-            }
-          ]} 
-          pointerEvents="none"
-        >
-          {stickersData.map((item) => (
-            <View 
-              key={item.id}
-              style={[
-                styles.stickerContainer,
-                {
-                  top: item.y,
-                  left: item.isLeft ? item.x : undefined,
-                  right: !item.isLeft ? item.x : undefined,
-                  transform: [{ rotate: `${item.rotation}deg` }, { translateY: -20 }],
-                  alignItems: item.isLeft ? 'flex-start' : 'flex-end',
-                }
-              ]}
-            >
-              <View>
-                <TextSticker text={item.reaction.sticker_id} fontSize={28} />
-                <View style={styles.stickerAvatar}>
-                  {item.reaction.avatar_url ? (
-                    <Image source={{ uri: item.reaction.avatar_url }} style={StyleSheet.absoluteFill} />
-                  ) : (
-                    <Text style={styles.avatarFallbackText}>
-                      {(item.reaction.username || "?")[0].toUpperCase()}
-                    </Text>
-                  )}
-                </View>
+      <Animated.View 
+        style={[
+          styles.stickerLayer, 
+          { 
+            opacity: stickersOpacity,
+            transform: [{ scale: stickersScale }]
+          }
+        ]} 
+        pointerEvents="none"
+      >
+        {stickersData.map((item) => (
+          <View 
+            key={item.id}
+            style={[
+              styles.stickerContainer,
+              {
+                top: item.y,
+                // Anchor flush to post edges
+                left: item.isLeft ? item.anchorX : undefined,
+                right: !item.isLeft ? (SCREEN_WIDTH - item.anchorX) : undefined,
+                transform: [
+                  { rotate: `${item.rotation}deg` }, 
+                  { translateX: item.isLeft ? -10 : 10 },
+                  { translateX: item.isLeft ? '-100%' : '0%' },
+                  { translateY: -20 }
+                ],
+                alignItems: item.isLeft ? 'flex-end' : 'flex-start',
+              }
+            ]}
+          >
+            <View>
+              <TextSticker text={item.reaction.sticker_id} fontSize={28} />
+              <View style={styles.stickerAvatar}>
+                {item.reaction.avatar_url ? (
+                  <Image source={{ uri: item.reaction.avatar_url }} style={StyleSheet.absoluteFill} />
+                ) : (
+                  <Text style={styles.avatarFallbackText}>
+                    {(item.reaction.username || "?")[0].toUpperCase()}
+                  </Text>
+                )}
               </View>
             </View>
-          ))}
-        </Animated.View>
+          </View>
+        ))}
+      </Animated.View>
 
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            style={{ width: "100%" }} 
-          >
+      <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ width: "100%" }} 
+        >
+          <ForceTheme mode="Light">
             <Animated.View 
               style={[
                 styles.modalContainer, 
@@ -375,71 +415,101 @@ export default function CommentModal({ visible, onClose, onSeen, photoId, photoO
                 }
               ]}
             >
-              <View style={styles.modalBackgroundFiller}>
-                <BlurView intensity={80} tint={mode === "Dark" ? "dark" : "light"} style={StyleSheet.absoluteFill} />
-              </View>
-              
-              <View style={{ flex: 1 }}>
-                <View style={styles.dragArea} {...panResponder.panHandlers}>
-                  <View style={styles.dragHandle} />
-                  <View style={styles.header}>
-                    <Text style={styles.headerTitle}>Commentaires</Text>
-                    <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
-                      <CloseIcon />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {loading ? (
-                  <View style={styles.loaderContainer}>
-                    <ActivityIndicator size="large" color={colors.text} />
-                  </View>
-                ) : (
-                  <FlatList
-                    data={comments}
-                    keyExtractor={(item) => item.id}
-                    renderItem={renderComment}
-                    contentContainerStyle={styles.listContent}
-                    showsVerticalScrollIndicator={true}
-                    keyboardShouldPersistTaps="handled"
-                    keyboardDismissMode="on-drag"
-                    style={{ flex: 1 }}
-                    ListEmptyComponent={
-                      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                        <View style={styles.emptyContainer}>
-                          <Text style={styles.emptyText}>Aucun commentaire pour le moment.</Text>
-                        </View>
-                      </TouchableWithoutFeedback>
-                    }
-                  />
-                )}
-              </View>
-
-              {!isOwner && (
-                <View style={{ paddingBottom: Math.max(insets.bottom, 20) }}>
-                  {userComment ? (
-                    <View style={styles.inputArea}>
-                      <View style={styles.alreadySharedContainer}>
-                        <Text style={styles.alreadySharedText}>Vous avez déjà partagé votre avis</Text>
-                      </View>
-                    </View>
-                  ) : (
-                    <CommentInput 
-                      content={content} 
-                      setContent={setContent} 
-                      onSubmit={handleSubmit} 
-                      submitting={submitting} 
-                    />
-                  )}
-                </View>
-              )}
+              <CommentModalBody 
+                loading={loading}
+                comments={comments}
+                renderComment={renderComment}
+                isOwner={isOwner}
+                userComment={userComment}
+                content={content}
+                setContent={setContent}
+                handleSubmit={handleSubmit}
+                submitting={submitting}
+                insets={insets}
+                panResponder={panResponder}
+              />
             </Animated.View>
-          </KeyboardAvoidingView>
-        </View>
+          </ForceTheme>
+        </KeyboardAvoidingView>
       </View>
-    </Modal>
+    </View>
   );
 }
+
+function CommentModalBody({
+  loading,
+  comments,
+  renderComment,
+  isOwner,
+  userComment,
+  content,
+  setContent,
+  handleSubmit,
+  submitting,
+  insets,
+  panResponder
+}: any) {
+  const { colors } = useTheme(); 
+  const styles = useThemedStyles(makeStyles);
+
+  return (
+    <>
+      <View style={styles.modalBackgroundFiller}>
+        <BlurView intensity={80} tint="light" style={StyleSheet.absoluteFill} />
+      </View>
+      
+      <View style={{ flex: 1 }}>
+        <View style={styles.dragArea} {...panResponder.panHandlers}>
+          <View style={styles.dragHandle} />
+        </View>
+
+        {loading ? (
+          <View style={styles.loaderContainer}>
+            <ActivityIndicator size="large" color={colors.text} />
+          </View>
+        ) : (
+          <FlatList
+            data={comments}
+            keyExtractor={(item) => item.id}
+            renderItem={renderComment}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={true}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            style={{ flex: 1 }}
+            ListEmptyComponent={
+              <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyText}>Aucun commentaire pour le moment.</Text>
+                </View>
+              </TouchableWithoutFeedback>
+            }
+          />
+        )}
+      </View>
+
+      {!isOwner && (
+        <View style={{ paddingBottom: Math.max(insets.bottom, 20) }}>
+          {userComment ? (
+            <View style={styles.inputArea}>
+              <View style={styles.alreadySharedContainer}>
+                <Text style={styles.alreadySharedText}>Vous avez déjà partagé votre avis</Text>
+              </View>
+            </View>
+          ) : (
+            <CommentInput 
+              content={content} 
+              setContent={setContent} 
+              onSubmit={handleSubmit} 
+              submitting={submitting} 
+            />
+          )}
+        </View>
+      )}
+    </>
+  );
+}
+
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   root: {
@@ -463,45 +533,22 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     right: 0,
     bottom: -SCREEN_HEIGHT,
     backgroundColor: colors.card,
-    borderTopLeftRadius: radii.xl,
-    borderTopRightRadius: radii.xl,
+    borderTopLeftRadius: themeRadii.xl,
+    borderTopRightRadius: themeRadii.xl,
     overflow: "hidden",
   },
   dragArea: {
     width: "100%",
     alignItems: "center",
     paddingTop: 12,
+    paddingBottom: 8,
     zIndex: 10,
   },
   dragHandle: {
     width: 38,
     height: 4,
     backgroundColor: colors.borderSecondary,
-    borderRadius: radii.xs,
-    marginBottom: 8,
-  },
-  header: {
-    width: "100%",
-    paddingVertical: 12,
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "center",
-    borderBottomWidth: 1,
-    borderBottomColor: colors.cardBorder,
-  },
-  headerTitle: {
-    fontFamily: typography.family.bold,
-    fontSize: typography.size.md,
-    color: colors.text,
-    letterSpacing: 0.5,
-  },
-  closeBtn: {
-    position: "absolute",
-    right: 20,
-    width: 32,
-    height: 32,
-    justifyContent: "center",
-    alignItems: "center",
+    borderRadius: themeRadii.xs,
   },
   loaderContainer: {
     flex: 1,
@@ -509,12 +556,12 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: "center",
   },
   listContent: {
-    padding: 20,
-    paddingBottom: 40,
+    padding: themeSpacing.xl,
+    paddingBottom: themeSpacing.xl4,
   },
   emptyContainer: {
     alignItems: "center",
-    marginTop: 60,
+    marginTop: themeSpacing.xl4,
   },
   emptyText: {
     fontFamily: typography.family.medium,
@@ -522,17 +569,14 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textTertiary,
   },
   inputArea: {
-    padding: 20,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.cardBorder,
-    backgroundColor: colors.card,
+    padding: themeSpacing.xl,
+    paddingTop: themeSpacing.md,
   },
   alreadySharedContainer: {
     alignItems: "center",
     paddingVertical: 14,
     backgroundColor: colors.accentMuted,
-    borderRadius: radii.lg,
+    borderRadius: themeRadii.lg,
   },
   alreadySharedText: {
     fontFamily: typography.family.semibold,
@@ -552,7 +596,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     left: -10,
     width: 24,
     height: 24,
-    borderRadius: radii.xs,
+    borderRadius: themeRadii.xs,
     backgroundColor: colors.brand,
     justifyContent: 'center',
     alignItems: 'center',

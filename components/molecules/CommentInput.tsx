@@ -1,7 +1,9 @@
 import React from "react";
 import { View, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet } from "react-native";
 import { SendIcon } from "../atoms/SendIcon";
-import { spacing, radii, typography, type ThemeColors } from "../../lib/theme";
+import { UserAvatar } from "../atoms/Avatar";
+import { useAuth } from "../../lib/auth-context";
+import { spacing as themeSpacing, radii as themeRadii, typography, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
 
 interface CommentInputProps {
@@ -12,17 +14,23 @@ interface CommentInputProps {
 }
 
 export const CommentInput = ({ content, setContent, onSubmit, submitting }: CommentInputProps) => {
+  const { user } = useAuth();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const isDisabled = !content.trim() || submitting;
 
   return (
     <View style={styles.inputArea}>
+      <UserAvatar 
+        avatar_url={user?.avatar_url} 
+        username={user?.username || "Moi"} 
+        size={32}
+      />
       <View style={styles.inputContainer}>
         <TextInput
           style={styles.input}
           placeholder="Ajouter un commentaire..."
-          placeholderTextColor={colors.textMuted}
+          placeholderTextColor={colors.textTertiary}
           value={content}
           onChangeText={setContent}
           multiline
@@ -46,41 +54,38 @@ export const CommentInput = ({ content, setContent, onSubmit, submitting }: Comm
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   inputArea: {
-    padding: spacing.xl,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.cardBorder,
-    backgroundColor: colors.card,
-  },
-  inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.bg,
-    borderRadius: radii.full,
-    paddingLeft: spacing.lg,
-    paddingRight: spacing.xs,
-    paddingVertical: spacing.xs,
-    borderWidth: 1,
+    paddingHorizontal: themeSpacing.xl,
+    paddingVertical: themeSpacing.md,
+    gap: themeSpacing.lg, // var(--sds-size-space-400)
+  },
+  inputContainer: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.card, // var(--sds-color-background-default-secondary)
+    borderRadius: themeRadii.lg, // var(--sds-size-radius-400)
+    paddingHorizontal: themeSpacing.lg, // var(--sds-size-space-400)
+    paddingVertical: themeSpacing.sm, // var(--sds-size-space-200)
+    borderWidth: 1, // var(--sds-size-stroke-border)
     borderColor: colors.cardBorder,
+    gap: themeSpacing.lg, // var(--sds-size-space-400)
   },
   input: {
     flex: 1,
     color: colors.text,
-    fontFamily: typography.family.regular,
-    fontSize: typography.size.lg,
+    fontFamily: typography.family.regular, // var(--sds-typography-body-font-family)
+    fontSize: typography.size.md, // var(--sds-typography-body-size-medium)
     maxHeight: 100,
-    paddingVertical: spacing.sm,
+    padding: 0,
   },
   sendBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.full,
-    backgroundColor: colors.text,
     justifyContent: "center",
     alignItems: "center",
-    marginLeft: spacing.sm,
   },
   sendBtnDisabled: {
-    backgroundColor: colors.accentMuted,
+    opacity: 0.5,
   },
 });
+

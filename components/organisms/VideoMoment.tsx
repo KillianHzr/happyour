@@ -24,6 +24,7 @@ interface VideoMomentProps {
   onOpenComments?: (photoId: string, ownerId: string) => void;
   isVisible?: boolean;
   cachedUrl: string;
+  isShrunken?: boolean;
 }
 
 const NAVBAR_HEIGHT = 100;
@@ -35,7 +36,8 @@ export const VideoMoment = ({
   onOpenPicker,
   onOpenComments,
   isVisible,
-  cachedUrl
+  cachedUrl,
+  isShrunken = false
 }: VideoMomentProps) => {
   const insets = useSafeAreaInsets();
   const { colors, mode } = useTheme();
@@ -49,7 +51,7 @@ export const VideoMoment = ({
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const animatedUiStyle = useAnimatedStyle(() => ({
-    opacity: uiOpacity.value,
+    opacity: isShrunken ? 0 : uiOpacity.value,
   }));
 
   const hasSecond = !!moment.second_image_path;

@@ -25,6 +25,7 @@ interface AudioMomentProps {
   onOpenComments?: (photoId: string, ownerId: string) => void;
   isVisible?: boolean;
   onScrollLock?: (locked: boolean) => void;
+  isShrunken?: boolean;
 }
 
 const NAVBAR_HEIGHT = 100;
@@ -36,7 +37,8 @@ export const AudioMoment = ({
   onOpenPicker,
   onOpenComments,
   isVisible,
-  onScrollLock
+  onScrollLock,
+  isShrunken = false
 }: AudioMomentProps) => {
   const insets = useSafeAreaInsets();
   const { mode } = useTheme();
@@ -49,7 +51,7 @@ export const AudioMoment = ({
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const animatedUiStyle = useAnimatedStyle(() => ({
-    opacity: uiOpacity.value,
+    opacity: isShrunken ? 0 : uiOpacity.value,
   }));
 
   const hasSecond = !!moment.second_image_path;
