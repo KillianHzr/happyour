@@ -603,13 +603,13 @@
     "typography/family-sans": {
       "type": "STRING",
       "values": {
-        "Value": "Inter"
+        "Value": "Neulis Sans"
       }
     },
-    "typography/family-serif": {
+    "typography/family-cursive": {
       "type": "STRING",
       "values": {
-        "Value": "Noto Serif"
+        "Value": "Neulis Cursive"
       }
     },
     "typography/family-mono": {
@@ -1910,6 +1910,27 @@
         "Light": "{Primitives/color/black/1000}",
         "Dark": "{Primitives/color/white/1000}"
       }
+    },
+    "text/default/default-inverse": {
+      "type": "COLOR",
+      "values": {
+        "Light": "{Primitives/color/white/1000}",
+        "Dark": "{Primitives/color/black/1000}"
+      }
+    },
+    "border/default/default-inverse": {
+      "type": "COLOR",
+      "values": {
+        "Light": "{Primitives/color/white/1000}",
+        "Dark": "{Primitives/color/black/1000}"
+      }
+    },
+    "icon/default/default-inverse": {
+      "type": "COLOR",
+      "values": {
+        "Light": "{Primitives/color/white/1000}",
+        "Dark": "{Primitives/color/black/1000}"
+      }
     }
   },
   "-> Size": {
@@ -2218,7 +2239,7 @@
     "title-hero/font-family": {
       "type": "STRING",
       "values": {
-        "Mode 1": "{Primitives/typography/family-sans}"
+        "Mode 1": "{Primitives/typography/family-cursive}"
       }
     },
     "title-hero/size": {
@@ -2236,7 +2257,7 @@
     "title-page/font-family": {
       "type": "STRING",
       "values": {
-        "Mode 1": "{Primitives/typography/family-sans}"
+        "Mode 1": "{Primitives/typography/family-cursive}"
       }
     },
     "title-page/size-small": {
@@ -2266,7 +2287,7 @@
     "subtitle/font-family": {
       "type": "STRING",
       "values": {
-        "Mode 1": "{Primitives/typography/family-sans}"
+        "Mode 1": "{Primitives/typography/family-cursive}"
       }
     },
     "subtitle/size-small": {
@@ -2626,9 +2647,9 @@
       },
       "subtitle": {
         "fontFamily": "{-> Typography/subtitle/font-family}",
-        "fontStyle": "Bold",
-        "fontWeight": "{-> Typography/subtitle/font-weight-strong}",
-        "fontSize": "{-> Typography/subtitle/size-large}",
+        "fontStyle": "Regular",
+        "fontWeight": "{-> Typography/subtitle/font-weight-regular}",
+        "fontSize": "{-> Typography/subtitle/size-base}",
         "lineHeight": {
           "unit": "PERCENT",
           "value": 120.00000476837158
@@ -2644,7 +2665,7 @@
         "fontFamily": "{-> Typography/subtitle/font-family}",
         "fontStyle": "Bold",
         "fontWeight": "{-> Typography/subtitle/font-weight-strong}",
-        "fontSize": "{-> Typography/subtitle/size-large}",
+        "fontSize": "{-> Typography/subtitle/size-base}",
         "lineHeight": {
           "unit": "PERCENT",
           "value": 120.00000476837158
@@ -3023,7 +3044,7 @@
       "blur/overlay": {
         "type": "BACKGROUND_BLUR",
         "visible": true,
-        "blur": "{-> Size/blur/1200}"
+        "blur": "{-> Size/blur/400}"
       },
       "blur/layer": {
         "type": "LAYER_BLUR",
