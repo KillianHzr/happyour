@@ -25,9 +25,23 @@ interface VideoMomentProps {
   isVisible?: boolean;
   cachedUrl: string;
   isShrunken?: boolean;
+  postCountText?: string;
 }
 
 const NAVBAR_HEIGHT = 100;
+
+const getDayText = (dateStr: string) => {
+  const d = new Date(dateStr);
+  const day = d.toLocaleDateString("fr-FR", { weekday: "long" });
+  return day.charAt(0).toUpperCase() + day.slice(1);
+};
+
+const getTimeText = (dateStr: string) => {
+  const d = new Date(dateStr);
+  const hours = String(d.getHours()).padStart(2, "0");
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+};
 
 export const VideoMoment = ({
   moment,
@@ -37,7 +51,8 @@ export const VideoMoment = ({
   onOpenComments,
   isVisible,
   cachedUrl,
-  isShrunken = false
+  isShrunken = false,
+  postCountText
 }: VideoMomentProps) => {
   const insets = useSafeAreaInsets();
   const { colors, mode } = useTheme();
@@ -112,7 +127,8 @@ export const VideoMoment = ({
     uiOpacity.value = withTiming(1, { duration: 200 });
   };
 
-  const paddingTopBottom = Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 12) / 2);
+  const paddingTop = insets.top;
+  const paddingBottom = 0;
 
   const renderContent = () => {
     if (swapped && hasSecond) {
@@ -160,7 +176,7 @@ export const VideoMoment = ({
   const overlayNote = swapped && hasSecond ? moment.second_note : moment.note;
 
   return (
-    <View style={[styles.fullscreenPage, { paddingTop: paddingTopBottom, paddingBottom: paddingTopBottom }]}>
+    <View style={[styles.fullscreenPage, { paddingTop, paddingBottom }]}>
       <View style={styles.momentWrapper}>
         <Pressable
           style={StyleSheet.absoluteFill}
@@ -191,24 +207,30 @@ export const VideoMoment = ({
                 style={StyleSheet.absoluteFill}
                 pointerEvents="none"
               />
-              <AuthorInfo
-                avatar_url={moment.avatar_url}
-                username={moment.username}
-                created_at={moment.created_at}
-                note={overlayNote}
-                isCrown={crownWinnerId === moment.user_id}
-                isOwn={isOwn}
-                hasNewComments={moment.hasNewComments}
-                onOpenComments={() => onOpenComments?.(moment.id, moment.user_id)}
-                onOpenPicker={() => onOpenPicker?.(moment.id)}
-              />
-              <ReactionsRow
-                reactions={moment.reactions}
-                currentUserId={currentUserId}
-                photoId={moment.id}
-                crownWinnerId={crownWinnerId}
-                onOpenPicker={onOpenPicker}
-              />
+              <View style={styles.detailsContainer} pointerEvents="box-none">
+                <View style={styles.topInfoRow} pointerEvents="none">
+                  <View style={styles.topLeftInfo}>
+                    <Text style={styles.dayText}>{getDayText(moment.created_at)}</Text>
+                    <Text style={styles.timeText}>{getTimeText(moment.created_at)}</Text>
+                  </View>
+                  {postCountText ? (
+                    <View style={styles.postCountBadge}>
+                      <Text style={styles.postCountText}>{postCountText}</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <AuthorInfo
+                  avatar_url={moment.avatar_url}
+                  username={moment.username}
+                  created_at={moment.created_at}
+                  note={overlayNote}
+                  isCrown={false}
+                  isOwn={isOwn}
+                  hasNewComments={moment.hasNewComments}
+                  onOpenComments={() => onOpenComments?.(moment.id, moment.user_id)}
+                  onOpenPicker={() => onOpenPicker?.(moment.id)}
+                />
+              </View>
             </Reanimated.View>
             {hasSecond && (
               <Reanimated.View style={[StyleSheet.absoluteFill, animatedUiStyle]} pointerEvents="box-none">
@@ -233,12 +255,15 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: colors.bg,
-    paddingHorizontal: spacing.md
+    paddingHorizontal: 0
   },
   momentWrapper: {
     flex: 1,
     width: '100%',
-    borderRadius: spacing.xxl,
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
     overflow: "hidden",
     backgroundColor: "transparent"
   },
@@ -286,7 +311,49 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     padding: spacing.xl + 2,
     paddingBottom: spacing.xxl,
     paddingTop: 80,
-    gap: spacing.md + 2
+  },
+  detailsContainer: {
+    width: "100%",
+    gap: 9,
+  },
+  topInfoRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
+  },
+  topLeftInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  dayText: {
+    color: colors.text,
+    fontFamily: typography.family.semibold,
+    fontSize: typography.size.md,
+    lineHeight: typography.size.md * 1.4,
+  },
+  timeText: {
+    color: colors.textSecondary,
+    fontFamily: typography.family.regular,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * 1.4,
+  },
+  postCountBadge: {
+    backgroundColor: colors.opacityLight,
+    borderRadius: radii.md,
+    paddingTop: spacing.xs,
+    paddingRight: spacing.sm,
+    paddingBottom: spacing.xs,
+    paddingLeft: spacing.sm,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  postCountText: {
+    color: colors.text,
+    fontFamily: typography.family.bold,
+    fontSize: typography.size.xxs,
+    lineHeight: typography.size.xxs,
   },
   downloadBtnContainer: {
     position: "absolute",

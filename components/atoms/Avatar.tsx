@@ -9,16 +9,17 @@ interface UserAvatarProps {
   avatar_url?: string | null;
   username: string;
   size?: number;
+  borderRadius?: number;
 }
 
-export const UserAvatar = ({ avatar_url, username, size = 28 }: UserAvatarProps) => {
+export const UserAvatar = ({ avatar_url, username, size = 28, borderRadius }: UserAvatarProps) => {
   const { colors } = useTheme();
-  const borderRadius = size / 2;
+  const r = borderRadius ?? (size / 2);
   if (avatar_url) {
-    return <Image source={{ uri: avatar_url }} style={{ width: size, height: size, borderRadius }} />;
+    return <Image source={{ uri: avatar_url }} style={{ width: size, height: size, borderRadius: r }} />;
   }
   return (
-    <View style={{ width: size, height: size, borderRadius, backgroundColor: colors.text, justifyContent: "center", alignItems: "center" }}>
+    <View style={{ width: size, height: size, borderRadius: r, backgroundColor: colors.text, justifyContent: "center", alignItems: "center" }}>
       <Text style={{ color: colors.bg, fontFamily: typography.family.bold, fontSize: Math.round(size * 0.42) }}>
         {username[0]?.toUpperCase() ?? "?"}
       </Text>
@@ -30,9 +31,10 @@ interface CrownedAvatarProps extends UserAvatarProps {
   isCrown: boolean;
 }
 
-export const CrownedAvatar = ({ avatar_url, username, size = 36, isCrown }: CrownedAvatarProps) => {
+export const CrownedAvatar = ({ avatar_url, username, size = 36, isCrown, borderRadius }: CrownedAvatarProps) => {
   const { colors } = useTheme();
   const crownSize = Math.round(size * 0.6);
+  const r = borderRadius ?? (size / 2);
   return (
     <View style={{ width: size, height: size + (isCrown ? crownSize * 0.6 : 0), alignItems: "center", justifyContent: "flex-end" }}>
       {isCrown && (
@@ -42,8 +44,8 @@ export const CrownedAvatar = ({ avatar_url, username, size = 36, isCrown }: Crow
           </Svg>
         </View>
       )}
-      <View style={isCrown ? { borderWidth: 2, borderColor: colors.gold, borderRadius: size / 2 } : undefined}>
-        <UserAvatar avatar_url={avatar_url} username={username} size={size} />
+      <View style={isCrown ? { borderWidth: 2, borderColor: colors.gold, borderRadius: r } : undefined}>
+        <UserAvatar avatar_url={avatar_url} username={username} size={size} borderRadius={r} />
       </View>
     </View>
   );

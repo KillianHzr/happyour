@@ -98,6 +98,7 @@ function CommentModalContent({
   const [userComment, setUserComment] = useState<Comment | null>(null);
   
   const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
+  const keyboardTranslateY = useRef(new Animated.Value(0)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const stickersOpacity = useRef(new Animated.Value(0)).current;
   const stickersScale = useRef(new Animated.Value(0.9)).current;
@@ -110,8 +111,8 @@ function CommentModalContent({
   }, [reactions]);
 
   // SHRUNKEN POST BOUNDS (Synchronized with PhotoFeed.tsx)
-  const POST_WIDTH = 214;
   const POST_HEIGHT = 380;
+  const POST_WIDTH = SCREEN_WIDTH * (POST_HEIGHT / SCREEN_HEIGHT);
   const POST_BOTTOM_GAP = 40;
 
   const postBottom = SCREEN_HEIGHT - MODAL_HEIGHT - POST_BOTTOM_GAP;
@@ -235,6 +236,34 @@ function CommentModalContent({
       animateOut();
     }
   }, [visible]);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showListener = Keyboard.addListener(showEvent, (e) => {
+      Animated.timing(keyboardTranslateY, {
+        toValue: -e.endCoordinates.height,
+        duration: e.duration || 250,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    });
+
+    const hideListener = Keyboard.addListener(hideEvent, (e) => {
+      Animated.timing(keyboardTranslateY, {
+        toValue: 0,
+        duration: e.duration || 250,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    });
+
+    return () => {
+      showListener.remove();
+      hideListener.remove();
+    };
+  }, [keyboardTranslateY]);
 
   const handleClose = () => {
     animateOut(onClose);
@@ -365,72 +394,78 @@ function CommentModalContent({
         ]} 
         pointerEvents="none"
       >
-        {stickersData.map((item) => (
-          <View 
-            key={item.id}
-            style={[
-              styles.stickerContainer,
-              {
-                top: item.y,
-                // Anchor flush to post edges
-                left: item.isLeft ? item.anchorX : undefined,
-                right: !item.isLeft ? (SCREEN_WIDTH - item.anchorX) : undefined,
-                transform: [
-                  { rotate: `${item.rotation}deg` }, 
-                  { translateX: item.isLeft ? -10 : 10 },
-                  { translateX: item.isLeft ? '-100%' : '0%' },
-                  { translateY: -20 }
-                ],
-                alignItems: item.isLeft ? 'flex-end' : 'flex-start',
-              }
-            ]}
-          >
-            <View>
-              <TextSticker text={item.reaction.sticker_id} fontSize={28} />
-              <View style={styles.stickerAvatar}>
-                {item.reaction.avatar_url ? (
-                  <Image source={{ uri: item.reaction.avatar_url }} style={StyleSheet.absoluteFill} />
-                ) : (
-                  <Text style={styles.avatarFallbackText}>
-                    {(item.reaction.username || "?")[0].toUpperCase()}
-                  </Text>
-                )}
-              </View>
-            </View>
-          </View>
-        ))}
-      </Animated.View>
+        {stickersData.map((item) => {
+          const displayValue = (item.reaction.sticker_id || "—").toUpperCase();
+          const stickerFontSize = 28;
+          const stickerHeight = stickerFontSize * 1.05;
+          const rawStickerWidth = (displayValue.length * stickerFontSize * 0.6) + 8;
+          const stickerWidth = Math.max(rawStickerWidth, stickerFontSize * 2.2);
 
-      <View style={styles.modalOverlay}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={{ width: "100%" }} 
-        >
-          <ForceTheme mode="Light">
-            <Animated.View 
+          return (
+            <View 
+              key={item.id}
               style={[
-                styles.modalContainer, 
-                { 
-                  transform: [{ translateY }],
+                styles.stickerContainer,
+                {
+                  top: item.y,
+                  // Anchor center of the sticker on the post edges
+                  left: item.anchorX,
+                  width: stickerWidth,
+                  height: stickerHeight,
+                  transform: [
+                    { translateX: "-50%" },
+                    { translateY: "-50%" },
+                    { rotate: `${item.rotation}deg` }
+                  ],
+                  alignItems: "center",
+                  justifyContent: "center",
                 }
               ]}
             >
-              <CommentModalBody 
-                loading={loading}
-                comments={comments}
-                renderComment={renderComment}
-                isOwner={isOwner}
-                userComment={userComment}
-                content={content}
-                setContent={setContent}
-                handleSubmit={handleSubmit}
-                submitting={submitting}
-                insets={insets}
-                panResponder={panResponder}
-              />
-            </Animated.View>
-          </ForceTheme>
-        </KeyboardAvoidingView>
+              <View style={{ width: stickerWidth, height: stickerHeight }}>
+                <TextSticker text={item.reaction.sticker_id} fontSize={stickerFontSize} />
+                <View style={styles.stickerAvatar}>
+                  {item.reaction.avatar_url ? (
+                    <Image source={{ uri: item.reaction.avatar_url }} style={StyleSheet.absoluteFill} />
+                  ) : (
+                    <Text style={styles.avatarFallbackText}>
+                      {(item.reaction.username || "?")[0].toUpperCase()}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            </View>
+          );
+        })}
+      </Animated.View>
+
+      <View style={styles.modalOverlay}>
+        <ForceTheme mode="Light">
+          <Animated.View 
+            style={[
+              styles.modalContainer, 
+              { 
+                transform: [
+                  { translateY: Animated.add(translateY, keyboardTranslateY) }
+                ],
+              }
+            ]}
+          >
+            <CommentModalBody 
+              loading={loading}
+              comments={comments}
+              renderComment={renderComment}
+              isOwner={isOwner}
+              userComment={userComment}
+              content={content}
+              setContent={setContent}
+              handleSubmit={handleSubmit}
+              submitting={submitting}
+              insets={insets}
+              panResponder={panResponder}
+            />
+          </Animated.View>
+        </ForceTheme>
       </View>
     </View>
   );

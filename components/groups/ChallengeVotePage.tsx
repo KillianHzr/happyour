@@ -290,7 +290,7 @@ export default function ChallengeVotePage({
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
+    height: "100%",
     backgroundColor: colors.bg,
     paddingHorizontal: 20,
   },

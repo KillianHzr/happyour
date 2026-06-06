@@ -20,7 +20,9 @@ export const TextSticker = ({
 
   // Extremely tight width/height calculations
   const height = fontSize * 1.05;
-  const width = (displayValue.length * fontSize * 0.6) + 8;
+  const rawWidth = (displayValue.length * fontSize * 0.6) + 8;
+  // Ensure a minimum width so the text sticker isn't obscured by the avatar badge
+  const width = Math.max(rawWidth, fontSize * 2.2);
   const xCenter = width / 2;
   const yCenter = height / 2;
 

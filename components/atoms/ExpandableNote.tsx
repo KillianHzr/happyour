@@ -26,8 +26,8 @@ export const ExpandableNote = ({ text, maxLines }: ExpandableNoteProps) => {
       <Text style={styles.momentNote} numberOfLines={expanded ? undefined : maxLines}>
         {text}
       </Text>
-      {!expanded && isTruncated && (
-        <Text style={styles.noteExpand}>voir plus</Text>
+      {isTruncated && (
+        <Text style={styles.noteExpand}>{expanded ? "voir moins" : "voir plus"}</Text>
       )}
     </TouchableOpacity>
   );
@@ -37,13 +37,15 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   momentNote: {
     color: colors.text,
     fontFamily: typography.family.regular,
-    fontSize: typography.size.xs,
+    fontSize: typography.size.md,
+    lineHeight: typography.size.md * 1.4,
     marginTop: 3
   },
   noteExpand: {
     color: colors.textSecondary,
-    fontFamily: typography.family.semibold,
-    fontSize: typography.size.xs,
+    fontFamily: typography.family.regular,
+    fontSize: typography.size.xxs,
+    lineHeight: typography.size.xxs * 1.4,
     marginTop: 2
   },
 });

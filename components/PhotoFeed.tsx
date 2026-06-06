@@ -7,6 +7,7 @@ import {
   Dimensions,
   ViewToken,
   Platform,
+  TouchableOpacity,
 } from "react-native";
 import Reanimated, {
   useSharedValue,
@@ -14,6 +15,9 @@ import Reanimated, {
   useAnimatedStyle,
   withTiming,
   Easing,
+  LinearTransition,
+  FadeIn,
+  FadeOut,
   type SharedValue,
 } from "react-native-reanimated";
 import * as FileSystem from "expo-file-system/legacy";
@@ -32,12 +36,15 @@ import { VideoMoment } from "./organisms/VideoMoment";
 import { RevealIntroPage } from "./organisms/RevealIntroPage";
 import { CrownRevealPage } from "./organisms/CrownRevealPage";
 import { AnimatedPageWrapper } from "./molecules/AnimatedPageWrapper";
-import { radii, typography, type ThemeColors } from "../lib/theme";
+import { radii, spacing, typography, type ThemeColors } from "../lib/theme";
 import { useTheme, useThemedStyles, ForceTheme } from "../lib/theme-context";
 
 export { PhotoEntry, Reaction };
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const FEED_HEIGHT = SCREEN_HEIGHT - 100;
+
+
 
 export const isEmoji = (str: string) => {
   const regexExp = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/gi;
@@ -81,7 +88,8 @@ function formatDayLabel(dateStr: string) {
   return { date: dateStr.slice(0, 10), label: `${day}\n${full}` };
 }
 
-const AnimatedFlatList = Reanimated.createAnimatedComponent(FlatList) as typeof FlatList<FeedItem>;
+const AnimatedFlatList = Reanimated.createAnimatedComponent(FlatList) as unknown as typeof FlatList<FeedItem>;
+const AnimatedTouchableOpacity = Reanimated.createAnimatedComponent(TouchableOpacity);
 
 export default function PhotoFeed(props: Props) {
   return (
@@ -132,6 +140,7 @@ function PhotoFeedContent({
 
   const activePhoto = useMemo(() => photos.find(p => p.id === activePhotoId), [photos, activePhotoId]);
 
+
   // Shrink animation shared values
   const contentScale = useSharedValue(1);
   const contentTranslateY = useSharedValue(0);
@@ -149,18 +158,18 @@ function PhotoFeedContent({
     if (commentModalVisible) {
       // TARGET DIMENSIONS: ~214px wide, ~380px high
       const TARGET_HEIGHT = 380;
-      const scale = TARGET_HEIGHT / SCREEN_HEIGHT;
+      const scale = TARGET_HEIGHT / FEED_HEIGHT;
       
       // MODAL POSITION: bottom 392px
       const MODAL_HEIGHT = 392;
       const targetBottom = SCREEN_HEIGHT - MODAL_HEIGHT - 40; // 40px above modal
       
       // MATH:
-      // Scale happens from center (SCREEN_HEIGHT / 2)
-      // Visual bottom of scaled view = (SCREEN_HEIGHT / 2 + ty) + (TARGET_HEIGHT / 2)
+      // Scale happens from center (FEED_HEIGHT / 2)
+      // Visual bottom of scaled view = (FEED_HEIGHT / 2 + ty) + (TARGET_HEIGHT / 2)
       // We want Visual bottom = targetBottom
-      // ty = targetBottom - (SCREEN_HEIGHT / 2) - (TARGET_HEIGHT / 2)
-      const ty = targetBottom - (SCREEN_HEIGHT / 2) - (TARGET_HEIGHT / 2);
+      // ty = targetBottom - (FEED_HEIGHT / 2) - (TARGET_HEIGHT / 2)
+      const ty = targetBottom - (FEED_HEIGHT / 2) - (TARGET_HEIGHT / 2);
 
       contentScale.value = withTiming(scale, config);
       contentTranslateY.value = withTiming(ty, config);
@@ -272,6 +281,32 @@ function PhotoFeedContent({
     return result;
   }, [photos, crownWinnerId, challengePeriod1, challengePeriod2, hideIntro, hideEnd]);
 
+  const currentItem = useMemo(() => items[visibleIndex] || null, [items, visibleIndex]);
+
+  const postCountTexts = useMemo(() => {
+    const texts: Record<number, string> = {};
+    const momentItems = items.filter(i => i.type === "moment");
+    const total = momentItems.length;
+    let count = 0;
+    items.forEach((item, idx) => {
+      if (item.type === "moment") {
+        count++;
+        texts[idx] = `${count}/${total}`;
+      }
+    });
+    return texts;
+  }, [items]);
+
+  const showBottomSection = useMemo(() => {
+    if (!currentItem) return false;
+    return (
+      currentItem.type === "intro" ||
+      currentItem.type === "crown" ||
+      currentItem.type === "moment" ||
+      currentItem.type === "challenge_vote"
+    );
+  }, [currentItem]);
+
   const renderItem = ({ item, index }: { item: FeedItem; index: number }) => {
     let content: React.ReactNode = null;
 
@@ -333,6 +368,7 @@ function PhotoFeedContent({
             onOpenPicker={onOpenPicker} 
             onOpenComments={(pid, oid) => { openComments(pid, oid); onOpenComments?.(pid, oid); }} 
             isShrunken={commentModalVisible}
+            postCountText={postCountTexts[index]}
           />
         );
       } else if (isVideo) {
@@ -346,6 +382,7 @@ function PhotoFeedContent({
             onOpenPicker={onOpenPicker} 
             onOpenComments={(pid, oid) => { openComments(pid, oid); onOpenComments?.(pid, oid); }} 
             isShrunken={commentModalVisible}
+            postCountText={postCountTexts[index]}
           />
         );
       } else {
@@ -358,6 +395,7 @@ function PhotoFeedContent({
             onOpenComments={(pid, oid) => { openComments(pid, oid); onOpenComments?.(pid, oid); }} 
             isVisible={index === visibleIndex} 
             isShrunken={commentModalVisible}
+            postCountText={postCountTexts[index]}
           />
         );
       }
@@ -375,14 +413,14 @@ function PhotoFeedContent({
           renderItem={renderItem}
           keyExtractor={(_, i) => i.toString()}
           pagingEnabled={true}
-          snapToInterval={SCREEN_HEIGHT}
+          snapToInterval={FEED_HEIGHT}
           snapToAlignment="start"
           decelerationRate="fast"
           disableIntervalMomentum={true}
           showsVerticalScrollIndicator={false}
           onScroll={onScroll}
           scrollEventThrottle={16}
-          getItemLayout={(_, i) => ({ length: SCREEN_HEIGHT, offset: SCREEN_HEIGHT * i, index: i })}
+          getItemLayout={(_, i) => ({ length: FEED_HEIGHT, offset: FEED_HEIGHT * i, index: i })}
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
           windowSize={5}
@@ -410,13 +448,73 @@ function PhotoFeedContent({
             </View>
           </View>
         )}
+
       </Reanimated.View>
+
+      {showBottomSection && currentItem && !commentModalVisible && (
+        <View style={styles.bottomSection}>
+          {currentItem.type === "moment" ? (
+            <>
+              <AnimatedTouchableOpacity
+                key="orange-btn"
+                layout={LinearTransition.duration(300)}
+                style={styles.reactionsBtn}
+                onPress={() => {
+                  const moment = currentItem.data;
+                  openComments(moment.id, moment.user_id);
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.reactionsBtnText}>Réactions</Text>
+              </AnimatedTouchableOpacity>
+              <AnimatedTouchableOpacity
+                key="placeholder-btn"
+                entering={FadeIn.duration(200)}
+                exiting={FadeOut.duration(200)}
+                layout={LinearTransition.duration(300)}
+                style={styles.placeholderBtn}
+                activeOpacity={0.7}
+              />
+            </>
+          ) : (
+            <AnimatedTouchableOpacity
+              key="orange-btn"
+              layout={LinearTransition.duration(300)}
+              style={styles.reactionsBtn}
+              onPress={() => {
+                if (currentItem.type === "intro" || currentItem.type === "crown") {
+                  try {
+                    flatListRef.current?.scrollToIndex({ index: visibleIndex + 1, animated: true });
+                  } catch (e) {
+                    console.warn("Failed to scroll to next index:", e);
+                  }
+                } else if (currentItem.type === "challenge_vote") {
+                  console.log("Participer au vote pressed");
+                }
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.reactionsBtnText}>
+                {currentItem.type === "intro" 
+                  ? "Démarrer" 
+                  : currentItem.type === "crown" 
+                    ? "Suivant" 
+                    : "Participer au vote"}
+              </Text>
+            </AnimatedTouchableOpacity>
+          )}
+        </View>
+      )}
       
       {activePhotoId && activePhotoOwnerId && (
         <CommentModal
           visible={commentModalVisible}
           onClose={() => setCommentModalVisible(false)}
-          onSeen={onOpenComments || openComments}
+          onSeen={(pid) => {
+            if (onOpenComments) {
+              onOpenComments(pid, activePhotoOwnerId);
+            }
+          }}
           photoId={activePhotoId}
           photoOwnerId={activePhotoOwnerId}
           reactions={activePhoto?.reactions || []}
@@ -429,12 +527,12 @@ function PhotoFeedContent({
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   list: { flex: 1, backgroundColor: colors.bg },
   contentWrapper: {
-    flex: 1,
+    height: FEED_HEIGHT,
     backgroundColor: colors.bg,
   },
   fullscreenPage: {
     width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
+    height: "100%",
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: colors.bg,
@@ -509,6 +607,39 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   revealCountdownTextRed: {
     color: '#FFFFFF',
+  },
+  bottomSection: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 100, // NAVBAR_HEIGHT
+    backgroundColor: colors.bg,
+    flexDirection: "row",
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    gap: spacing.md,
+    alignItems: "flex-start",
+    zIndex: 10,
+  },
+  reactionsBtn: {
+    flex: 1,
+    height: 52,
+    backgroundColor: colors.brand,
+    borderRadius: radii.lg,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  reactionsBtnText: {
+    fontFamily: typography.family.bold,
+    fontSize: typography.size.md,
+    color: colors.textBrandOnBrandSecondary,
+  },
+  placeholderBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: radii.lg,
+    backgroundColor: colors.card, // background/default/secondary
   },
 });
 
