@@ -27,6 +27,9 @@ import { AudioCaptionPlayer } from "../molecules/AudioCaptionPlayer";
 import LottieView from "lottie-react-native";
 import BlurView from "../atoms/BlurView";
 import { BlurView as NativeBlurView } from "@sbaiahmed1/react-native-blur";
+import Reanimated, { useSharedValue, useAnimatedProps, useAnimatedStyle, withTiming, Easing as REasing } from "react-native-reanimated";
+
+const ReanimatedLottieView = Reanimated.createAnimatedComponent(LottieView);
 
 const NAVBAR_HEIGHT = 100;
 // Constantes de la barre de description (utilisées dans onShow ET startEditCaption)
@@ -136,6 +139,20 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     if (!cameraPermission?.granted) requestCameraPermission();
   }, []);
 
+  const [shouldMountCamera, setShouldMountCamera] = useState(true);
+
+  useEffect(() => {
+    let timeout: NodeJS.Timeout;
+    if (isActive) {
+      setShouldMountCamera(true);
+    } else {
+      timeout = setTimeout(() => {
+        setShouldMountCamera(false);
+      }, 5000);
+    }
+    return () => clearTimeout(timeout);
+  }, [isActive]);
+
   const [showGroupPicker, setShowGroupPicker] = useState(false);
   const pickerOpacity = useRef(new Animated.Value(0)).current;
 
@@ -199,16 +216,57 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const capturingSecondRef = useRef(false);
 
   const [cameraMode, setCameraMode] = useState<CameraMode>("PHOTO");
-  const lottieRef = useRef<LottieView>(null);
-  const [activeLottie, setActiveLottie] = useState<string | null>(null);
+  const progressPhotoVideo = useSharedValue(0);
+  const progressPhotoDraw = useSharedValue(0);
+  const progressVideoDraw = useSharedValue(0);
 
-  useEffect(() => {
-    if (activeLottie === "video-draw-forward") {
-      lottieRef.current?.play(0, 60); // Ajuste les frames selon ton fichier (0 à fin)
-    } else if (activeLottie === "video-draw-backward") {
-      lottieRef.current?.play(60, 0); // Force le départ de la fin vers le début
+  const activeLottieIndex = useSharedValue(0); // 0=PhotoVideo, 1=PhotoDraw, 2=VideoDraw
+
+  const propsPhotoVideo = useAnimatedProps(() => ({ progress: progressPhotoVideo.value }));
+  const propsPhotoDraw = useAnimatedProps(() => ({ progress: progressPhotoDraw.value }));
+  const propsVideoDraw = useAnimatedProps(() => ({ progress: progressVideoDraw.value }));
+
+  const stylePhotoVideo = useAnimatedStyle(() => ({ opacity: activeLottieIndex.value === 0 ? 1 : 0 }));
+  const stylePhotoDraw = useAnimatedStyle(() => ({ opacity: activeLottieIndex.value === 1 ? 1 : 0 }));
+  const styleVideoDraw = useAnimatedStyle(() => ({ opacity: activeLottieIndex.value === 2 ? 1 : 0 }));
+
+  const handleSelectMode = (m: CameraMode) => {
+    if (cameraMode === m) return;
+    
+    if (cameraMode === "PHOTO" && m === "VIDEO") {
+       activeLottieIndex.value = 0;
+       progressPhotoVideo.value = 0;
+       progressPhotoVideo.value = withTiming(1, { duration: 800, easing: REasing.inOut(REasing.ease) });
+       progressVideoDraw.value = 0; // Pre-set dormant to match VIDEO
+    } else if (cameraMode === "VIDEO" && m === "PHOTO") {
+       activeLottieIndex.value = 0;
+       progressPhotoVideo.value = 1;
+       progressPhotoVideo.value = withTiming(0, { duration: 800, easing: REasing.inOut(REasing.ease) });
+       progressPhotoDraw.value = 0; // Pre-set dormant to match PHOTO
+    } else if (cameraMode === "PHOTO" && m === "DESSIN") {
+       activeLottieIndex.value = 1;
+       progressPhotoDraw.value = 0;
+       progressPhotoDraw.value = withTiming(1, { duration: 800, easing: REasing.inOut(REasing.ease) });
+       progressVideoDraw.value = 1; // Pre-set dormant to match DESSIN
+    } else if (cameraMode === "DESSIN" && m === "PHOTO") {
+       activeLottieIndex.value = 1;
+       progressPhotoDraw.value = 1;
+       progressPhotoDraw.value = withTiming(0, { duration: 800, easing: REasing.inOut(REasing.ease) });
+       progressPhotoVideo.value = 0; // Pre-set dormant to match PHOTO
+    } else if (cameraMode === "VIDEO" && m === "DESSIN") {
+       activeLottieIndex.value = 2;
+       progressVideoDraw.value = 0;
+       progressVideoDraw.value = withTiming(1, { duration: 800, easing: REasing.inOut(REasing.ease) });
+       progressPhotoDraw.value = 1; // Pre-set dormant to match DESSIN
+    } else if (cameraMode === "DESSIN" && m === "VIDEO") {
+       activeLottieIndex.value = 2;
+       progressVideoDraw.value = 1;
+       progressVideoDraw.value = withTiming(0, { duration: 800, easing: REasing.inOut(REasing.ease) });
+       progressPhotoVideo.value = 1; // Pre-set dormant to match VIDEO
     }
-  }, [activeLottie]);
+    
+    setCameraMode(m);
+  };
 
   const [drawingColor, setDrawingColor] = useState("#FF561A");
   const [drawingStrokeWidth, setDrawingStrokeWidth] = useState(6);
@@ -1343,11 +1401,10 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
           <View style={[styles.cameraPageContainer, { justifyContent: "flex-end", paddingTop: 0, paddingBottom: NAVBAR_HEIGHT, paddingHorizontal: 0 }]}>
             <View style={styles.cameraInner}>
               <>
-                {/* Camera view clipped to rounded rect — only mount when active + permission granted.
-                    Gating on isActive prevents mounting while the tab is off-screen, which on iOS
-                    can trigger a race where stopRunning() queues after startRunning() on sessionQueue. */}
+                {/* Camera view clipped to rounded rect — permanently mounted for 0-lag transitions 
+                    like Snapchat. Unmounts after 5s of inactivity to save battery. */}
                 <View style={[StyleSheet.absoluteFillObject, { borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, overflow: "hidden" }]}>
-                  {isActive && (cameraPermission?.granted ?? Platform.OS === "ios") && (
+                  {shouldMountCamera && (cameraPermission?.granted ?? Platform.OS === "ios") && (
                     <SeamlessRecorder
                       ref={seamlessRecorderRef}
                       facing={facing}
@@ -1448,14 +1505,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               {(activeChallenge === null || capturingSecond) && !isRecording && !isAudioRecording && !(cameraMode === "DESSIN" && canUndo) && (
                 <ModeSelector
                   selected={cameraMode}
-                  onSelect={(m) => { 
-                    if (cameraMode === "VIDEO" && m === "DESSIN") {
-                      setActiveLottie("video-draw-forward");
-                    } else if (cameraMode === "DESSIN" && m === "VIDEO") {
-                      setActiveLottie("video-draw-backward");
-                    }
-                    setCameraMode(m); 
-                  }}
+                  onSelect={handleSelectMode}
                 />
               )}
             </View>
@@ -1474,18 +1524,25 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} />
                 {isRecording || isAudioRecording ? (
                   <Shape name="stop" size={40} color={colors.brand} />
-                ) : (cameraMode === "VIDEO" || cameraMode === "DESSIN" || activeLottie?.startsWith("video-draw")) ? (
-                  <LottieView
-                    ref={lottieRef}
-                    source={require("../../assets/animations/video-draw.json")}
-                    loop={false}
-                    speed={2}
-                    style={{ width: 80, height: 80 }}
-                    onAnimationFinish={() => setActiveLottie(null)}
-                  />
-                ) : cameraMode === "PHOTO" ? (
-                  <Shape name="photo" size={48} color={colors.brand} />
-                ) : null}
+                ) : (
+                  <View style={{ width: 80, height: 80 }}>
+                    <ReanimatedLottieView
+                      source={require("../../assets/animations/photo - video.json")}
+                      animatedProps={propsPhotoVideo}
+                      style={[StyleSheet.absoluteFillObject, stylePhotoVideo]}
+                    />
+                    <ReanimatedLottieView
+                      source={require("../../assets/animations/photo - draw.json")}
+                      animatedProps={propsPhotoDraw}
+                      style={[StyleSheet.absoluteFillObject, stylePhotoDraw]}
+                    />
+                    <ReanimatedLottieView
+                      source={require("../../assets/animations/video - draw.json")}
+                      animatedProps={propsVideoDraw}
+                      style={[StyleSheet.absoluteFillObject, styleVideoDraw]}
+                    />
+                  </View>
+                )}
               </TouchableOpacity>}
               {cameraMode !== "TEXTE" && <View style={styles.sideControlPlaceholder} />}
             </View>

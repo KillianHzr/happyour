@@ -64,7 +64,7 @@ export default function CreateGroupScreen() {
         placeholderTextColor={colors.muted}
         value={name}
         onChangeText={setName}
-        maxLength={25}
+        maxLength={9}
       />
 
       <TouchableOpacity style={theme.accentButton} onPress={handleCreate} disabled={loading}>

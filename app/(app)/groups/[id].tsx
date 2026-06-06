@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { View, Text, StyleSheet, Dimensions, Animated, TouchableOpacity, Alert, TextInput, AppState, Modal, KeyboardAvoidingView, Platform, Pressable } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
@@ -912,10 +912,20 @@ export default function MainPagerScreen() {
 
   // ── Pager ──
   const jumpTo = (page: number) => {
+    if (page === currentPage) return;
     scrollRef.current?.scrollTo({ x: page * SCREEN_WIDTH, animated: false });
     scrollX.setValue(page * SCREEN_WIDTH);
     setCurrentPage(page);
   };
+
+  const tab0ActiveOpacity = scrollX.interpolate({ inputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH], outputRange: [0, 1, 0], extrapolate: 'clamp' });
+  const tab0InactiveOpacity = scrollX.interpolate({ inputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH], outputRange: [1, 0, 1], extrapolate: 'clamp' });
+
+  const tab1ActiveOpacity = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [0, 1, 0], extrapolate: 'clamp' });
+  const tab1InactiveOpacity = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [1, 0, 1], extrapolate: 'clamp' });
+
+  const tab2ActiveOpacity = scrollX.interpolate({ inputRange: [SCREEN_WIDTH, 2 * SCREEN_WIDTH, 3 * SCREEN_WIDTH], outputRange: [0, 1, 0], extrapolate: 'clamp' });
+  const tab2InactiveOpacity = scrollX.interpolate({ inputRange: [SCREEN_WIDTH, 2 * SCREEN_WIDTH, 3 * SCREEN_WIDTH], outputRange: [1, 0, 1], extrapolate: 'clamp' });
 
   const cameraTranslateX = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH] });
   const cameraScale = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [0.9, 1, 0.9] });
@@ -1007,6 +1017,99 @@ export default function MainPagerScreen() {
     }
   }, [user, activeGroupId, groupData]);
 
+  const memoizedVaultPage = useMemo(() => (
+    <VaultPage
+      allGroups={allGroups}
+      activeGroupId={activeGroupId}
+      onSwitchGroup={handleSwitchGroup}
+      onAddGroup={() => setShowAddGroupModal(true)}
+      groupName={groupName}
+      inviteCode={groupInviteCode}
+      isAdmin={isAdmin}
+      currentUserId={user?.id}
+      members={members}
+      photoCount={photoCount}
+      photos={photos}
+      revealDate={lockedRevealDate}
+      revealEndDate={unlocked ? activeRevealEndDate : undefined}
+      unlocked={unlocked}
+      currentUserPostedThisWeek={currentUserPostedThisWeek}
+      onOpenReveal={() => { if (currentUserPostedThisWeek) setShowReveal(true); }}
+      onOpenSettings={() => setShowGroupSettings(true)}
+      onLeaveGroup={() => setShowLeaveConfirm(true)}
+      onRemoveMember={async (memberId) => {
+        const { error } = await supabase.from("group_members").delete().eq("group_id", activeGroupId).eq("user_id", memberId);
+        if (error) throw new Error(error.message);
+        await fetchAllData();
+      }}
+      groupId={activeGroupId}
+      vaultChallenges={debugVaultChallenges ?? challenges}
+      refreshing={refreshing}
+      onRefresh={async () => {
+        setRefreshing(true);
+        await fetchAllData({ force: true });
+        setRefreshing(false);
+      }}
+      onSimulateReveal={__DEV__ ? () => setDebugUnlocked(true) : undefined}
+      onDebugNotifReveal={__DEV__ ? () => scheduleImmediateLocalNotification("Le coffre est ouvert !", `Les moments de "${groupName}" sont disponibles`, { type: "recap", groupId: activeGroupId }) : undefined}
+      onDebugNotifPhoto={__DEV__ ? () => scheduleImmediateLocalNotification(groupName || "Groupe", "Un ami a partagé un moment !", { type: "new_photo", groupId: activeGroupId }) : undefined}
+      onDebugNotifInvite={__DEV__ ? () => scheduleImmediateLocalNotification("Nouvelle invitation !", `Tu as été invité à rejoindre "${groupName}"`, { type: "invite", groupName: groupName || "Groupe" }) : undefined}
+      onDebugResetChallenges={__DEV__ ? async () => {
+        const weekStart = getChallengeWeekStart();
+        await supabase.from("weekly_challenges").delete().eq("group_id", activeGroupId).eq("week_start", weekStart);
+        await fetchAllData();
+      } : undefined}
+      onDebugResetMyResponse={__DEV__ ? async () => {
+        const weekStart = getChallengeWeekStart();
+        const { data: ch } = await supabase.from("weekly_challenges").select("id").eq("group_id", activeGroupId).eq("week_start", weekStart);
+        if (ch && ch.length > 0) {
+          const ids = ch.map((c: any) => c.id);
+          await supabase.from("challenge_responses").delete().eq("user_id", user?.id ?? "").in("challenge_id", ids);
+        }
+        await fetchAllData();
+      } : undefined}
+      onDebugShowCurrentChallenges={__DEV__ ? async () => {
+        const currentWeekStart = getChallengeWeekStart();
+        const result = await fetchChallengeData(activeGroupId, currentWeekStart, members);
+        setDebugVaultChallenges(result);
+      } : undefined}
+      onDebugOpenCreateCustom={__DEV__ ? () => setShowCustomChallengeCreate(true) : undefined}
+      onDebugOpenQueueCustom={__DEV__ ? () => setShowCustomChallengeQueue(true) : undefined}
+      onGoToCamera={() => jumpTo(1)}
+    />
+  ), [
+    allGroups, activeGroupId, handleSwitchGroup, groupName, groupInviteCode, isAdmin, user?.id, members, photoCount, photos,
+    lockedRevealDate, unlocked, activeRevealEndDate, currentUserPostedThisWeek, refreshing, challenges, debugVaultChallenges, fetchAllData, debugUnlocked
+  ]);
+
+  const memoizedCameraPage = useMemo(() => (
+    <CameraPage
+      groupId={activeGroupId}
+      userId={user?.id ?? ""}
+      isActive={currentPage === 1}
+      allGroups={allGroups}
+      onScrollLock={(v) => { setCameraScrollLocked(v); scrollRef.current?.setNativeProps({ scrollEnabled: !v }); }}
+      onHideMenu={setCameraHideMenu}
+      onCaptureSent={(info) => { setProfileRefreshKey(k => k + 1); showCaptureToast(info); }}
+    />
+  ), [activeGroupId, user?.id, currentPage === 1, allGroups]);
+
+  const memoizedProfilePage = useMemo(() => (
+    <ProfilePage
+      userId={user?.id ?? ""}
+      username={username}
+      avatarUrl={avatarUrl}
+      email={email}
+      allGroups={allGroups}
+      revealConfig={revealConfig}
+      onAvatarUpdate={setAvatarUrl}
+      onUsernameUpdate={setUsername}
+      onStreakUpdate={setStreakDays}
+      isActive={currentPage === 2}
+      refreshKey={profileRefreshKey}
+    />
+  ), [user?.id, username, avatarUrl, email, allGroups, revealConfig, profileRefreshKey, currentPage === 2]);
+
   if (!dataLoaded) return <View style={styles.loaderWrap}><Loader size={48} /></View>;
 
   return (
@@ -1031,95 +1134,17 @@ export default function MainPagerScreen() {
       >
         {/* PAGE 0: COFFRE */}
         <View style={[styles.page, { zIndex: 2 }]}>
-          <VaultPage
-            allGroups={allGroups}
-            activeGroupId={activeGroupId}
-            onSwitchGroup={handleSwitchGroup}
-            onAddGroup={() => setShowAddGroupModal(true)}
-            groupName={groupName}
-            inviteCode={groupInviteCode}
-            isAdmin={isAdmin}
-            currentUserId={user?.id}
-            members={members}
-            photoCount={photoCount}
-            photos={photos}
-            revealDate={lockedRevealDate}
-            revealEndDate={unlocked ? activeRevealEndDate : undefined}
-            unlocked={unlocked}
-            currentUserPostedThisWeek={currentUserPostedThisWeek}
-            onOpenReveal={() => { if (currentUserPostedThisWeek) setShowReveal(true); }}
-            onOpenSettings={() => setShowGroupSettings(true)}
-            onLeaveGroup={() => setShowLeaveConfirm(true)}
-            onRemoveMember={async (memberId) => {
-              const { error } = await supabase.from("group_members").delete().eq("group_id", activeGroupId).eq("user_id", memberId);
-              if (error) throw new Error(error.message);
-              await fetchAllData();
-            }}
-            groupId={activeGroupId}
-            vaultChallenges={debugVaultChallenges ?? challenges}
-            refreshing={refreshing}
-            onRefresh={async () => {
-              setRefreshing(true);
-              await fetchAllData({ force: true });
-              setRefreshing(false);
-            }}
-            onSimulateReveal={__DEV__ ? () => setDebugUnlocked(true) : undefined}
-            onDebugNotifReveal={__DEV__ ? () => scheduleImmediateLocalNotification("Le coffre est ouvert !", `Les moments de "${groupName}" sont disponibles`, { type: "recap", groupId: activeGroupId }) : undefined}
-            onDebugNotifPhoto={__DEV__ ? () => scheduleImmediateLocalNotification(groupName || "Groupe", "Un ami a partagé un moment !", { type: "new_photo", groupId: activeGroupId }) : undefined}
-            onDebugNotifInvite={__DEV__ ? () => scheduleImmediateLocalNotification("Nouvelle invitation !", `Tu as été invité à rejoindre "${groupName}"`, { type: "invite", groupName: groupName || "Groupe" }) : undefined}
-            onDebugResetChallenges={__DEV__ ? async () => {
-              const weekStart = getChallengeWeekStart();
-              await supabase.from("weekly_challenges").delete().eq("group_id", activeGroupId).eq("week_start", weekStart);
-              await fetchAllData();
-            } : undefined}
-            onDebugResetMyResponse={__DEV__ ? async () => {
-              const weekStart = getChallengeWeekStart();
-              const { data: ch } = await supabase.from("weekly_challenges").select("id").eq("group_id", activeGroupId).eq("week_start", weekStart);
-              if (ch && ch.length > 0) {
-                const ids = ch.map((c: any) => c.id);
-                await supabase.from("challenge_responses").delete().eq("user_id", user?.id ?? "").in("challenge_id", ids);
-              }
-              await fetchAllData();
-            } : undefined}
-            onDebugShowCurrentChallenges={__DEV__ ? async () => {
-              const currentWeekStart = getChallengeWeekStart();
-              const result = await fetchChallengeData(activeGroupId, currentWeekStart, members);
-              setDebugVaultChallenges(result);
-            } : undefined}
-            onDebugOpenCreateCustom={__DEV__ ? () => setShowCustomChallengeCreate(true) : undefined}
-            onDebugOpenQueueCustom={__DEV__ ? () => setShowCustomChallengeQueue(true) : undefined}
-            onGoToCamera={() => jumpTo(1)}
-          />
+          {memoizedVaultPage}
         </View>
 
         {/* PAGE 1: CAMERA */}
         <Animated.View style={[styles.page, { transform: [{ translateX: cameraTranslateX }, { scale: cameraScale }], opacity: cameraOpacity }]}>
-          <CameraPage
-            groupId={activeGroupId}
-            userId={user?.id ?? ""}
-            isActive={currentPage === 1}
-            allGroups={allGroups}
-            onScrollLock={(v) => { setCameraScrollLocked(v); scrollRef.current?.setNativeProps({ scrollEnabled: !v }); }}
-            onHideMenu={setCameraHideMenu}
-            onCaptureSent={(info) => { setProfileRefreshKey(k => k + 1); showCaptureToast(info); }}
-          />
+          {memoizedCameraPage}
         </Animated.View>
 
         {/* PAGE 2: PROFIL */}
         <View style={[styles.page, { zIndex: 2 }]}>
-          <ProfilePage
-            userId={user?.id ?? ""}
-            username={username}
-            avatarUrl={avatarUrl}
-            email={email}
-            allGroups={allGroups}
-            revealConfig={revealConfig}
-            onAvatarUpdate={setAvatarUrl}
-            onUsernameUpdate={setUsername}
-            onStreakUpdate={setStreakDays}
-            isActive={currentPage === 2}
-            refreshKey={profileRefreshKey}
-          />
+          {memoizedProfilePage}
         </View>
       </Animated.ScrollView>
 
@@ -1128,26 +1153,58 @@ export default function MainPagerScreen() {
         <View style={styles.tabBarContainer}>
           <View style={styles.tabBarContent}>
             <TouchableOpacity style={styles.tab} onPress={() => jumpTo(0)}>
-              <Icon name="lock" size={24} color={currentPage === 0 ? colors.icon : colors.iconSecondary} />
-              <Text style={[styles.tabLabel, currentPage === 0 && styles.tabLabelActive]}>Coffre</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.tab} onPress={() => jumpTo(1)}>
-              <Icon name="circle" size={24} color={currentPage === 1 ? colors.icon : colors.iconSecondary} />
-              <Text style={[styles.tabLabel, currentPage === 1 && styles.tabLabelActive]}>Capture</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.tab} onPress={() => jumpTo(2)}>
-              <View style={{ position: "relative" }}>
-                <Icon name="user" size={24} color={currentPage === 2 ? colors.icon : colors.iconSecondary} />
-                {streakDays > 0 && (
-                  <View style={styles.streakBadge}>
-                    <Svg width="10" height="13" viewBox="0 0 16 21" fill="none">
-                      <Path d="M8 1C8.66667 3.66667 10 5.83333 12 7.5C14 9.16667 15 11 15 13C15 14.8565 14.2625 16.637 12.9497 17.9497C11.637 19.2625 9.85652 20 8 20C6.14348 20 4.36301 19.2625 3.05025 17.9497C1.7375 16.637 1 14.8565 1 13C1 11.9181 1.35089 10.8655 2 10C2 10.663 2.26339 11.2989 2.73223 11.7678C3.20107 12.2366 3.83696 12.5 4.5 12.5C5.16304 12.5 5.79893 12.2366 6.26777 11.7678C6.73661 11.2989 7 10.663 7 10C7 8 5.5 7 5.5 5C5.5 3.66667 6.33333 2.33333 8 1Z" fill="#FFA600" stroke="#FFA600" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    </Svg>
-                    <Text style={styles.streakBadgeText}>{streakDays}</Text>
-                  </View>
-                )}
+              <Animated.View style={[{ position: "absolute", alignItems: "center" }, { opacity: tab0InactiveOpacity }]}>
+                <Icon name="lock-filled" size={24} color={colors.iconSecondary} />
+                <Text style={styles.tabLabel}>Coffre</Text>
+              </Animated.View>
+              <Animated.View style={[{ position: "absolute", alignItems: "center" }, { opacity: tab0ActiveOpacity }]}>
+                <Icon name="lock" size={24} color={colors.icon} />
+                <Text style={[styles.tabLabel, styles.tabLabelActive]}>Coffre</Text>
+              </Animated.View>
+              {/* Invisible placeholder for layout sizing */}
+              <View style={{ opacity: 0, alignItems: "center" }}>
+                <Icon name="lock" size={24} />
+                <Text style={[styles.tabLabel, styles.tabLabelActive]}>Coffre</Text>
               </View>
-              <Text style={[styles.tabLabel, currentPage === 2 && styles.tabLabelActive]}>Profil</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.tab} onPress={() => jumpTo(1)}>
+              <Animated.View style={[{ position: "absolute", alignItems: "center" }, { opacity: tab1InactiveOpacity }]}>
+                <Icon name="circle" size={24} color={colors.iconSecondary} />
+                <Text style={styles.tabLabel}>Capture</Text>
+              </Animated.View>
+              <Animated.View style={[{ position: "absolute", alignItems: "center" }, { opacity: tab1ActiveOpacity }]}>
+                <Icon name="circle-filled" size={24} color={colors.icon} />
+                <Text style={[styles.tabLabel, styles.tabLabelActive]}>Capture</Text>
+              </Animated.View>
+              <View style={{ opacity: 0, alignItems: "center" }}>
+                <Icon name="circle-filled" size={24} />
+                <Text style={[styles.tabLabel, styles.tabLabelActive]}>Capture</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.tab} onPress={() => jumpTo(2)}>
+              <Animated.View style={[{ position: "absolute", alignItems: "center" }, { opacity: tab2InactiveOpacity }]}>
+                <Icon name="user" size={24} color={colors.iconSecondary} />
+                <Text style={styles.tabLabel}>Profil</Text>
+              </Animated.View>
+              <Animated.View style={[{ position: "absolute", alignItems: "center" }, { opacity: tab2ActiveOpacity }]}>
+                <Icon name="user" size={24} color={colors.icon} />
+                <Text style={[styles.tabLabel, styles.tabLabelActive]}>Profil</Text>
+              </Animated.View>
+              <View style={{ opacity: 0, alignItems: "center" }}>
+                <Icon name="user" size={24} />
+                <Text style={[styles.tabLabel, styles.tabLabelActive]}>Profil</Text>
+              </View>
+
+              {streakDays > 0 && (
+                <View style={[styles.streakBadge, { right: 8, top: -2 }]} pointerEvents="none">
+                  <Svg width="10" height="13" viewBox="0 0 16 21" fill="none">
+                    <Path d="M8 1C8.66667 3.66667 10 5.83333 12 7.5C14 9.16667 15 11 15 13C15 14.8565 14.2625 16.637 12.9497 17.9497C11.637 19.2625 9.85652 20 8 20C6.14348 20 4.36301 19.2625 3.05025 17.9497C1.7375 16.637 1 14.8565 1 13C1 11.9181 1.35089 10.8655 2 10C2 10.663 2.26339 11.2989 2.73223 11.7678C3.20107 12.2366 3.83696 12.5 4.5 12.5C5.16304 12.5 5.79893 12.2366 6.26777 11.7678C6.73661 11.2989 7 10.663 7 10C7 8 5.5 7 5.5 5C5.5 3.66667 6.33333 2.33333 8 1Z" fill="#FFA600" stroke="#FFA600" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </Svg>
+                  <Text style={styles.streakBadgeText}>{streakDays}</Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -1417,7 +1474,7 @@ export default function MainPagerScreen() {
               placeholderTextColor={colors.textTertiary}
               value={newGroupName}
               onChangeText={setNewGroupName}
-              maxLength={25}
+              maxLength={9}
               autoFocus
               returnKeyType="done"
               onSubmitEditing={handleCreateGroup}
