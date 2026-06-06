@@ -17,8 +17,8 @@ import { useUpload } from "../../lib/upload-context";
 import DrawingCanvas, { type DrawingCanvasRef } from "../DrawingCanvas";
 import { SendIcon, FeatherIcon, FlipIcon, CloseIcon, FlashIcon } from "./GroupIcons";
 import { VolumeManager } from "react-native-volume-manager";
-import ChallengesModal from "./ChallengesModal";
-import { type ActiveChallenge } from "../../lib/challenges";
+import ChallengesModal, { ChallengesContent, ChallengesSlider } from "./ChallengesModal";
+import { type ActiveChallenge, getCurrentChallengePeriod } from "../../lib/challenges";
 import { radii, spacing, stroke, blur, typography, textStyles, glassBlurIntensity, buildColors, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import Shape, { type ShapeName } from "../Shape";
@@ -35,9 +35,9 @@ const MARGIN_ABOVE_KB = spacing.lg;  // 16px
 const CAPTION_GAP = spacing.sm;      // 8px
 
 // LayoutAnimation pour les transitions de la barre de légende (entrée/sortie édition)
-if (Platform.OS === "android") {
-  UIManager.setLayoutAnimationEnabledExperimental?.(true);
-}
+// if (Platform.OS === "android") {
+//   UIManager.setLayoutAnimationEnabledExperimental?.(true);
+// }
 const CAPTION_TRANSITION = {
   duration: 220,
   create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
@@ -163,8 +163,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     }
   };
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
-  const [showChallengesModal, setShowChallengesModal] = useState(false);
+  const [showChallengesInline, setShowChallengesInline] = useState(false);
   const [activeChallenge, setActiveChallenge] = useState<ActiveChallenge | null>(null);
+  const challengeChooseRef = useRef<(() => void) | null>(null);
 
   const drawingRef = useRef<DrawingCanvasRef>(null);
   const textInputRef = useRef<any>(null);
@@ -582,12 +583,16 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   ).current;
 
   useEffect(() => {
-    const base = slot1 !== null || isPinching || isZoomDragging || isRecording;
+    if (!isActive) setShowChallengesInline(false);
+  }, [isActive]);
+
+  useEffect(() => {
+    const base = slot1 !== null || isPinching || isZoomDragging || isRecording || showChallengesInline;
     // Swipe entre les vues : verrouillé dès qu'on est en DESSIN (même sans dessiner).
     onScrollLock(base || cameraMode === "DESSIN");
     // Menu de l'app : masqué seulement en capture (en DESSIN : une fois qu'on dessine).
     onHideMenu?.(base || (cameraMode === "DESSIN" && canUndo));
-  }, [slot1, isPinching, cameraMode, canUndo, isZoomDragging, isRecording]);
+  }, [slot1, isPinching, cameraMode, canUndo, isZoomDragging, isRecording, showChallengesInline]);
 
   useEffect(() => {
     if (cameraMode === "AUDIO" && isCapturing && !capturedAudioUri) {
@@ -1398,7 +1403,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               <View style={[challengeStyles.topContainer, { paddingTop: cameraFrameTop + CHALLENGE_GAP }]} pointerEvents="box-none">
                 <TouchableOpacity
                   style={challengeStyles.challengeBtn}
-                  onPress={() => setShowChallengesModal(true)}
+                  onPress={() => setShowChallengesInline(true)}
                   activeOpacity={0.8}
                 >
                   <Text style={challengeStyles.challengeBtnText}>Défis</Text>
@@ -1705,12 +1710,60 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         </View>
       )}
 
+      {/* ── Vue Défis inline ── */}
+      <View
+        style={[
+          StyleSheet.absoluteFillObject,
+          { backgroundColor: colors.bg, zIndex: 100 },
+          !showChallengesInline && { opacity: 0, pointerEvents: "none", zIndex: -100 }
+        ]}
+      >
+          {/* Header — même marges horizontales que le bouton Choisir en bas */}
+          <View style={{ paddingTop: insets.top, paddingHorizontal: spacing.lg }}>
+            {/* Ligne 1 : bouton retour + titre */}
+            <View style={challengeStyles.inlineHeaderRow}>
+              <TouchableOpacity
+                style={challengeStyles.inlineBackBtn}
+                onPress={() => setShowChallengesInline(false)}
+                activeOpacity={0.7}
+              >
+                <Icon name="chevron-left" size={20} color={colors.icon} />
+              </TouchableOpacity>
+              <Text style={challengeStyles.inlineTitle}>Défis</Text>
+            </View>
+            {/* Ligne 2 : spacer + deadline */}
+            <View style={challengeStyles.inlineHeaderRow}>
+              <View style={challengeStyles.inlineBackBtnSpacer} />
+              <Text style={challengeStyles.inlineDeadline}>{getChallengeDeadlineText()}</Text>
+            </View>
+          </View>
+
+          {/* Slider de défis — flex:1 pour remplir toute la hauteur jusqu'au bouton */}
+          <View style={{ flex: 1, marginTop: spacing.xl }}>
+            <ChallengesSlider
+              allGroups={allGroups}
+              currentUserId={userId}
+              onSelectChallenge={(challenge) => {
+                handleSelectChallenge(challenge);
+                setShowChallengesInline(false);
+              }}
+              onClose={() => setShowChallengesInline(false)}
+              chooseRef={challengeChooseRef}
+            />
+          </View>
+
+          {/* Bouton Choisir — sélectionne le défi actif (celui avec la stroke) */}
+          <View style={styles.previewSendArea}>
+            <PrimaryButton label="Choisir" onPress={() => challengeChooseRef.current?.()} />
+          </View>
+        </View>
+
       </View>{/* /bgViewRef */}
 
-      {/* ── Challenges Modal ── */}
+      {/* ── Challenges Modal (legacy, kept for backward compat) ── */}
       <ChallengesModal
-        visible={showChallengesModal}
-        onClose={() => setShowChallengesModal(false)}
+        visible={false}
+        onClose={() => {}}
         allGroups={allGroups}
         currentUserId={userId}
         onSelectChallenge={handleSelectChallenge}
@@ -2311,6 +2364,12 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   captionConfirmBtn: { width: 32, height: 32, borderRadius: radii.sm, overflow: "hidden", justifyContent: "center", alignItems: "center", alignSelf: "center" },
 });
 
+function getChallengeDeadlineText(): string {
+  const period = getCurrentChallengePeriod();
+  if (period === null) return "Prochain défi lundi";
+  return period === 1 ? "Jusqu'à mercredi 20h" : "Jusqu'à dimanche 20h";
+}
+
 const makeChallengeStyles = (colors: ThemeColors) => StyleSheet.create({
   topContainer: {
     position: "absolute",
@@ -2374,6 +2433,34 @@ const makeChallengeStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: typography.family.semibold,
     fontSize: typography.size.xs,
     marginTop: 2,
+  },
+  // Vue défis inline
+  inlineHeaderRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    alignItems: "center",
+  },
+  inlineBackBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.md,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  inlineBackBtnSpacer: {
+    width: 40,
+    height: 1,
+  },
+  inlineTitle: {
+    ...textStyles.subtitleStrong,
+    color: colors.text,
+    lineHeight: undefined,
+    fontSize: 32,
+  },
+  inlineDeadline: {
+    ...textStyles.bodySmall,
+    color: colors.text,
+    lineHeight: undefined,
   },
 });
 

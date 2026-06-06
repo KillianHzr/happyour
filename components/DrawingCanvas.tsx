@@ -85,6 +85,9 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { color: string; strok
           lastPointRef.current = { x, y };
           activeStrokeRef.current = { path, color: selectedColorRef.current, strokeWidth: selectedStrokeWidthRef.current };
           forceUpdate((n) => n + 1);
+
+          // Notify immediately that we are drawing to update UI (hide placeholder, etc.)
+          onHistoryChange?.(true, redoStackRef.current.length > 0);
         },
         onPanResponderMove: (evt) => {
           if (!activeStrokeRef.current) return;
@@ -106,11 +109,14 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { color: string; strok
             setCompletedStrokes((prev) => [...prev, stroke]);
             activeStrokeRef.current = null;
             lastPointRef.current = null;
+            onHistoryChange?.(true, false);
           }
         },
         onPanResponderTerminate: () => {
           activeStrokeRef.current = null;
           lastPointRef.current = null;
+          // Re-sync with actual history
+          onHistoryChange?.(completedStrokes.length > 0, redoStackRef.current.length > 0);
         },
       })
     ).current;

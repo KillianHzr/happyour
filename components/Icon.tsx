@@ -11,9 +11,9 @@ import { useTheme } from "../lib/theme-context";
  * design system. On peut la surcharger via `color`, mais jamais via la couleur
  * d'origine du SVG.
  */
-export type IconName = "flash" | "flash-on" | "rotate" | "zoom" | "rollback" | "trash" | "lock" | "user" | "circle" | "check" | "x" | "mic" | "play";
+export type IconName = "flash" | "flash-on" | "rotate" | "zoom" | "rollback" | "trash" | "lock" | "user" | "circle" | "check" | "x" | "mic" | "play" | "chevron-left";
 
-type IconDef = { viewBox: string; paths: string[] };
+type IconDef = { viewBox: string; paths: string[]; stroke?: boolean; strokeWidth?: number };
 
 const ICONS: Record<IconName, IconDef> = {
   flash: {
@@ -86,6 +86,12 @@ const ICONS: Record<IconName, IconDef> = {
     viewBox: "0 0 20 20",
     paths: ["M3.1665 10.0002V8.33325C3.1665 7.78097 3.61422 7.33325 4.1665 7.33325C4.71879 7.33325 5.1665 7.78097 5.1665 8.33325V10.0002C5.16659 11.282 5.67617 12.5109 6.58252 13.4172C7.48887 14.3236 8.71775 14.8332 9.99951 14.8333C11.2814 14.8333 12.5111 14.3237 13.4175 13.4172C14.3237 12.5109 14.8334 11.2819 14.8335 10.0002V8.33325C14.8335 7.78097 15.2812 7.33325 15.8335 7.33325C16.3856 7.33343 16.8335 7.78108 16.8335 8.33325V10.0002C16.8334 11.8124 16.113 13.5509 14.8315 14.8323C13.7881 15.8755 12.4418 16.5457 10.9995 16.759V18.1663H13.3335C13.8855 18.1664 14.3333 18.6142 14.3335 19.1663C14.3335 19.7184 13.8856 20.1661 13.3335 20.1663H6.6665C6.11422 20.1663 5.6665 19.7185 5.6665 19.1663C5.66668 18.6141 6.11433 18.1663 6.6665 18.1663H8.99951V16.759C7.55727 16.5456 6.21079 15.8756 5.16748 14.8323C3.88606 13.5509 3.16659 11.8124 3.1665 10.0002ZM11.4995 3.33325C11.4995 2.93543 11.3414 2.55401 11.0601 2.27271C10.7788 1.9915 10.3973 1.83325 9.99951 1.83325C9.6018 1.83334 9.22019 1.99148 8.93896 2.27271C8.65776 2.55399 8.49951 2.9355 8.49951 3.33325V10.0002C8.4996 10.398 8.65774 10.7796 8.93896 11.0608C9.22019 11.342 9.6018 11.5002 9.99951 11.5002C10.3972 11.5002 10.7788 11.3419 11.0601 11.0608C11.3413 10.7796 11.4994 10.398 11.4995 10.0002V3.33325ZM13.4995 10.0002C13.4994 10.9283 13.1313 11.8186 12.4751 12.4749C11.8187 13.1312 10.9278 13.5002 9.99951 13.5002C9.07137 13.5002 8.1812 13.1312 7.5249 12.4749C6.8686 11.8186 6.4996 10.9284 6.49951 10.0002V3.33325C6.49951 2.40507 6.86863 1.515 7.5249 0.858643C8.1812 0.202342 9.07137 -0.166662 9.99951 -0.166748C10.9278 -0.166748 11.8187 0.202265 12.4751 0.858643C13.1313 1.51499 13.4995 2.40515 13.4995 3.33325V10.0002Z"],
   },
+  "chevron-left": {
+    viewBox: "0 0 24 24",
+    paths: ["M15 18l-6-6 6-6"],
+    stroke: true,
+    strokeWidth: 2.5,
+  },
 };
 
 type IconProps = {
@@ -100,9 +106,11 @@ export default function Icon({ name, size = 24, color }: IconProps) {
   const def = ICONS[name];
   return (
     <Svg width={size} height={size} viewBox={def.viewBox} fill="none">
-      {def.paths.map((d, i) => (
-        <Path key={i} d={d} fill={fill} />
-      ))}
+      {def.paths.map((d, i) =>
+        def.stroke
+          ? <Path key={i} d={d} stroke={fill} strokeWidth={def.strokeWidth ?? 2} strokeLinecap="round" strokeLinejoin="round" />
+          : <Path key={i} d={d} fill={fill} />
+      )}
     </Svg>
   );
 }
