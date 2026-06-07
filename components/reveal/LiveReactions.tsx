@@ -164,6 +164,7 @@ type Props = {
   currentUsername: string;
   currentAvatarUrl: string | null;
   isVisible: boolean;
+  onParticipantsChange?: (participants: any[]) => void;
 };
 
 // ─── LiveReactions ────────────────────────────────────────────────────────────
@@ -174,6 +175,7 @@ export default function LiveReactions({
   currentUsername,
   currentAvatarUrl,
   isVisible,
+  onParticipantsChange,
 }: Props) {
   const insets = useSafeAreaInsets();
   const styles = useThemedStyles(makeStyles);
@@ -188,7 +190,16 @@ export default function LiveReactions({
   const reversalsRef      = useRef<number[]>([]); // timestamps of X-axis direction reversals
   const lastXDirectionRef = useRef<0 | 1 | -1>(0); // last committed X direction
 
-  const sync = () => setParticipants(new Map(pRef.current));
+  const sync = () => {
+    setParticipants(new Map(pRef.current));
+    onParticipantsChange?.(
+      Array.from(pRef.current.values()).map(p => ({
+        userId: p.userId,
+        username: p.username,
+        avatarUrl: p.avatarUrl,
+      }))
+    );
+  };
 
   const makeParticipant = (
     userId: string,
@@ -342,39 +353,10 @@ export default function LiveReactions({
   }, [isVisible, sendWave]);
 
   // ── render ─────────────────────────────────────────────────────────────────
-  const list = Array.from(participants.values());
-  if (list.length === 0) return null;
-
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-
-      {/* Avatar column — top right */}
-      <View style={[styles.avatarsCol, { top: insets.top + 8 }]}>
-        {list.map((p) => (
-          <Animated.View
-            key={p.userId}
-            style={{ transform: [{ scale: p.avatarScale }] }}
-          >
-            <View style={styles.avatarRow}>
-              {/* Small waving hand to the left of the avatar */}
-              <WavingHand size={26} trigger={waveTriggers.get(p.userId) ?? 0} />
-              {p.avatarUrl ? (
-                <Image source={{ uri: p.avatarUrl }} style={styles.avatar} contentFit="cover" />
-              ) : (
-                <View style={[styles.avatar, styles.avatarFallback]}>
-                  <Text style={styles.avatarInitial}>
-                    {p.username[0]?.toUpperCase() ?? "?"}
-                  </Text>
-                </View>
-              )}
-            </View>
-          </Animated.View>
-        ))}
-      </View>
-
       {/* Big centred wave — shown on the waving user's own screen */}
       <BigWave trigger={myWaveTrigger} />
-
     </View>
   );
 }

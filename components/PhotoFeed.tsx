@@ -36,6 +36,8 @@ import { AudioMoment } from "./organisms/AudioMoment";
 import { VideoMoment } from "./organisms/VideoMoment";
 import { RevealIntroPage } from "./organisms/RevealIntroPage";
 import { CrownRevealPage } from "./organisms/CrownRevealPage";
+import { RevealEndPage } from "./organisms/RevealEndPage";
+import { RefreshIcon } from "./atoms/RefreshIcon";
 import { AnimatedPageWrapper } from "./molecules/AnimatedPageWrapper";
 import { radii, spacing, typography, type ThemeColors } from "../lib/theme";
 import { useTheme, useThemedStyles, ForceTheme } from "../lib/theme-context";
@@ -80,6 +82,7 @@ type Props = {
   challengePeriod1?: ChallengeWithData | null;
   challengePeriod2?: ChallengeWithData | null;
   onVoteChallenge?: (challengeId: string, responseId: string) => void;
+  onBackToCapture?: () => void;
 };
 
 function formatDayLabel(dateStr: string) {
@@ -119,7 +122,8 @@ function PhotoFeedContent({
   onOpenComments,
   challengePeriod1,
   challengePeriod2,
-  onVoteChallenge
+  onVoteChallenge,
+  onBackToCapture
 }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -298,8 +302,7 @@ function PhotoFeedContent({
         challenge1Inserted = true;
       }
       const d = photo.created_at.slice(0, 10);
-      if (d !== lastDate && !hideIntro) {
-        result.push({ type: "separator", ...formatDayLabel(photo.created_at) });
+      if (d !== lastDate) {
         lastDate = d;
       }
       result.push({ type: "moment", data: photo });
@@ -336,7 +339,8 @@ function PhotoFeedContent({
       currentItem.type === "intro" ||
       currentItem.type === "crown" ||
       currentItem.type === "moment" ||
-      currentItem.type === "challenge_vote"
+      currentItem.type === "challenge_vote" ||
+      currentItem.type === "end"
     );
   }, [currentItem]);
 
@@ -344,16 +348,28 @@ function PhotoFeedContent({
     let content: React.ReactNode = null;
 
     if (item.type === "intro") {
-      content = <RevealIntroPage groupName={groupName} isVisible={index === visibleIndex} customTitle={introTitle} customSubtitle={introSubtitle} />;
+      content = (
+        <RevealIntroPage 
+          groupName={groupName} 
+          isVisible={index === visibleIndex} 
+          customTitle={introTitle} 
+          customSubtitle={introSubtitle} 
+          firstPhotoUrl={photos[0]?.url}
+          momentsCount={photos.length}
+        />
+      );
     } else if (item.type === "crown") {
       const winner = photos.find((p) => p.user_id === crownWinnerId);
       if (!winner) return null;
+      const currentUserPhoto = photos.find((p) => p.user_id === currentUserId);
       content = (
         <CrownRevealPage 
           winner={winner} 
           durationMs={crownDurationMs} 
           currentUserId={currentUserId}
           userDurationMs={currentUserId ? (crownAllDurations[currentUserId] ?? 0) : 0}
+          currentUserAvatarUrl={currentUserPhoto?.avatar_url}
+          currentUsername={currentUserPhoto?.username || "Moi"}
         />
       );
     } else if (item.type === "separator") {
@@ -375,12 +391,11 @@ function PhotoFeedContent({
       );
     } else if (item.type === "end") {
       content = (
-        <View style={styles.fullscreenPage}>
-          <View style={styles.endLogoMark} />
-          <Text style={styles.endTitle}>Reveal terminé.</Text>
-          <Text style={styles.endSubtitle}>Prochain rewind dans :</Text>
-          <Text style={styles.countdownText}>{countdownText}</Text>
-        </View>
+        <RevealEndPage
+          photos={photos}
+          isVisible={index === visibleIndex}
+          firstPhotoUrl={photos[0]?.url}
+        />
       );
     } else {
       const moment = item.data;
@@ -465,29 +480,44 @@ function PhotoFeedContent({
             style={styles.list}
             scrollEnabled={!commentModalVisible}
           />
-          {revealEndDate && revealTimeLeft !== "" && !commentModalVisible && (
-            <View style={[styles.revealCountdownBar, { top: insets.top + 8 }]} pointerEvents="none">
-              <View style={[styles.revealCountdownPill, revealMsLeft < 4 * 3600000 && styles.revealCountdownPillRed]}>
-                <Svg width="12" height="12" viewBox="0 0 24 24" fill="none" style={{ marginRight: 5 }}>
-                  <Path 
-                    d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" 
-                    stroke={revealMsLeft < 4 * 3600000 ? "#FFFFFF" : colors.secondary}
-                    strokeWidth="2" 
-                    strokeLinecap="round" 
-                  />
-                </Svg>
-                <Text style={[styles.revealCountdownText, revealMsLeft < 4 * 3600000 && styles.revealCountdownTextRed]}>
-                  {revealTimeLeft}
-                </Text>
-              </View>
-            </View>
-          )}
+          {/* Countdown timer pill is now rendered in RevealHeader */}
         </Reanimated.View>
       </Reanimated.View>
 
       {showBottomSection && currentItem && !commentModalVisible && (
         <View style={styles.bottomSection}>
-          {currentItem.type === "moment" ? (
+          {currentItem.type === "end" ? (
+            <>
+              <AnimatedTouchableOpacity
+                key="orange-btn"
+                layout={LinearTransition.duration(300)}
+                style={styles.reactionsBtn}
+                onPress={() => {
+                  onBackToCapture?.();
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.reactionsBtnText}>Retour à la capture</Text>
+              </AnimatedTouchableOpacity>
+              <AnimatedTouchableOpacity
+                key="refresh-btn"
+                entering={FadeIn.duration(200)}
+                exiting={FadeOut.duration(200)}
+                layout={LinearTransition.duration(300)}
+                style={[styles.placeholderBtn, { justifyContent: "center", alignItems: "center" }]}
+                onPress={() => {
+                  try {
+                    flatListRef.current?.scrollToIndex({ index: 0, animated: true });
+                  } catch (e) {
+                    console.warn("Failed to scroll to start index:", e);
+                  }
+                }}
+                activeOpacity={0.85}
+              >
+                <RefreshIcon size={24} color={colors.brand} />
+              </AnimatedTouchableOpacity>
+            </>
+          ) : currentItem.type === "moment" ? (
             <>
               <AnimatedTouchableOpacity
                 key="orange-btn"

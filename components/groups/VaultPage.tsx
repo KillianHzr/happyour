@@ -70,9 +70,11 @@ function getStrokeWidth(count: number): number {
 function useCountdown(targetDate: Date): { text: string; msLeft: number } {
   const [text, setText] = useState("");
   const [msLeft, setMsLeft] = useState(0);
+  const targetTime = targetDate.getTime();
+
   useEffect(() => {
     const tick = () => {
-      const diff = targetDate.getTime() - Date.now();
+      const diff = targetTime - Date.now();
       if (diff <= 0) { setText("00:00:00"); setMsLeft(0); return; }
       setMsLeft(diff);
       const d = Math.floor(diff / 86400000);
@@ -85,7 +87,7 @@ function useCountdown(targetDate: Date): { text: string; msLeft: number } {
     tick();
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
-  }, [targetDate]);
+  }, [targetTime]);
   return { text, msLeft };
 }
 

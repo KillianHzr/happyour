@@ -1,6 +1,7 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { View, Text, StyleSheet, Dimensions, Animated, TouchableOpacity, Alert, TextInput, AppState, Modal, KeyboardAvoidingView, Platform, Pressable } from "react-native";
+import { Image } from "expo-image";
+import { View, Text, StyleSheet, ScrollView, Dimensions, Animated, TouchableOpacity, Alert, TextInput, AppState, Modal, KeyboardAvoidingView, Platform, Pressable } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import BlurView from "../../../components/atoms/BlurView";
 import { supabase } from "../../../lib/supabase";
@@ -29,6 +30,7 @@ import CustomChallengeCreatePage from "../../../components/groups/CustomChalleng
 import CustomChallengeQueuePage from "../../../components/groups/CustomChallengeQueuePage";
 import BottomSheet from "../../../components/BottomSheet";
 import LiveReactions from "../../../components/reveal/LiveReactions";
+import { RevealHeader, type Participant } from "../../../components/organisms/RevealHeader";
 import MotivationalNotificationsModal from "../../../components/MotivationalNotificationsModal";
 import { scheduleImmediateLocalNotification, scheduleFirstMomentReminder, notifyReaction } from "../../../lib/notifications";
 import { radii, spacing, typography, textStyles, type ThemeColors } from "../../../lib/theme";
@@ -72,6 +74,7 @@ type GroupData = {
   members: any[];
   photoCount: number;
   photos: PhotoEntry[];
+  comments: any[];
   crownWinnerId: string | null;
   crownDurationMs: number;
   allDurations: Record<string, number>;
@@ -94,6 +97,18 @@ function getWeekBounds(revealDayOfWeek = 0, revealHour = 20) {
   const prevRevealDate = new Date(revealDate);
   prevRevealDate.setDate(revealDate.getDate() - 7);
   return { monday, revealDate, prevRevealDate };
+}
+
+function formatRelativeTime(dateInput: Date | string): string {
+  const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
+  const diffMs = Date.now() - date.getTime();
+  if (diffMs < 60000) return "1m";
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 60) return `${diffMins}min`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}j`;
 }
 
 export default function MainPagerScreen() {
@@ -139,6 +154,10 @@ export default function MainPagerScreen() {
 
   // Modals
   const [showReveal, setShowReveal] = useState(false);
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+  const [connectedParticipants, setConnectedParticipants] = useState<Participant[]>([]);
+  const [revealTimeLeft, setRevealTimeLeft] = useState("");
+  const [revealMsLeft, setRevealMsLeft] = useState(Infinity);
   const [showGroupSettings, setShowGroupSettings] = useState(false);
   const [showAddGroupModal, setShowAddGroupModal] = useState(false);
   const [showNotifOnboarding, setShowNotifOnboarding] = useState(false);
@@ -209,6 +228,51 @@ export default function MainPagerScreen() {
   const crownDurationMs = activeData?.crownDurationMs ?? 0;
   const isAdmin = activeData?.isAdmin ?? false;
   const challenges = activeData?.challenges ?? null;
+
+  const activitiesList = useMemo(() => {
+    if (!activeData || !user) return [];
+
+    const list: Array<{
+      id: string;
+      username: string;
+      avatarUrl: string | null;
+      created_at: string;
+      context: string;
+    }> = [];
+
+    const myPhotos = photos.filter((p) => p.user_id === user.id);
+    const myPhotoIds = new Set(myPhotos.map((p) => p.id));
+
+    // 1. Reactions on my photos
+    for (const photo of myPhotos) {
+      for (const rx of photo.reactions) {
+        if (rx.user_id !== user.id) {
+          list.push({
+            id: `reaction-${rx.id}`,
+            username: rx.username,
+            avatarUrl: rx.avatar_url,
+            created_at: rx.created_at || photo.created_at,
+            context: "A réagit avec un stickers à ton moment",
+          });
+        }
+      }
+    }
+
+    // 2. Comments on my photos
+    for (const comment of activeData.comments || []) {
+      if (myPhotoIds.has(comment.photo_id) && comment.user_id !== user.id) {
+        list.push({
+          id: `comment-${comment.id}`,
+          username: comment.profiles?.username ?? "Anonyme",
+          avatarUrl: comment.profiles?.avatar_url ?? null,
+          created_at: comment.created_at,
+          context: "A commenté ton moment",
+        });
+      }
+    }
+
+    return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }, [activeData, photos, user]);
 
   const { revealDate, prevRevealDate } = getWeekBounds(revealConfig.day, revealConfig.hour);
   const revealEndDate = new Date(revealDate.getTime() + 24 * 60 * 60 * 1000);
@@ -338,16 +402,18 @@ export default function MainPagerScreen() {
           }
 
           if (photoIds.length > 0) {
-  ;
-            const [reactionsRes, viewsRes, latestCommentsRes] = await Promise.all([
-              supabase.from("reactions").select("id, photo_id, user_id, emoji").in("photo_id", photoIds),
+            const [reactionsRes, viewsRes, commentsRes] = await Promise.all([
+              supabase.from("reactions").select("id, photo_id, user_id, emoji, created_at").in("photo_id", photoIds),
               supabase.from("comment_views").select("photo_id, last_viewed_at").eq("user_id", user.id).in("photo_id", photoIds),
-              supabase.from("comments").select("photo_id, created_at").in("photo_id", photoIds).order("created_at", { ascending: false })
+              supabase.from("comments")
+                .select("id, photo_id, user_id, content, created_at, profiles:user_id(username, avatar_url)")
+                .in("photo_id", photoIds)
+                .order("created_at", { ascending: false })
             ]);
 
             const viewsMap = Object.fromEntries((viewsRes.data ?? []).map((v: any) => [v.photo_id, v.last_viewed_at]));
             const latestCommentsMap: Record<string, string> = {};
-            for (const c of latestCommentsRes.data ?? []) {
+            for (const c of commentsRes.data ?? []) {
               if (!latestCommentsMap[c.photo_id]) {
                 latestCommentsMap[c.photo_id] = c.created_at;
               }
@@ -363,7 +429,8 @@ export default function MainPagerScreen() {
                 username: member?.username ?? "Anonyme",
                 avatar_url: member?.avatar_url ?? null,
                 sticker_id: r.emoji,
-              });
+                created_at: r.created_at,
+              } as any);
             }
 
             const groupPhotos = photosRes.data!.map((p: any) => {
@@ -400,6 +467,7 @@ export default function MainPagerScreen() {
               members: membersData,
               photoCount,
               photos: groupPhotos,
+              comments: commentsRes.data || [],
               crownWinnerId: crown?.winnerId ?? null,
               crownDurationMs: crown?.durationMs ?? 0,
               allDurations: crown?.allDurations ?? {},
@@ -415,6 +483,7 @@ export default function MainPagerScreen() {
             members: membersData,
             photoCount: 0,
             photos: [],
+            comments: [],
             crownWinnerId: null,
             crownDurationMs: 0,
             allDurations: {},
@@ -513,6 +582,23 @@ export default function MainPagerScreen() {
   }, [user, activeGroupId]);
 
   useEffect(() => { fetchAllData(); }, [fetchAllData]);
+
+  const activeRevealEndTime = activeRevealEndDate.getTime();
+
+  useEffect(() => {
+    const tick = () => {
+      const ms = activeRevealEndTime - Date.now();
+      if (ms <= 0) { setRevealTimeLeft("Expiré"); setRevealMsLeft(0); return; }
+      setRevealMsLeft(ms);
+      const h = Math.floor(ms / 3600000);
+      const m = Math.floor((ms % 3600000) / 60000);
+      const s = Math.floor((ms % 60000) / 1000);
+      setRevealTimeLeft(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [activeRevealEndTime]);
 
   useEffect(() => {
     const hasJustFinished = activeUploads.some((u) => u.status === "success");
@@ -1174,14 +1260,13 @@ export default function MainPagerScreen() {
       {/* ── REVEAL OVERLAY ── */}
       {showReveal && (
         <View style={[StyleSheet.absoluteFill, styles.revealOverlay]}>
-          <TouchableOpacity
-            style={[styles.revealBackBtn, { top: insets.top + 12 }]}
-            onPress={() => setShowReveal(false)}
-          >
-            <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <Path d="M19 12H5M12 5l-7 7 7 7" stroke={colors.text} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
-          </TouchableOpacity>
+          <RevealHeader
+            onClose={() => setShowReveal(false)}
+            countdownText={revealTimeLeft}
+            revealMsLeft={revealMsLeft}
+            participants={connectedParticipants}
+            onNotificationPress={() => setShowNotificationsModal(true)}
+          />
           <PhotoFeed
             photos={photos}
             currentUserId={user?.id}
@@ -1197,6 +1282,10 @@ export default function MainPagerScreen() {
             challengePeriod1={challenges?.period1 ?? null}
             challengePeriod2={challenges?.period2 ?? null}
             onVoteChallenge={handleVoteChallenge}
+            onBackToCapture={() => {
+              setShowReveal(false);
+              jumpTo(1);
+            }}
           />
           {user?.id && username && (
             <LiveReactions
@@ -1205,6 +1294,7 @@ export default function MainPagerScreen() {
               currentUsername={username}
               currentAvatarUrl={avatarUrl ?? null}
               isVisible={true}
+              onParticipantsChange={setConnectedParticipants}
             />
           )}
 
@@ -1253,6 +1343,66 @@ export default function MainPagerScreen() {
               </Animated.View>
             </Pressable>
           )}
+
+          {/* Notifications Modal */}
+          <Modal
+            visible={showNotificationsModal}
+            animationType="slide"
+            onRequestClose={() => setShowNotificationsModal(false)}
+          >
+            <View style={styles.notifContainer}>
+              {/* Header */}
+              <View style={[styles.notifHeader, { paddingTop: insets.top + 16 }]}>
+                <TouchableOpacity style={styles.notifBackButton} onPress={() => setShowNotificationsModal(false)} activeOpacity={0.7}>
+                  <Svg width="7" height="12" viewBox="0 0 7 12" fill="none">
+                    <Path
+                      d="M5.29289 0.292893C5.68342 -0.0976311 6.31643 -0.0976311 6.70696 0.292893C7.09748 0.683417 7.09748 1.31643 6.70696 1.70696L2.41399 5.99992L6.70696 10.2929C7.09748 10.6834 7.09748 11.3164 6.70696 11.707C6.31643 12.0975 5.68342 12.0975 5.29289 11.707L0.292893 6.70696C-0.0976311 6.31643 -0.0976311 5.68342 0.292893 5.29289L5.29289 0.292893Z"
+                      fill={colors.text}
+                    />
+                  </Svg>
+                </TouchableOpacity>
+                <Text style={styles.notifTitle}>Activités</Text>
+              </View>
+
+              {/* Content */}
+              <ScrollView contentContainerStyle={activitiesList.length > 0 ? styles.notifListContent : styles.notifContent} showsVerticalScrollIndicator={false}>
+                {activitiesList.length > 0 ? (
+                  <View style={styles.activitiesList}>
+                    {activitiesList.map((item) => (
+                      <View key={item.id} style={styles.activityItem}>
+                        {/* Profile pic (rounded square of 48px and radius/300) */}
+                        <View style={styles.activityAvatarWrap}>
+                          {item.avatarUrl ? (
+                            <Image source={{ uri: item.avatarUrl }} style={styles.activityAvatar} />
+                          ) : (
+                            <Text style={styles.activityAvatarFallbackText}>
+                              {item.username[0]?.toUpperCase() ?? "?"}
+                            </Text>
+                          )}
+                        </View>
+
+                        {/* Details */}
+                        <View style={styles.activityDetails}>
+                          <View style={styles.activityMetaRow}>
+                            <Text style={styles.activityUsername} numberOfLines={1}>{item.username}</Text>
+                            <Text style={styles.activityTimeDot}>•</Text>
+                            <Text style={styles.activityTime}>{formatRelativeTime(item.created_at)}</Text>
+                          </View>
+                          <Text style={styles.activityContext}>{item.context}</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.notifEmptyState}>
+                    <Text style={styles.notifEmptyEmoji}>🔔</Text>
+                    <Text style={styles.notifEmptyTitle}>Aucune activité</Text>
+                    <Text style={styles.notifEmptySub}>Vous serez notifié quand vos amis réagiront ou commenteront vos moments.</Text>
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+          </Modal>
 
           {/* Custom Text Input Modal */}
           <Modal visible={showCustomTextInput} transparent animationType="fade" onRequestClose={() => setShowCustomTextInput(false)}>
@@ -1615,4 +1765,118 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   historyRow: { flexDirection: "row", gap: 8, justifyContent: "center", flexWrap: "wrap" },
   historyChip: { backgroundColor: colors.accentMuted, borderRadius: radii.lg, paddingHorizontal: 14, paddingVertical: 7 },
   historyChipText: { color: colors.text, fontFamily: typography.family.bold, fontSize: typography.size.xs },
+
+  // Notifications View
+  notifContainer: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
+  notifHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    gap: spacing.sm, // gap-200 (8px)
+  },
+  notifBackButton: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.md, // radius/300 (12px)
+    backgroundColor: colors.opacityLight, // background/default/default-opacity
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  notifTitle: {
+    ...textStyles.subtitleStrong,
+    color: colors.text,
+  },
+  notifContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  notifListContent: {
+    flexGrow: 1,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+  },
+  activitiesList: {
+    flexDirection: "column",
+    gap: spacing.lg, // space/400 (16px)
+    width: "100%",
+  },
+  activityItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
+  },
+  activityAvatarWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: radii.md, // radius/300 (12px)
+    backgroundColor: colors.accentMuted,
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
+  },
+  activityAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: radii.md,
+  },
+  activityAvatarFallbackText: {
+    color: colors.text,
+    fontFamily: typography.family.bold,
+    fontSize: 18,
+  },
+  activityDetails: {
+    flex: 1,
+    flexDirection: "column",
+    marginLeft: spacing.md, // size-space-300 (12px)
+  },
+  activityMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 2,
+  },
+  activityUsername: {
+    ...textStyles.bodySmallStrong,
+    color: colors.text,
+    maxWidth: "70%",
+  },
+  activityTimeDot: {
+    marginHorizontal: 6,
+    color: colors.textSecondary,
+    fontSize: 10,
+  },
+  activityTime: {
+    ...textStyles.bodySmall,
+    color: colors.textSecondary,
+  },
+  activityContext: {
+    ...textStyles.bodyBase,
+    color: colors.text,
+  },
+  notifEmptyState: {
+    alignItems: "center",
+    gap: 12,
+  },
+  notifEmptyEmoji: {
+    fontSize: 48,
+    marginBottom: 8,
+  },
+  notifEmptyTitle: {
+    fontFamily: typography.family.bold,
+    fontSize: typography.size.md,
+    color: colors.text,
+    textAlign: "center",
+  },
+  notifEmptySub: {
+    fontFamily: typography.family.regular,
+    fontSize: typography.size.sm,
+    color: colors.textSecondary,
+    textAlign: "center",
+    lineHeight: 20,
+  },
 });
