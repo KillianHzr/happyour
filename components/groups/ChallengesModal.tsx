@@ -308,41 +308,55 @@ export function ChallengesSlider({
     <View style={{ flex: 1 }} onLayout={(e) => setAvailableHeight(e.nativeEvent.layout.height)}>
       {cardHeight > 0 && (
         <>
-          <Animated.ScrollView
-            ref={scrollRef}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            snapToInterval={snapInterval}
-            decelerationRate="fast"
-            contentContainerStyle={{ paddingHorizontal: sideMargin }}
-            onScroll={handleScroll}
-            onMomentumScrollEnd={handleMomentumScrollEnd}
-            scrollEventThrottle={16}
-            bounces={false}
-            overScrollMode="never"
-          >
-            {displayItems.map((gc, idx) => renderCard(gc, idx))}
-          </Animated.ScrollView>
-          <View
-            style={[
-              StyleSheet.absoluteFillObject,
-              sliderStyles.cardActive,
-              { 
-                width: cardWidth, 
-                height: cardHeight, 
-                left: sideMargin,
-                borderRadius: radii.xl,
-                zIndex: 50,
-              }
-            ]}
-            pointerEvents="none"
-          />
-          {needsLoop && (
-            <View style={sliderStyles.dotsContainer}>
-              {groupChallenges.map((_, idx) => (
-                <View key={idx} style={[sliderStyles.dot, idx === activeIndex && sliderStyles.dotActive]} />
-              ))}
+          {groupChallenges.length === 0 ? (
+            <View style={sliderStyles.emptyContainer}>
+              <ActivityIndicator color={colors.text} size="large" />
             </View>
+          ) : isGap ? (
+            <View style={[sliderStyles.card, { width: cardWidth, height: cardHeight, left: sideMargin, justifyContent: "center", alignItems: "center", padding: 32 }]}>
+              <Text style={{ color: colors.text, fontFamily: typography.family.bold, fontSize: typography.size.lg, textAlign: "center", lineHeight: 28 }}>
+                Reviens demain pour de nouveaux défis !
+              </Text>
+            </View>
+          ) : (
+            <>
+              <Animated.ScrollView
+                ref={scrollRef}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                snapToInterval={snapInterval}
+                decelerationRate="fast"
+                contentContainerStyle={{ paddingHorizontal: sideMargin }}
+                onScroll={handleScroll}
+                onMomentumScrollEnd={handleMomentumScrollEnd}
+                scrollEventThrottle={16}
+                bounces={false}
+                overScrollMode="never"
+              >
+                {displayItems.map((gc, idx) => renderCard(gc, idx))}
+              </Animated.ScrollView>
+              <View
+                style={[
+                  StyleSheet.absoluteFillObject,
+                  sliderStyles.cardActive,
+                  { 
+                    width: cardWidth, 
+                    height: cardHeight, 
+                    left: sideMargin,
+                    borderRadius: radii.xl,
+                    zIndex: 50,
+                  }
+                ]}
+                pointerEvents="none"
+              />
+              {needsLoop && (
+                <View style={sliderStyles.dotsContainer}>
+                  {groupChallenges.map((_, idx) => (
+                    <View key={idx} style={[sliderStyles.dot, idx === activeIndex && sliderStyles.dotActive]} />
+                  ))}
+                </View>
+              )}
+            </>
           )}
         </>
       )}
@@ -585,15 +599,14 @@ export function ChallengesContent({ allGroups, currentUserId, onSelectChallenge,
       contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
       showsVerticalScrollIndicator={false}
     >
-      {isGap && (
+      {isGap ? (
         <View style={styles.gapBanner}>
-          <Text style={styles.gapBannerText}>Reviens lundi pour les nouveaux défis !</Text>
+          <Text style={styles.gapBannerText}>Reviens demain pour de nouveaux défis !</Text>
         </View>
-      )}
-
-      {groupChallenges.map((gc) => (
-        <View key={gc.groupId} style={styles.groupBlock}>
-          <Text style={styles.groupName}>{gc.groupName}</Text>
+      ) : (
+        groupChallenges.map((gc) => (
+          <View key={gc.groupId} style={styles.groupBlock}>
+            <Text style={styles.groupName}>{gc.groupName}</Text>
 
           {gc.loading ? (
             <View style={styles.card}>
@@ -661,11 +674,12 @@ export function ChallengesContent({ allGroups, currentUserId, onSelectChallenge,
                     <Path d="M9 18l6-6-6-6" stroke={colors.textSecondary} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                   </Svg>
                 )}
-              </View>
-            </TouchableOpacity>
-          )}
-        </View>
-      ))}
+                </View>
+              </TouchableOpacity>
+            )}
+          </View>
+        ))
+      )}
     </ScrollView>
   );
 }

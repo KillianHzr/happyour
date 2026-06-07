@@ -18,7 +18,7 @@ import DrawingCanvas, { type DrawingCanvasRef } from "../DrawingCanvas";
 import { SendIcon, FeatherIcon, FlipIcon, CloseIcon, FlashIcon } from "./GroupIcons";
 import { VolumeManager } from "react-native-volume-manager";
 import ChallengesModal, { ChallengesContent, ChallengesSlider, ChallengePromptText } from "./ChallengesModal";
-import { type ActiveChallenge, getCurrentChallengePeriod } from "../../lib/challenges";
+import { type ActiveChallenge, getCurrentChallengePeriod, TARGET_CHALLENGE_PROMPT } from "../../lib/challenges";
 import { radii, spacing, stroke, blur, typography, textStyles, glassBlurIntensity, buildColors, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import Shape, { type ShapeName } from "../Shape";
@@ -309,13 +309,20 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   // Animated values for caption editing — preview shrinks to make room for keyboard
   const previewWidthAnim = useRef(new Animated.Value(winWidth)).current;
   const previewBottomRadiusAnim = useRef(new Animated.Value(0)).current;
+  const previewMarginBottomAnim = useRef(new Animated.Value(0)).current;
   // Position verticale de la barre de légende (absolue dans previewFullContainer).
-  const captionBarBottomAnim = useRef(new Animated.Value(NAVBAR_HEIGHT + spacing.lg)).current;
+  const captionBarBottomAnim = useRef(new Animated.Value((activeChallenge !== null ? 0 : NAVBAR_HEIGHT) + spacing.lg)).current;
   // Dernière hauteur clavier connue sur Android (ajusté une fois après keyboardDidShow).
   const lastKbHRef = useRef<number | null>(null);
 
   // Keep ref in sync so keyboard listeners don't capture stale state
   useEffect(() => { isEditingCaptionRef.current = isEditingCaption; }, [isEditingCaption]);
+  
+  useEffect(() => {
+    if (!isEditingCaptionRef.current) {
+      captionBarBottomAnim.setValue((activeChallenge !== null ? 0 : NAVBAR_HEIGHT) + spacing.lg);
+    }
+  }, [activeChallenge]);
 
   // Keyboard listeners — iOS: keyboardWillShow/Hide (avant animation, sync parfait).
   // Android: keyboardDidShow stocke kbH + correction ; l'animation principale est dans
@@ -339,9 +346,13 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         const mediaFrameBottom = winHeight - captionBarBottom - EDIT_CAPTION_H - CAPTION_GAP;
         const targetH = Math.max(winWidth * 0.4 * 16 / 9, mediaFrameBottom - topFixed);
         const targetW = Math.floor(targetH * 9 / 16);
+        const chalTargetH = mediaFrameBottom - (insets.top + spacing.lg);
+        const chalTargetW = Math.floor(chalTargetH * 4 / 6);
+        const chalMarginBottom = winHeight - (insets.top + spacing.lg) - chalTargetH - NAVBAR_HEIGHT;
         Animated.parallel([
-          Animated.timing(previewWidthAnim, { toValue: targetW, duration: 150, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+          Animated.timing(previewWidthAnim, { toValue: activeChallenge !== null ? chalTargetW : targetW, duration: 150, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
           Animated.timing(captionBarBottomAnim, { toValue: captionBarBottom, duration: 150, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+          Animated.timing(previewMarginBottomAnim, { toValue: activeChallenge !== null ? Math.max(0, chalMarginBottom) : 0, duration: 150, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         ]).start();
         return;
       }
@@ -353,10 +364,14 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       const mediaFrameBottom = winHeight - captionBarBottom - EDIT_CAPTION_H - CAPTION_GAP;
       const targetH = Math.max(winWidth * 0.4 * 16 / 9, mediaFrameBottom - topFixed);
       const targetW = Math.floor(targetH * 9 / 16);
+      const chalTargetH = mediaFrameBottom - (insets.top + spacing.lg);
+      const chalTargetW = Math.floor(chalTargetH * 4 / 6);
+      const chalMarginBottom = winHeight - (insets.top + spacing.lg) - chalTargetH - NAVBAR_HEIGHT;
       Animated.parallel([
-        Animated.timing(previewWidthAnim, { toValue: targetW, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(previewWidthAnim, { toValue: activeChallenge !== null ? chalTargetW : targetW, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         Animated.timing(previewBottomRadiusAnim, { toValue: radii.lg, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         Animated.timing(captionBarBottomAnim, { toValue: captionBarBottom, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(previewMarginBottomAnim, { toValue: activeChallenge !== null ? Math.max(0, chalMarginBottom) : 0, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
       ]).start();
     });
 
@@ -373,9 +388,10 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         captionBarBottomAnim.stopAnimation();
         previewBottomRadiusAnim.stopAnimation();
         Animated.parallel([
-          Animated.timing(captionBarBottomAnim, { toValue: NAVBAR_HEIGHT + spacing.lg, duration: 250, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+          Animated.timing(captionBarBottomAnim, { toValue: (activeChallenge !== null ? 0 : NAVBAR_HEIGHT) + spacing.lg, duration: 250, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
           Animated.timing(previewWidthAnim, { toValue: winWidth, duration: 250, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
           Animated.timing(previewBottomRadiusAnim, { toValue: 0, duration: 250, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+          Animated.timing(previewMarginBottomAnim, { toValue: 0, duration: 250, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         ]).start();
         return;
       }
@@ -385,7 +401,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       Animated.parallel([
         Animated.timing(previewWidthAnim, { toValue: winWidth, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         Animated.timing(previewBottomRadiusAnim, { toValue: 0, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
-        Animated.timing(captionBarBottomAnim, { toValue: NAVBAR_HEIGHT + spacing.lg, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(captionBarBottomAnim, { toValue: (activeChallenge !== null ? 0 : NAVBAR_HEIGHT) + spacing.lg, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(previewMarginBottomAnim, { toValue: 0, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
       ]).start(() => {
         if (isEditingCaptionRef.current) {
           LayoutAnimation.configureNext(CAPTION_TRANSITION);
@@ -396,7 +413,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     });
 
     return () => { onShow.remove(); onHide.remove(); };
-  }, [winWidth, winHeight, insets.top, insets.bottom]);
+  }, [winWidth, winHeight, insets.top, insets.bottom, activeChallenge]);
 
   const startEditCaption = () => {
     if (Platform.OS !== "android") {
@@ -415,10 +432,14 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       const mediaFrameBottom = winHeight - captionBarBottom - EDIT_CAPTION_H - CAPTION_GAP;
       const targetH = Math.max(winWidth * 0.4 * 16 / 9, mediaFrameBottom - topFixed);
       const targetW = Math.floor(targetH * 9 / 16);
+      const chalTargetH = mediaFrameBottom - (insets.top + spacing.lg);
+      const chalTargetW = Math.floor(chalTargetH * 4 / 6);
+      const chalMarginBottom = winHeight - (insets.top + spacing.lg) - chalTargetH - NAVBAR_HEIGHT;
       Animated.parallel([
         Animated.timing(captionBarBottomAnim, { toValue: captionBarBottom, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
-        Animated.timing(previewWidthAnim, { toValue: targetW, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(previewWidthAnim, { toValue: activeChallenge !== null ? chalTargetW : targetW, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         Animated.timing(previewBottomRadiusAnim, { toValue: radii.lg, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(previewMarginBottomAnim, { toValue: activeChallenge !== null ? Math.max(0, chalMarginBottom) : 0, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
       ]).start();
     }
   };
@@ -427,9 +448,10 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     if (Platform.OS === "android") {
       // Fermeture en parallèle avec la fermeture du clavier (~300ms).
       Animated.parallel([
-        Animated.timing(captionBarBottomAnim, { toValue: NAVBAR_HEIGHT + spacing.lg, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(captionBarBottomAnim, { toValue: (activeChallenge !== null ? 0 : NAVBAR_HEIGHT) + spacing.lg, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         Animated.timing(previewWidthAnim, { toValue: winWidth, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         Animated.timing(previewBottomRadiusAnim, { toValue: 0, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(previewMarginBottomAnim, { toValue: 0, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
       ]).start(() => {
         if (isEditingCaptionRef.current) {
           isEditingCaptionRef.current = false;
@@ -645,12 +667,12 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   }, [isActive]);
 
   useEffect(() => {
-    const base = slot1 !== null || isPinching || isZoomDragging || isRecording || showChallengesInline;
+    const base = slot1 !== null || isPinching || isZoomDragging || isRecording || showChallengesInline || activeChallenge !== null;
     // Swipe entre les vues : verrouillé dès qu'on est en DESSIN (même sans dessiner).
     onScrollLock(base || cameraMode === "DESSIN");
     // Menu de l'app : masqué seulement en capture (en DESSIN : une fois qu'on dessine).
     onHideMenu?.(base || (cameraMode === "DESSIN" && canUndo));
-  }, [slot1, isPinching, cameraMode, canUndo, isZoomDragging, isRecording, showChallengesInline]);
+  }, [slot1, isPinching, cameraMode, canUndo, isZoomDragging, isRecording, showChallengesInline, activeChallenge]);
 
   useEffect(() => {
     if (cameraMode === "AUDIO" && isCapturing && !capturedAudioUri) {
@@ -703,9 +725,10 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     if (isEditingCaptionRef.current) {
       isEditingCaptionRef.current = false;
       setIsEditingCaption(false);
-      captionBarBottomAnim.setValue(NAVBAR_HEIGHT + spacing.lg);
+      captionBarBottomAnim.setValue((activeChallenge !== null ? 0 : NAVBAR_HEIGHT) + spacing.lg);
       previewWidthAnim.setValue(winWidth);
       previewBottomRadiusAnim.setValue(0);
+      previewMarginBottomAnim.setValue(0);
       Keyboard.dismiss();
     }
   };
@@ -1300,15 +1323,45 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 multiline
                 value={textModeContent}
                 onChangeText={setTextModeContent}
-                autofocus="off"
+                autoFocus={false}
                 textAlignVertical="top"
                 pointerEvents="auto"
               />
             </Pressable>
           </KeyboardAvoidingView>
         ) : cameraMode === "DESSIN" ? (
-          <View style={[styles.cameraPageContainer, { justifyContent: "flex-end", paddingTop: 0, paddingBottom: NAVBAR_HEIGHT, paddingHorizontal: 0 }]}>
-            <View style={styles.drawingArea}>
+          <View style={[styles.cameraPageContainer, { justifyContent: "flex-end", paddingBottom: activeChallenge !== null ? 0 : NAVBAR_HEIGHT, paddingHorizontal: 0 }]}>
+            {activeChallenge && (
+              <View style={{ position: "absolute", top: 0, left: 0, right: 0, paddingTop: insets.top, paddingHorizontal: spacing.lg }} pointerEvents="box-none">
+                <View style={challengeStyles.inlineHeaderRow}>
+                  <TouchableOpacity
+                    style={challengeStyles.inlineBackBtn}
+                    onPress={() => {
+                      resetAll();
+                      setShowChallengesInline(true);
+                    }}
+                  >
+                    <Icon name="chevron-left" size={20} color={colors.icon} />
+                  </TouchableOpacity>
+                  <Text style={challengeStyles.inlineTitle}>Défi {allGroups.find(g => g.id === activeChallenge.groupId)?.name ?? ""}</Text>
+                </View>
+
+                <View style={{ marginTop: 12, height: 48, justifyContent: "center", alignItems: "center" }}>
+                   {activeChallenge.isTarget ? (
+                     <Text style={{ ...textStyles.subheading, color: colors.text, textAlign: "center" }}>{TARGET_CHALLENGE_PROMPT}</Text>
+                   ) : (
+                     <ChallengePromptText 
+                       targetUsername={activeChallenge.targetUsername} 
+                       themeLabel={activeChallenge.themeLabel} 
+                       colors={colors} 
+                       textStyle={{ ...textStyles.subheading, color: colors.text, textAlign: "center" }}
+                     />
+                   )}
+                </View>
+              </View>
+            )}
+
+            <View style={[styles.drawingArea, activeChallenge && { aspectRatio: 4 / 6 }]}>
               <DrawingCanvas ref={drawingRef} color={drawingColor} strokeWidth={drawingStrokeWidth} onHistoryChange={(u, r) => { setCanUndo(u); setCanRedo(r); }} />
 
               {!canUndo && (
@@ -1399,9 +1452,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
           </View>
         ) : (
           <View style={[styles.cameraPageContainer, { 
-            justifyContent: activeChallenge ? "center" : "flex-end", 
-            paddingTop: activeChallenge ? insets.top + 100 : 0, 
-            paddingBottom: activeChallenge ? 120 : NAVBAR_HEIGHT, 
+            justifyContent: "flex-end", 
+            paddingBottom: activeChallenge !== null ? 0 : NAVBAR_HEIGHT, 
             paddingHorizontal: 0 
           }]}>
             {activeChallenge && (
@@ -1409,7 +1461,10 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 <View style={challengeStyles.inlineHeaderRow}>
                   <TouchableOpacity
                     style={challengeStyles.inlineBackBtn}
-                    onPress={() => setActiveChallenge(null)}
+                    onPress={() => {
+                      resetAll();
+                      setShowChallengesInline(true);
+                    }}
                   >
                     <Icon name="chevron-left" size={20} color={colors.icon} />
                   </TouchableOpacity>
@@ -1417,26 +1472,30 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 </View>
 
                 <View style={{ marginTop: 12, height: 48, justifyContent: "center", alignItems: "center" }}>
-                   <ChallengePromptText 
-                     targetUsername={activeChallenge.targetUsername} 
-                     themeLabel={activeChallenge.themeLabel} 
-                     colors={colors} 
-                     textStyle={{ ...textStyles.subheading, color: colors.text }}
-                   />
+                   {activeChallenge.isTarget ? (
+                     <Text style={{ ...textStyles.subheading, color: colors.text, textAlign: "center" }}>{TARGET_CHALLENGE_PROMPT}</Text>
+                   ) : (
+                     <ChallengePromptText 
+                       targetUsername={activeChallenge.targetUsername} 
+                       themeLabel={activeChallenge.themeLabel} 
+                       colors={colors} 
+                       textStyle={{ ...textStyles.subheading, color: colors.text, textAlign: "center" }}
+                     />
+                   )}
                 </View>
               </View>
             )}
 
-            <View style={[styles.cameraInner, activeChallenge && { aspectRatio: 4 / 5 }]}>
+            <View style={[styles.cameraInner, activeChallenge && { aspectRatio: 4 / 6 }]}>
               <>
                 {/* Camera view clipped to rounded rect — permanently mounted for 0-lag transitions 
                     like Snapchat. Unmounts after 5s of inactivity to save battery. */}
-                <View style={[StyleSheet.absoluteFillObject, { borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, borderBottomLeftRadius: activeChallenge ? radii.xl : 0, borderBottomRightRadius: activeChallenge ? radii.xl : 0, overflow: "hidden" }]}>
+                <View style={[StyleSheet.absoluteFillObject, { borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, overflow: "hidden" }]}>
                   {shouldMountCamera && (cameraPermission?.granted ?? Platform.OS === "ios") && (
                     <SeamlessRecorder
                       ref={seamlessRecorderRef}
                       facing={facing}
-                      flash={flash === 'torch' ? 'on' : flash as 'off' | 'on' | 'auto'}
+                      flash={flash as any}
                       zoom={zoom}
                       torch={cameraMode === "VIDEO" ? torch : false}
                       videoMode={cameraMode === "VIDEO"}
@@ -1523,7 +1582,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               {!(capturingSecond && cameraMode === "TEXTE") && <TouchableOpacity
                 style={styles.captureBtn}
                 onPress={handleCapture}
+                // @ts-ignore
                 onTouchStart={handleTouchStart}
+                // @ts-ignore
                 onTouchMove={handleTouchMove}
                 disabled={isPinching || (cameraMode === "TEXTE" && !textModeContent.trim())}
                 activeOpacity={0.8}
@@ -1563,19 +1624,53 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
 
       {/* ── Preview Unifié (même frame 9:16 que la capture) ── */}
       {!isCapturing && isActive && previewSlot && (
-        <View style={[styles.previewFullContainer, activeChallenge !== null && { justifyContent: "center", paddingBottom: 120, paddingTop: insets.top + 100, backgroundColor: "transparent" }]}>
+        <View style={[styles.previewFullContainer, {
+           justifyContent: activeChallenge !== null ? "flex-end" : "flex-start", 
+           paddingBottom: activeChallenge !== null ? (isEditingCaption ? NAVBAR_HEIGHT : 0) : 0,
+           backgroundColor: activeChallenge !== null ? "transparent" : colors.bg 
+        }]}>
           {activeChallenge === null && (
             <View style={{ height: Math.max(0, winHeight - winWidth * 16 / 9 - NAVBAR_HEIGHT) }} pointerEvents="none" />
+          )}
+          {activeChallenge !== null && !isEditingCaption && (
+            <View style={{ position: "absolute", top: 0, left: 0, right: 0, paddingTop: insets.top, paddingHorizontal: spacing.lg, zIndex: 10 }} pointerEvents="box-none">
+              <View style={challengeStyles.inlineHeaderRow}>
+                <TouchableOpacity
+                  style={challengeStyles.inlineBackBtn}
+                  onPress={() => {
+                    resetAll();
+                    setShowChallengesInline(true);
+                  }}
+                >
+                  <Icon name="chevron-left" size={20} color={colors.icon} />
+                </TouchableOpacity>
+                <Text style={challengeStyles.inlineTitle}>Défi {allGroups.find(g => g.id === activeChallenge.groupId)?.name ?? ""}</Text>
+              </View>
+
+              <View style={{ marginTop: 12, height: 48, justifyContent: "center", alignItems: "center" }}>
+                 {activeChallenge.isTarget ? (
+                   <Text style={{ ...textStyles.subheading, color: colors.text, textAlign: "center" }}>{TARGET_CHALLENGE_PROMPT}</Text>
+                 ) : (
+                   <ChallengePromptText 
+                     targetUsername={activeChallenge.targetUsername} 
+                     themeLabel={activeChallenge.themeLabel} 
+                     colors={colors} 
+                     textStyle={{ ...textStyles.subheading, color: colors.text, textAlign: "center" }}
+                   />
+                 )}
+              </View>
+            </View>
           )}
 
           {/* Frame média — largeur animée, ratio 9:16 via aspectRatio, centrée */}
           <Animated.View style={[
             styles.previewMediaFrame,
-            activeChallenge !== null && { aspectRatio: 4 / 5, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl },
+            activeChallenge !== null && { aspectRatio: 4 / 6, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl },
             {
               width: previewWidthAnim,
-              borderBottomLeftRadius: activeChallenge !== null ? radii.xl : previewBottomRadiusAnim,
-              borderBottomRightRadius: activeChallenge !== null ? radii.xl : previewBottomRadiusAnim,
+              marginBottom: previewMarginBottomAnim,
+              borderBottomLeftRadius: previewBottomRadiusAnim,
+              borderBottomRightRadius: previewBottomRadiusAnim,
             }
           ]}>
             {/* ── Contenu selon le mode ── */}
@@ -1639,29 +1734,12 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               <Image source={{ uri: previewSlot.uri ?? "" }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
             )}
 
-            {/* Banner défi */}
-            {activeChallenge !== null && (
-              <View style={challengeStyles.previewBannerOverlay} pointerEvents="box-none">
-                <View style={challengeStyles.bannerRow}>
-                  <TouchableOpacity style={challengeStyles.bannerClose} onPress={() => setActiveChallenge(null)} activeOpacity={0.7}>
-                    <Svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                      <Path d="M18 6L6 18M6 6l12 12" stroke={colors.text} strokeWidth="2.5" strokeLinecap="round" />
-                    </Svg>
-                  </TouchableOpacity>
-                  <View style={challengeStyles.bannerTextWrapper}>
-                    <Text style={challengeStyles.bannerText} numberOfLines={2}>{activeChallenge.promptText}</Text>
-                    {activeChallenge.proposedByUsername && (
-                      <Text style={challengeStyles.bannerProposerText}>↳ {activeChallenge.proposedByUsername}</Text>
-                    )}
-                  </View>
-                </View>
-              </View>
-            )}
+
 
             {/* Bouton fermer — masqué pendant l'édition de la description */}
             {!isEditingCaption && (
               <View style={styles.previewTopBtns}>
-                <TouchableOpacity style={styles.topSquareBtn} onPress={resetAll}><CloseIcon /></TouchableOpacity>
+                <TouchableOpacity style={styles.topSquareBtn} onPress={activeChallenge !== null ? handleTrash : resetAll}><CloseIcon /></TouchableOpacity>
               </View>
             )}
 
@@ -1670,9 +1748,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
           {/* Barre de légende — un seul élément, toujours position:absolute dans previewFullContainer.
                État normal : bottom = NAVBAR_HEIGHT+16 (overlay bas de la frame).
                État édition : bottom = kbH+16 (au-dessus du clavier), frame rétrécie au-dessus. */}
-          {activeChallenge === null && (
-            <Animated.View style={[styles.captionBarOuter, { bottom: captionBarBottomAnim }]}>
-              <View style={styles.captionBar}>
+          <Animated.View style={[styles.captionBarOuter, { bottom: captionBarBottomAnim }]}>
+            <View style={styles.captionBar}>
                 {Platform.OS === "android" ? (
                   <NativeBlurView blurAmount={30} blurType="light" blurRounds={2} style={StyleSheet.absoluteFill} pointerEvents="none" />
                 ) : (
@@ -1762,9 +1839,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                     </View>
                   ) : null
                 )}
-              </View>
-            </Animated.View>
-          )}
+            </View>
+          </Animated.View>
 
           {/* Bouton Partager — masqué pendant l'édition et les défis */}
           {!isEditingCaption && activeChallenge === null && (
@@ -1782,7 +1858,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
           <PrimaryButton 
             label="Participer" 
             onPress={openGroupPicker} 
-            disabled={isCapturing || capturingSecond} 
+            disabled={slot1 === null || isCapturing || capturingSecond} 
           />
         </View>
       )}
@@ -1831,7 +1907,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
 
           {/* Bouton Choisir — sélectionne le défi actif (celui avec la stroke) */}
           <View style={styles.previewSendArea}>
-            <PrimaryButton label="Choisir" onPress={() => challengeChooseRef.current?.()} />
+            <PrimaryButton label="Choisir" onPress={() => challengeChooseRef.current?.()} disabled={getCurrentChallengePeriod() === null} />
           </View>
         </View>
 
