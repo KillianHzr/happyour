@@ -17,7 +17,7 @@ import { useUpload } from "../../lib/upload-context";
 import DrawingCanvas, { type DrawingCanvasRef } from "../DrawingCanvas";
 import { SendIcon, FeatherIcon, FlipIcon, CloseIcon, FlashIcon } from "./GroupIcons";
 import { VolumeManager } from "react-native-volume-manager";
-import ChallengesModal, { ChallengesContent, ChallengesSlider } from "./ChallengesModal";
+import ChallengesModal, { ChallengesContent, ChallengesSlider, ChallengePromptText } from "./ChallengesModal";
 import { type ActiveChallenge, getCurrentChallengePeriod } from "../../lib/challenges";
 import { radii, spacing, stroke, blur, typography, textStyles, glassBlurIntensity, buildColors, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
@@ -1398,12 +1398,40 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
             </TouchableOpacity>
           </View>
         ) : (
-          <View style={[styles.cameraPageContainer, { justifyContent: "flex-end", paddingTop: 0, paddingBottom: NAVBAR_HEIGHT, paddingHorizontal: 0 }]}>
-            <View style={styles.cameraInner}>
+          <View style={[styles.cameraPageContainer, { 
+            justifyContent: activeChallenge ? "center" : "flex-end", 
+            paddingTop: activeChallenge ? insets.top + 100 : 0, 
+            paddingBottom: activeChallenge ? 120 : NAVBAR_HEIGHT, 
+            paddingHorizontal: 0 
+          }]}>
+            {activeChallenge && (
+              <View style={{ position: "absolute", top: 0, left: 0, right: 0, paddingTop: insets.top, paddingHorizontal: spacing.lg }} pointerEvents="box-none">
+                <View style={challengeStyles.inlineHeaderRow}>
+                  <TouchableOpacity
+                    style={challengeStyles.inlineBackBtn}
+                    onPress={() => setActiveChallenge(null)}
+                  >
+                    <Icon name="chevron-left" size={20} color={colors.icon} />
+                  </TouchableOpacity>
+                  <Text style={challengeStyles.inlineTitle}>Défi {allGroups.find(g => g.id === activeChallenge.groupId)?.name ?? ""}</Text>
+                </View>
+
+                <View style={{ marginTop: 12, height: 48, justifyContent: "center", alignItems: "center" }}>
+                   <ChallengePromptText 
+                     targetUsername={activeChallenge.targetUsername} 
+                     themeLabel={activeChallenge.themeLabel} 
+                     colors={colors} 
+                     textStyle={{ ...textStyles.subheading, color: colors.text }}
+                   />
+                </View>
+              </View>
+            )}
+
+            <View style={[styles.cameraInner, activeChallenge && { aspectRatio: 4 / 5 }]}>
               <>
                 {/* Camera view clipped to rounded rect — permanently mounted for 0-lag transitions 
                     like Snapchat. Unmounts after 5s of inactivity to save battery. */}
-                <View style={[StyleSheet.absoluteFillObject, { borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, overflow: "hidden" }]}>
+                <View style={[StyleSheet.absoluteFillObject, { borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, borderBottomLeftRadius: activeChallenge ? radii.xl : 0, borderBottomRightRadius: activeChallenge ? radii.xl : 0, overflow: "hidden" }]}>
                   {shouldMountCamera && (cameraPermission?.granted ?? Platform.OS === "ios") && (
                     <SeamlessRecorder
                       ref={seamlessRecorderRef}
@@ -1454,7 +1482,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       {/* ── Camera UI overlay ── */}
       {isCapturing && (
         <View style={styles.fill} pointerEvents="box-none">
-          {/* Challenge top area (button or active banner) */}
+          {/* Challenge top area is hidden when activeChallenge is present because we use the custom header */}
           {!capturingSecond && !isRecording && !(cameraMode === "DESSIN" && canUndo) && (
             activeChallenge === null ? (
               <View style={[challengeStyles.topContainer, { paddingTop: cameraFrameTop + CHALLENGE_GAP }]} pointerEvents="box-none">
@@ -1467,27 +1495,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                   <Shape name="dessin" size={20} color={colors.iconBrandOnBrandSecondary} />
                 </TouchableOpacity>
               </View>
-            ) : (
-              <View style={[challengeStyles.topContainer, { top: cameraFrameTop, left: 12, right: 12 }]} pointerEvents="box-none">
-                <View style={challengeStyles.bannerRow} pointerEvents="box-none">
-                  <TouchableOpacity
-                    style={challengeStyles.bannerClose}
-                    onPress={() => setActiveChallenge(null)}
-                    activeOpacity={0.7}
-                  >
-                    <Svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                      <Path d="M18 6L6 18M6 6l12 12" stroke={colors.text} strokeWidth="2.5" strokeLinecap="round" />
-                    </Svg>
-                  </TouchableOpacity>
-                  <View style={challengeStyles.bannerTextWrapper}>
-                    <Text style={challengeStyles.bannerText} numberOfLines={2}>{activeChallenge.promptText}</Text>
-                    {activeChallenge.proposedByUsername && (
-                      <Text style={challengeStyles.bannerProposerText}>↳ {activeChallenge.proposedByUsername}</Text>
-                    )}
-                  </View>
-                </View>
-              </View>
-            )
+            ) : null
           )}
 
           {isRecording && (
@@ -1555,18 +1563,19 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
 
       {/* ── Preview Unifié (même frame 9:16 que la capture) ── */}
       {!isCapturing && isActive && previewSlot && (
-        <View style={styles.previewFullContainer}>
-          {/* Spacer supérieur — ancre le bord haut de la frame. Avec adjustResize (Android), winHeight
-               diminue naturellement quand le clavier apparaît, donc ce spacer se rétrécit sans animation. */}
-          <View style={{ height: Math.max(0, winHeight - winWidth * 16 / 9 - NAVBAR_HEIGHT) }} pointerEvents="none" />
+        <View style={[styles.previewFullContainer, activeChallenge !== null && { justifyContent: "center", paddingBottom: 120, paddingTop: insets.top + 100, backgroundColor: "transparent" }]}>
+          {activeChallenge === null && (
+            <View style={{ height: Math.max(0, winHeight - winWidth * 16 / 9 - NAVBAR_HEIGHT) }} pointerEvents="none" />
+          )}
 
           {/* Frame média — largeur animée, ratio 9:16 via aspectRatio, centrée */}
           <Animated.View style={[
             styles.previewMediaFrame,
+            activeChallenge !== null && { aspectRatio: 4 / 5, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl },
             {
               width: previewWidthAnim,
-              borderBottomLeftRadius: previewBottomRadiusAnim,
-              borderBottomRightRadius: previewBottomRadiusAnim,
+              borderBottomLeftRadius: activeChallenge !== null ? radii.xl : previewBottomRadiusAnim,
+              borderBottomRightRadius: activeChallenge !== null ? radii.xl : previewBottomRadiusAnim,
             }
           ]}>
             {/* ── Contenu selon le mode ── */}
@@ -1757,13 +1766,24 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
             </Animated.View>
           )}
 
-          {/* Bouton Partager — masqué pendant l'édition */}
-          {!isEditingCaption && (
+          {/* Bouton Partager — masqué pendant l'édition et les défis */}
+          {!isEditingCaption && activeChallenge === null && (
             <View style={styles.previewSendArea}>
               <PrimaryButton label="Partager" onPress={openGroupPicker} />
             </View>
           )}
 
+        </View>
+      )}
+
+      {/* ── Challenge Participer Button ── */}
+      {activeChallenge !== null && !isEditingCaption && (
+        <View style={[styles.previewSendArea, { zIndex: 50 }]} pointerEvents="box-none">
+          <PrimaryButton 
+            label="Participer" 
+            onPress={openGroupPicker} 
+            disabled={isCapturing || capturingSecond} 
+          />
         </View>
       )}
 

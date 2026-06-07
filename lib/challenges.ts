@@ -58,6 +58,8 @@ export type ActiveChallenge = {
   groupId: string;
   isTarget: boolean;
   proposedByUsername: string | null;
+  targetUsername: string;
+  themeLabel: string;
 };
 
 // Option type for custom challenges

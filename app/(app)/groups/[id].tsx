@@ -44,7 +44,8 @@ const captureToastShape = (mode: string): ShapeName => {
   return "photo";
 };
 
-const captureToastMsg = (mode: string, groupName: string): string => {
+const captureToastMsg = (mode: string, groupName: string, isChallenge?: boolean): string => {
+  if (isChallenge) return `Participation au défi envoyée dans ${groupName}`;
   const labels: Record<string, string> = {
     PHOTO: "Photo partagée",
     VIDEO: "Vidéo partagée",
@@ -124,7 +125,7 @@ export default function MainPagerScreen() {
   const [email, setEmail] = useState("");
   const [streakDays, setStreakDays] = useState(0);
   const [profileRefreshKey, setProfileRefreshKey] = useState(0);
-  const [captureToast, setCaptureToast] = useState<{ mode: string; groupName: string } | null>(null);
+  const [captureToast, setCaptureToast] = useState<{ mode: string; groupName: string; isChallenge?: boolean } | null>(null);
   const captureToastTimerRef = useRef<NodeJS.Timeout | null>(null);
   const captureToastAnim = useRef({ opacity: new Animated.Value(0), translateY: new Animated.Value(-12) }).current;
 
@@ -161,7 +162,7 @@ export default function MainPagerScreen() {
     ]).start(() => setCaptureToast(null));
   };
 
-  const showCaptureToast = (info: { mode: string; groupName: string }) => {
+  const showCaptureToast = (info: { mode: string; groupName: string; isChallenge?: boolean }) => {
     if (captureToastTimerRef.current) clearTimeout(captureToastTimerRef.current);
     captureToastAnim.opacity.setValue(0);
     captureToastAnim.translateY.setValue(-12);
@@ -1221,7 +1222,7 @@ export default function MainPagerScreen() {
           pointerEvents="box-none"
         >
           <Shape name={captureToastShape(captureToast.mode)} size={20} color={colors.iconBrandTertiary} />
-          <Text style={styles.captureToastText}>{captureToastMsg(captureToast.mode, captureToast.groupName)}</Text>
+          <Text style={styles.captureToastText}>{captureToastMsg(captureToast.mode, captureToast.groupName, captureToast.isChallenge)}</Text>
           <TouchableOpacity onPress={dismissCaptureToast} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Icon name="x" size={20} color={colors.icon} />
           </TouchableOpacity>

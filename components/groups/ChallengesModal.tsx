@@ -19,6 +19,7 @@ import {
   type WeeklyChallenge, type ChallengeCapture, type ActiveChallenge,
 } from "../../lib/challenges";
 import BlurView from "../atoms/BlurView";
+import { BlurView as NativeBlurView } from "@sbaiahmed1/react-native-blur";
 import { TextSticker } from "../atoms/TextSticker";
 import Shape, { type ShapeName } from "../Shape";
 
@@ -58,20 +59,22 @@ const CAPTURE_TO_SHAPE: Record<ChallengeCapture, ShapeName> = {
   DESSIN: "dessin",
 };
 
-function ChallengePromptText({
+export function ChallengePromptText({
   targetUsername,
   themeLabel,
   colors,
+  textStyle,
 }: {
   targetUsername: string;
   themeLabel: string;
   colors: ThemeColors;
+  textStyle?: any;
 }) {
   const vowels = "aeiouyAEIOUY";
   const startsWithVowel = vowels.includes(themeLabel[0] ?? "");
   const art = startsWithVowel ? "un" : "un·e";
   return (
-    <Text style={{ ...textStyles.heading, color: colors.text, lineHeight: undefined, textAlign: "center" }}>
+    <Text style={[{ ...textStyles.heading, color: colors.text, lineHeight: undefined, textAlign: "center" }, textStyle]}>
       {"Si "}
       <Text style={{ color: colors.textBrandTertiary }}>{targetUsername}</Text>
       {` était ${art} `}
@@ -112,9 +115,7 @@ export function ChallengesSlider({
 
   const loadChallenges = async (period: 1 | 2 | null, currentGroups: GroupInfo[]) => {
     const effectivePeriod = period ?? 2;
-    const weekStart = period === null
-      ? getChallengeWeekStart(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
-      : getChallengeWeekStart();
+    const weekStart = getChallengeWeekStart();
 
     setGroupChallenges(currentGroups.map((g) => ({
       groupId: g.id, groupName: g.name, challenge: null, hasResponded: false, loading: true,
@@ -162,6 +163,8 @@ export function ChallengesSlider({
       groupId: gc.groupId,
       isTarget,
       proposedByUsername: gc.challenge.proposed_by_username ?? null,
+      targetUsername: gc.challenge.target_username,
+      themeLabel: gc.challenge.theme.label,
     });
     onClose();
   };
@@ -247,11 +250,21 @@ export function ChallengesSlider({
         ]}
       >
         {gc.challenge?.target_avatar_url ? (
-          <Image source={{ uri: gc.challenge.target_avatar_url }} style={StyleSheet.absoluteFillObject as any} contentFit="cover" transition={0} cachePolicy="memory-disk" />
+          <Image 
+            source={{ uri: gc.challenge.target_avatar_url }} 
+            style={StyleSheet.absoluteFillObject as any} 
+            contentFit="cover" 
+            transition={0} 
+            cachePolicy="memory-disk" 
+            blurRadius={Platform.OS === "android" ? 20 : 0}
+          />
         ) : (
           <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.card }]} />
         )}
-        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(8, 8, 10, 0.78)" }]} pointerEvents="none" />
+        {Platform.OS === "ios" && (
+          <NativeBlurView style={StyleSheet.absoluteFillObject} blurType="dark" blurAmount={30} />
+        )}
+        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: Platform.OS === "android" ? "rgba(8, 8, 10, 0.7)" : "rgba(8, 8, 10, 0.5)" }]} pointerEvents="none" />
         <View style={sliderStyles.cardContent}>
           <TextSticker text={gc.groupName} backgroundColor={colors.icon} />
           {gc.loading ? (
@@ -259,7 +272,11 @@ export function ChallengesSlider({
           ) : gc.challenge ? (
             <View style={sliderStyles.challengeDetails}>
               <View style={sliderStyles.captureBadge}>
-                <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod="dimezisBlurView" style={StyleSheet.absoluteFillObject as any} pointerEvents="none" />
+                {Platform.OS === "ios" ? (
+                  <NativeBlurView style={StyleSheet.absoluteFillObject} blurType="dark" blurAmount={30} />
+                ) : (
+                  <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(20, 20, 25, 0.85)" }]} />
+                )}
                 <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
                 <Text style={sliderStyles.captureBadgeText}>{CAPTURE_LABEL[captureType]} obligatoire</Text>
                 <Shape name={CAPTURE_TO_SHAPE[captureType]} size={16} color={colors.icon} />
@@ -469,9 +486,7 @@ export function ChallengesContent({ allGroups, currentUserId, onSelectChallenge,
 
   const loadChallenges = async (period: 1 | 2 | null) => {
     const effectivePeriod = period ?? 2;
-    const weekStart = period === null
-      ? getChallengeWeekStart(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
-      : getChallengeWeekStart();
+    const weekStart = getChallengeWeekStart();
 
     setGroupChallenges(allGroups.map((g) => ({
       groupId: g.id,
@@ -558,6 +573,8 @@ export function ChallengesContent({ allGroups, currentUserId, onSelectChallenge,
       groupId: gc.groupId,
       isTarget,
       proposedByUsername: gc.challenge.proposed_by_username ?? null,
+      targetUsername: gc.challenge.target_username,
+      themeLabel: gc.challenge.theme.label,
     });
     onClose();
   };
@@ -568,6 +585,12 @@ export function ChallengesContent({ allGroups, currentUserId, onSelectChallenge,
       contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 24 }]}
       showsVerticalScrollIndicator={false}
     >
+      {isGap && (
+        <View style={styles.gapBanner}>
+          <Text style={styles.gapBannerText}>Reviens lundi pour les nouveaux défis !</Text>
+        </View>
+      )}
+
       {groupChallenges.map((gc) => (
         <View key={gc.groupId} style={styles.groupBlock}>
           <Text style={styles.groupName}>{gc.groupName}</Text>
@@ -742,6 +765,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.cardBorder,
     padding: 16,
+    overflow: "hidden",
   },
   cardDisabled: {
     opacity: 0.5,
@@ -835,5 +859,17 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: typography.size.sm,
     textAlign: "center",
     paddingVertical: 4,
+  },
+  gapBanner: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: radii.md,
+    padding: 12,
+    marginBottom: 20,
+    alignItems: "center",
+  },
+  gapBannerText: {
+    color: colors.text,
+    fontFamily: typography.family.semibold,
+    fontSize: typography.size.sm,
   },
 });
