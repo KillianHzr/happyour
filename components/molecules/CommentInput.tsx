@@ -12,9 +12,11 @@ interface CommentInputProps {
   setContent: (text: string) => void;
   onSubmit: () => void;
   submitting: boolean;
+  onFocus?: () => void;
+  onBlur?: () => void;
 }
 
-export const CommentInput = ({ content, setContent, onSubmit, submitting }: CommentInputProps) => {
+export const CommentInput = ({ content, setContent, onSubmit, submitting, onFocus, onBlur }: CommentInputProps) => {
   const { user } = useAuth();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -54,6 +56,10 @@ export const CommentInput = ({ content, setContent, onSubmit, submitting }: Comm
           value={content}
           onChangeText={setContent}
           maxLength={500}
+          multiline={true}
+          textAlignVertical="center"
+          onFocus={onFocus}
+          onBlur={onBlur}
         />
         {content.trim().length > 0 && (
           <TouchableOpacity
@@ -80,7 +86,7 @@ export const CommentInput = ({ content, setContent, onSubmit, submitting }: Comm
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   inputArea: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-end",
     paddingHorizontal: themeSpacing.lg, // space/400
     paddingTop: themeSpacing.sm, // space/200
     paddingBottom: themeSpacing.sm, // space/200
@@ -88,13 +94,15 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   inputContainer: {
     flex: 1,
-    height: themeSpacing.xl3, // space/1200 (48px)
+    minHeight: themeSpacing.xl3, // space/1200 (48px)
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-end",
     backgroundColor: colors.card, // var(--sds-color-background-default-secondary)
     borderRadius: themeRadii.lg, // var(--sds-size-radius-400)
     paddingLeft: themeSpacing.md, // space/300 (12px)
     paddingRight: themeSpacing.sm, // space/200 (8px)
+    paddingTop: 8,
+    paddingBottom: 8,
     gap: themeSpacing.lg, // space/400 (16px)
   },
   input: {
@@ -102,8 +110,9 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.text,
     fontFamily: typography.family.regular, // var(--sds-typography-body-font-family)
     fontSize: typography.size.md, // var(--sds-typography-body-size-medium)
-    height: "100%",
-    padding: 0,
+    paddingTop: 4,
+    paddingBottom: 4,
+    maxHeight: 70, // Max height for ~3 lines of text
   },
   sendBtn: {
     width: themeSpacing.xxl, // 32px (space/800)
@@ -113,6 +122,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 0, // space/empty
+    marginBottom: 0,
   },
   sendBtnDisabled: {
     opacity: 0.5,

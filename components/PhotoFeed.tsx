@@ -8,6 +8,7 @@ import {
   ViewToken,
   Platform,
   TouchableOpacity,
+  Keyboard,
 } from "react-native";
 import Reanimated, {
   useSharedValue,
@@ -137,12 +138,30 @@ function PhotoFeedContent({
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [activePhotoId, setActivePhotoId] = useState<string | null>(null);
   const [activePhotoOwnerId, setActivePhotoOwnerId] = useState<string | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const activePhoto = useMemo(() => photos.find(p => p.id === activePhotoId), [photos, activePhotoId]);
 
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const showListener = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideListener = Keyboard.addListener(hideEvent, (e) => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showListener.remove();
+      hideListener.remove();
+    };
+  }, []);
 
   // Shrink animation shared values
-  const contentScale = useSharedValue(1);
+  const contentScaleX = useSharedValue(1);
+  const contentScaleY = useSharedValue(1);
   const contentTranslateY = useSharedValue(0);
   const contentBorderRadius = useSharedValue(0);
 
@@ -156,39 +175,53 @@ function PhotoFeedContent({
     const config = { duration: 250, easing: Easing.out(Easing.cubic) };
     
     if (commentModalVisible) {
-      // TARGET DIMENSIONS: ~214px wide, ~380px high
-      const TARGET_HEIGHT = 380;
-      const scale = TARGET_HEIGHT / FEED_HEIGHT;
-      
-      // MODAL POSITION: bottom 392px
+      const hasKeyboard = keyboardHeight > 0;
       const MODAL_HEIGHT = 392;
-      const targetBottom = SCREEN_HEIGHT - MODAL_HEIGHT - 40; // 40px above modal
+      const currentModalHeight = hasKeyboard ? MODAL_HEIGHT / 2 : MODAL_HEIGHT;
+      const targetBottom = SCREEN_HEIGHT - currentModalHeight - (hasKeyboard ? keyboardHeight + 24 : 24);
       
-      // MATH:
-      // Scale happens from center (FEED_HEIGHT / 2)
-      // Visual bottom of scaled view = (FEED_HEIGHT / 2 + ty) + (TARGET_HEIGHT / 2)
-      // We want Visual bottom = targetBottom
-      // ty = targetBottom - (FEED_HEIGHT / 2) - (TARGET_HEIGHT / 2)
-      const ty = targetBottom - (FEED_HEIGHT / 2) - (TARGET_HEIGHT / 2);
+      const targetBottomNoKeyboard = SCREEN_HEIGHT - MODAL_HEIGHT - 24;
+      const OPEN_MODAL_POST_HEIGHT = Math.min(380, (targetBottomNoKeyboard - insets.top) / (1 - insets.top / FEED_HEIGHT));
+      const scaleX = OPEN_MODAL_POST_HEIGHT / FEED_HEIGHT;
+      
+      const PREVIEW_TOP = insets.top * (1 - scaleX);
+      const TARGET_HEIGHT = Math.max(80, targetBottom - PREVIEW_TOP);
+      
+      const scaleY = TARGET_HEIGHT / FEED_HEIGHT;
+      const ty = PREVIEW_TOP - (FEED_HEIGHT / 2) + (TARGET_HEIGHT / 2);
 
-      contentScale.value = withTiming(scale, config);
+      contentScaleX.value = withTiming(scaleX, config);
+      contentScaleY.value = withTiming(scaleY, config);
       contentTranslateY.value = withTiming(ty, config);
       contentBorderRadius.value = withTiming(radii.xl, config);
     } else {
-      contentScale.value = withTiming(1, config);
+      contentScaleX.value = withTiming(1, config);
+      contentScaleY.value = withTiming(1, config);
       contentTranslateY.value = withTiming(0, config);
       contentBorderRadius.value = withTiming(0, config);
     }
-  }, [commentModalVisible]);
+  }, [commentModalVisible, keyboardHeight, insets.top]);
 
   const animatedContentStyle = useAnimatedStyle(() => ({
     transform: [
       { translateY: contentTranslateY.value },
-      { scale: contentScale.value },
+      { scaleX: contentScaleX.value },
+      { scaleY: contentScaleY.value },
     ],
     borderRadius: contentBorderRadius.value,
     overflow: 'hidden',
   }));
+
+  const animatedInnerStyle = useAnimatedStyle(() => {
+    const scaleY = contentScaleY.value === 0 ? 1 : (contentScaleX.value / contentScaleY.value);
+    const ty = (FEED_HEIGHT / 2) * (scaleY - 1);
+    return {
+      transform: [
+        { translateY: ty },
+        { scaleY: scaleY },
+      ],
+    };
+  });
 
   useEffect(() => {
     const videos = photos.filter((p) => p.url && p.image_path.endsWith(".mp4") && p.url.startsWith("http"));
@@ -407,48 +440,49 @@ function PhotoFeedContent({
   return (
     <View style={styles.list}>
       <Reanimated.View style={[styles.contentWrapper, animatedContentStyle]}>
-        <AnimatedFlatList
-          ref={flatListRef}
-          data={items}
-          renderItem={renderItem}
-          keyExtractor={(_, i) => i.toString()}
-          pagingEnabled={true}
-          snapToInterval={FEED_HEIGHT}
-          snapToAlignment="start"
-          decelerationRate="fast"
-          disableIntervalMomentum={true}
-          showsVerticalScrollIndicator={false}
-          onScroll={onScroll}
-          scrollEventThrottle={16}
-          getItemLayout={(_, i) => ({ length: FEED_HEIGHT, offset: FEED_HEIGHT * i, index: i })}
-          onViewableItemsChanged={onViewableItemsChanged}
-          viewabilityConfig={viewabilityConfig}
-          windowSize={5}
-          maxToRenderPerBatch={2}
-          initialNumToRender={2}
-          removeClippedSubviews={Platform.OS === "android"}
-          overScrollMode="never"
-          style={styles.list}
-          scrollEnabled={!commentModalVisible}
-        />
-        {revealEndDate && revealTimeLeft !== "" && (
-          <View style={[styles.revealCountdownBar, { top: insets.top + 8 }]} pointerEvents="none">
-            <View style={[styles.revealCountdownPill, revealMsLeft < 4 * 3600000 && styles.revealCountdownPillRed]}>
-              <Svg width="12" height="12" viewBox="0 0 24 24" fill="none" style={{ marginRight: 5 }}>
-                <Path 
-                  d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" 
-                  stroke={revealMsLeft < 4 * 3600000 ? "#FFFFFF" : colors.secondary}
-                  strokeWidth="2" 
-                  strokeLinecap="round" 
-                />
-              </Svg>
-              <Text style={[styles.revealCountdownText, revealMsLeft < 4 * 3600000 && styles.revealCountdownTextRed]}>
-                {revealTimeLeft}
-              </Text>
+        <Reanimated.View style={[{ flex: 1 }, animatedInnerStyle]}>
+          <AnimatedFlatList
+            ref={flatListRef}
+            data={items}
+            renderItem={renderItem}
+            keyExtractor={(_, i) => i.toString()}
+            pagingEnabled={true}
+            snapToInterval={FEED_HEIGHT}
+            snapToAlignment="start"
+            decelerationRate="fast"
+            disableIntervalMomentum={true}
+            showsVerticalScrollIndicator={false}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+            getItemLayout={(_, i) => ({ length: FEED_HEIGHT, offset: FEED_HEIGHT * i, index: i })}
+            onViewableItemsChanged={onViewableItemsChanged}
+            viewabilityConfig={viewabilityConfig}
+            windowSize={5}
+            maxToRenderPerBatch={2}
+            initialNumToRender={2}
+            removeClippedSubviews={Platform.OS === "android"}
+            overScrollMode="never"
+            style={styles.list}
+            scrollEnabled={!commentModalVisible}
+          />
+          {revealEndDate && revealTimeLeft !== "" && !commentModalVisible && (
+            <View style={[styles.revealCountdownBar, { top: insets.top + 8 }]} pointerEvents="none">
+              <View style={[styles.revealCountdownPill, revealMsLeft < 4 * 3600000 && styles.revealCountdownPillRed]}>
+                <Svg width="12" height="12" viewBox="0 0 24 24" fill="none" style={{ marginRight: 5 }}>
+                  <Path 
+                    d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" 
+                    stroke={revealMsLeft < 4 * 3600000 ? "#FFFFFF" : colors.secondary}
+                    strokeWidth="2" 
+                    strokeLinecap="round" 
+                  />
+                </Svg>
+                <Text style={[styles.revealCountdownText, revealMsLeft < 4 * 3600000 && styles.revealCountdownTextRed]}>
+                  {revealTimeLeft}
+                </Text>
+              </View>
             </View>
-          </View>
-        )}
-
+          )}
+        </Reanimated.View>
       </Reanimated.View>
 
       {showBottomSection && currentItem && !commentModalVisible && (
@@ -466,6 +500,9 @@ function PhotoFeedContent({
                 activeOpacity={0.85}
               >
                 <Text style={styles.reactionsBtnText}>Réactions</Text>
+                {currentItem.data?.hasNewComments && (
+                  <View style={styles.reactionsBtnBadge} />
+                )}
               </AnimatedTouchableOpacity>
               <AnimatedTouchableOpacity
                 key="placeholder-btn"
@@ -634,6 +671,15 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: typography.family.bold,
     fontSize: typography.size.md,
     color: colors.textBrandOnBrandSecondary,
+  },
+  reactionsBtnBadge: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    width: 24,
+    height: 24,
+    borderRadius: radii.full,
+    backgroundColor: colors.bgInverse,
   },
   placeholderBtn: {
     width: 52,

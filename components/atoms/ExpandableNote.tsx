@@ -6,15 +6,24 @@ import { useThemedStyles } from "../../lib/theme-context";
 interface ExpandableNoteProps {
   text: string;
   maxLines: number;
+  onToggleExpand?: (expanded: boolean) => void;
 }
 
-export const ExpandableNote = ({ text, maxLines }: ExpandableNoteProps) => {
+export const ExpandableNote = ({ text, maxLines, onToggleExpand }: ExpandableNoteProps) => {
   const styles = useThemedStyles(makeStyles);
   const [expanded, setExpanded] = useState(false);
   const [isTruncated, setIsTruncated] = useState(false);
 
+  const handlePress = () => {
+    if (isTruncated) {
+      const nextExpanded = !expanded;
+      setExpanded(nextExpanded);
+      onToggleExpand?.(nextExpanded);
+    }
+  };
+
   return (
-    <TouchableOpacity onPress={() => isTruncated && setExpanded(v => !v)} activeOpacity={0.8}>
+    <TouchableOpacity onPress={handlePress} activeOpacity={0.8}>
       <View style={{ height: 0, overflow: 'hidden' }}>
         <Text
           style={styles.momentNote}

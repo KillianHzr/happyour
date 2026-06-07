@@ -16,10 +16,16 @@ import {
   Easing,
   Keyboard,
   TouchableWithoutFeedback,
+  LayoutAnimation,
+  UIManager,
 } from "react-native";
 import { Image } from "expo-image";
 import BlurView from "./atoms/BlurView";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+if (Platform.OS === "android") {
+  UIManager.setLayoutAnimationEnabledExperimental?.(true);
+}
 
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth-context";
@@ -68,6 +74,7 @@ export default function CommentModal(props: CommentModalProps) {
       transparent
       animationType="none"
       onRequestClose={onClose}
+      statusBarTranslucent
     >
       <CommentModalContent 
         {...props} 
@@ -96,9 +103,10 @@ function CommentModalContent({
   const [submitting, setSubmitting] = useState(false);
   const [content, setContent] = useState("");
   const [userComment, setUserComment] = useState<Comment | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   
   const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
-  const keyboardTranslateY = useRef(new Animated.Value(0)).current;
+  const modalHeightAnim = useRef(new Animated.Value(MODAL_HEIGHT)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const stickersOpacity = useRef(new Animated.Value(0)).current;
   const stickersScale = useRef(new Animated.Value(0.9)).current;
@@ -111,24 +119,45 @@ function CommentModalContent({
   }, [reactions]);
 
   // SHRUNKEN POST BOUNDS (Synchronized with PhotoFeed.tsx)
-  const POST_HEIGHT = 380;
-  const POST_WIDTH = SCREEN_WIDTH * (POST_HEIGHT / SCREEN_HEIGHT);
-  const POST_BOTTOM_GAP = 40;
-
-  const postBottom = SCREEN_HEIGHT - MODAL_HEIGHT - POST_BOTTOM_GAP;
-  const postTop = postBottom - POST_HEIGHT;
+  const FEED_HEIGHT = SCREEN_HEIGHT - 100;
+  const hasKeyboard = keyboardHeight > 0;
+  const currentModalHeight = hasKeyboard ? MODAL_HEIGHT / 2 : MODAL_HEIGHT;
+  
+  const targetBottom = SCREEN_HEIGHT - currentModalHeight - (hasKeyboard ? keyboardHeight + 4 : 24);
+  
+  const targetBottomNoKeyboard = SCREEN_HEIGHT - MODAL_HEIGHT - 24;
+  const OPEN_MODAL_POST_HEIGHT = Math.min(380, (targetBottomNoKeyboard - insets.top) / (1 - insets.top / FEED_HEIGHT));
+  const scaleX = OPEN_MODAL_POST_HEIGHT / FEED_HEIGHT;
+  
+  const PREVIEW_TOP = insets.top * (1 - scaleX);
+  const POST_HEIGHT_DYNAMIC = Math.max(80, targetBottom - PREVIEW_TOP);
+  const POST_WIDTH_DYNAMIC = SCREEN_WIDTH * scaleX;
+  
+  const postBottom = PREVIEW_TOP + POST_HEIGHT_DYNAMIC;
+  const postTop = insets.top;
   const postCenterX = SCREEN_WIDTH / 2;
-  const postLeft = postCenterX - (POST_WIDTH / 2);
-  const postRight = postCenterX + (POST_WIDTH / 2);
+  const postLeft = postCenterX - (POST_WIDTH_DYNAMIC / 2);
+  const postRight = postCenterX + (POST_WIDTH_DYNAMIC / 2);
+
+  const randomFactorsRef = useRef<Record<string, { scatterY: number; rotation: number }>>({});
 
   const stickersData = useMemo(() => {
     return textReactions.map((reaction, index) => {
       const isLeft = index % 2 === 0;
 
-      // Vertical: Distribute along the 380px height of the post
-      const centerY = postTop + (POST_HEIGHT / 2);
-      const scatterY = (Math.random() - 0.5) * (POST_HEIGHT * 0.7); 
-      const rotation = (Math.random() - 0.5) * 20;
+      // Retrieve or generate stable random factors for this reaction
+      if (!randomFactorsRef.current[reaction.id]) {
+        randomFactorsRef.current[reaction.id] = {
+          scatterY: Math.random() - 0.5,
+          rotation: Math.random() - 0.5,
+        };
+      }
+      const factors = randomFactorsRef.current[reaction.id];
+
+      // Vertical: Distribute along the dynamic height of the post
+      const centerY = postTop + (POST_HEIGHT_DYNAMIC / 2);
+      const scatterY = factors.scatterY * (POST_HEIGHT_DYNAMIC * 0.7); 
+      const rotation = factors.rotation * 20;
 
       return {
         id: reaction.id,
@@ -140,7 +169,7 @@ function CommentModalContent({
         isLeft
       };
     });
-  }, [textReactions, postTop, postLeft, postRight]);
+  }, [textReactions, postTop, postLeft, postRight, POST_HEIGHT_DYNAMIC]);
 
 
   const markAsSeen = useCallback(async () => {
@@ -237,33 +266,44 @@ function CommentModalContent({
     }
   }, [visible]);
 
+
+
+  useEffect(() => {
+    if (Platform.OS === "android") {
+      Animated.timing(modalHeightAnim, {
+        toValue: hasKeyboard ? MODAL_HEIGHT / 2 : MODAL_HEIGHT,
+        duration: 250,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start();
+    }
+  }, [hasKeyboard]);
+
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
 
     const showListener = Keyboard.addListener(showEvent, (e) => {
-      Animated.timing(keyboardTranslateY, {
-        toValue: -e.endCoordinates.height,
-        duration: e.duration || 250,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
+      if (Platform.OS === "ios") {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      }
+      setKeyboardHeight(e.endCoordinates.height);
     });
 
     const hideListener = Keyboard.addListener(hideEvent, (e) => {
-      Animated.timing(keyboardTranslateY, {
-        toValue: 0,
-        duration: e.duration || 250,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
+      if (Platform.OS === "ios") {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      }
+      setKeyboardHeight(0);
     });
 
     return () => {
       showListener.remove();
       hideListener.remove();
     };
-  }, [keyboardTranslateY]);
+  }, []);
+
+
 
   const handleClose = () => {
     animateOut(onClose);
@@ -320,7 +360,7 @@ function CommentModalContent({
   }, [photoId, user?.id]);
 
   const handleSubmit = async () => {
-    if (!content.trim() || submitting || !user || isOwner) return;
+    if (!content.trim() || submitting || !user) return;
     setSubmitting(true);
     try {
       const { data, error } = await supabase
@@ -375,6 +415,8 @@ function CommentModalContent({
       onDelete={handleDeleteComment} 
     />
   );
+
+  const animatedModalHeight = Platform.OS === "ios" ? currentModalHeight : modalHeightAnim;
 
   return (
     <View style={styles.root}>
@@ -439,34 +481,43 @@ function CommentModalContent({
         })}
       </Animated.View>
 
-      <View style={styles.modalOverlay}>
+      <KeyboardAvoidingView
+        behavior={hasKeyboard ? "padding" : undefined}
+        style={styles.modalOverlay}
+      >
         <ForceTheme mode="Light">
           <Animated.View 
-            style={[
-              styles.modalContainer, 
-              { 
-                transform: [
-                  { translateY: Animated.add(translateY, keyboardTranslateY) }
-                ],
-              }
-            ]}
+            style={{ 
+              transform: [{ translateY: translateY }],
+              width: "100%"
+            }}
           >
+            <Animated.View 
+              style={[
+                styles.modalContainer, 
+                { 
+                  height: animatedModalHeight,
+                }
+              ]}
+            >
             <CommentModalBody 
               loading={loading}
               comments={comments}
               renderComment={renderComment}
               isOwner={isOwner}
               userComment={userComment}
+              insets={insets}
+              panResponder={panResponder}
               content={content}
               setContent={setContent}
               handleSubmit={handleSubmit}
               submitting={submitting}
-              insets={insets}
-              panResponder={panResponder}
+              hasKeyboard={hasKeyboard}
             />
+            </Animated.View>
           </Animated.View>
         </ForceTheme>
-      </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -477,15 +528,18 @@ function CommentModalBody({
   renderComment,
   isOwner,
   userComment,
+  insets,
+  panResponder,
   content,
   setContent,
   handleSubmit,
   submitting,
-  insets,
-  panResponder
+  hasKeyboard,
 }: any) {
   const { colors } = useTheme(); 
   const styles = useThemedStyles(makeStyles);
+
+  const paddingBottom = hasKeyboard ? 8 : Math.max(insets.bottom, 20);
 
   return (
     <>
@@ -523,24 +577,14 @@ function CommentModalBody({
         )}
       </View>
 
-      {!isOwner && (
-        <View style={{ paddingBottom: Math.max(insets.bottom, 20) }}>
-          {userComment ? (
-            <View style={styles.inputArea}>
-              <View style={styles.alreadySharedContainer}>
-                <Text style={styles.alreadySharedText}>Vous avez déjà partagé votre avis</Text>
-              </View>
-            </View>
-          ) : (
-            <CommentInput 
-              content={content} 
-              setContent={setContent} 
-              onSubmit={handleSubmit} 
-              submitting={submitting} 
-            />
-          )}
-        </View>
-      )}
+      <View style={{ paddingBottom: paddingBottom }}>
+        <CommentInput 
+          content={content} 
+          setContent={setContent} 
+          onSubmit={handleSubmit} 
+          submitting={submitting} 
+        />
+      </View>
     </>
   );
 }
@@ -559,7 +603,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.opacityLight,
   },
   modalContainer: {
-    height: MODAL_HEIGHT,
+    // Height is driven dynamically by modalHeightAnim in the component
   },
   modalBackgroundFiller: {
     position: "absolute",

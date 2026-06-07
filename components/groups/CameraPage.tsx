@@ -1237,7 +1237,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 multiline
                 value={textModeContent}
                 onChangeText={setTextModeContent}
-                autofocus="off"
+                autoFocus={false}
                 textAlignVertical="top"
                 pointerEvents="auto"
               />

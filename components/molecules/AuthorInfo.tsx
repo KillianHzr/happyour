@@ -83,7 +83,7 @@ export const AuthorInfo = ({
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   authorInfo: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: spacing.md
   },
   textSection: {
