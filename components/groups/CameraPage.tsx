@@ -2625,7 +2625,7 @@ const makePickerStyles = (colors: ThemeColors) => StyleSheet.create({
   shareInText: { ...textStyles.subtitleStrong, color: colors.text, lineHeight: undefined, marginBottom: 48 },
   groupBtnsCol: { gap: 16, width: "100%", alignItems: "center" },
   groupBtn: { width: "100%", paddingHorizontal: 24, paddingVertical: 16, borderRadius: radii.lg, backgroundColor: colors.opacityLight, flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  groupBtnText: { ...textStyles.singleLineSubheadingStrong, color: colors.textNeutral, lineHeight: undefined, transform: [{ rotate: "-2deg" }] },
+  groupBtnText: { ...textStyles.singleLineSubheadingStrong, color: colors.textNeutral, lineHeight: undefined },
   groupCancelBtnContainer: { width: "100%", paddingHorizontal: 24, paddingVertical: 16, alignItems: "center", justifyContent: "center" },
   groupPickerCancel: { ...textStyles.singleLineBodyBaseStrong, color: colors.textSecondary },
 });

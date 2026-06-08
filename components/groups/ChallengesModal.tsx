@@ -266,7 +266,9 @@ export function ChallengesSlider({
         )}
         <View style={[StyleSheet.absoluteFillObject, { backgroundColor: Platform.OS === "android" ? "rgba(8, 8, 10, 0.7)" : "rgba(8, 8, 10, 0.5)" }]} pointerEvents="none" />
         <View style={sliderStyles.cardContent}>
-          <TextSticker text={gc.groupName} backgroundColor={colors.icon} />
+          <View style={{ transform: [{ rotate: "2deg" }] }}>
+            <TextSticker text={gc.groupName} backgroundColor={colors.icon} />
+          </View>
           {gc.loading ? (
             <ActivityIndicator color={colors.text} size="large" />
           ) : gc.challenge ? (
@@ -606,7 +608,7 @@ export function ChallengesContent({ allGroups, currentUserId, onSelectChallenge,
       ) : (
         groupChallenges.map((gc) => (
           <View key={gc.groupId} style={styles.groupBlock}>
-            <Text style={styles.groupName}>{gc.groupName}</Text>
+            <Text style={[styles.groupName, { transform: [{ rotate: "2deg" }] }]}>{gc.groupName}</Text>
 
           {gc.loading ? (
             <View style={styles.card}>
