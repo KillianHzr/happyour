@@ -37,16 +37,8 @@ const EDIT_CAPTION_H = 48;
 const MARGIN_ABOVE_KB = spacing.lg;  // 16px
 const CAPTION_GAP = spacing.sm;      // 8px
 
-// LayoutAnimation pour les transitions de la barre de légende (entrée/sortie édition)
-// if (Platform.OS === "android") {
-//   UIManager.setLayoutAnimationEnabledExperimental?.(true);
-// }
-const CAPTION_TRANSITION = {
-  duration: 220,
-  create: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
-  update: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.bounds },
-  delete: { type: LayoutAnimation.Types.easeInEaseOut, property: LayoutAnimation.Properties.opacity },
-};
+// LayoutAnimation is disabled due to Android keyboard layout conflicts.
+// We use Animated.timing on uiOpacityAnim instead for fluid transitions.
 // Espace entre le haut du cadre de capture et le bouton Défis (par-dessus la caméra).
 const CHALLENGE_GAP = 16;
 // Sur iOS, expo-blur fonctionne nativement (UIVisualEffectView).
@@ -310,6 +302,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const previewWidthAnim = useRef(new Animated.Value(winWidth)).current;
   const previewBottomRadiusAnim = useRef(new Animated.Value(0)).current;
   const previewMarginBottomAnim = useRef(new Animated.Value(0)).current;
+  const uiOpacityAnim = useRef(new Animated.Value(1)).current;
   // Position verticale de la barre de légende (absolue dans previewFullContainer).
   const captionBarBottomAnim = useRef(new Animated.Value((activeChallenge !== null ? 0 : NAVBAR_HEIGHT) + spacing.lg)).current;
   // Dernière hauteur clavier connue sur Android (ajusté une fois après keyboardDidShow).
@@ -351,8 +344,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         const chalMarginBottom = winHeight - (insets.top + spacing.lg) - chalTargetH - NAVBAR_HEIGHT;
         Animated.parallel([
           Animated.timing(previewWidthAnim, { toValue: activeChallenge !== null ? chalTargetW : targetW, duration: 150, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
-          Animated.timing(captionBarBottomAnim, { toValue: captionBarBottom, duration: 150, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+          Animated.timing(captionBarBottomAnim, { toValue: captionBarBottom - NAVBAR_HEIGHT, duration: 150, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
           Animated.timing(previewMarginBottomAnim, { toValue: activeChallenge !== null ? Math.max(0, chalMarginBottom) : 0, duration: 150, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+          Animated.timing(uiOpacityAnim, { toValue: 0, duration: 150, useNativeDriver: true }),
         ]).start();
         return;
       }
@@ -370,8 +364,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       Animated.parallel([
         Animated.timing(previewWidthAnim, { toValue: activeChallenge !== null ? chalTargetW : targetW, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         Animated.timing(previewBottomRadiusAnim, { toValue: radii.lg, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
-        Animated.timing(captionBarBottomAnim, { toValue: captionBarBottom, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(captionBarBottomAnim, { toValue: captionBarBottom - NAVBAR_HEIGHT, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         Animated.timing(previewMarginBottomAnim, { toValue: activeChallenge !== null ? Math.max(0, chalMarginBottom) : 0, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(uiOpacityAnim, { toValue: 0, duration: dur, useNativeDriver: true }),
       ]).start();
     });
 
@@ -392,6 +387,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
           Animated.timing(previewWidthAnim, { toValue: winWidth, duration: 250, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
           Animated.timing(previewBottomRadiusAnim, { toValue: 0, duration: 250, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
           Animated.timing(previewMarginBottomAnim, { toValue: 0, duration: 250, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+          Animated.timing(uiOpacityAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
         ]).start();
         return;
       }
@@ -403,9 +399,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         Animated.timing(previewBottomRadiusAnim, { toValue: 0, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         Animated.timing(captionBarBottomAnim, { toValue: (activeChallenge !== null ? 0 : NAVBAR_HEIGHT) + spacing.lg, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         Animated.timing(previewMarginBottomAnim, { toValue: 0, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(uiOpacityAnim, { toValue: 1, duration: dur, useNativeDriver: true }),
       ]).start(() => {
         if (isEditingCaptionRef.current) {
-          LayoutAnimation.configureNext(CAPTION_TRANSITION);
           isEditingCaptionRef.current = false;
           setIsEditingCaption(false);
         }
@@ -416,9 +412,6 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   }, [winWidth, winHeight, insets.top, insets.bottom, activeChallenge]);
 
   const startEditCaption = () => {
-    if (Platform.OS !== "android") {
-      LayoutAnimation.configureNext(CAPTION_TRANSITION);
-    }
     isEditingCaptionRef.current = true;
     setIsEditingCaption(true);
 
@@ -436,10 +429,11 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       const chalTargetW = Math.floor(chalTargetH * 4 / 6);
       const chalMarginBottom = winHeight - (insets.top + spacing.lg) - chalTargetH - NAVBAR_HEIGHT;
       Animated.parallel([
-        Animated.timing(captionBarBottomAnim, { toValue: captionBarBottom, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(captionBarBottomAnim, { toValue: captionBarBottom - NAVBAR_HEIGHT, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         Animated.timing(previewWidthAnim, { toValue: activeChallenge !== null ? chalTargetW : targetW, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         Animated.timing(previewBottomRadiusAnim, { toValue: radii.lg, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         Animated.timing(previewMarginBottomAnim, { toValue: activeChallenge !== null ? Math.max(0, chalMarginBottom) : 0, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(uiOpacityAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
       ]).start();
     }
   };
@@ -452,6 +446,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         Animated.timing(previewWidthAnim, { toValue: winWidth, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         Animated.timing(previewBottomRadiusAnim, { toValue: 0, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         Animated.timing(previewMarginBottomAnim, { toValue: 0, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(uiOpacityAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
       ]).start(() => {
         if (isEditingCaptionRef.current) {
           isEditingCaptionRef.current = false;
@@ -1626,14 +1621,14 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       {!isCapturing && isActive && previewSlot && (
         <View style={[styles.previewFullContainer, {
            justifyContent: activeChallenge !== null ? "flex-end" : "flex-start", 
-           paddingBottom: activeChallenge !== null ? (isEditingCaption ? NAVBAR_HEIGHT : 0) : 0,
+           paddingBottom: 0,
            backgroundColor: activeChallenge !== null ? "transparent" : colors.bg 
         }]}>
           {activeChallenge === null && (
             <View style={{ height: Math.max(0, winHeight - winWidth * 16 / 9 - NAVBAR_HEIGHT) }} pointerEvents="none" />
           )}
-          {activeChallenge !== null && !isEditingCaption && (
-            <View style={{ position: "absolute", top: 0, left: 0, right: 0, paddingTop: insets.top, paddingHorizontal: spacing.lg, zIndex: 10 }} pointerEvents="box-none">
+          {activeChallenge !== null && (
+            <Animated.View style={{ position: "absolute", top: 0, left: 0, right: 0, paddingTop: insets.top, paddingHorizontal: spacing.lg, zIndex: 10, opacity: uiOpacityAnim }} pointerEvents={isEditingCaption ? "none" : "box-none"}>
               <View style={challengeStyles.inlineHeaderRow}>
                 <TouchableOpacity
                   style={challengeStyles.inlineBackBtn}
@@ -1659,7 +1654,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                    />
                  )}
               </View>
-            </View>
+            </Animated.View>
           )}
 
           {/* Frame média — largeur animée, ratio 9:16 via aspectRatio, centrée */}
@@ -1736,12 +1731,10 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
 
 
 
-            {/* Bouton fermer — masqué pendant l'édition de la description */}
-            {!isEditingCaption && (
-              <View style={styles.previewTopBtns}>
-                <TouchableOpacity style={styles.topSquareBtn} onPress={activeChallenge !== null ? handleTrash : resetAll}><CloseIcon /></TouchableOpacity>
-              </View>
-            )}
+            {/* Bouton fermer — fondu pendant l'édition de la description */}
+            <Animated.View style={[styles.previewTopBtns, { opacity: uiOpacityAnim }]} pointerEvents={isEditingCaption ? "none" : "box-none"}>
+              <TouchableOpacity style={styles.topSquareBtn} onPress={activeChallenge !== null ? handleTrash : resetAll}><CloseIcon /></TouchableOpacity>
+            </Animated.View>
 
           </Animated.View>
 
@@ -1843,24 +1836,35 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
           </Animated.View>
 
           {/* Bouton Partager — masqué pendant l'édition et les défis */}
-          {!isEditingCaption && activeChallenge === null && (
-            <View style={styles.previewSendArea}>
+          {activeChallenge === null && (
+            <Animated.View style={[styles.previewSendArea, { opacity: uiOpacityAnim }]} pointerEvents={isEditingCaption ? "none" : "box-none"}>
               <PrimaryButton label="Partager" onPress={openGroupPicker} />
-            </View>
+            </Animated.View>
           )}
 
         </View>
       )}
 
       {/* ── Challenge Participer Button ── */}
-      {activeChallenge !== null && !isEditingCaption && (
-        <View style={[styles.previewSendArea, { zIndex: 50 }]} pointerEvents="box-none">
+      {activeChallenge !== null && (
+        <Animated.View style={[styles.previewSendArea, { zIndex: 50, opacity: uiOpacityAnim }]} pointerEvents={isEditingCaption ? "none" : "box-none"}>
           <PrimaryButton 
             label="Participer" 
             onPress={openGroupPicker} 
+            disabled={!previewSlot} 
+          />
+        </Animated.View>
+      )}
+
+      {/* ── Normal Capture Send / Actions ── */}
+      {activeChallenge === null && (
+        <Animated.View style={[styles.previewSendArea, { zIndex: 50, opacity: uiOpacityAnim }]} pointerEvents={isEditingCaption ? "none" : "box-none"}>
+          <PrimaryButton 
+            label="Partager" 
+            onPress={openGroupPicker} 
             disabled={slot1 === null || isCapturing || capturingSecond} 
           />
-        </View>
+        </Animated.View>
       )}
 
       {/* ── Vue Défis inline ── */}
