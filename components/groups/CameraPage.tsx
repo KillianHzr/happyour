@@ -1790,14 +1790,16 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                     ref={captionEditInputRef}
                     style={styles.captionEditInput}
                     value={slot1!.note}
-                    onChangeText={updateSlot1Note}
+                    onChangeText={(text) => updateSlot1Note(text.replace(/\n/g, ''))}
                     placeholder="Ajouter une description"
                     placeholderTextColor={colors.textSecondary}
-                    multiline
+                    multiline={true}
+                    scrollEnabled={true}
                     maxLength={140}
-                    scrollEnabled
                     autoFocus
-                    blurOnSubmit={false}
+                    returnKeyType={Platform.OS === "android" ? "done" : "default"}
+                    blurOnSubmit={true}
+                    onSubmitEditing={confirmEditCaption}
                   />
                 ) : (
                   <TouchableOpacity style={styles.captionTextArea} onPress={startEditCaption} activeOpacity={0.7}>
@@ -1811,13 +1813,13 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
 
                 {previewSlot.mode !== "AUDIO" && !slot1!.captionAudioUri && (
                   isEditingCaption ? (
-                    <TouchableOpacity style={styles.captionConfirmBtn} onPress={confirmEditCaption} activeOpacity={0.8}>
-                      {Platform.OS === "ios" && (
+                    Platform.OS !== "android" && (
+                      <TouchableOpacity style={styles.captionConfirmBtn} onPress={confirmEditCaption} activeOpacity={0.8}>
                         <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
-                      )}
-                      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
-                      <Icon name="check" size={16} color={colors.icon} />
-                    </TouchableOpacity>
+                        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
+                        <Icon name="check" size={16} color={colors.icon} />
+                      </TouchableOpacity>
+                    )
                   ) : (!slot1!.note.trim() || isCaptionRecording) ? (
                     <View style={[styles.captionMicBtn, isSwipingToCancel && { opacity: 0.5 }]} {...captionPanResponder.panHandlers}>
                       {Platform.OS === "ios" && (
