@@ -1101,6 +1101,7 @@ export default function MainPagerScreen() {
       username={username}
       avatarUrl={avatarUrl}
       email={email}
+      groupName={groupName}
       allGroups={allGroups}
       revealConfig={revealConfig}
       onAvatarUpdate={setAvatarUrl}
@@ -1109,7 +1110,7 @@ export default function MainPagerScreen() {
       isActive={currentPage === 2}
       refreshKey={profileRefreshKey}
     />
-  ), [user?.id, username, avatarUrl, email, allGroups, revealConfig, profileRefreshKey, currentPage === 2]);
+  ), [user?.id, username, avatarUrl, email, groupName, allGroups, revealConfig, profileRefreshKey, currentPage === 2]);
 
   if (!dataLoaded) return <View style={styles.loaderWrap}><Loader size={48} /></View>;
 
@@ -1151,50 +1152,50 @@ export default function MainPagerScreen() {
 
       {/* NAV BAR — masquée pendant une capture ou le reveal */}
       {!cameraHideMenu && !showReveal && (
-        <View style={styles.tabBarContainer}>
+        <View style={[styles.tabBarContainer, { backgroundColor: currentPage === 1 ? 'transparent' : colors.card }]}>
           <View style={styles.tabBarContent}>
             <TouchableOpacity style={styles.tab} onPress={() => jumpTo(0)}>
-              <Animated.View style={[{ position: "absolute", alignItems: "center" }, { opacity: tab0InactiveOpacity }]}>
+              <Animated.View style={[{ position: "absolute", alignItems: "center", gap: spacing.sm }, { opacity: tab0InactiveOpacity }]}>
                 <Icon name="lock-filled" size={24} color={colors.iconSecondary} />
                 <Text style={styles.tabLabel}>Coffre</Text>
               </Animated.View>
-              <Animated.View style={[{ position: "absolute", alignItems: "center" }, { opacity: tab0ActiveOpacity }]}>
+              <Animated.View style={[{ position: "absolute", alignItems: "center", gap: spacing.sm }, { opacity: tab0ActiveOpacity }]}>
                 <Icon name="lock" size={24} color={colors.icon} />
                 <Text style={[styles.tabLabel, styles.tabLabelActive]}>Coffre</Text>
               </Animated.View>
               {/* Invisible placeholder for layout sizing */}
-              <View style={{ opacity: 0, alignItems: "center" }}>
+              <View style={{ opacity: 0, alignItems: "center", gap: spacing.sm }}>
                 <Icon name="lock" size={24} />
                 <Text style={[styles.tabLabel, styles.tabLabelActive]}>Coffre</Text>
               </View>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.tab} onPress={() => jumpTo(1)}>
-              <Animated.View style={[{ position: "absolute", alignItems: "center" }, { opacity: tab1InactiveOpacity }]}>
+              <Animated.View style={[{ position: "absolute", alignItems: "center", gap: spacing.sm }, { opacity: tab1InactiveOpacity }]}>
                 <Icon name="circle" size={24} color={colors.iconSecondary} />
                 <Text style={styles.tabLabel}>Capture</Text>
               </Animated.View>
-              <Animated.View style={[{ position: "absolute", alignItems: "center" }, { opacity: tab1ActiveOpacity }]}>
+              <Animated.View style={[{ position: "absolute", alignItems: "center", gap: spacing.sm }, { opacity: tab1ActiveOpacity }]}>
                 <Icon name="circle-filled" size={24} color={colors.icon} />
                 <Text style={[styles.tabLabel, styles.tabLabelActive]}>Capture</Text>
               </Animated.View>
-              <View style={{ opacity: 0, alignItems: "center" }}>
+              <View style={{ opacity: 0, alignItems: "center", gap: spacing.sm }}>
                 <Icon name="circle-filled" size={24} />
                 <Text style={[styles.tabLabel, styles.tabLabelActive]}>Capture</Text>
               </View>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.tab} onPress={() => jumpTo(2)}>
-              <Animated.View style={[{ position: "absolute", alignItems: "center" }, { opacity: tab2InactiveOpacity }]}>
+              <Animated.View style={[{ position: "absolute", alignItems: "center", gap: spacing.sm }, { opacity: tab2InactiveOpacity }]}>
                 <Icon name="user" size={24} color={colors.iconSecondary} />
                 <Text style={styles.tabLabel}>Profil</Text>
               </Animated.View>
-              <Animated.View style={[{ position: "absolute", alignItems: "center" }, { opacity: tab2ActiveOpacity }]}>
-                <Icon name="user" size={24} color={colors.icon} />
+              <Animated.View style={[{ position: "absolute", alignItems: "center", gap: spacing.sm }, { opacity: tab2ActiveOpacity }]}>
+                <Icon name="user-filled" size={24} color={colors.icon} />
                 <Text style={[styles.tabLabel, styles.tabLabelActive]}>Profil</Text>
               </Animated.View>
-              <View style={{ opacity: 0, alignItems: "center" }}>
-                <Icon name="user" size={24} />
+              <View style={{ opacity: 0, alignItems: "center", gap: spacing.sm }}>
+                <Icon name="user-filled" size={24} />
                 <Text style={[styles.tabLabel, styles.tabLabelActive]}>Profil</Text>
               </View>
 
@@ -1570,10 +1571,9 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   captureToastText: { flex: 1, color: colors.text, ...textStyles.bodyStrong },
 
   // Navbar
-  // Menu : fond background/default/default, marge 16 x / 12 haut / 25 bas.
-  tabBarContainer: { position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 100, backgroundColor: colors.bg, paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: 25 },
+  tabBarContainer: { position: "absolute", bottom: 26, left: 16, right: 16, zIndex: 100, paddingVertical: spacing.sm, paddingHorizontal: 0, borderRadius: radii.lg },
   tabBarContent: { flexDirection: "row" },
-  tab: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.sm, padding: spacing.sm },
+  tab: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.sm, paddingVertical: spacing.xs, paddingHorizontal: spacing.sm },
   tabLabel: { ...textStyles.singleLineBodyExtraSmallStrong, color: colors.textSecondary },
   tabLabelActive: { color: colors.text },
   streakBadge: { position: "absolute", top: -5, right: -8, width: 16, height: 16, borderRadius: radii.sm, justifyContent: "center", alignItems: "center" },

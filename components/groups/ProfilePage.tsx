@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   Modal, KeyboardAvoidingView, Platform, TextInput,
-  ActivityIndicator, Alert, RefreshControl, Animated,
+  ActivityIndicator, Alert, RefreshControl, Animated, Dimensions,
 } from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -25,7 +25,11 @@ import PhotoFeed from "../PhotoFeed";
 import type { PhotoEntry, Reaction } from "../PhotoFeed";
 import MotivationalNotificationsModal from "../MotivationalNotificationsModal";
 import DeleteAccountModal from "../DeleteAccountModal";
-import { radii, typography, type ThemeColors } from "../../lib/theme";
+import { radii, spacing, textStyles, typography, type ThemeColors } from "../../lib/theme";
+import Icon from "../Icon";
+import BottomSheet from "../BottomSheet";
+import SettingsSheet from "../SettingsSheet";
+import SettingsMainContent from "../settings/SettingsMainContent";
 
 const MONTH_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 
@@ -56,6 +60,12 @@ function fmtDDMM(d: Date): string {
 function weekKey(monday: Date): string {
   return monday.toISOString().slice(0, 10);
 }
+
+function dayKey(d: Date): string {
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+const DAY_LABELS = ["Lu", "Ma", "Me", "Je", "Ve", "Sa", "Di"];
 
 // Reveal window for a week (given its Monday)
 function weekRevealDates(monday: Date, revealDay: number, revealHour: number) {
@@ -88,6 +98,7 @@ type Props = {
   username: string;
   avatarUrl: string | null;
   email: string;
+  groupName?: string;
   allGroups: { id: string; name: string }[];
   revealConfig: { day: number; hour: number };
   onAvatarUpdate: (url: string) => void;
@@ -169,9 +180,27 @@ const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
   { value: "dark", label: "Sombre" },
 ];
 
+// ─── Star icon ───────────────────────────────────────────────────────────────
+const DropletIcon = ({ size = 20, color = "#FF561A" }: { size?: number; color?: string }) => (
+  <Svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+    <Path d="M9.9997 1.24219C10.265 1.24208 10.5191 1.34765 10.7067 1.53516L15.4235 6.25195C16.4961 7.32389 17.2269 8.68957 17.5231 10.1768C17.8194 11.6641 17.6677 13.2062 17.0876 14.6074C16.5075 16.0085 15.5251 17.2062 14.2644 18.0488C13.0036 18.8914 11.521 19.3408 10.0046 19.3408C8.4882 19.3408 7.00563 18.8913 5.74482 18.0488C4.48398 17.2062 3.50074 16.0085 2.9206 14.6074C2.34048 13.2062 2.18883 11.6641 2.48506 10.1768C2.78122 8.68985 3.51145 7.32381 4.58369 6.25195L9.29267 1.53613L9.36592 1.46875C9.54379 1.32289 9.76765 1.24229 9.9997 1.24219Z" fill={color} />
+  </Svg>
+);
+
+// ─── Group name pill ──────────────────────────────────────────────────────────
+function GroupNamePill({ name, bg, fg }: { name: string; bg: string; fg: string }) {
+  return (
+    <View style={{ height: 40, paddingHorizontal: spacing.xs2, backgroundColor: bg, justifyContent: "center", overflow: "hidden" }}>
+      <Text style={{ fontFamily: textStyles.subtitleStrong.fontFamily, fontSize: typography.size.subtitle, textTransform: "uppercase", color: fg, includeFontPadding: false } as any} numberOfLines={1}>
+        {name}
+      </Text>
+    </View>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function ProfilePage({
-  userId, username, avatarUrl, email, allGroups, revealConfig,
+  userId, username, avatarUrl, email, groupName, allGroups, revealConfig,
   onAvatarUpdate, onUsernameUpdate, onStreakUpdate, isActive = false, refreshKey,
 }: Props) {
   const insets = useSafeAreaInsets();
@@ -188,17 +217,104 @@ export default function ProfilePage({
   const [savingUsername, setSavingUsername] = useState(false);
 
   // ── Profile data ──
-  const [photoTimestamps, setPhotoTimestamps] = useState<{ id: string; created_at: string; group_id: string }[]>([]);
+  const [photoTimestamps, setPhotoTimestamps] = useState<{ id: string; created_at: string; group_id: string; image_path: string; note: string | null }[]>([]);
   const [streak, setStreak] = useState(0);
   const [streakWeeks, setStreakWeeks] = useState<Set<string>>(new Set());
   const [loadingData, setLoadingData] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // ── Container coffre ──
+  const [coffreGroupIndex, setCoffreGroupIndex] = useState(() => {
+    const idx = allGroups.findIndex(g => g.name === groupName);
+    return idx >= 0 ? idx : 0;
+  });
+  type GroupCoffreStats = { comments: number; stickers: number; loading: boolean };
+  const [groupCoffreStats, setGroupCoffreStats] = useState<Record<string, GroupCoffreStats>>({});
+  const [showDeleteMomentModal, setShowDeleteMomentModal] = useState(false);
+  const [deletingMoment, setDeletingMoment] = useState(false);
+
+  // ── Current week day statuses ──
+  const weekDayStatuses = useMemo(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const monday = getMondayOf(today);
+    const postDayKeys = new Set(photoTimestamps.map(p => dayKey(new Date(p.created_at))));
+    // Determine streak start day
+    let startDay: Date | null = null;
+    if (postDayKeys.has(dayKey(today))) startDay = new Date(today);
+    else if (postDayKeys.has(dayKey(addDays(today, -1)))) startDay = addDays(today, -1);
+    // Build set of days in current streak
+    const streakDayKeys = new Set<string>();
+    if (startDay && streak > 0) {
+      for (let i = 0; i < streak; i++) streakDayKeys.add(dayKey(addDays(startDay, -i)));
+    }
+    return Array.from({ length: 7 }, (_, i) => {
+      const date = addDays(monday, i);
+      const key = dayKey(date);
+      const isPosted = postDayKeys.has(key);
+      const isToday = key === dayKey(today);
+      const isFuture = date > today;
+      let state: "active" | "lost" | "today" | "future";
+      if (isPosted) state = streakDayKeys.has(key) ? "active" : "lost";
+      else if (isToday) state = "today";
+      else state = "future";
+      return { state, date };
+    });
+  }, [photoTimestamps, streak]);
+
+  // ── Coffre computed values ──
+  const sortedCoffreGroups = useMemo(() => {
+    return [...allGroups].sort((a, b) => {
+      const lastA = photoTimestamps.filter(p => p.group_id === a.id)
+        .reduce((m, p) => Math.max(m, new Date(p.created_at).getTime()), 0);
+      const lastB = photoTimestamps.filter(p => p.group_id === b.id)
+        .reduce((m, p) => Math.max(m, new Date(p.created_at).getTime()), 0);
+      return lastB - lastA;
+    });
+  }, [allGroups, photoTimestamps]);
+
+  const coffreGroup = sortedCoffreGroups[coffreGroupIndex] ?? null;
+
+  const coffreMomentsCount = useMemo(() => {
+    if (!coffreGroup) return 0;
+    return photoTimestamps.filter(p => p.group_id === coffreGroup.id).length;
+  }, [photoTimestamps, coffreGroup]);
+
+  const coffreRevealsCount = useMemo(() => {
+    if (!coffreGroup) return 0;
+    const groupPhotos = photoTimestamps.filter(p => p.group_id === coffreGroup.id);
+    const weekSet = new Set<string>();
+    for (const p of groupPhotos) {
+      const mon = getMondayOf(new Date(p.created_at));
+      if (isWeekViewable(mon, revealConfig.day, revealConfig.hour)) weekSet.add(weekKey(mon));
+    }
+    return weekSet.size;
+  }, [photoTimestamps, coffreGroup, revealConfig]);
+
+  const coffreLastPhoto = useMemo(() => {
+    if (!coffreGroup) return null;
+    const sorted = photoTimestamps
+      .filter(p => p.group_id === coffreGroup.id)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return sorted[0] ?? null;
+  }, [photoTimestamps, coffreGroup]);
+
+  const coffreGroupStat = groupCoffreStats[coffreGroup?.id ?? ""];
+
+  const canDeleteLastMoment = useMemo(() => {
+    if (!coffreLastPhoto) return false;
+    const today = new Date();
+    const monday = getMondayOf(today);
+    const { revealStart } = weekRevealDates(monday, revealConfig.day, revealConfig.hour);
+    const photoDate = new Date(coffreLastPhoto.created_at);
+    return photoDate >= monday && photoDate < revealStart && Date.now() < revealStart.getTime();
+  }, [coffreLastPhoto, revealConfig]);
 
   const [dailyNotifs, setDailyNotifs] = useState(3);
   const [notifPeriods, setNotifPeriods] = useState<("morning" | "afternoon" | "evening")[]>(["morning", "afternoon", "evening"]);
   const [showNotifModal, setShowNotifModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showRandomInfo, setShowRandomInfo] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   // ── Calendar ──
   const now = new Date();
@@ -232,7 +348,7 @@ export default function ProfilePage({
     const [photosRes, profileRes] = await Promise.all([
       supabase
         .from("photos")
-        .select("id, created_at, group_id")
+        .select("id, created_at, group_id, image_path, note")
         .eq("user_id", userId)
         .in("group_id", allGroups.map(g => g.id))
         .order("created_at", { ascending: true }),
@@ -329,9 +445,50 @@ export default function ProfilePage({
     setTargetedChallenges(mapped);
   }, [userId, username]);
 
+  const loadCoffreStats = useCallback(async (groupId: string) => {
+    const photoIds = photoTimestamps.filter(p => p.group_id === groupId).map(p => p.id);
+    if (photoIds.length === 0) {
+      setGroupCoffreStats(prev => ({ ...prev, [groupId]: { comments: 0, stickers: 0, loading: false } }));
+      return;
+    }
+    setGroupCoffreStats(prev => ({ ...prev, [groupId]: { ...(prev[groupId] ?? { comments: 0, stickers: 0 }), loading: true } }));
+    const [commentsRes, stickersRes] = await Promise.all([
+      supabase.from("comments").select("id", { count: "exact", head: true }).eq("user_id", userId).in("photo_id", photoIds),
+      supabase.from("reactions").select("id", { count: "exact", head: true }).eq("user_id", userId).in("photo_id", photoIds),
+    ]);
+    setGroupCoffreStats(prev => ({
+      ...prev,
+      [groupId]: { comments: commentsRes.count ?? 0, stickers: stickersRes.count ?? 0, loading: false },
+    }));
+  }, [userId, photoTimestamps]);
+
+  const deleteLastMoment = useCallback(async () => {
+    if (!coffreLastPhoto || !coffreGroup) return;
+    setDeletingMoment(true);
+    try {
+      await supabase.from("reactions").delete().eq("photo_id", coffreLastPhoto.id);
+      await supabase.from("comments").delete().eq("photo_id", coffreLastPhoto.id);
+      await supabase.from("comment_views").delete().eq("photo_id", coffreLastPhoto.id);
+
+      const { error } = await supabase.from("photos").delete().eq("id", coffreLastPhoto.id);
+      if (error) throw error;
+      setShowDeleteMomentModal(false);
+      await loadData();
+    } catch (e: any) {
+      showToast(e.message ?? "Erreur lors de la suppression", "error");
+    } finally {
+      setDeletingMoment(false);
+    }
+  }, [coffreLastPhoto, coffreGroup, loadData, showToast]);
+
   // Initial load
   useEffect(() => { loadData(); }, [loadData]);
   useEffect(() => { loadChallengeHistory(); }, [loadChallengeHistory]);
+
+  // Load coffre stats when group or photos change
+  useEffect(() => {
+    if (coffreGroup) loadCoffreStats(coffreGroup.id);
+  }, [coffreGroup, loadCoffreStats]);
 
   // Refetch every time the profile tab becomes active
   const prevActive = useRef(false);
@@ -590,8 +747,166 @@ export default function ProfilePage({
           />
         }
       >
+        {/* ── Top header ── */}
+        <View style={[styles.topHeaderWrap, { paddingTop: insets.top, marginTop: 16 }]}>
+          <View style={styles.topHeaderRow}>
+            <View style={styles.topHeaderLeft}>
+              <GroupNamePill name={groupName ?? ""} bg={colors.brand} fg={colors.textInverse} />
+            </View>
+            <View style={styles.topHeaderRight}>
+              <TouchableOpacity style={styles.moreBtn} activeOpacity={0.75} onPress={() => setShowSettings(true)}>
+                <Icon name="menu" size={20} color={colors.iconNeutral} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
+        {/* ── NEW: content ── */}
+        <View style={styles.newContent}>
+          {/* profil */}
+          <View style={styles.newProfilCard}>
+            {/* top-info */}
+            <View style={styles.newTopInfo}>
+              {/* a. Avatar */}
+              <View style={styles.newAvatar}>
+                {avatarUrl
+                  ? <Image source={{ uri: avatarUrl }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+                  : <Text style={styles.newAvatarInitial}>{(username?.[0] ?? "?").toUpperCase()}</Text>}
+              </View>
+
+              {/* b. Week activity */}
+              <View style={styles.newWeekActivity}>
+                <View style={styles.newWeekCountRow}>
+                  <Text style={styles.newWeekCountNum}>{streakWeeks.size}</Text>
+                  <Text style={styles.newWeekCountLabel}>semaine{streakWeeks.size > 1 ? "s" : ""}</Text>
+                </View>
+                <Text style={styles.newWeekSubtitle}>d'activité</Text>
+              </View>
+
+              {/* c. Streaks */}
+              <View style={styles.newStreaks}>
+                <View style={styles.newStreakRow}>
+                  <Text style={styles.newStreakNum}>{streak}</Text>
+                  <DropletIcon size={20} color={colors.brand} />
+                </View>
+                <Text style={styles.newStreakLabel}>streak</Text>
+              </View>
+            </View>
+
+            {/* list-day */}
+            <View style={styles.newListDay}>
+              {weekDayStatuses.map(({ state }, i) => (
+                <View key={i} style={styles.newStreakBlock}>
+                  <View style={[
+                    styles.newDaySquare,
+                    state === "active" && { backgroundColor: colors.brand },
+                    state === "lost"   && { backgroundColor: colors.brandSecondary },
+                    (state === "future" || state === "today") && {
+                      backgroundColor: "transparent",
+                      borderWidth: 1,
+                      borderColor: state === "today" ? colors.borderBrandTertiary : colors.borderNeutralTertiary,
+                    },
+                  ]}>
+                    {(state === "active" || state === "lost") && (
+                      <DropletIcon size={16} color={colors.iconBrandOnBrand} />
+                    )}
+                  </View>
+                  <Text style={[styles.newDayLabel, state === "today" && { color: colors.textBrandTertiary }]}>{DAY_LABELS[i]}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* container-coffre */}
+          {sortedCoffreGroups.length > 0 && (
+            <View style={styles.containerCoffre}>
+              {/* title */}
+              <View style={styles.coffreTitle}>
+                <Text style={styles.cofreTitleText} numberOfLines={1}>
+                  {(sortedCoffreGroups[coffreGroupIndex]?.name ?? "").toUpperCase()}
+                </Text>
+                {sortedCoffreGroups.length > 1 && (
+                  <View style={styles.cofrePagination}>
+                    <TouchableOpacity
+                      disabled={coffreGroupIndex === 0}
+                      onPress={() => setCoffreGroupIndex(i => i - 1)}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <View style={{ transform: [{ rotate: "180deg" }] }}>
+                        <Icon name="chevron-right" size={24} color={coffreGroupIndex === 0 ? colors.iconDisabled : colors.icon} />
+                      </View>
+                    </TouchableOpacity>
+                    <Text style={styles.cofrePaginText}>{coffreGroupIndex + 1}/{sortedCoffreGroups.length}</Text>
+                    <TouchableOpacity
+                      disabled={coffreGroupIndex === sortedCoffreGroups.length - 1}
+                      onPress={() => setCoffreGroupIndex(i => i + 1)}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Icon name="chevron-right" size={24} color={coffreGroupIndex === sortedCoffreGroups.length - 1 ? colors.iconDisabled : colors.icon} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+
+              {/* bento */}
+              <View style={styles.cofreBento}>
+                <View style={styles.cofreBentoRow}>
+                  <View style={[styles.cofreBentoItem, { flex: 1 }]}>
+                    <Text style={styles.cofreBentoNum}>{coffreMomentsCount}</Text>
+                    <Text style={styles.cofreBentoLabel}>Moments partagés</Text>
+                  </View>
+                  <View style={[styles.cofreBentoItem, { flex: 1 }]}>
+                    <Text style={styles.cofreBentoNum}>{coffreRevealsCount}</Text>
+                    <Text style={styles.cofreBentoLabel}>Reveal vécus</Text>
+                  </View>
+                </View>
+                <View style={styles.cofreBentoRow}>
+                  <View style={[styles.cofreBentoItem, { flex: 1 }]}>
+                    <Text style={styles.cofreBentoNum}>
+                      {coffreGroupStat?.loading ? "…" : String(coffreGroupStat?.comments ?? 0)}
+                    </Text>
+                    <Text style={styles.cofreBentoLabel}>Commentaires</Text>
+                  </View>
+                  <View style={[styles.cofreBentoItem, { flex: 1 }]}>
+                    <Text style={styles.cofreBentoNum}>
+                      {coffreGroupStat?.loading ? "…" : String(coffreGroupStat?.stickers ?? 0)}
+                    </Text>
+                    <Text style={styles.cofreBentoLabel}>Stickers</Text>
+                  </View>
+                </View>
+                {/* last moment row — only shown if current week and reveal not started */}
+                {canDeleteLastMoment && (
+                  <View style={styles.cofreBentoLastItem}>
+                    <View style={styles.cofreBentoLastInfo}>
+                      <Text style={styles.cofreBentoLastTitle}>Dernier moment partagé</Text>
+                      {canDeleteLastMoment && (
+                        <TouchableOpacity
+                          style={styles.cofreDeleteBtn}
+                          onPress={() => setShowDeleteMomentModal(true)}
+                          activeOpacity={0.7}
+                        >
+                          <Icon name="trash" size={20} color={colors.bgDanger} />
+                          <Text style={styles.cofreDeleteText}>Supprimer</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                    <View style={styles.cofreBentoCapture}>
+                      {coffreLastPhoto?.image_path !== "text_mode"
+                        ? <Image source={{ uri: r2Storage.getPublicUrl(coffreLastPhoto?.image_path ?? "") }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+                        : <View style={{ flex: 1, backgroundColor: colors.bgNeutral }} />
+                      }
+                    </View>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
+        </View>
+
         {/* ── Profile card ── */}
-        <View style={[styles.profileCard, { marginTop: insets.top + 20 }]}>
+        <View style={[styles.profileCard, { marginTop: 20 }]}>
           <TouchableOpacity onPress={updateAvatar} disabled={uploading} style={styles.profileAvatarBtn}>
             <View style={styles.profileAvatar}>
               {avatarUrl
@@ -970,6 +1285,50 @@ export default function ProfilePage({
         </KeyboardAvoidingView>
       </Modal>
 
+      {/* Delete last moment confirmation — BottomSheet */}
+      <BottomSheet visible={showDeleteMomentModal} onClose={() => !deletingMoment && setShowDeleteMomentModal(false)}>
+        <View style={[styles.deleteMomentSheet, { height: Dimensions.get("window").height - insets.top - insets.bottom - 44 }]}>
+          {/* text */}
+          <View style={styles.deleteMomentText}>
+            <Text style={styles.deleteMomentTitle}>Attention cette action est définitive</Text>
+            <Text style={styles.deleteMomentBody}>
+              Ce moment sera supprimé du jardin {(coffreGroup?.name ?? "").toUpperCase()}
+            </Text>
+          </View>
+
+          {/* capture */}
+          <View style={styles.deleteMomentCapture}>
+            {coffreLastPhoto && coffreLastPhoto.image_path !== "text_mode"
+              ? <Image source={{ uri: r2Storage.getPublicUrl(coffreLastPhoto.image_path) }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+              : <View style={{ flex: 1, backgroundColor: colors.bgNeutral }} />
+            }
+          </View>
+
+          {/* list-button */}
+          <View style={styles.deleteMomentButtons}>
+            <TouchableOpacity
+              style={[styles.deleteMomentConfirmBtn, deletingMoment && { opacity: 0.7 }]}
+              onPress={deleteLastMoment}
+              disabled={deletingMoment}
+              activeOpacity={0.8}
+            >
+              {deletingMoment
+                ? <ActivityIndicator color={colors.textDangerOnDanger} />
+                : <Text style={styles.deleteMomentConfirmText}>Oui, supprimer définitivement</Text>
+              }
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.deleteMomentCancelBtn}
+              onPress={() => setShowDeleteMomentModal(false)}
+              disabled={deletingMoment}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.deleteMomentCancelText}>Non, garder</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </BottomSheet>
+
       <MotivationalNotificationsModal
         visible={showNotifModal}
         onClose={() => {
@@ -983,6 +1342,15 @@ export default function ProfilePage({
       <DeleteAccountModal
         visible={showDeleteModal}
         onClose={() => setShowDeleteModal(false)}
+      />
+
+      <SettingsSheet
+        visible={showSettings}
+        onClose={() => setShowSettings(false)}
+        initialPage={{
+          title: "Paramètres",
+          content: <SettingsMainContent username={username} avatarUrl={avatarUrl} />,
+        }}
       />
 
       <Modal visible={showRandomInfo} transparent animationType="fade" onRequestClose={() => setShowRandomInfo(false)}>
@@ -1013,6 +1381,297 @@ export default function ProfilePage({
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   scroll: { flex: 1, backgroundColor: colors.bg },
+
+  // Top header
+  topHeaderWrap: {
+    backgroundColor: colors.bg,
+    paddingHorizontal: 20,
+  },
+  topHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xl,
+  },
+  topHeaderLeft: {
+    flex: 1,
+    alignItems: "flex-start",
+  },
+  topHeaderRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  moreBtn: {
+    width: 40,
+    height: 40,
+    padding: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: radii.md,
+    backgroundColor: colors.card,
+  },
+
+  // ── New design section ──
+  newContent: {
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: spacing.xl,
+    paddingHorizontal: 20,
+    marginTop: 32,
+    alignSelf: "stretch",
+  },
+  newProfilCard: {
+    padding: spacing.xl,
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: spacing.lg,
+    alignSelf: "stretch",
+    borderRadius: radii.lg,
+    backgroundColor: colors.card,
+  },
+  newTopInfo: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    alignSelf: "stretch",
+  },
+  newAvatar: {
+    width: 80, height: 80,
+    borderRadius: radii.xl,
+    overflow: "hidden",
+    backgroundColor: colors.accentMuted,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  newAvatarInitial: {
+    fontFamily: typography.family.bold,
+    fontSize: typography.size.xl,
+    color: colors.text,
+  },
+  newWeekActivity: {
+    flexDirection: "column",
+    justifyContent: "center",
+    alignItems: "flex-start",
+    alignSelf: "stretch",
+  },
+  newWeekCountRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: spacing.xs,
+  },
+  newWeekCountNum: {
+    ...textStyles.heading,
+    color: colors.text,
+  },
+  newWeekCountLabel: {
+    ...textStyles.bodyStrong,
+    color: colors.text,
+  },
+  newWeekSubtitle: {
+    ...textStyles.bodySmall,
+    color: colors.textSecondary,
+  },
+  newStreaks: {
+    flexDirection: "column",
+    justifyContent: "center",
+    alignItems: "flex-start",
+    alignSelf: "stretch",
+  },
+  newStreakRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  newStreakNum: {
+    ...textStyles.heading,
+    color: colors.text,
+  },
+  newStreakLabel: {
+    ...textStyles.bodySmall,
+    color: colors.textSecondary,
+  },
+  newListDay: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    alignSelf: "stretch",
+  },
+  newStreakBlock: {
+    width: 32,
+    flexDirection: "column",
+    alignItems: "flex-start",
+  },
+  newDaySquare: {
+    width: 32, height: 32,
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: radii.sm,
+  },
+  newDayLabel: {
+    height: 20,
+    alignSelf: "stretch",
+    textAlign: "center",
+    ...textStyles.bodySmall,
+    color: colors.textSecondary,
+  },
+
+  // ── Container coffre ──
+  containerCoffre: {
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: spacing.md,
+    alignSelf: "stretch",
+  },
+  coffreTitle: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    alignSelf: "stretch",
+  },
+  cofreTitleText: {
+    ...textStyles.heading,
+    color: colors.text,
+    flex: 1,
+    textTransform: "uppercase",
+  },
+  cofrePagination: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  cofrePaginText: {
+    ...textStyles.bodySmall,
+    color: colors.text,
+  },
+  cofreBento: {
+    flexDirection: "column",
+    gap: 8,
+    alignSelf: "stretch",
+  },
+  cofreBentoRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  cofreBentoItem: {
+    padding: spacing.lg,
+    flexDirection: "column",
+    justifyContent: "center",
+    alignItems: "flex-start",
+    gap: 0,
+    backgroundColor: colors.bg,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  cofreBentoNum: {
+    ...textStyles.subtitleStrong,
+    color: colors.textNeutral,
+  },
+  cofreBentoLabel: {
+    ...textStyles.bodyExtraSmall,
+    color: colors.textNeutral,
+  },
+  cofreBentoLastItem: {
+    padding: spacing.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xxl,
+    alignSelf: "stretch",
+    backgroundColor: colors.bg,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  cofreBentoLastInfo: {
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: spacing.lg,
+    flex: 1,
+  },
+  cofreBentoLastTitle: {
+    ...textStyles.bodyBase,
+    color: colors.text,
+  },
+  cofreDeleteBtn: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  cofreDeleteText: {
+    ...textStyles.singleLineBodyBaseStrong,
+    color: colors.textDangerTertiary,
+    includeFontPadding: false,
+    lineHeight: undefined,
+  } as any,
+  cofreBentoCapture: {
+    width: 36,
+    aspectRatio: 9 / 16,
+    borderRadius: radii.sm,
+    overflow: "hidden",
+    alignSelf: "stretch",
+  },
+
+  // Delete moment bottom sheet
+  deleteMomentSheet: {
+    paddingTop: spacing.xl3 - 28,
+    paddingBottom: 0,
+    flexDirection: "column",
+    justifyContent: "space-between",
+  },
+  deleteMomentText: {
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    alignSelf: "stretch",
+  },
+  deleteMomentTitle: {
+    ...textStyles.subtitleStrong,
+    color: colors.text,
+    alignSelf: "stretch",
+  },
+  deleteMomentBody: {
+    ...textStyles.bodyBase,
+    color: colors.textSecondary,
+  },
+  deleteMomentCapture: {
+    height: "50%",
+    aspectRatio: 9 / 16,
+    borderRadius: radii.sm,
+    overflow: "hidden",
+    alignSelf: "center",
+  },
+  deleteMomentButtons: {
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: spacing.md,
+    alignSelf: "stretch",
+  },
+  deleteMomentConfirmBtn: {
+    alignSelf: "stretch",
+    paddingVertical: spacing.lg,
+    borderRadius: radii.lg,
+    backgroundColor: colors.bgDanger,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  deleteMomentConfirmText: {
+    ...textStyles.singleLineSubheadingStrong,
+    color: colors.textDangerOnDanger,
+  },
+  deleteMomentCancelBtn: {
+    alignSelf: "stretch",
+    paddingVertical: spacing.lg,
+    borderRadius: radii.lg,
+    backgroundColor: colors.bgNeutralTertiary,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  deleteMomentCancelText: {
+    ...textStyles.singleLineSubheadingStrong,
+    color: colors.textNeutral,
+  },
 
   // Profile card
   profileCard: {

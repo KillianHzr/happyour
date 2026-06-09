@@ -317,9 +317,10 @@ export const buildColors = (mode: ThemeMode) => ({
   bgMeasurement:  resolveToken("-> Color/background/utilities/measurement",           mode),
 
   // ── Texte par défaut ──────────────────────────────────────────────────────
-  text:           resolveToken("-> Color/text/default/default",    mode),  // #FFFFFF
-  textSecondary:  resolveToken("-> Color/text/default/secondary",  mode),  // rgba(255,255,255,0.5)
-  textTertiary:   resolveToken("-> Color/text/default/tertiary",   mode),  // rgba(255,255,255,0.4)
+  text:                resolveToken("-> Color/text/default/default",         mode),  // #FFFFFF
+  textInverse:         resolveToken("-> Color/text/default/default-inverse", mode),  // Dark: #0C0C0D / Light: #FFFFFF
+  textSecondary:       resolveToken("-> Color/text/default/secondary",       mode),  // rgba(255,255,255,0.5)
+  textTertiary:        resolveToken("-> Color/text/default/tertiary",        mode),  // rgba(255,255,255,0.4)
 
   // ── Texte neutre ──────────────────────────────────────────────────────────
   textNeutral:           resolveToken("-> Color/text/neutral/default",             mode),
@@ -409,9 +410,10 @@ export const buildColors = (mode: ThemeMode) => ({
   borderSwatch:      resolveToken("-> Color/border/utilities/swatch",         mode),
 
   // ── Icônes par défaut ─────────────────────────────────────────────────────
-  icon:          resolveToken("-> Color/icon/default/default",   mode),
-  iconSecondary: resolveToken("-> Color/icon/default/secondary", mode),
-  iconTertiary:  resolveToken("-> Color/icon/default/tertiary",  mode),
+  icon:          resolveToken("-> Color/icon/default/default",         mode),
+  iconSecondary: resolveToken("-> Color/icon/default/secondary",       mode),
+  iconTertiary:  resolveToken("-> Color/icon/default/tertiary",        mode),
+  iconInverse:   resolveToken("-> Color/icon/default/default-inverse", mode),
 
   // ── Icônes neutres ────────────────────────────────────────────────────────
   iconNeutral:              resolveToken("-> Color/icon/neutral/default",             mode),

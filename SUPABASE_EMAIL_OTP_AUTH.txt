@@ -1,0 +1,76 @@
+AUTHENTIFICATION PAR EMAIL OTP (sans mot de passe)
+===================================================
+
+Flow : l'utilisateur entre son email → reçoit un code à 6 chiffres → entre le code → connecté.
+Inscription et connexion sont le même flow (shouldCreateUser: true par défaut).
+
+
+────────────────────────────────────────────────────────────
+1. MODIFIER LE TEMPLATE EMAIL (obligatoire pour envoyer un code et pas un lien)
+────────────────────────────────────────────────────────────
+
+Dashboard → Authentication → Email Templates → "Magic Link"
+
+Remplacer le contenu par :
+
+  <h2>Ton code de connexion HappyOur</h2>
+  <p>{{ .Token }}</p>
+
+Sans ça, Supabase envoie un lien cliquable au lieu d'un code — ne pas oublier.
+
+
+────────────────────────────────────────────────────────────
+2. MODIFIER auth-context.tsx
+────────────────────────────────────────────────────────────
+
+Remplacer login() / register() par deux fonctions :
+
+  // Étape 1 : envoyer le code OTP
+  const sendOtp = async (email: string) => {
+    const { error } = await supabase.auth.signInWithOtp({ email });
+    if (error) throw error;
+    // data.user et data.session sont null ici, c'est normal
+  };
+
+  // Étape 2 : vérifier le code
+  const verifyOtp = async (email: string, token: string) => {
+    const { data, error } = await supabase.auth.verifyOtp({
+      email,
+      token,   // le code à 6 chiffres saisi par l'utilisateur
+      type: "email",
+    });
+    if (error) throw error;
+    // data.session est maintenant valide, AuthProvider redirige automatiquement
+  };
+
+Exposer sendOtp et verifyOtp dans le contexte.
+
+
+────────────────────────────────────────────────────────────
+3. MODIFIER LES ÉCRANS AUTH (app/(auth)/)
+────────────────────────────────────────────────────────────
+
+Écran 1 — Saisie de l'email :
+  • Input email + bouton "Continuer"
+  • Appelle sendOtp(email)
+  • Navigue vers l'écran du code en passant l'email en paramètre
+
+Écran 2 — Saisie du code :
+  • Input 6 chiffres + bouton "Valider"
+  • Appelle verifyOtp(email, code)
+  • Bouton "Renvoyer le code" → rappelle sendOtp(email)
+  • Gestion d'erreur : "Token has expired" → demander de renvoyer
+
+En cas de succès, la session est créée et AuthProvider redirige seul.
+
+
+────────────────────────────────────────────────────────────
+NOTES
+────────────────────────────────────────────────────────────
+• Pas de rebuild natif nécessaire : 100% JS
+• shouldCreateUser est true par défaut → pas besoin de séparer inscription et connexion
+• Pour bloquer l'inscription automatique (connexion seule) :
+    signInWithOtp({ email, options: { shouldCreateUser: false } })
+• Expiration du code : Dashboard → Auth → Providers → Email → "Email OTP Expiration"
+  Défaut recommandé : 300 secondes (5 min)
+• L'email s'affiche déjà dans les paramètres via user?.email (déjà en place)
