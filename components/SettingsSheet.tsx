@@ -5,7 +5,21 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { spacing, radii, textStyles } from "../lib/theme";
 import { useTheme } from "../lib/theme-context";
+import { useAuth } from "../lib/auth-context";
+import { supabase } from "../lib/supabase";
 import Icon from "./Icon";
+import Shape from "./Shape";
+
+export type SettingsData = {
+  recovery_email: string | null;
+  notifications_paused: boolean;
+  notif_reveal_comment: boolean;
+  notif_reveal_sticker: boolean;
+  notif_reveal_mention: boolean;
+  daily_notifications_count: number;
+  notification_periods: string[];
+  display_language: string;
+};
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -32,11 +46,19 @@ type StackEntry = {
 type SettingsNavContextType = {
   push: (config: SettingsPageConfig) => void;
   pop: () => void;
+  updateTopConfig: (partial: Partial<Pick<SettingsPageConfig, "trailingButton">>) => void;
+  showToast: (message: string, type?: "success" | "error") => void;
+  settingsData: SettingsData | null;
+  refetchSettingsData: () => Promise<void>;
 };
 
 const SettingsNavContext = createContext<SettingsNavContextType>({
   push: () => {},
   pop: () => {},
+  updateTopConfig: () => {},
+  showToast: () => {},
+  settingsData: null,
+  refetchSettingsData: async () => {},
 });
 
 export const useSettingsNav = () => useContext(SettingsNavContext);
@@ -150,11 +172,16 @@ type Props = {
   initialPage: SettingsPageConfig;
 };
 
+type SettingsToast = { message: string; type: "success" | "error" };
+
 let _nextId = 0;
 
 export default function SettingsSheet({ visible, onClose, initialPage }: Props) {
   const { colors } = useTheme();
+  const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [mounted, setMounted] = useState(false);
+  const [settingsData, setSettingsData] = useState<SettingsData | null>(null);
   const sheetAnim = useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const [stack, setStack] = useState<StackEntry[]>([]);
   const stackRef = useRef<StackEntry[]>([]);
@@ -163,13 +190,70 @@ export default function SettingsSheet({ visible, onClose, initialPage }: Props) 
   const componentMountedRef = useRef(true);
   const initialPageRef = useRef(initialPage);
 
+  // ── Toast ──
+  const [toast, setToast] = useState<SettingsToast | null>(null);
+  const toastAnim = useRef({
+    opacity: new Animated.Value(0),
+    translateY: new Animated.Value(-8),
+  }).current;
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     initialPageRef.current = initialPage;
+    // Sync root stack entry so SettingsMainContent reflects updated props
+    setStack(prev => {
+      if (prev.length === 0) return prev;
+      const updated = [...prev];
+      updated[0] = { ...updated[0], config: { ...updated[0].config, content: initialPage.content, title: initialPage.title } };
+      stackRef.current = updated;
+      return updated;
+    });
   }, [initialPage]);
 
   useEffect(() => {
     return () => { componentMountedRef.current = false; };
   }, []);
+
+  const fetchSettingsData = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("profiles")
+      .select("recovery_email, notifications_paused, notif_reveal_comment, notif_reveal_sticker, notif_reveal_mention, daily_notifications_count, notification_periods, display_language")
+      .eq("id", user.id)
+      .single();
+    if (data) {
+      setSettingsData({
+        recovery_email: data.recovery_email ?? null,
+        notifications_paused: data.notifications_paused ?? false,
+        notif_reveal_comment: data.notif_reveal_comment ?? true,
+        notif_reveal_sticker: data.notif_reveal_sticker ?? true,
+        notif_reveal_mention: data.notif_reveal_mention ?? true,
+        daily_notifications_count: data.daily_notifications_count ?? 3,
+        notification_periods: data.notification_periods ?? ["morning", "afternoon", "evening"],
+        display_language: data.display_language ?? "fr-FR",
+      });
+    }
+  }, [user]);
+
+  const dismissToast = useCallback(() => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    Animated.parallel([
+      Animated.timing(toastAnim.opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+      Animated.timing(toastAnim.translateY, { toValue: -8, duration: 200, useNativeDriver: true }),
+    ]).start(() => setToast(null));
+  }, [toastAnim]);
+
+  const showToast = useCallback((message: string, type: "success" | "error" = "success") => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastAnim.opacity.setValue(0);
+    toastAnim.translateY.setValue(-8);
+    setToast({ message, type });
+    Animated.parallel([
+      Animated.spring(toastAnim.opacity, { toValue: 1, useNativeDriver: true, tension: 60, friction: 10 }),
+      Animated.spring(toastAnim.translateY, { toValue: 0, useNativeDriver: true, tension: 60, friction: 10 }),
+    ]).start();
+    toastTimerRef.current = setTimeout(dismissToast, 3000);
+  }, [toastAnim, dismissToast]);
 
   // Animate the full sheet out, then notify parent
   const triggerClose = useCallback(() => {
@@ -203,6 +287,7 @@ export default function SettingsSheet({ visible, onClose, initialPage }: Props) 
       sheetAnim.setValue(SCREEN_WIDTH);
       setStack([initial]);
       setMounted(true);
+      fetchSettingsData();
       requestAnimationFrame(() => {
         Animated.timing(sheetAnim, {
           toValue: 0,
@@ -255,6 +340,18 @@ export default function SettingsSheet({ visible, onClose, initialPage }: Props) 
     });
   }, []);
 
+  // Update the config of the top page (e.g. enable/disable trailing button)
+  const updateTopConfig = useCallback((partial: Partial<Pick<SettingsPageConfig, "trailingButton">>) => {
+    setStack(prev => {
+      if (prev.length === 0) return prev;
+      const updated = [...prev];
+      const top = updated[updated.length - 1];
+      updated[updated.length - 1] = { ...top, config: { ...top.config, ...partial } };
+      stackRef.current = updated;
+      return updated;
+    });
+  }, []);
+
   // Pop the top sub-page, or close the sheet if at root
   const pop = useCallback(() => {
     if (isAnimating.current) return;
@@ -280,6 +377,9 @@ export default function SettingsSheet({ visible, onClose, initialPage }: Props) 
 
   if (!mounted) return null;
 
+  // Header height: paddingTop (safe area) + marginTop (spacing.lg=16) + iconBtn (40) + marginTop below header
+  const toastTop = insets.top + 16 + 40 + 16;
+
   return (
     <Modal
       visible={mounted}
@@ -297,7 +397,7 @@ export default function SettingsSheet({ visible, onClose, initialPage }: Props) 
           },
         ]}
       >
-        <SettingsNavContext.Provider value={{ push, pop }}>
+        <SettingsNavContext.Provider value={{ push, pop, updateTopConfig, showToast, settingsData, refetchSettingsData: fetchSettingsData }}>
           {stack.map((entry, index) => (
             <Animated.View
               key={entry.id}
@@ -317,8 +417,50 @@ export default function SettingsSheet({ visible, onClose, initialPage }: Props) 
               {entry.config.content}
             </Animated.View>
           ))}
+
+          {/* ── In-modal toast ── */}
+          {toast && (
+            <Animated.View
+              style={[
+                toastSt.toast,
+                {
+                  top: toastTop,
+                  backgroundColor: colors.card,
+                  opacity: toastAnim.opacity,
+                  transform: [{ translateY: toastAnim.translateY }],
+                },
+              ]}
+              pointerEvents="box-none"
+            >
+              <Shape name="photo" size={20} color={colors.iconBrandTertiary} />
+              <Text style={[toastSt.text, { color: colors.text }]} numberOfLines={2}>
+                {toast.message}
+              </Text>
+              <TouchableOpacity onPress={dismissToast} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Icon name="x" size={20} color={colors.icon} />
+              </TouchableOpacity>
+            </Animated.View>
+          )}
         </SettingsNavContext.Provider>
       </Animated.View>
     </Modal>
   );
 }
+
+const toastSt = StyleSheet.create({
+  toast: {
+    position: "absolute",
+    left: spacing.lg,
+    right: spacing.lg,
+    zIndex: 999,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 16,
+    borderRadius: radii.sm,
+  },
+  text: {
+    flex: 1,
+    ...textStyles.bodyStrong,
+  },
+});

@@ -103,6 +103,7 @@ type Props = {
   revealConfig: { day: number; hour: number };
   onAvatarUpdate: (url: string) => void;
   onUsernameUpdate: (name: string) => void;
+  onEmailUpdate?: (email: string) => void;
   onStreakUpdate: (days: number) => void;
   isActive?: boolean;
   refreshKey?: number;
@@ -201,7 +202,7 @@ function GroupNamePill({ name, bg, fg }: { name: string; bg: string; fg: string 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function ProfilePage({
   userId, username, avatarUrl, email, groupName, allGroups, revealConfig,
-  onAvatarUpdate, onUsernameUpdate, onStreakUpdate, isActive = false, refreshKey,
+  onAvatarUpdate, onUsernameUpdate, onEmailUpdate, onStreakUpdate, isActive = false, refreshKey,
 }: Props) {
   const insets = useSafeAreaInsets();
   const { logout } = useAuth();
@@ -315,6 +316,11 @@ export default function ProfilePage({
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showRandomInfo, setShowRandomInfo] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+
+  const settingsInitialPage = useMemo(() => ({
+    title: "Paramètres",
+    content: <SettingsMainContent username={username} avatarUrl={avatarUrl} onUsernameUpdate={onUsernameUpdate} onAvatarUpdate={onAvatarUpdate} onEmailUpdate={onEmailUpdate} />,
+  }), [username, avatarUrl, onUsernameUpdate, onAvatarUpdate, onEmailUpdate]);
 
   // ── Calendar ──
   const now = new Date();
@@ -751,7 +757,7 @@ export default function ProfilePage({
         <View style={[styles.topHeaderWrap, { paddingTop: insets.top, marginTop: 16 }]}>
           <View style={styles.topHeaderRow}>
             <View style={styles.topHeaderLeft}>
-              <GroupNamePill name={groupName ?? ""} bg={colors.brand} fg={colors.textInverse} />
+              <GroupNamePill name={username} bg={colors.brand} fg={colors.textInverse} />
             </View>
             <View style={styles.topHeaderRight}>
               <TouchableOpacity style={styles.moreBtn} activeOpacity={0.75} onPress={() => setShowSettings(true)}>
@@ -1347,10 +1353,7 @@ export default function ProfilePage({
       <SettingsSheet
         visible={showSettings}
         onClose={() => setShowSettings(false)}
-        initialPage={{
-          title: "Paramètres",
-          content: <SettingsMainContent username={username} avatarUrl={avatarUrl} />,
-        }}
+        initialPage={settingsInitialPage}
       />
 
       <Modal visible={showRandomInfo} transparent animationType="fade" onRequestClose={() => setShowRandomInfo(false)}>

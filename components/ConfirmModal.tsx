@@ -1,7 +1,7 @@
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
 import BottomSheet from "./BottomSheet";
 import { useTheme, useThemedStyles } from "../lib/theme-context";
-import { spacing, radii, textStyles, type ThemeColors } from "../lib/theme";
+import { spacing, radii, textStyles, typography, type ThemeColors } from "../lib/theme";
 
 type Props = {
   visible: boolean;
@@ -120,6 +120,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   confirmText: {
     ...textStyles.singleLineSubheadingStrong,
+    lineHeight: typography.size.xl + 4, // 24px — laisse de la place pour les jambages (p, g, j…)
   },
   cancelBtn: {
     alignSelf: "stretch",
@@ -131,5 +132,6 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   cancelText: {
     ...textStyles.singleLineSubheadingStrong,
+    lineHeight: typography.size.xl + 4, // 24px — idem
   },
 });

@@ -12,10 +12,22 @@ import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import { spacing, radii, textStyles, typography, type ThemeColors } from "../../lib/theme";
 import Icon, { type IconName } from "../Icon";
 import ConfirmModal from "../ConfirmModal";
+import BottomSheet from "../BottomSheet";
+import ProfileSettingsPage from "./ProfileSettingsPage";
+import NotificationsSettingsPage from "./NotificationsSettingsPage";
+import ThemeSettingsPage from "./ThemeSettingsPage";
+import AccessibilitySettingsPage from "./AccessibilitySettingsPage";
+import PrivacySettingsPage from "./PrivacySettingsPage";
+import HelpSettingsPage from "./HelpSettingsPage";
+import AboutSettingsPage from "./AboutSettingsPage";
+import { APP_NAME } from "./LegalComponents";;
 
 type Props = {
   username: string;
   avatarUrl: string | null;
+  onUsernameUpdate?: (name: string) => void;
+  onAvatarUpdate?: (url: string) => void;
+  onEmailUpdate?: (email: string) => void;
 };
 
 // ─── Empty placeholder page ───────────────────────────────────────────────────
@@ -44,7 +56,7 @@ function UsernamePill({ name, colors }: { name: string; colors: any }) {
 
 // ─── Main content ─────────────────────────────────────────────────────────────
 
-export default function SettingsMainContent({ username, avatarUrl }: Props) {
+export default function SettingsMainContent({ username, avatarUrl, onUsernameUpdate, onAvatarUpdate, onEmailUpdate }: Props) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const { user, logout } = useAuth();
@@ -54,6 +66,7 @@ export default function SettingsMainContent({ username, avatarUrl }: Props) {
 
   const email = user?.email ?? null;
 
+  const [showSubscription, setShowSubscription] = useState(false);
   const [showLogout, setShowLogout] = useState(false);
   const [showDeleteStep1, setShowDeleteStep1] = useState(false);
   const [showDeleteStep2, setShowDeleteStep2] = useState(false);
@@ -101,7 +114,11 @@ export default function SettingsMainContent({ username, avatarUrl }: Props) {
         {/* ── Profile link ── */}
         <TouchableOpacity
           style={styles.profileRow}
-          onPress={() => pushEmpty("Mon profil")}
+          onPress={() => push({
+            title: "Profil",
+            content: <ProfileSettingsPage username={username} avatarUrl={avatarUrl} email={email} onUsernameUpdate={onUsernameUpdate} onAvatarUpdate={onAvatarUpdate} onEmailUpdate={onEmailUpdate} />,
+            trailingButton: { label: "Enregistrer", disabled: true, onPress: () => {} },
+          })}
           activeOpacity={0.7}
         >
           <View style={styles.profileInfo}>
@@ -128,23 +145,23 @@ export default function SettingsMainContent({ username, avatarUrl }: Props) {
           <SettingsSection
             title="Personnalisation"
             items={[
-              { label: "Notifications", icon: "bell", onPress: () => pushEmpty("Notifications") },
-              { label: "Thème", icon: "moon", onPress: () => pushEmpty("Thème") },
-              { label: "Accessibilité", icon: "eye", onPress: () => pushEmpty("Accessibilité") },
+              { label: "Notifications", icon: "bell", onPress: () => push({ title: "Notifications", content: <NotificationsSettingsPage /> }) },
+              { label: "Thème", icon: "moon", onPress: () => push({ title: "Thème", content: <ThemeSettingsPage /> }) },
+              { label: "Accessibilité", icon: "eye", onPress: () => push({ title: "Accessibilité", content: <AccessibilitySettingsPage /> }) },
             ]}
           />
           <SettingsSection
             title="Sécurité"
             items={[
-              { label: "Confidentialité", icon: "shield", onPress: () => pushEmpty("Confidentialité") },
-              { label: "Aide et assistance", icon: "life-buoy", onPress: () => pushEmpty("Aide et assistance") },
-              { label: "À propos", icon: "info", onPress: () => pushEmpty("À propos") },
+              { label: "Confidentialité", icon: "shield", onPress: () => push({ title: "Confidentialité", content: <PrivacySettingsPage /> }) },
+              { label: "Aide et assistance", icon: "life-buoy", onPress: () => push({ title: "Aide et assistance", content: <HelpSettingsPage /> }) },
+              { label: "À propos", icon: "info", onPress: () => push({ title: "À propos", content: <AboutSettingsPage /> }) },
             ]}
           />
           {/* ── Subscription button ── */}
           <TouchableOpacity
             style={[styles.subscriptionBtn, { borderColor: colors.borderBrandSecondary }]}
-            onPress={() => {}}
+            onPress={() => setShowSubscription(true)}
             activeOpacity={0.85}
           >
             <Image
@@ -167,6 +184,28 @@ export default function SettingsMainContent({ username, avatarUrl }: Props) {
           />
         </View>
       </ScrollView>
+
+      {/* ── Subscription coming soon modal ── */}
+      <BottomSheet visible={showSubscription} onClose={() => setShowSubscription(false)}>
+        <View style={subscriptionModalSt.content}>
+          <View style={subscriptionModalSt.textBlock}>
+            <View style={[subscriptionModalSt.iconWrap, { backgroundColor: colors.brandTertiary }]}>
+              <Icon name="key" size={28} color={colors.brand} />
+            </View>
+            <Text style={[subscriptionModalSt.title, { color: colors.text }]}>Bientôt disponible</Text>
+            <Text style={[subscriptionModalSt.subtitle, { color: colors.textSecondary }]}>
+              L'abonnement {APP_NAME} est en cours de développement. Tu seras notifié dès son lancement.
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[subscriptionModalSt.btn, { backgroundColor: colors.brand }]}
+            onPress={() => setShowSubscription(false)}
+            activeOpacity={0.8}
+          >
+            <Text style={[subscriptionModalSt.btnText, { color: colors.textBrandOnBrand }]}>OK, j'attends !</Text>
+          </TouchableOpacity>
+        </View>
+      </BottomSheet>
 
       {/* ── Logout modal ── */}
       <ConfirmModal
@@ -432,5 +471,47 @@ const makeStyles = (_colors: ThemeColors) => StyleSheet.create({
   },
   trailingText: {
     ...textStyles.bodyBase,
+  },
+});
+
+const subscriptionModalSt = StyleSheet.create({
+  content: {
+    flexDirection: "column",
+    gap: spacing.xl3,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.lg,
+    paddingHorizontal: spacing.lg,
+  },
+  textBlock: {
+    flexDirection: "column",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  iconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: radii.md,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  title: {
+    ...textStyles.subtitleStrong,
+    textAlign: "center",
+  },
+  subtitle: {
+    ...textStyles.bodyBase,
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  btn: {
+    alignSelf: "stretch",
+    paddingVertical: spacing.lg,
+    borderRadius: radii.lg,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  btnText: {
+    ...textStyles.singleLineSubheadingStrong,
+    lineHeight: typography.size.xl + 4,
   },
 });

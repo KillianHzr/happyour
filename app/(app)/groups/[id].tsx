@@ -1106,6 +1106,7 @@ export default function MainPagerScreen() {
       revealConfig={revealConfig}
       onAvatarUpdate={setAvatarUrl}
       onUsernameUpdate={setUsername}
+      onEmailUpdate={setEmail}
       onStreakUpdate={setStreakDays}
       isActive={currentPage === 2}
       refreshKey={profileRefreshKey}
