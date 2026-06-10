@@ -1,22 +1,21 @@
-import { useState } from "react";
-import { View, Text, StyleSheet, Dimensions, TouchableOpacity, Modal } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { View, Text, StyleSheet, Dimensions, TouchableOpacity, Modal, FlatList, Animated, Share } from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
 import { getChallengePrompt, type ChallengeWithData, type ChallengeResponse } from "../../lib/challenges";
 import Svg, { Path } from "react-native-svg";
 import { r2Storage } from "../../lib/r2";
 import ChallengeAudioPlayer from "./ChallengeAudioPlayer";
-import { radii, typography, type ThemeColors } from "../../lib/theme";
+import { radii, typography, shadows, spacing, textStyles, stroke, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
+import { supabase } from "../../lib/supabase";
+import CommentModal from "../CommentModal";
+import { type Reaction } from "../../lib/feed-types";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
-
-const COLS = 3;
-const GRID_GAP = 8;
-const CARD_SIZE = (SCREEN_WIDTH - 40 - GRID_GAP * (COLS - 1)) / COLS;
-
-// Audio waveform bars for thumbnails
-const MINI_WAVE = [6, 10, 8, 14, 10, 12, 7];
 
 function getSecondUrl(r: ChallengeResponse): string | null {
   if (!r.second_image_path || r.second_image_path === "text_mode") return null;
@@ -28,39 +27,6 @@ function mediaType(path: string | null): "text" | "audio" | "drawing" | "photo" 
   if (path.endsWith(".m4a")) return "audio";
   if (path.includes("_draw")) return "drawing";
   return "photo";
-}
-
-// Inline thumbnail renderer for grid cards
-function ResponseThumb({ r }: { r: ChallengeResponse }) {
-  const { colors } = useTheme();
-  const type = mediaType(r.image_path);
-  if (type === "text") {
-    return (
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.card, justifyContent: "center", alignItems: "center", padding: 6 }]}>
-        <Text style={{ color: colors.text, fontSize: typography.size.xs, fontFamily: typography.family.semibold, textAlign: "center" }} numberOfLines={4}>
-          {r.note}
-        </Text>
-      </View>
-    );
-  }
-  if (type === "audio") {
-    return (
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", gap: 5 }]}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
-          {MINI_WAVE.map((h, i) => (
-            <View key={i} style={{ width: 2.5, height: h, borderRadius: radii.xs, backgroundColor: colors.textSecondary }} />
-          ))}
-        </View>
-        <View style={{ width: 22, height: 22, borderRadius: radii.md, backgroundColor: colors.accentMuted, justifyContent: "center", alignItems: "center" }}>
-          <Svg width="9" height="9" viewBox="0 0 24 24" fill={colors.text}>
-            <Path d="M8 5v14l11-7z" />
-          </Svg>
-        </View>
-      </View>
-    );
-  }
-  // drawing or photo — both render as image with cover (thumbnail context)
-  return <Image source={{ uri: r.url }} style={StyleSheet.absoluteFillObject} contentFit="cover" />;
 }
 
 // Modal media renderer — respects exact same ratios as PhotoFeed
@@ -91,7 +57,6 @@ function ModalMedia({ imagePath, url, note }: { imagePath: string | null; url: s
       </View>
     );
   }
-  // Regular photo — cover + top-aligned, same as PhotoFeed
   return (
     <Image
       source={{ uri: url ?? "" }}
@@ -102,186 +67,417 @@ function ModalMedia({ imagePath, url, note }: { imagePath: string | null; url: s
   );
 }
 
+function StepperDot({ isActive, activeColor, inactiveColor, style }: { isActive: boolean, activeColor: string, inactiveColor: string, style: any }) {
+  const animValue = useRef(new Animated.Value(isActive ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(animValue, {
+      toValue: isActive ? 1 : 0,
+      duration: 100,
+      useNativeDriver: false,
+    }).start();
+  }, [isActive]);
+
+  const backgroundColor = animValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: [inactiveColor, activeColor],
+  });
+
+  return <Animated.View style={[style, { backgroundColor }]} />;
+}
+
 export default function ChallengeVotePage({
   challenge,
   period,
   currentUserId,
   onVote,
+  members = [],
+  showResponsesModal = false,
+  onCloseResponsesModal,
+  onCommentModalChange,
 }: {
   challenge: ChallengeWithData;
   period: 1 | 2;
   currentUserId?: string;
   onVote: (challengeId: string, responseId: string) => void;
+  members?: any[];
+  showResponsesModal?: boolean;
+  onCloseResponsesModal?: () => void;
+  onCommentModalChange?: (visible: boolean) => void;
 }) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const cvStyles = useThemedStyles(makeStyles);
-  const [selected, setSelected] = useState<ChallengeResponse | null>(null);
+  
+  const [activeIndex, setActiveIndex] = useState(0);
   const [swapped, setSwapped] = useState(false);
+  const [commentModalVisible, setCommentModalVisible] = useState(false);
+  const [commentModalMode, setCommentModalMode] = useState<"comment" | "sticker">("comment");
+  const [commentActiveResponse, setCommentActiveResponse] = useState<ChallengeResponse | null>(null);
+  const [reactionsMap, setReactionsMap] = useState<Record<string, Reaction[]>>({});
 
+  useEffect(() => {
+    onCommentModalChange?.(commentModalVisible);
+  }, [commentModalVisible, onCommentModalChange]);
+
+  const responsesCount = challenge.responses.length;
   const isTarget = challenge.target_user_id === currentUserId;
   const myVote = challenge.votes.find((v) => v.voter_id === currentUserId);
-  const nonTargetResponses = challenge.responses.filter((r) => !r.is_target_response);
-  const targetResponse = challenge.responses.find((r) => r.is_target_response);
   const canVote = !isTarget;
-  const periodLabel = period === 1 ? "LUNDI → MERCREDI" : "JEUDI → DIMANCHE";
   const prompt = isTarget
     ? "Tu étais la cible !"
     : getChallengePrompt(challenge.target_username, challenge.theme.label);
 
-  const openResponse = (r: ChallengeResponse) => {
-    setSelected(r);
-    setSwapped(false);
+  const fetchReactions = async () => {
+    if (challenge.responses.length === 0) return;
+    const responseIds = challenge.responses.map(r => r.id);
+    try {
+      const { data } = await supabase
+        .from("reactions")
+        .select("id, photo_id, user_id, emoji, created_at")
+        .in("photo_id", responseIds);
+
+      if (data) {
+        const map: Record<string, Reaction[]> = {};
+        data.forEach((r: any) => {
+          if (!map[r.photo_id]) map[r.photo_id] = [];
+          const member = members.find(m => m.user_id === r.user_id);
+          map[r.photo_id].push({
+            id: r.id,
+            user_id: r.user_id,
+            username: member?.username ?? "Anonyme",
+            avatar_url: member?.avatar_url ?? null,
+            sticker_id: r.emoji,
+            created_at: r.created_at
+          } as any);
+        });
+        setReactionsMap(map);
+      }
+    } catch (err) {
+      console.error("Error fetching challenge reactions:", err);
+    }
   };
 
-  const handleVote = (responseId: string) => {
-    onVote(challenge.id, responseId);
-    setSelected(null);
+  // Fetch reactions and subscribe to changes in real-time
+  useEffect(() => {
+    fetchReactions();
+
+    const channel = supabase
+      .channel(`challenge-reactions-${challenge.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "reactions" }, () => {
+        fetchReactions();
+      })
+      .subscribe();
+
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [challenge.responses, members]);
+
+  // Reset indices on modal close/open
+  useEffect(() => {
+    if (showResponsesModal) {
+      setActiveIndex(0);
+      setSwapped(false);
+    }
+  }, [showResponsesModal]);
+
+  const handleScroll = (event: any) => {
+    const slideSize = event.nativeEvent.layoutMeasurement.width;
+    if (slideSize <= 0) return;
+    const index = Math.round(event.nativeEvent.contentOffset.x / slideSize);
+    if (index >= 0 && index < challenge.responses.length && index !== activeIndex) {
+      setActiveIndex(index);
+      setSwapped(false); // Reset swap state for new slide
+    }
   };
 
-  // Derive modal display from swap state
-  const modalImagePath = selected
-    ? swapped ? (selected.second_image_path ?? selected.image_path) : selected.image_path
-    : null;
-  const modalUrl = selected
-    ? swapped ? (getSecondUrl(selected) ?? selected.url) : selected.url
-    : null;
-  const modalNote = selected
-    ? swapped ? (selected.second_note ?? null) : selected.note
-    : null;
-  const hasSecond = selected ? !!(selected.second_image_path) : false;
-  const modalType = mediaType(modalImagePath);
+  const activeResponse = challenge.responses[activeIndex];
+  const hasSecond = activeResponse ? !!(activeResponse.second_image_path) : false;
 
-  return (
-    <View style={[cvStyles.container, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 16 }]}>
-      {/* Header */}
-      <View style={cvStyles.header}>
-        <View style={cvStyles.defiPill}>
-          <Text style={cvStyles.defiPillText}>DÉFI {period}</Text>
+  // Shrunken layout animation for comment visibility inside responses modal
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const translateYAnim = useRef(new Animated.Value(0)).current;
+  const borderRadiusAnim = useRef(new Animated.Value(16)).current;
+  const opacityAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    let targetScale = 1;
+    let targetTranslateY = 0;
+
+    if (commentModalVisible) {
+      const MODAL_HEIGHT = 392;
+      const targetBottom = SCREEN_HEIGHT - MODAL_HEIGHT - 24;
+      
+      const Q_BOTTOM = Math.max(insets.top, 16) + 80;
+      const TARGET_HEIGHT = Math.max(150, targetBottom - Q_BOTTOM);
+      
+      targetScale = TARGET_HEIGHT / 500;
+      
+      const currentLayoutCenter = (SCREEN_HEIGHT + Q_BOTTOM) / 2;
+      const targetCenter = targetBottom - TARGET_HEIGHT / 2;
+      targetTranslateY = targetCenter - currentLayoutCenter;
+    }
+
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: targetScale,
+        useNativeDriver: true,
+        tension: 65,
+        friction: 10,
+      }),
+      Animated.spring(translateYAnim, {
+        toValue: targetTranslateY,
+        useNativeDriver: true,
+        tension: 65,
+        friction: 10,
+      }),
+      Animated.spring(borderRadiusAnim, {
+        toValue: commentModalVisible ? 24 : 16,
+        useNativeDriver: true,
+        tension: 65,
+        friction: 10,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: commentModalVisible ? 0 : 1,
+        duration: 200,
+        useNativeDriver: true,
+      })
+    ]).start();
+  }, [commentModalVisible]);
+
+  const renderResponseSlide = ({ item, index }: { item: ChallengeResponse, index: number }) => {
+    const slideImagePath = swapped ? (item.second_image_path ?? item.image_path) : item.image_path;
+    const slideUrl = swapped ? (getSecondUrl(item) ?? item.url) : item.url;
+    const slideNote = swapped ? (item.second_note ?? null) : item.note;
+    const isTextOnly = mediaType(slideImagePath) === "text";
+    const isDrawing = mediaType(slideImagePath) === "drawing";
+    
+    return (
+      <Animated.View style={[cvStyles.slideCard, { opacity: index === activeIndex ? 1 : opacityAnim }]}>
+        <View style={cvStyles.slideMediaWrapper}>
+          <ModalMedia imagePath={slideImagePath} url={slideUrl} note={slideNote} />
         </View>
-        <Text style={cvStyles.periodLabel}>{periodLabel}</Text>
-      </View>
 
-      {/* Prompt */}
-      <Text style={cvStyles.prompt} numberOfLines={3}>{prompt}</Text>
-      {challenge.proposed_by_username && (
-        <View style={cvStyles.proposerChip}>
-          <Text style={cvStyles.proposerChipText}>✦ Proposé par {challenge.proposed_by_username}</Text>
-        </View>
-      )}
-
-      {/* Target row */}
-      <View style={cvStyles.targetRow}>
-        {challenge.target_avatar_url ? (
-          <Image source={{ uri: challenge.target_avatar_url }} style={cvStyles.targetAvatar} contentFit="cover" />
-        ) : (
-          <View style={[cvStyles.targetAvatar, cvStyles.avatarFallback]}>
-            <Text style={cvStyles.avatarLetter}>{challenge.target_username[0]?.toUpperCase()}</Text>
-          </View>
+        {!isTextOnly && !isDrawing && (
+          <LinearGradient
+            colors={["transparent", "rgba(0,0,0,0.85)"]}
+            style={StyleSheet.absoluteFillObject}
+            pointerEvents="none"
+          />
         )}
-        <View style={{ flex: 1 }}>
-          <Text style={cvStyles.targetLabel}>La cible</Text>
-          <Text style={cvStyles.targetName}>{challenge.target_username}</Text>
-        </View>
-        {targetResponse && targetResponse.image_path !== "text_mode" && (
-          <TouchableOpacity style={cvStyles.targetThumb} onPress={() => openResponse(targetResponse)} activeOpacity={0.8}>
-            <ResponseThumb r={targetResponse} />
-          </TouchableOpacity>
-        )}
-      </View>
 
-      {/* Responses grid */}
-      <Text style={cvStyles.responsesLabel}>
-        {nonTargetResponses.length === 0 ? "Aucune proposition" : "Les propositions"}
-      </Text>
-      {nonTargetResponses.length > 0 && (
-        <View style={cvStyles.responseGrid}>
-          {nonTargetResponses.map((r) => {
-            const isVoted = myVote?.response_id === r.id;
-            return (
-              <TouchableOpacity
-                key={r.id}
-                style={[cvStyles.responseCard, isVoted && cvStyles.responseCardVoted]}
-                onPress={() => openResponse(r)}
-                activeOpacity={0.8}
-              >
-                <View style={cvStyles.responseThumb}>
-                  <ResponseThumb r={r} />
-                  {isVoted && (
-                    <View style={cvStyles.votedBadge}>
-                      <Text style={cvStyles.votedBadgeText}>✓</Text>
-                    </View>
-                  )}
-                  {r.second_image_path && (
-                    <View style={cvStyles.dualCaptureDot} />
-                  )}
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      )}
-
-      {/* Footer hint */}
-      <Text style={cvStyles.hint}>
-        {isTarget
-          ? "Tu étais la cible, tu ne peux pas voter"
-          : myVote
-          ? "Vote enregistré 👍"
-          : "Appuie sur une proposition pour voter"}
-      </Text>
-
-      {/* Response detail modal */}
-      <Modal visible={!!selected} transparent animationType="fade" onRequestClose={() => setSelected(null)}>
-        {selected && (
-          <View style={cvStyles.modalOverlay}>
-            <View style={[cvStyles.modalContainer, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 }]}>
-              {/* Top bar */}
-              <View style={cvStyles.modalTopBar}>
-                <TouchableOpacity style={cvStyles.modalCloseBtn} onPress={() => setSelected(null)} activeOpacity={0.7}>
-                  <Svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                    <Path d="M18 6L6 18M6 6l12 12" stroke={colors.text} strokeWidth="2.5" strokeLinecap="round" />
-                  </Svg>
-                </TouchableOpacity>
-                {hasSecond && (
-                  <TouchableOpacity style={cvStyles.swapBtn} onPress={() => setSwapped(v => !v)} activeOpacity={0.7}>
-                    <Svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={colors.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <Path d="M7 16V4m0 0L3 8m4-4l4 4" /><Path d="M17 8v12m0 0l4-4m-4 4l-4-4" />
-                    </Svg>
-                    <Text style={cvStyles.swapBtnText}>{swapped ? "Voir 1ère capture" : "Voir 2ème capture"}</Text>
-                  </TouchableOpacity>
-                )}
+        <View style={cvStyles.cardDetailsContainer} pointerEvents="box-none">
+          <View style={cvStyles.authorInfoRow} pointerEvents="box-none">
+            {item.avatar_url ? (
+              <Image source={{ uri: item.avatar_url }} style={cvStyles.authorAvatar} contentFit="cover" />
+            ) : (
+              <View style={[cvStyles.authorAvatar, cvStyles.authorAvatarFallback]}>
+                <Text style={cvStyles.authorAvatarLetter}>{(item.username || "?")[0].toUpperCase()}</Text>
               </View>
-
-              {/* Media — full height */}
-              <View style={cvStyles.modalMedia}>
-                <ModalMedia imagePath={modalImagePath} url={modalUrl} note={modalNote} />
-              </View>
-
-              {/* Caption — only for image/drawing/audio (not when text_mode already shows the text) */}
-              {modalType !== "text" && modalNote ? (
-                <View style={cvStyles.noteBox}>
-                  <Text style={cvStyles.noteText}>{modalNote}</Text>
-                </View>
-              ) : null}
-
-              {/* Vote button */}
-              {canVote && (
-                myVote?.response_id === selected.id ? (
-                  <View style={cvStyles.voteBtnVoted}>
-                    <Text style={cvStyles.voteBtnVotedText}>✓ Tu as voté pour cette réponse</Text>
-                  </View>
-                ) : (
-                  <TouchableOpacity style={cvStyles.voteBtn} onPress={() => handleVote(selected.id)} activeOpacity={0.85}>
-                    <Text style={cvStyles.voteBtnText}>
-                      {myVote ? "Changer mon vote pour cette réponse" : "Voter pour cette réponse"}
-                    </Text>
-                  </TouchableOpacity>
-                )
+            )}
+            <View style={cvStyles.authorTextSection} pointerEvents="none">
+              <Text style={[
+                cvStyles.authorName,
+                !isDrawing && { color: "#FFFFFF" }
+              ]}>{item.username}</Text>
+              {!isTextOnly && (
+                <Text style={[
+                  cvStyles.authorNote,
+                  !isDrawing && { color: "rgba(255, 255, 255, 0.7)" }
+                ]} numberOfLines={2}>{slideNote || "Sans description"}</Text>
               )}
             </View>
           </View>
-        )}
+        </View>
+      </Animated.View>
+    );
+  };
+
+  return (
+    <View style={cvStyles.container}>
+      {/* ── PART 1: Main Challenge Intro Screen ── */}
+      <View style={cvStyles.titleRow}>
+        <Text style={cvStyles.titleText}>Défi</Text>
+        <Svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+          <Path d="M32 13.8502C32 9.7264 28.7574 6.33436 24.746 5.89225C24.2131 5.83127 23.7564 5.48063 23.5509 4.98516C22.3406 2.0581 19.3492 0 16 0C12.6508 0 9.65937 2.0581 8.4491 4.98516C8.24358 5.48063 7.79448 5.83889 7.25404 5.89225C3.24263 6.34198 0 9.7264 0 13.8502C0 16.0303 0.875357 18.0045 2.28354 19.4528C2.7098 19.8873 2.83159 20.5123 2.61085 21.0764C2.24548 22.014 2.04757 23.0278 2.0628 24.095C2.12369 28.4474 5.8078 32.0453 10.1541 31.9996C12.0266 31.9767 13.7393 31.3135 15.0866 30.2159C15.6118 29.789 16.373 29.789 16.8906 30.2159C18.2379 31.3135 19.9505 31.9843 21.823 31.9996C26.1694 32.0453 29.8535 28.4474 29.9144 24.095C29.9296 23.0278 29.7317 22.0064 29.3663 21.0764C29.1456 20.5123 29.275 19.8797 29.6936 19.4528C31.1094 18.0121 31.9772 16.0379 31.9772 13.8502H32Z" fill={colors.icon} />
+          <Path d="M23.8554 5.84651C23.8782 5.84651 23.9087 5.84651 23.8554 5.84651V5.84651Z" fill={colors.icon} />
+        </Svg>
+      </View>
+
+      <View style={cvStyles.spacer300} />
+
+      <Text style={cvStyles.promptText}>{prompt}</Text>
+
+      <View style={cvStyles.spacer1200} />
+
+      {challenge.target_avatar_url ? (
+        <Image source={{ uri: challenge.target_avatar_url }} style={cvStyles.targetAvatarLarge} contentFit="cover" />
+      ) : (
+        <View style={[cvStyles.targetAvatarLarge, cvStyles.avatarLargeFallback]}>
+          <Text style={cvStyles.avatarLargeLetter}>{(challenge.target_username || "?")[0]?.toUpperCase()}</Text>
+        </View>
+      )}
+
+      <View style={cvStyles.spacer400} />
+
+      <View style={cvStyles.repliesBadge}>
+        <Text style={cvStyles.repliesBadgeText}>
+          {responsesCount} {responsesCount > 1 ? "réponses" : "réponse"}
+        </Text>
+      </View>
+      
+      {/* ── PART 2: Horizontally Scrollable Full-Screen Responses Modal ── */}
+      <Modal visible={showResponsesModal} transparent animationType="slide" onRequestClose={onCloseResponsesModal}>
+        <View style={cvStyles.modalOverlay}>
+          {/* Top Bar / Header */}
+          <View style={{ paddingTop: Math.max(insets.top, 16), zIndex: 10 }}>
+            <Animated.View style={{ 
+              transform: [{ translateY: opacityAnim.interpolate({ inputRange: [0, 1], outputRange: [-48, 0] }) }]
+            }}>
+              <Animated.View style={[cvStyles.modalHeader, { paddingTop: 0, opacity: opacityAnim }]}>
+                <View style={cvStyles.headerLeft}>
+                  <TouchableOpacity onPress={onCloseResponsesModal} activeOpacity={0.7} style={cvStyles.backBtn}>
+                    <Svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={colors.text} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <Path d="M15 19l-7-7 7-7" />
+                    </Svg>
+                  </TouchableOpacity>
+                  <Text style={cvStyles.headerTitle}>Défi</Text>
+                </View>
+
+                {hasSecond && (
+                  <TouchableOpacity style={cvStyles.swapBtn} onPress={() => setSwapped(v => !v)} activeOpacity={0.7}>
+                    <Svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={colors.text} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <Path d="M7 16V4m0 0L3 8m4-4l4 4" /><Path d="M17 8v12m0 0l4-4m-4 4l-4-4" />
+                    </Svg>
+                    <Text style={cvStyles.swapBtnText}>{swapped ? "1ère cap." : "2ème cap."}</Text>
+                  </TouchableOpacity>
+                )}
+              </Animated.View>
+
+              <Text style={cvStyles.modalQuestionText}>
+                Si{" "}
+                <Text style={cvStyles.orangeText}>{challenge.target_username}</Text>
+                {" était un"}{"aeiouyAEIOUY".includes(challenge.theme.label?.[0] ?? "") ? "" : "·e"}{" "}
+                <Text style={cvStyles.orangeText}>{challenge.theme.label}</Text>
+                {", ça serait..."}
+              </Text>
+            </Animated.View>
+          </View>
+
+          {/* Horizontally Scrollable Carousel */}
+          {responsesCount > 0 ? (
+            <View style={cvStyles.carouselFlexContainer}>
+              <Animated.View 
+                style={[
+                  cvStyles.carouselWrapper,
+                  {
+                    transform: [
+                      { translateY: translateYAnim },
+                      { scale: scaleAnim }
+                    ],
+                    borderRadius: borderRadiusAnim,
+                  }
+                ]}
+              >
+                <FlatList
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  data={challenge.responses}
+                  keyExtractor={(item) => item.id}
+                  renderItem={renderResponseSlide}
+                  onMomentumScrollEnd={handleScroll}
+                  snapToOffsets={challenge.responses.map((_, i) => i * (340 + spacing.lg))}
+                  decelerationRate="fast"
+                  scrollEnabled={!commentModalVisible}
+                  extraData={{ activeIndex }}
+                  contentContainerStyle={{
+                    paddingHorizontal: (SCREEN_WIDTH - 340) / 2 - spacing.lg / 2,
+                  }}
+                  style={{ flex: 1 }}
+                />
+              </Animated.View>
+
+              {/* Stepper Dot Page Indicators */}
+              {responsesCount > 1 && (
+                <View style={cvStyles.stepperContainer}>
+                  {challenge.responses.map((_, index) => (
+                    <StepperDot
+                      key={index}
+                      isActive={activeIndex === index}
+                      inactiveColor={colors.iconTertiary}
+                      activeColor={colors.icon}
+                      style={cvStyles.stepperDot}
+                    />
+                  ))}
+                </View>
+              )}
+            </View>
+          ) : (
+            <View style={cvStyles.emptyContainer}>
+              <Text style={cvStyles.emptyText}>Aucune réponse à afficher.</Text>
+            </View>
+          )}
+
+          {/* Bottom Control Bar */}
+          {activeResponse && !commentModalVisible && (
+            <View style={cvStyles.modalFooter}>
+              <TouchableOpacity 
+                style={cvStyles.modalReactionsBtn} 
+                onPress={() => {
+                  setCommentActiveResponse(activeResponse);
+                  setCommentModalMode("comment");
+                  setCommentModalVisible(true);
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={cvStyles.modalReactionsBtnText}>Réactions</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={cvStyles.placeholderBtn} 
+                activeOpacity={0.7}
+                onPress={async () => {
+                  const url = swapped ? (getSecondUrl(activeResponse) ?? activeResponse.url) : activeResponse.url;
+                  if (!url) return;
+                  try {
+                    const isAvailable = await Sharing.isAvailableAsync();
+                    if (!isAvailable) {
+                      Share.share({ url, message: url });
+                      return;
+                    }
+                    // Download to cache before sharing
+                    const filename = url.split('/').pop()?.split('?')[0] || 'shared_media.jpg';
+                    const localUri = FileSystem.cacheDirectory + filename;
+                    const { uri } = await FileSystem.downloadAsync(url, localUri);
+                    await Sharing.shareAsync(uri);
+                  } catch (e) {
+                    console.error("Share error:", e);
+                    Share.share({ url, message: url });
+                  }
+                }}
+              >
+                <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <Path d="M2.75 20V12C2.75 11.3096 3.30964 10.75 4 10.75C4.69036 10.75 5.25 11.3096 5.25 12V20C5.25 20.1989 5.32907 20.3896 5.46973 20.5303C5.61038 20.6709 5.80109 20.75 6 20.75H18C18.1989 20.75 18.3896 20.6709 18.5303 20.5303C18.6709 20.3896 18.75 20.1989 18.75 20V12C18.75 11.3096 19.3096 10.75 20 10.75C20.6904 10.75 21.25 11.3096 21.25 12V20C21.25 20.862 20.9073 21.6884 20.2979 22.2979C19.6884 22.9073 18.862 23.25 18 23.25H6C5.13805 23.25 4.31164 22.9073 3.70215 22.2979C3.09266 21.6884 2.75 20.862 2.75 20ZM10.75 15V5.01758L8.88379 6.88379C8.39563 7.37194 7.60437 7.37194 7.11621 6.88379C6.62806 6.39563 6.62806 5.60437 7.11621 5.11621L11.1162 1.11621L11.2109 1.03027C11.7019 0.629789 12.4261 0.658549 12.8838 1.11621L16.8838 5.11621C17.3719 5.60437 17.3719 6.39563 16.8838 6.88379C16.3956 7.37194 15.6044 7.37194 15.1162 6.88379L13.25 5.01758V15C13.25 15.6904 12.6904 16.25 12 16.25C11.3096 16.25 10.75 15.6904 10.75 15Z" fill="#FF561A"/>
+                </Svg>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* ── Comment / Reactions Modal for Active Slide ── */}
+          {commentModalVisible && commentActiveResponse && (
+            <CommentModal
+              visible={commentModalVisible}
+              onClose={() => {
+                setCommentModalVisible(false);
+                setCommentActiveResponse(null);
+              }}
+              photoId={commentActiveResponse.id}
+              photoOwnerId={commentActiveResponse.user_id}
+              reactions={reactionsMap[commentActiveResponse.id] || []}
+              initialMode={commentModalMode}
+            />
+          )}
+        </View>
       </Modal>
     </View>
   );
@@ -292,237 +488,257 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     width: SCREEN_WIDTH,
     height: "100%",
     backgroundColor: colors.bg,
-    paddingHorizontal: 20,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 12,
-  },
-  defiPill: {
-    backgroundColor: colors.accentMuted,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: radii.lg,
-  },
-  defiPillText: {
-    color: colors.text,
-    fontFamily: typography.family.bold,
-    fontSize: typography.size.xs,
-    letterSpacing: 0.8,
-  },
-  proposerChip: {
-    alignSelf: "flex-start",
-    backgroundColor: "rgba(255,200,80,0.12)",
-    borderRadius: radii.md,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: "rgba(255,200,80,0.25)",
-  },
-  proposerChipText: {
-    color: "rgba(255,200,80,0.85)",
-    fontFamily: typography.family.semibold,
-    fontSize: typography.size.xs,
-  },
-  periodLabel: {
-    color: colors.textTertiary,
-    fontFamily: typography.family.regular,
-    fontSize: typography.size.xs,
-    letterSpacing: 0.5,
-  },
-  prompt: {
-    color: colors.text,
-    fontFamily: typography.family.bold,
-    fontSize: typography.size.lg,
-    lineHeight: 24,
-    marginBottom: 14,
-  },
-  targetRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    backgroundColor: colors.card,
-    borderRadius: radii.lg,
-    padding: 12,
-    marginBottom: 18,
-  },
-  targetAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.lg,
-  },
-  avatarFallback: {
-    backgroundColor: colors.accentMuted,
+    paddingHorizontal: 68,
+    paddingTop: 140,
+    paddingBottom: 108,
     justifyContent: "center",
     alignItems: "center",
   },
-  avatarLetter: {
-    color: colors.text,
-    fontFamily: typography.family.bold,
-    fontSize: typography.size.sm,
-  },
-  targetLabel: {
-    color: colors.textTertiary,
-    fontFamily: typography.family.regular,
-    fontSize: typography.size.xs,
-    letterSpacing: 0.5,
-  },
-  targetName: {
-    color: colors.text,
-    fontFamily: typography.family.semibold,
-    fontSize: typography.size.sm,
-  },
-  targetThumb: {
-    width: 48,
-    height: 48,
-    borderRadius: radii.sm,
-    overflow: "hidden",
-    backgroundColor: colors.card,
-  },
-  responsesLabel: {
-    color: colors.textTertiary,
-    fontFamily: typography.family.semibold,
-    fontSize: typography.size.xs,
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-    marginBottom: 10,
-  },
-  responseGrid: {
+  titleRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: GRID_GAP,
-  },
-  responseCard: {
-    width: CARD_SIZE,
-    borderRadius: radii.md,
-    overflow: "hidden",
-    backgroundColor: colors.card,
-    borderWidth: 2,
-    borderColor: "transparent",
-  },
-  responseCardVoted: {
-    borderColor: "#34C759",
-  },
-  responseThumb: {
-    width: CARD_SIZE - 4,
-    height: CARD_SIZE - 4,
-    backgroundColor: colors.card,
-  },
-  votedBadge: {
-    position: "absolute",
-    top: 6,
-    right: 6,
-    width: 22,
-    height: 22,
-    borderRadius: radii.md,
-    backgroundColor: "rgba(52,199,89,0.85)",
-    justifyContent: "center",
     alignItems: "center",
+    gap: spacing.sm,
   },
-  votedBadgeText: {
-    color: "#FFFFFF",
-    fontFamily: typography.family.bold,
-    fontSize: typography.size.xs,
+  titleText: {
+    ...textStyles.titlePage,
+    color: colors.text,
   },
-  dualCaptureDot: {
-    position: "absolute",
-    bottom: 6,
-    right: 6,
-    width: 8,
-    height: 8,
-    borderRadius: radii.xs,
-    backgroundColor: colors.textSecondary,
-  },
-  hint: {
-    color: colors.textTertiary,
-    fontFamily: typography.family.regular,
-    fontSize: typography.size.xs,
+  promptText: {
+    fontFamily: typography.family.semibold,
+    fontSize: typography.size.xxl,
+    lineHeight: typography.size.xxl * 1.2,
     textAlign: "center",
-    marginTop: 14,
+    color: colors.text,
   },
-  // Modal
+  targetAvatarLarge: {
+    width: 160,
+    height: 240,
+    borderRadius: radii.md,
+  },
+  avatarLargeFallback: {
+    width: 160,
+    height: 240,
+    borderRadius: radii.md,
+    backgroundColor: colors.accentMuted,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarLargeLetter: {
+    color: colors.text,
+    fontFamily: typography.family.bold,
+    fontSize: 48,
+  },
+  repliesBadge: {
+    backgroundColor: colors.opacityLight,
+    borderRadius: radii.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    alignSelf: "center",
+  },
+  repliesBadgeText: {
+    ...textStyles.singleLineBodyBaseStrong,
+    color: colors.text,
+  },
+  spacer300: {
+    height: spacing.md,
+  },
+  spacer1200: {
+    height: spacing.xl3,
+  },
+  spacer400: {
+    height: spacing.lg,
+  },
+
+  // Modal Layout Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: colors.bg,
   },
-  modalContainer: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  modalTopBar: {
+  modalHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    marginBottom: 14,
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 0,
+    zIndex: 10,
   },
-  modalCloseBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.lg,
-    backgroundColor: colors.accentMuted,
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  backBtn: {
+    padding: 4,
     justifyContent: "center",
     alignItems: "center",
+  },
+  headerTitle: {
+    ...textStyles.subtitleStrong,
+    fontSize: 32,
+    color: colors.text,
+  },
+  modalQuestionText: {
+    ...textStyles.subheading,
+    color: colors.text,
+    textAlign: "center",
+    paddingTop: 12,
+    paddingBottom: 24,
+    paddingHorizontal: 16,
+  },
+  orangeText: {
+    color: colors.brand,
   },
   swapBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: colors.accentMuted,
+    backgroundColor: "rgba(255,255,255,0.08)",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: radii.lg,
   },
   swapBtnText: {
-    color: colors.secondary,
+    color: colors.text,
     fontFamily: typography.family.semibold,
-    fontSize: typography.size.xs,
+    fontSize: typography.size.xxs,
   },
-  modalMedia: {
+
+  // Carousel & Slides Styles
+  carouselFlexContainer: {
     flex: 1,
-    borderRadius: radii.lg,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  carouselWrapper: {
+    width: SCREEN_WIDTH,
+    height: 500,
+    backgroundColor: "transparent",
+  },
+  slideCard: {
+    width: 340,
+    height: 500,
+    borderRadius: radii.xl,
     overflow: "hidden",
-    backgroundColor: colors.bg,
-    marginBottom: 12,
+    position: "relative",
+    backgroundColor: "#000000",
+    marginHorizontal: spacing.lg / 2,
+    borderWidth: stroke.md,
+    borderColor: colors.borderBrandTertiary,
   },
-  noteBox: {
-    backgroundColor: colors.card,
+  slideMediaWrapper: {
+    width: "100%",
+    height: "100%",
+    position: "absolute",
+  },
+  cardDetailsContainer: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 16,
+  },
+  authorInfoRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  authorAvatar: {
+    width: 48,
+    height: 48,
     borderRadius: radii.md,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 12,
   },
-  noteText: {
-    color: colors.secondary,
+  authorAvatarFallback: {
+    width: 48,
+    height: 48,
+    borderRadius: radii.md,
+    backgroundColor: colors.accentMuted,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  authorAvatarLetter: {
+    color: "#FFFFFF",
+    fontFamily: typography.family.bold,
+    fontSize: 18,
+  },
+  authorTextSection: {
+    flex: 1,
+    gap: 2,
+  },
+  authorName: {
+    color: colors.textNeutral,
+    fontFamily: typography.family.bold,
+    fontSize: 14,
+  },
+  authorNote: {
+    color: colors.textNeutral,
     fontFamily: typography.family.regular,
-    fontSize: typography.size.sm,
-    textAlign: "center",
-    lineHeight: 20,
+    fontSize: 12,
+    lineHeight: 16,
   },
-  voteBtn: {
-    backgroundColor: colors.text,
+  stepperContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    alignSelf: "center",
+    gap: spacing.xs2,
+    marginTop: 24,
+    borderRadius: radii.full,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.opacityLight,
+  },
+  stepperDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: colors.iconTertiary,
+  },
+  stepperDotActive: {
+    backgroundColor: colors.icon,
+  },
+
+  // Bottom Footer Styles
+  modalFooter: {
+    height: 100,
+    backgroundColor: colors.bg,
+    flexDirection: "row",
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    gap: spacing.md,
+    alignItems: "flex-start",
+    zIndex: 10,
+  },
+  modalReactionsBtn: {
+    flex: 1,
+    height: 52,
+    backgroundColor: colors.brand,
     borderRadius: radii.lg,
-    paddingVertical: 15,
+    justifyContent: "center",
     alignItems: "center",
   },
-  voteBtnText: {
-    color: colors.bg,
-    fontFamily: typography.family.bold,
-    fontSize: typography.size.sm,
-  },
-  voteBtnVoted: {
-    backgroundColor: "rgba(52,199,89,0.15)",
+  placeholderBtn: {
+    width: 52,
+    height: 52,
     borderRadius: radii.lg,
-    paddingVertical: 15,
+    backgroundColor: colors.card,
+    justifyContent: "center",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(52,199,89,0.4)",
   },
-  voteBtnVotedText: {
-    color: "#34C759",
+  modalReactionsBtnText: {
     fontFamily: typography.family.bold,
+    fontSize: typography.size.md,
+    color: colors.textBrandOnBrandSecondary,
+  },
+
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  emptyText: {
+    color: colors.textSecondary || colors.textMuted,
+    fontFamily: typography.family.medium,
     fontSize: typography.size.sm,
   },
 });

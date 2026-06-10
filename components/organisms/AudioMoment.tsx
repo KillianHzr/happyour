@@ -152,9 +152,20 @@ export const AudioMoment = ({
   const paddingTop = insets.top;
   const paddingBottom = 0;
 
+  const animatedWrapperStyle = useAnimatedStyle(() => {
+    const radius = withTiming(isShrunken ? radii.xxl : radii.xl, { duration: 250 });
+    const bottomRadius = withTiming(isShrunken ? radii.xxl : 0, { duration: 250 });
+    return {
+      borderTopLeftRadius: radius,
+      borderTopRightRadius: radius,
+      borderBottomLeftRadius: bottomRadius,
+      borderBottomRightRadius: bottomRadius,
+    };
+  });
+
   return (
     <View style={[styles.fullscreenPage, { paddingTop, paddingBottom }]}>
-      <View style={styles.momentWrapper}>
+      <Reanimated.View style={[styles.momentWrapper, animatedWrapperStyle]}>
         <Pressable
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
@@ -218,7 +229,7 @@ export const AudioMoment = ({
             )}
           </View>
         </Pressable>
-      </View>
+      </Reanimated.View>
     </View>
   );
 };

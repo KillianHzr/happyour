@@ -74,13 +74,13 @@ export const RevealIntroPage = ({
       ) : null}
 
       <Animated.View style={[styles.middleContainer, { opacity, transform: [{ scale }] }]}>
-        {groupName ? (
+        <View style={styles.stickerWrapper}>
           <TextSticker 
-            text={groupName} 
-            fontSize={28} 
-            backgroundColor={colors.white} 
+            text="Noyaux" 
+            fontSize={typography.size.titleSm} 
+            padY={spacing.md} 
           />
-        ) : null}
+        </View>
 
         <View style={styles.titlesContainer}>
           <Text style={styles.mainTitle}>{customTitle ?? "REVEAL"}</Text>
@@ -129,6 +129,9 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   titlesContainer: {
     alignItems: "center",
     gap: spacing.negSm, // var space neg-200 (-8px)
+  },
+  stickerWrapper: {
+    transform: [{ rotate: "-2deg" }],
   },
   mainTitle: {
     fontFamily: typography.family.bold,

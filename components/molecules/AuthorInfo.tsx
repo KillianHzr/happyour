@@ -73,7 +73,7 @@ export const AuthorInfo = ({
             <AudioCaptionPlayer player={audioPlayer!} status={audioStatus!} onScrollLock={onScrollLock} waveform={captionWaveform} />
           </View>
         ) : (
-          note && <ExpandableNote text={note} maxLines={2} />
+          note !== null && <ExpandableNote text={note || "Sans description"} maxLines={2} />
         )}
       </View>
     </View>

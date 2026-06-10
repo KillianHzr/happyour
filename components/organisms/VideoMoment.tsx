@@ -175,9 +175,20 @@ export const VideoMoment = ({
 
   const overlayNote = swapped && hasSecond ? moment.second_note : moment.note;
 
+  const animatedWrapperStyle = useAnimatedStyle(() => {
+    const radius = withTiming(isShrunken ? radii.xxl : radii.xl, { duration: 250 });
+    const bottomRadius = withTiming(isShrunken ? radii.xxl : 0, { duration: 250 });
+    return {
+      borderTopLeftRadius: radius,
+      borderTopRightRadius: radius,
+      borderBottomLeftRadius: bottomRadius,
+      borderBottomRightRadius: bottomRadius,
+    };
+  });
+
   return (
     <View style={[styles.fullscreenPage, { paddingTop, paddingBottom }]}>
-      <View style={styles.momentWrapper}>
+      <Reanimated.View style={[styles.momentWrapper, animatedWrapperStyle]}>
         <Pressable
           style={StyleSheet.absoluteFill}
           onPress={() => !swapped && setIsPaused((v) => !v)}
@@ -243,7 +254,7 @@ export const VideoMoment = ({
             )}
           </View>
         </Pressable>
-      </View>
+      </Reanimated.View>
     </View>
   );
 };

@@ -70,9 +70,9 @@ export const CrownRevealPage = ({
 
           {/* Card 2: Individual Score (shown only if the current user is not the winner) */}
           {!isWinner && currentUserId && (
-            <View style={styles.card}>
+            <View style={styles.cardSecondPlace}>
               <View style={styles.avatarContainer56}>
-                <UserAvatar avatar_url={currentUserAvatarUrl} username={currentUsername} size={52} borderRadius={radii.xl - 2} />
+                <UserAvatar avatar_url={currentUserAvatarUrl} username={currentUsername} size={56} borderRadius={radii.lg} />
               </View>
               <View style={styles.cardTextContainer}>
                 <Text style={styles.cardNameSecondPlace}>Toi</Text>
@@ -132,6 +132,15 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: spacing.lg,
     alignSelf: "center",
   },
+  cardSecondPlace: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.opacityLight,
+    borderRadius: radii.lg,
+    padding: spacing.lg,
+    gap: spacing.lg,
+    alignSelf: "center",
+  },
   avatarContainer: {
     width: 80,
     height: 80,
@@ -146,10 +155,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   avatarContainer56: {
     width: 56,
     height: 56,
-    borderRadius: radii.xl,
-    borderWidth: 2,
-    borderColor: colors.icon,
-    borderStyle: "solid",
+    borderRadius: radii.lg,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",

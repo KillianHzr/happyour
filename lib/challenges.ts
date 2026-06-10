@@ -337,6 +337,8 @@ export async function fetchChallengeData(
         return {
           ...r,
           url: r.image_path === "text_mode" ? "" : r2Storage.getPublicUrl(r.image_path),
+          video_thumbnail_url: r.video_thumbnail_path ? r2Storage.getPublicUrl(r.video_thumbnail_path) : null,
+          second_video_thumbnail_url: r.second_video_thumbnail_path ? r2Storage.getPublicUrl(r.second_video_thumbnail_path) : null,
           username: m?.username ?? "Anonyme",
           avatar_url: m?.avatar_url ?? null,
         };

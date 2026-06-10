@@ -4,6 +4,7 @@ import { Image } from "expo-image";
 import { View, Text, StyleSheet, ScrollView, Dimensions, Animated, TouchableOpacity, Alert, TextInput, AppState, Modal, KeyboardAvoidingView, Platform, Pressable } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import BlurView from "../../../components/atoms/BlurView";
+import { SvgCutout } from "../../../components/atoms/SvgCutout";
 import { supabase } from "../../../lib/supabase";
 import { r2Storage } from "../../../lib/r2";
 import { useAuth } from "../../../lib/auth-context";
@@ -34,9 +35,10 @@ import { RevealHeader, type Participant } from "../../../components/organisms/Re
 import MotivationalNotificationsModal from "../../../components/MotivationalNotificationsModal";
 import { scheduleImmediateLocalNotification, scheduleFirstMomentReminder, notifyReaction } from "../../../lib/notifications";
 import { radii, spacing, typography, textStyles, type ThemeColors } from "../../../lib/theme";
+import { StatusBar } from "expo-status-bar";
 import Icon from "../../../components/Icon";
 import Shape, { type ShapeName } from "../../../components/Shape";
-import { useTheme, useThemedStyles } from "../../../lib/theme-context";
+import { useTheme, useThemedStyles, ForceTheme } from "../../../lib/theme-context";
 
 const captureToastShape = (mode: string): ShapeName => {
   if (mode === "VIDEO") return "video";
@@ -123,6 +125,7 @@ export default function MainPagerScreen() {
   const scrollX = useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const scrollRef = useRef<Animated.ScrollView>(null);
   const pagerTouchRef = useRef<{ x: number; y: number; decided: boolean } | null>(null);
+  const photoFeedRef = useRef<any>(null);
 
   // Multi-group
   const [allGroups, setAllGroups] = useState<GroupInfo[]>([]);
@@ -154,6 +157,7 @@ export default function MainPagerScreen() {
 
   // Modals
   const [showReveal, setShowReveal] = useState(false);
+  const [hideRevealHeader, setHideRevealHeader] = useState(false);
   const [showNotificationsModal, setShowNotificationsModal] = useState(false);
   const [connectedParticipants, setConnectedParticipants] = useState<Participant[]>([]);
   const [revealTimeLeft, setRevealTimeLeft] = useState("");
@@ -236,6 +240,8 @@ export default function MainPagerScreen() {
       id: string;
       username: string;
       avatarUrl: string | null;
+      photoUrl: string;
+      photoId: string;
       created_at: string;
       context: string;
     }> = [];
@@ -251,6 +257,8 @@ export default function MainPagerScreen() {
             id: `reaction-${rx.id}`,
             username: rx.username,
             avatarUrl: rx.avatar_url,
+            photoUrl: photo.video_thumbnail_url ?? photo.url,
+            photoId: photo.id,
             created_at: rx.created_at || photo.created_at,
             context: "A réagit avec un stickers à ton moment",
           });
@@ -261,18 +269,31 @@ export default function MainPagerScreen() {
     // 2. Comments on my photos
     for (const comment of activeData.comments || []) {
       if (myPhotoIds.has(comment.photo_id) && comment.user_id !== user.id) {
+        const photoObj = myPhotos.find((p) => p.id === comment.photo_id);
         list.push({
           id: `comment-${comment.id}`,
           username: comment.profiles?.username ?? "Anonyme",
           avatarUrl: comment.profiles?.avatar_url ?? null,
+          photoUrl: photoObj?.video_thumbnail_url ?? photoObj?.url ?? "",
+          photoId: comment.photo_id,
           created_at: comment.created_at,
           context: "A commenté ton moment",
         });
       }
     }
-
     return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [activeData, photos, user]);
+
+  const handleActivityClick = useCallback((item: any) => {
+    setShowNotificationsModal(false);
+    setTimeout(() => {
+      if (photoFeedRef.current) {
+        photoFeedRef.current.scrollToPhoto(item.photoId, true);
+      } else {
+        console.warn("photoFeedRef.current is not initialized");
+      }
+    }, 400);
+  }, []);
 
   const { revealDate, prevRevealDate } = getWeekBounds(revealConfig.day, revealConfig.hour);
   const revealEndDate = new Date(revealDate.getTime() + 24 * 60 * 60 * 1000);
@@ -355,7 +376,7 @@ export default function MainPagerScreen() {
           const [membersRes, photosRes] = await Promise.all([
             supabase.from("group_members").select("user_id, role, profiles:user_id(username, avatar_url)").eq("group_id", g.id),
             supabase.from("photos")
-              .select("id, image_path, second_image_path, audio_note_path, waveform, caption_waveform, created_at, note, user_id, profiles:user_id(username, avatar_url)")
+              .select("id, image_path, second_image_path, audio_note_path, waveform, caption_waveform, created_at, note, user_id, video_thumbnail_path, second_video_thumbnail_path, profiles:user_id(username, avatar_url)")
               .eq("group_id", g.id)
               .gte("created_at", photoStart.toISOString())
               .lt("created_at", photoEnd.toISOString())
@@ -367,10 +388,7 @@ export default function MainPagerScreen() {
           }));
           const me = (membersRes.data ?? []).find((m: any) => m.user_id === user.id);
           const isAdminForGroup = me?.role === "admin" ?? false;
-          const photoCount = photosRes.data?.length ?? 0;
 
-          const photoIds = (photosRes.data ?? []).map((p: any) => p.id);
-          
           const challengeWeekStart = getChallengeWeekStart(prevRevealDate);
           let challenges = await fetchChallengeData(g.id, challengeWeekStart, membersData);
           // DEV: if prev week has no challenges, load current week so simulate-reveal shows data
@@ -380,6 +398,20 @@ export default function MainPagerScreen() {
               challenges = await fetchChallengeData(g.id, currentWeekStart, membersData);
             }
           }
+
+          const challengeResponseIds = new Set<string>();
+          if (challenges.period1) {
+            challenges.period1.responses.forEach(r => challengeResponseIds.add(r.id));
+          }
+          if (challenges.period2) {
+            challenges.period2.responses.forEach(r => challengeResponseIds.add(r.id));
+          }
+
+          // Filter out challenge responses so they don't show up in the main feed
+          const filteredPhotosData = (photosRes.data ?? []).filter((p: any) => !challengeResponseIds.has(p.id));
+
+          const photoCount = filteredPhotosData.length;
+          const photoIds = filteredPhotosData.map((p: any) => p.id);
 
           // Check if current user responded to any challenge this week (unlocks reveal)
           const currentChallengeWeekStart = getChallengeWeekStart();
@@ -411,6 +443,14 @@ export default function MainPagerScreen() {
                 .order("created_at", { ascending: false })
             ]);
 
+            console.log("[DB FETCH] Fetching reactions for photoIds:", photoIds);
+            console.log("[DB FETCH] Reactions query result count:", reactionsRes.data?.length, "Error:", reactionsRes.error);
+            if (reactionsRes.data) {
+              reactionsRes.data.forEach((r: any) => {
+                console.log(`[DB FETCH] Reaction Row - ID: ${r.id}, PhotoID: ${r.photo_id}, UserID: ${r.user_id}, Emoji: ${r.emoji}, CreatedAt: ${r.created_at}`);
+              });
+            }
+
             const viewsMap = Object.fromEntries((viewsRes.data ?? []).map((v: any) => [v.photo_id, v.last_viewed_at]));
             const latestCommentsMap: Record<string, string> = {};
             for (const c of commentsRes.data ?? []) {
@@ -433,12 +473,15 @@ export default function MainPagerScreen() {
               } as any);
             }
 
-            const groupPhotos = photosRes.data!.map((p: any) => {
+            const groupPhotos = filteredPhotosData.map((p: any) => {
               const r2Url = p.image_path === "text_mode" ? "" : r2Storage.getPublicUrl(p.image_path);
               const url = mediaCache.getLocalUri(p.image_path) ?? r2Url;
               const lastViewedAt = viewsMap[p.id];
               const latestCommentAt = latestCommentsMap[p.id];
               const hasNewComments = latestCommentAt && (!lastViewedAt || new Date(latestCommentAt) > new Date(lastViewedAt));
+
+              const videoThumbnailUrl = p.video_thumbnail_path ? (mediaCache.getLocalUri(p.video_thumbnail_path) ?? r2Storage.getPublicUrl(p.video_thumbnail_path)) : null;
+              const secondVideoThumbnailUrl = p.second_video_thumbnail_path ? (mediaCache.getLocalUri(p.second_video_thumbnail_path) ?? r2Storage.getPublicUrl(p.second_video_thumbnail_path)) : null;
 
               return {
                 id: p.id,
@@ -457,6 +500,10 @@ export default function MainPagerScreen() {
                 user_id: p.user_id,
                 reactions: reactionsByPhoto[p.id] ?? [],
                 hasNewComments: !!hasNewComments,
+                video_thumbnail_path: p.video_thumbnail_path ?? null,
+                second_video_thumbnail_path: p.second_video_thumbnail_path ?? null,
+                video_thumbnail_url: videoThumbnailUrl,
+                second_video_thumbnail_url: secondVideoThumbnailUrl,
               };
             });
 
@@ -778,25 +825,27 @@ export default function MainPagerScreen() {
 
   // Real-time reactions
   useEffect(() => {
-    if (!user) return;
+    if (!user || !activeGroupId) return;
     const channel = supabase
       .channel(`rt-reactions-${activeGroupId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "reactions" }, (payload) => {
+        console.log("[Reactions RT] Postgres change received:", payload.eventType, payload.new || payload.old);
         if (payload.eventType === "DELETE") {
           const old = payload.old as any;
-          if (!old?.photo_id) return;
           setGroupData((prev) => {
             const next = { ...prev };
+            let updated = false;
             for (const gid in next) {
               const g = next[gid];
-              const pIdx = g.photos.findIndex((p) => p.id === old.photo_id);
+              const pIdx = g.photos.findIndex((p) => p.reactions.some((r) => r.id === old.id));
               if (pIdx === -1) continue;
               const newPhotos = [...g.photos];
               newPhotos[pIdx] = { ...newPhotos[pIdx], reactions: newPhotos[pIdx].reactions.filter((r) => r.id !== old.id) };
               next[gid] = { ...g, photos: newPhotos };
-              return next;
+              updated = true;
+              break;
             }
-            return prev;
+            return updated ? next : prev;
           });
         } else {
           const nr = payload.new as any;
@@ -827,7 +876,9 @@ export default function MainPagerScreen() {
           });
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`[Reactions RT] Subscribed status: ${status} for group: ${activeGroupId}`);
+      });
     return () => { supabase.removeChannel(channel); };
   }, [user, activeGroupId]);
 
@@ -1259,15 +1310,19 @@ export default function MainPagerScreen() {
 
       {/* ── REVEAL OVERLAY ── */}
       {showReveal && (
-        <View style={[StyleSheet.absoluteFill, styles.revealOverlay]}>
-          <RevealHeader
-            onClose={() => setShowReveal(false)}
-            countdownText={revealTimeLeft}
-            revealMsLeft={revealMsLeft}
-            participants={connectedParticipants}
-            onNotificationPress={() => setShowNotificationsModal(true)}
-          />
+        <ForceTheme mode="Dark">
+          <View style={[StyleSheet.absoluteFill, styles.revealOverlay]}>
+          {!hideRevealHeader && (
+            <RevealHeader
+              onClose={() => setShowReveal(false)}
+              countdownText={revealTimeLeft}
+              revealMsLeft={revealMsLeft}
+              participants={connectedParticipants}
+              onNotificationPress={() => setShowNotificationsModal(true)}
+            />
+          )}
           <PhotoFeed
+            ref={photoFeedRef}
             photos={photos}
             currentUserId={user?.id}
             nextUnlockDate={nextRevealDate}
@@ -1286,6 +1341,7 @@ export default function MainPagerScreen() {
               setShowReveal(false);
               jumpTo(1);
             }}
+            onCommentModalChange={setHideRevealHeader}
           />
           {user?.id && username && (
             <LiveReactions
@@ -1350,58 +1406,13 @@ export default function MainPagerScreen() {
             animationType="slide"
             onRequestClose={() => setShowNotificationsModal(false)}
           >
-            <View style={styles.notifContainer}>
-              {/* Header */}
-              <View style={[styles.notifHeader, { paddingTop: insets.top + 16 }]}>
-                <TouchableOpacity style={styles.notifBackButton} onPress={() => setShowNotificationsModal(false)} activeOpacity={0.7}>
-                  <Svg width="7" height="12" viewBox="0 0 7 12" fill="none">
-                    <Path
-                      d="M5.29289 0.292893C5.68342 -0.0976311 6.31643 -0.0976311 6.70696 0.292893C7.09748 0.683417 7.09748 1.31643 6.70696 1.70696L2.41399 5.99992L6.70696 10.2929C7.09748 10.6834 7.09748 11.3164 6.70696 11.707C6.31643 12.0975 5.68342 12.0975 5.29289 11.707L0.292893 6.70696C-0.0976311 6.31643 -0.0976311 5.68342 0.292893 5.29289L5.29289 0.292893Z"
-                      fill={colors.text}
-                    />
-                  </Svg>
-                </TouchableOpacity>
-                <Text style={styles.notifTitle}>Activités</Text>
-              </View>
-
-              {/* Content */}
-              <ScrollView contentContainerStyle={activitiesList.length > 0 ? styles.notifListContent : styles.notifContent} showsVerticalScrollIndicator={false}>
-                {activitiesList.length > 0 ? (
-                  <View style={styles.activitiesList}>
-                    {activitiesList.map((item) => (
-                      <View key={item.id} style={styles.activityItem}>
-                        {/* Profile pic (rounded square of 48px and radius/300) */}
-                        <View style={styles.activityAvatarWrap}>
-                          {item.avatarUrl ? (
-                            <Image source={{ uri: item.avatarUrl }} style={styles.activityAvatar} />
-                          ) : (
-                            <Text style={styles.activityAvatarFallbackText}>
-                              {item.username[0]?.toUpperCase() ?? "?"}
-                            </Text>
-                          )}
-                        </View>
-
-                        {/* Details */}
-                        <View style={styles.activityDetails}>
-                          <View style={styles.activityMetaRow}>
-                            <Text style={styles.activityUsername} numberOfLines={1}>{item.username}</Text>
-                            <Text style={styles.activityTimeDot}>•</Text>
-                            <Text style={styles.activityTime}>{formatRelativeTime(item.created_at)}</Text>
-                          </View>
-                          <Text style={styles.activityContext}>{item.context}</Text>
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-                ) : (
-                  <View style={styles.notifEmptyState}>
-                    <Text style={styles.notifEmptyEmoji}>🔔</Text>
-                    <Text style={styles.notifEmptyTitle}>Aucune activité</Text>
-                    <Text style={styles.notifEmptySub}>Vous serez notifié quand vos amis réagiront ou commenteront vos moments.</Text>
-                  </View>
-                )}
-              </ScrollView>
-            </View>
+            <ForceTheme mode="Dark">
+              <NotificationsModalContent
+                onClose={() => setShowNotificationsModal(false)}
+                activitiesList={activitiesList}
+                handleActivityClick={handleActivityClick}
+              />
+            </ForceTheme>
           </Modal>
 
           {/* Custom Text Input Modal */}
@@ -1498,9 +1509,10 @@ export default function MainPagerScreen() {
                     })()}
                   </View>
                </View>
-            </KeyboardAvoidingView>
-          </Modal>
-        </View>
+             </KeyboardAvoidingView>
+           </Modal>
+          </View>
+        </ForceTheme>
       )}
 
       {/* ── GROUP SETTINGS MODAL ── */}
@@ -1788,7 +1800,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   notifTitle: {
     ...textStyles.subtitleStrong,
-    color: colors.text,
+    color: colors.textNeutral,
   },
   notifContent: {
     flexGrow: 1,
@@ -1826,7 +1838,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: radii.md,
   },
   activityAvatarFallbackText: {
-    color: colors.text,
+    color: colors.textNeutral,
     fontFamily: typography.family.bold,
     fontSize: 18,
   },
@@ -1842,21 +1854,24 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   activityUsername: {
     ...textStyles.bodySmallStrong,
-    color: colors.text,
+    color: colors.textNeutral,
     maxWidth: "70%",
   },
   activityTimeDot: {
     marginHorizontal: 6,
-    color: colors.textSecondary,
+    color: colors.textNeutralTertiary,
     fontSize: 10,
   },
   activityTime: {
     ...textStyles.bodySmall,
-    color: colors.textSecondary,
+    color: colors.textNeutralTertiary,
   },
   activityContext: {
     ...textStyles.bodyBase,
-    color: colors.text,
+    color: colors.textNeutral,
+  },
+  activityCutoutWrap: {
+    marginLeft: spacing.xl, // space-600 (24px)
   },
   notifEmptyState: {
     alignItems: "center",
@@ -1869,14 +1884,93 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   notifEmptyTitle: {
     fontFamily: typography.family.bold,
     fontSize: typography.size.md,
-    color: colors.text,
+    color: colors.textNeutral,
     textAlign: "center",
   },
   notifEmptySub: {
     fontFamily: typography.family.regular,
     fontSize: typography.size.sm,
-    color: colors.textSecondary,
+    color: colors.textNeutral,
     textAlign: "center",
     lineHeight: 20,
   },
 });
+
+interface NotificationsModalContentProps {
+  onClose: () => void;
+  activitiesList: any[];
+  handleActivityClick: (item: any) => void;
+}
+
+function NotificationsModalContent({
+  onClose,
+  activitiesList,
+  handleActivityClick,
+}: NotificationsModalContentProps) {
+  const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+
+  return (
+    <View style={styles.notifContainer}>
+      <StatusBar style="light" />
+      {/* Header */}
+      <View style={[styles.notifHeader, { paddingTop: insets.top + 16 }]}>
+        <TouchableOpacity style={styles.notifBackButton} onPress={onClose} activeOpacity={0.7}>
+          <Svg width="7" height="12" viewBox="0 0 7 12" fill="none">
+            <Path
+              d="M5.29289 0.292893C5.68342 -0.0976311 6.31643 -0.0976311 6.70696 0.292893C7.09748 0.683417 7.09748 1.31643 6.70696 1.70696L2.41399 5.99992L6.70696 10.2929C7.09748 10.6834 7.09748 11.3164 6.70696 11.707C6.31643 12.0975 5.68342 12.0975 5.29289 11.707L0.292893 6.70696C-0.0976311 6.31643 -0.0976311 5.68342 0.292893 5.29289L5.29289 0.292893Z"
+              fill={colors.textNeutral}
+            />
+          </Svg>
+        </TouchableOpacity>
+        <Text style={styles.notifTitle}>Activités</Text>
+      </View>
+
+      {/* Content */}
+      <ScrollView contentContainerStyle={activitiesList.length > 0 ? styles.notifListContent : styles.notifContent} showsVerticalScrollIndicator={false}>
+        {activitiesList.length > 0 ? (
+          <View style={styles.activitiesList}>
+            {activitiesList.map((item) => (
+              <TouchableOpacity key={item.id} style={styles.activityItem} onPress={() => handleActivityClick(item)} activeOpacity={0.7}>
+                {/* Profile pic (rounded square of 48px and radius/300) */}
+                <View style={styles.activityAvatarWrap}>
+                  {item.avatarUrl ? (
+                    <Image source={{ uri: item.avatarUrl }} style={styles.activityAvatar} />
+                  ) : (
+                    <Text style={styles.activityAvatarFallbackText}>
+                      {item.username[0]?.toUpperCase() ?? "?"}
+                    </Text>
+                  )}
+                </View>
+
+                {/* Details */}
+                <View style={styles.activityDetails}>
+                  <View style={styles.activityMetaRow}>
+                    <Text style={styles.activityUsername} numberOfLines={1}>{item.username}</Text>
+                    <Text style={styles.activityTimeDot}>•</Text>
+                    <Text style={styles.activityTime}>{formatRelativeTime(item.created_at)}</Text>
+                  </View>
+                  <Text style={styles.activityContext}>{item.context}</Text>
+                </View>
+
+                {/* Photo Cutout on the right */}
+                {item.photoUrl ? (
+                  <View style={styles.activityCutoutWrap}>
+                    <SvgCutout uri={item.photoUrl} size={56} />
+                  </View>
+                ) : null}
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.notifEmptyState}>
+            <Text style={styles.notifEmptyEmoji}>🔔</Text>
+            <Text style={styles.notifEmptyTitle}>Aucune activité</Text>
+            <Text style={styles.notifEmptySub}>Vous serez notifié quand vos amis réagiront ou commenteront vos moments.</Text>
+          </View>
+        )}
+      </ScrollView>
+    </View>
+  );
+}
