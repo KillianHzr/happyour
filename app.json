@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Disclose",
-    "slug": "Disclose",
+    "slug": "HappyOur",
     "version": "1.6.5",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -18,7 +18,7 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "21"
+      "buildNumber": "22"
     },
     "android": {
       "package": "com.happyour.app",

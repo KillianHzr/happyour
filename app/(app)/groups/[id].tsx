@@ -1545,7 +1545,7 @@ export default function MainPagerScreen() {
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   loaderWrap: { flex: 1, backgroundColor: colors.bg, justifyContent: "center", alignItems: "center" },
-  pager: { flex: 1 },
+  pager: { flex: 1, zIndex: 1 },
   page: { width: SCREEN_WIDTH, height: "100%", backgroundColor: colors.bg },
 
   // Toast capture
