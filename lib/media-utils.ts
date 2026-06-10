@@ -37,7 +37,7 @@ export const handleDownloadMedia = async (url: string, filename: string) => {
 
     const asset = await MediaLibrary.createAssetAsync(localUri);
     try {
-      await MediaLibrary.createAlbumAsync('Happyour', asset, true);
+      await MediaLibrary.createAlbumAsync('Disclose', asset, true);
     } catch (_) {}
     Alert.alert("Succès", "Média enregistré !");
   } catch (error) {

@@ -144,7 +144,7 @@ export default function InviteScreen() {
 
   const handleShareCode = async () => {
     try {
-      const message = `Rejoins mon cercle privé sur HappyOur !\n\nCode d'invitation : ${inviteCode}\n\nTélécharge l'app ici : https://happyour.killianherzer.fr/`;
+      const message = `Rejoins mon cercle privé sur Disclose !\n\nCode d'invitation : ${inviteCode}\n\nTélécharge l'app ici : https://happyour.killianherzer.fr/`;
       await Share.share({ message });
     } catch (e: any) {
       Alert.alert("Erreur", e.message);
@@ -167,7 +167,7 @@ export default function InviteScreen() {
         {/* Pour réactiver : retirer ce commentaire et décommenter le bloc ci-dessous
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Inviter par email</Text>
-          <Text style={styles.sectionDesc}>Entre l'email du compte HappyOur de ton ami.</Text>
+          <Text style={styles.sectionDesc}>Entre l'email du compte Disclose de ton ami.</Text>
           <View style={styles.row}>
             <TextInput
               style={[theme.glassInput, styles.input]}

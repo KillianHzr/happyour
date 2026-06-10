@@ -24,7 +24,7 @@ export default function UpdateModal({ visible, apkUrl }: UpdateModalProps) {
     setProgress(0);
 
     try {
-      const fileUri = FileSystem.cacheDirectory + "happyour-update.apk";
+      const fileUri = FileSystem.cacheDirectory + "disclose-update.apk";
       const downloadResumable = FileSystem.createDownloadResumable(
         apkUrl, fileUri, {},
         (downloadProgress) => {
@@ -58,7 +58,7 @@ export default function UpdateModal({ visible, apkUrl }: UpdateModalProps) {
           <Text style={styles.title}>Mise à jour requise</Text>
           <Text style={styles.message}>
             Une nouvelle version de l'application est disponible. Veuillez la
-            télécharger pour continuer à utiliser HappyOur.
+            télécharger pour continuer à utiliser Disclose.
           </Text>
           {downloading ? (
             <View style={styles.progressContainer}>

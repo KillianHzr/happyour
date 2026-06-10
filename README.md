@@ -1,4 +1,4 @@
-# HappyOur
+# Disclose
 
 App React Native (Expo SDK 55) de partage de moments en groupe. Backend Supabase.
 

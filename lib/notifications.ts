@@ -590,7 +590,7 @@ export async function scheduleMotivationalNotifications(count: number, periods: 
         await Notifications.scheduleNotificationAsync({
           identifier: `motivational_${day}_${slot}_${j}`,
           content: {
-            title: "HappyOur ✨",
+            title: "Disclose",
             body: chosen.message,
             sound: "default",
             channelId: "default",

@@ -13,7 +13,7 @@ Dashboard → Authentication → Email Templates → "Magic Link"
 
 Remplacer le contenu par :
 
-  <h2>Ton code de connexion HappyOur</h2>
+  <h2>Ton code de connexion Disclose</h2>
   <p>{{ .Token }}</p>
 
 Sans ça, Supabase envoie un lien cliquable au lieu d'un code — ne pas oublier.

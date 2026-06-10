@@ -57,7 +57,7 @@ export default function SplashScreen({ onFinish, ready }: SplashScreenProps) {
     <Animated.View style={[styles.container, { opacity: fadeOut }]}>
       <Animated.View style={[styles.logoContainer, { transform: [{ scale: logoScale }], opacity: logoOpacity }]}>
         <View style={styles.logoMark} />
-        <Text style={styles.title}>HappyOur</Text>
+        <Text style={styles.title}>Disclose</Text>
       </Animated.View>
       <View style={styles.dots}>
         {[dotOpacity1, dotOpacity2, dotOpacity3].map((dot, i) => (
