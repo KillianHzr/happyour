@@ -18,7 +18,7 @@ import PhotoFeed, { type PhotoEntry, type Reaction } from "../../../components/P
 import { TextSticker } from "../../../components/atoms/TextSticker";
 import { fetchChallengeData, getChallengeWeekStart, type ChallengeWithData } from "../../../lib/challenges";
 import Loader from "../../../components/Loader";
-import { ProfileIcon, VaultIcon, MomentIcon } from "../../../components/icons";
+import { ProfileIcon, VaultIcon, MomentIcon, FlowerIcon } from "../../../components/icons";
 import { CloseIcon } from "../../../components/groups/GroupIcons";
 
 import ProfilePage from "../../../components/groups/ProfilePage";
@@ -1157,17 +1157,17 @@ export default function MainPagerScreen() {
           <View style={styles.tabBarContent}>
             <TouchableOpacity style={styles.tab} onPress={() => jumpTo(0)}>
               <Animated.View style={[{ position: "absolute", alignItems: "center", gap: spacing.sm }, { opacity: tab0InactiveOpacity }]}>
-                <Icon name="lock-filled" size={24} color={colors.iconSecondary} />
-                <Text style={styles.tabLabel}>Coffre</Text>
+                <FlowerIcon size={24} color={colors.iconSecondary} filled={false} />
+                <Text style={styles.tabLabel}>Jardin</Text>
               </Animated.View>
               <Animated.View style={[{ position: "absolute", alignItems: "center", gap: spacing.sm }, { opacity: tab0ActiveOpacity }]}>
-                <Icon name="lock" size={24} color={colors.icon} />
-                <Text style={[styles.tabLabel, styles.tabLabelActive]}>Coffre</Text>
+                <FlowerIcon size={24} color={colors.icon} filled={true} />
+                <Text style={[styles.tabLabel, styles.tabLabelActive]}>Jardin</Text>
               </Animated.View>
               {/* Invisible placeholder for layout sizing */}
               <View style={{ opacity: 0, alignItems: "center", gap: spacing.sm }}>
-                <Icon name="lock" size={24} />
-                <Text style={[styles.tabLabel, styles.tabLabelActive]}>Coffre</Text>
+                <FlowerIcon size={24} filled={true} />
+                <Text style={[styles.tabLabel, styles.tabLabelActive]}>Jardin</Text>
               </View>
             </TouchableOpacity>
 
@@ -1200,14 +1200,6 @@ export default function MainPagerScreen() {
                 <Text style={[styles.tabLabel, styles.tabLabelActive]}>Profil</Text>
               </View>
 
-              {streakDays > 0 && (
-                <View style={[styles.streakBadge, { right: 8, top: -2 }]} pointerEvents="none">
-                  <Svg width="10" height="13" viewBox="0 0 16 21" fill="none">
-                    <Path d="M8 1C8.66667 3.66667 10 5.83333 12 7.5C14 9.16667 15 11 15 13C15 14.8565 14.2625 16.637 12.9497 17.9497C11.637 19.2625 9.85652 20 8 20C6.14348 20 4.36301 19.2625 3.05025 17.9497C1.7375 16.637 1 14.8565 1 13C1 11.9181 1.35089 10.8655 2 10C2 10.663 2.26339 11.2989 2.73223 11.7678C3.20107 12.2366 3.83696 12.5 4.5 12.5C5.16304 12.5 5.79893 12.2366 6.26777 11.7678C6.73661 11.2989 7 10.663 7 10C7 8 5.5 7 5.5 5C5.5 3.66667 6.33333 2.33333 8 1Z" fill="#FFA600" stroke="#FFA600" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </Svg>
-                  <Text style={styles.streakBadgeText}>{streakDays}</Text>
-                </View>
-              )}
             </TouchableOpacity>
           </View>
         </View>
