@@ -13,7 +13,8 @@ import { AuthorInfo } from "../molecules/AuthorInfo";
 import { ReactionsRow } from "../molecules/ReactionsRow";
 import { AudioPlayerView } from "../molecules/AudioPlayerView";
 import { r2Storage } from "../../lib/r2";
-import { colors, radii, spacing, typography } from "../../lib/theme";
+import { radii, spacing, typography, type ThemeColors } from "../../lib/theme";
+import { useTheme, useThemedStyles } from "../../lib/theme-context";
 
 import { PhotoEntry, Reaction } from "../../lib/feed-types";
 
@@ -37,6 +38,10 @@ export const PhotoMoment = ({
   isVisible
 }: PhotoMomentProps) => {
   const insets = useSafeAreaInsets();
+  const { mode } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+  // Scrim gradient over media: flips so the (themed) author text stays readable.
+  const scrimColor = mode === "Dark" ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.85)";
   const [swapped, setSwapped] = useState(false);
   const isOwn = moment.user_id === currentUserId;
 
@@ -69,23 +74,23 @@ export const PhotoMoment = ({
   const isDrawing = effectivePath.includes("_draw");
   const isEffectiveAudio = effectivePath.endsWith(".m4a");
   const isEffectiveVideo = effectivePath.endsWith(".mp4");
-  
+
   const textLen = effectiveNote?.length ?? 0;
   const fontSize = textLen <= 40 ? 32 : textLen <= 100 ? 26 : textLen <= 200 ? 21 : textLen <= 300 ? 17 : 15;
 
   // Audio player for swapped audio second capture
   const audioPlayer = useAudioPlayer(isEffectiveAudio ? effectiveUrl : "");
   const audioStatus = useAudioPlayerStatus(audioPlayer);
-  
-  useEffect(() => { 
-    if (!isEffectiveAudio || isVisible === false) audioPlayer.pause(); 
+
+  useEffect(() => {
+    if (!isEffectiveAudio || isVisible === false) audioPlayer.pause();
   }, [isEffectiveAudio, isVisible]);
 
   // Video player for swapped video second capture
-  const videoPlayer = useVideoPlayer(isEffectiveVideo ? effectiveUrl : null, (p) => { 
-    p.loop = true; 
+  const videoPlayer = useVideoPlayer(isEffectiveVideo ? effectiveUrl : null, (p) => {
+    p.loop = true;
   });
-  
+
   useEffect(() => {
     if (isEffectiveVideo && isVisible) videoPlayer.play();
     else videoPlayer.pause();
@@ -108,19 +113,19 @@ export const PhotoMoment = ({
     }
     if (isEffectiveVideo) {
       return (
-        <VideoView 
-          player={videoPlayer} 
-          style={StyleSheet.absoluteFill} 
-          contentFit="cover" 
-          nativeControls={false} 
+        <VideoView
+          player={videoPlayer}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          nativeControls={false}
         />
       );
     }
     return (
-      <PhotoImage 
-        url={effectiveUrl} 
-        fallback_url={swapped ? undefined : moment.fallback_url} 
-        isDrawing={isDrawing} 
+      <PhotoImage
+        url={effectiveUrl}
+        fallback_url={swapped ? undefined : moment.fallback_url}
+        isDrawing={isDrawing}
       />
     );
   };
@@ -150,7 +155,7 @@ export const PhotoMoment = ({
           {renderMainContent()}
         </Animated.View>
 
-        <Pressable 
+        <Pressable
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
           style={StyleSheet.absoluteFill}
@@ -167,10 +172,10 @@ export const PhotoMoment = ({
               </Reanimated.View>
             )}
             <Reanimated.View style={[styles.momentOverlay, animatedUiStyle]} pointerEvents="box-none">
-              <LinearGradient 
-                colors={["transparent", "rgba(0,0,0,0.85)"]} 
-                style={StyleSheet.absoluteFill} 
-                pointerEvents="none" 
+              <LinearGradient
+                colors={["transparent", scrimColor]}
+                style={StyleSheet.absoluteFill}
+                pointerEvents="none"
               />
               <AuthorInfo
                 avatar_url={moment.avatar_url}
@@ -183,21 +188,21 @@ export const PhotoMoment = ({
                 onOpenComments={() => onOpenComments?.(moment.id, moment.user_id)}
                 onOpenPicker={() => onOpenPicker?.(moment.id)}
               />
-              <ReactionsRow 
-                reactions={moment.reactions} 
-                currentUserId={currentUserId} 
-                photoId={moment.id} 
-                crownWinnerId={crownWinnerId} 
-                onOpenPicker={isOwn ? undefined : onOpenPicker} 
+              <ReactionsRow
+                reactions={moment.reactions}
+                currentUserId={currentUserId}
+                photoId={moment.id}
+                crownWinnerId={crownWinnerId}
+                onOpenPicker={isOwn ? undefined : onOpenPicker}
               />
             </Reanimated.View>
             {thumbnailPath && (
               <Reanimated.View style={[StyleSheet.absoluteFill, animatedUiStyle]} pointerEvents="box-none">
                 <Animated.View style={[StyleSheet.absoluteFill, { opacity: swapFade }]} pointerEvents="box-none">
-                  <SecondCaptureThumbnail 
-                    secondPath={thumbnailPath} 
-                    secondNote={thumbnailNote} 
-                    onPress={handleSwap} 
+                  <SecondCaptureThumbnail
+                    secondPath={thumbnailPath}
+                    secondNote={thumbnailNote}
+                    onPress={handleSwap}
                   />
                 </Animated.View>
               </Reanimated.View>
@@ -209,67 +214,67 @@ export const PhotoMoment = ({
   );
 };
 
-const styles = StyleSheet.create({
-  fullscreenPage: { 
-    width: "100%", 
-    height: "100%", 
-    justifyContent: "center", 
-    alignItems: "center", 
-    backgroundColor: colors.bg, 
-    paddingHorizontal: spacing.md 
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
+  fullscreenPage: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.bg,
+    paddingHorizontal: spacing.md
   },
-  momentWrapper: { 
-    flex: 1, 
-    width: '100%', 
-    borderRadius: spacing.xxl, 
-    overflow: "hidden", 
-    backgroundColor: "transparent" 
+  momentWrapper: {
+    flex: 1,
+    width: '100%',
+    borderRadius: spacing.xxl,
+    overflow: "hidden",
+    backgroundColor: "transparent"
   },
-  groupTag: { 
-    position: "absolute", 
-    top: spacing.md + 2, 
-    left: spacing.md + 2, 
-    zIndex: 5, 
-    backgroundColor: "rgba(0,0,0,0.58)", 
-    borderRadius: radii.sm, 
-    paddingHorizontal: spacing.sm + 2, 
-    paddingVertical: spacing.xs + 1, 
-    borderWidth: 1, 
-    borderColor: colors.cardBorder 
+  groupTag: {
+    position: "absolute",
+    top: spacing.md + 2,
+    left: spacing.md + 2,
+    zIndex: 5,
+    backgroundColor: colors.opacityLight,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.xs + 1,
+    borderWidth: 1,
+    borderColor: colors.cardBorder
   },
-  groupTagText: { 
-    color: colors.white, 
-    fontSize: typography.size.xs, 
-    fontFamily: typography.family.semibold 
+  groupTagText: {
+    color: colors.text,
+    fontSize: typography.size.xs,
+    fontFamily: typography.family.semibold
   },
-  textMomentBg: { 
-    flex: 1, 
-    width: "100%", 
-    justifyContent: "center", 
-    alignItems: "center", 
-    padding: spacing.xxl, 
-    backgroundColor: colors.bg 
+  textMomentBg: {
+    flex: 1,
+    width: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.xxl,
+    backgroundColor: colors.bg
   },
-  quoteContainer: { 
-    width: "100%", 
-    alignItems: "center", 
-    gap: spacing.xxl 
+  quoteContainer: {
+    width: "100%",
+    alignItems: "center",
+    gap: spacing.xxl
   },
-  textMomentContent: { 
-    fontFamily: typography.family.bold, 
-    color: colors.white, 
-    textAlign: "center", 
-    letterSpacing: -0.5 
+  textMomentContent: {
+    fontFamily: typography.family.bold,
+    color: colors.text,
+    textAlign: "center",
+    letterSpacing: -0.5
   },
-  momentOverlay: { 
-    position: "absolute", 
-    bottom: 0, 
-    left: 0, 
-    right: 0, 
-    padding: spacing.xl + 2, 
-    paddingBottom: spacing.xxl, 
-    paddingTop: 80, 
-    gap: spacing.md + 2 
+  momentOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: spacing.xl + 2,
+    paddingBottom: spacing.xxl,
+    paddingTop: 80,
+    gap: spacing.md + 2
   },
   downloadBtnContainer: {
     position: "absolute",

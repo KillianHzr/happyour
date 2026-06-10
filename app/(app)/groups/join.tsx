@@ -6,7 +6,8 @@ import { useAuth } from "../../../lib/auth-context";
 import { useToast } from "../../../lib/toast-context";
 import { translateError } from "../../../lib/error-messages";
 import { scheduleFirstMomentReminder } from "../../../lib/notifications";
-import { colors, theme, typography } from "../../../lib/theme";
+import { typography, type ThemeColors } from "../../../lib/theme";
+import { useTheme, useThemedStyles } from "../../../lib/theme-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Loader from "../../../components/Loader";
 
@@ -16,6 +17,8 @@ export default function JoinGroupScreen() {
   const { user } = useAuth();
   const { showToast } = useToast();
   const insets = useSafeAreaInsets();
+  const { colors, theme } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -79,7 +82,7 @@ export default function JoinGroupScreen() {
         <TextInput
           style={[theme.glassInput, styles.input]}
           placeholder="CODE-1234"
-          placeholderTextColor="rgba(255,255,255,0.3)"
+          placeholderTextColor={colors.textTertiary}
           autoCapitalize="characters"
           value={code}
           onChangeText={setCode}
@@ -97,12 +100,12 @@ export default function JoinGroupScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { flex: 1, paddingHorizontal: 24 },
   backBtn: { marginBottom: 32 },
   backText: { color: colors.secondary, fontFamily: typography.family.semibold, fontSize: typography.size.md },
-  title: { fontFamily: typography.family.bold, fontSize: typography.size.subtitle, color: colors.white, marginBottom: 12, letterSpacing: -1 },
+  title: { fontFamily: typography.family.bold, fontSize: typography.size.subtitle, color: colors.text, marginBottom: 12, letterSpacing: -1 },
   subtitle: { fontFamily: typography.family.regular, fontSize: typography.size.md, color: colors.secondary, lineHeight: 24, marginBottom: 40 },
   input: { fontSize: typography.size.xxl, fontFamily: typography.family.bold, textAlign: "center", letterSpacing: 2 },
   button: { marginTop: 24 },

@@ -2,7 +2,8 @@ import React from "react";
 import { View, Text } from "react-native";
 import { Image } from "expo-image";
 import { Svg, Path } from "react-native-svg";
-import { colors, typography } from "../../lib/theme";
+import { typography } from "../../lib/theme";
+import { useTheme } from "../../lib/theme-context";
 
 interface UserAvatarProps {
   avatar_url?: string | null;
@@ -11,13 +12,14 @@ interface UserAvatarProps {
 }
 
 export const UserAvatar = ({ avatar_url, username, size = 28 }: UserAvatarProps) => {
+  const { colors } = useTheme();
   const borderRadius = size / 2;
   if (avatar_url) {
     return <Image source={{ uri: avatar_url }} style={{ width: size, height: size, borderRadius }} />;
   }
   return (
-    <View style={{ width: size, height: size, borderRadius, backgroundColor: colors.white, justifyContent: "center", alignItems: "center" }}>
-      <Text style={{ color: colors.black, fontFamily: typography.family.bold, fontSize: Math.round(size * 0.42) }}>
+    <View style={{ width: size, height: size, borderRadius, backgroundColor: colors.text, justifyContent: "center", alignItems: "center" }}>
+      <Text style={{ color: colors.bg, fontFamily: typography.family.bold, fontSize: Math.round(size * 0.42) }}>
         {username[0]?.toUpperCase() ?? "?"}
       </Text>
     </View>
@@ -29,6 +31,7 @@ interface CrownedAvatarProps extends UserAvatarProps {
 }
 
 export const CrownedAvatar = ({ avatar_url, username, size = 36, isCrown }: CrownedAvatarProps) => {
+  const { colors } = useTheme();
   const crownSize = Math.round(size * 0.6);
   return (
     <View style={{ width: size, height: size + (isCrown ? crownSize * 0.6 : 0), alignItems: "center", justifyContent: "flex-end" }}>

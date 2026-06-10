@@ -4,7 +4,9 @@ import Reanimated, { useSharedValue, useAnimatedStyle, withTiming } from "react-
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
-import { colors, spacing, radii, typography } from "../../lib/theme";
+import { useVideoPlayer, VideoView } from "expo-video";
+import { spacing, radii, typography, type ThemeColors } from "../../lib/theme";
+import { useTheme, useThemedStyles } from "../../lib/theme-context";
 
 import { PhotoImage } from "../atoms/PhotoImage";
 import { DownloadButton } from "../atoms/DownloadButton";
@@ -13,7 +15,7 @@ import { AuthorInfo } from "../molecules/AuthorInfo";
 import { ReactionsRow } from "../molecules/ReactionsRow";
 import { AudioPlayerView } from "../molecules/AudioPlayerView";
 import { r2Storage } from "../../lib/r2";
-import { PhotoEntry, Reaction } from "../../lib/feed-types";
+import { PhotoEntry } from "../../lib/feed-types";
 
 interface AudioMomentProps {
   moment: PhotoEntry;
@@ -37,6 +39,9 @@ export const AudioMoment = ({
   onScrollLock
 }: AudioMomentProps) => {
   const insets = useSafeAreaInsets();
+  const { mode } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+  const scrimColor = mode === "Dark" ? "rgba(0,0,0,0.92)" : "rgba(255,255,255,0.92)";
   const [swapped, setSwapped] = useState(false);
   const isOwn = moment.user_id === currentUserId;
 
@@ -48,12 +53,33 @@ export const AudioMoment = ({
   }));
 
   const hasSecond = !!moment.second_image_path;
-  const player = useAudioPlayer(!swapped ? moment.url : "");
+  
+  // Players
+  const primaryAudioUrl = moment.audio_note_path ? r2Storage.getPublicUrl(moment.audio_note_path) : moment.url;
+  const secondaryUrl = hasSecond ? (moment.second_image_path === "text_mode" ? "" : r2Storage.getPublicUrl(moment.second_image_path!)) : "";
+  
+  const isPrimaryAudio = moment.image_path.endsWith(".m4a");
+  const isSecondaryAudio = hasSecond && moment.second_image_path!.endsWith(".m4a");
+  const isSecondaryVideo = hasSecond && moment.second_image_path!.endsWith(".mp4");
+  const isPrimaryVideo = moment.image_path.endsWith(".mp4");
+
+  const player = useAudioPlayer(!swapped ? primaryAudioUrl : (isSecondaryAudio ? secondaryUrl : ""));
   const status = useAudioPlayerStatus(player);
 
-  useEffect(() => { 
-    if (!isVisible) player.pause(); 
-  }, [isVisible]);
+  const videoPlayer = useVideoPlayer((!swapped && isPrimaryVideo) ? moment.url : (swapped && isSecondaryVideo ? secondaryUrl : null), (p) => {
+    p.loop = true;
+  });
+
+  useEffect(() => {
+    if (!isVisible) {
+      player.pause();
+      videoPlayer.pause();
+    } else if (!swapped && isPrimaryVideo) {
+      videoPlayer.play();
+    } else if (swapped && isSecondaryVideo) {
+      videoPlayer.play();
+    }
+  }, [isVisible, swapped, isPrimaryVideo, isSecondaryVideo]);
 
   const handlePressIn = () => {
     holdTimer.current = setTimeout(() => {
@@ -70,30 +96,40 @@ export const AudioMoment = ({
   };
 
   const renderContent = () => {
-    if (swapped && hasSecond) {
-      const secondPath = moment.second_image_path!;
-      const secondIsText = secondPath === "text_mode";
-      const secondIsDrawing = secondPath.includes("_draw");
-      const secondUrl = secondIsText ? "" : r2Storage.getPublicUrl(secondPath);
-      const secondNote = moment.second_note;
-      const textLen = secondNote?.length ?? 0;
+    const path = swapped && hasSecond ? moment.second_image_path! : moment.image_path;
+    const url = swapped && hasSecond ? secondaryUrl : moment.url;
+    
+    if (path === "text_mode") {
+      const textLen = moment.second_note?.length ?? 0;
       const fontSize = textLen <= 40 ? 32 : textLen <= 100 ? 26 : textLen <= 200 ? 21 : textLen <= 300 ? 17 : 15;
-      
-      if (secondIsText) {
-        return (
-          <View style={styles.textMomentBg}>
-            <View style={styles.quoteContainer}>
-              <Text style={[styles.textMomentContent, { fontSize, lineHeight: Math.round(fontSize * 1.4) }]}>
-                {secondNote}
-              </Text>
-            </View>
+      return (
+        <View style={styles.textMomentBg}>
+          <View style={styles.quoteContainer}>
+            <Text style={[styles.textMomentContent, { fontSize, lineHeight: Math.round(fontSize * 1.4) }]}>
+              {moment.second_note}
+            </Text>
           </View>
-        );
-      }
-      return <PhotoImage url={secondUrl} isDrawing={secondIsDrawing} />;
+        </View>
+      );
     }
-    return <AudioPlayerView player={player} status={status} onScrollLock={onScrollLock} />;
+
+    const isAudio = path.endsWith(".m4a");
+    const isVideo = path.endsWith(".mp4");
+    const isDrawing = path.includes("_draw");
+
+    if (isAudio) {
+      return <AudioPlayerView player={player} status={status} onScrollLock={onScrollLock} waveform={moment.waveform || undefined} />;
+    }
+
+    if (isVideo) {
+      return <VideoView player={videoPlayer} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />;
+    }
+
+    return <PhotoImage url={url} isDrawing={isDrawing} />;
   };
+
+  const isAudioCaption = !!moment.audio_note_path;
+  const showAudioPlayerInOverlay = (isPrimaryAudio || isAudioCaption) && !swapped;
 
   const overlayNote = swapped && hasSecond ? moment.second_note : moment.note;
   const paddingTopBottom = Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 12) / 2);
@@ -115,32 +151,36 @@ export const AudioMoment = ({
             )}
             {swapped && hasSecond && moment.second_image_path !== "text_mode" && (
               <Reanimated.View style={[styles.downloadBtnContainer, animatedUiStyle]}>
-                <DownloadButton url={r2Storage.getPublicUrl(moment.second_image_path!)} filename={`${moment.id}_2`} />
+                <DownloadButton url={secondaryUrl} filename={`${moment.id}_2`} />
               </Reanimated.View>
             )}
             <Reanimated.View style={[styles.momentOverlay, animatedUiStyle]} pointerEvents="box-none">
-              <LinearGradient 
-                colors={["transparent", "rgba(0,0,0,0.92)"]} 
-                style={StyleSheet.absoluteFill} 
-                pointerEvents="none" 
+              <LinearGradient
+                colors={["transparent", scrimColor]}
+                style={StyleSheet.absoluteFill}
+                pointerEvents="none"
               />
               <AuthorInfo
                 avatar_url={moment.avatar_url}
                 username={moment.username}
                 created_at={moment.created_at}
                 note={overlayNote}
+                audioPlayer={showAudioPlayerInOverlay ? player : undefined}
+                audioStatus={showAudioPlayerInOverlay ? status : undefined}
+                onScrollLock={showAudioPlayerInOverlay ? onScrollLock : undefined}
+                captionWaveform={moment.caption_waveform || undefined}
                 isCrown={crownWinnerId === moment.user_id}
                 isOwn={isOwn}
                 hasNewComments={moment.hasNewComments}
                 onOpenComments={() => onOpenComments?.(moment.id, moment.user_id)}
                 onOpenPicker={() => onOpenPicker?.(moment.id)}
               />
-              <ReactionsRow 
-                reactions={moment.reactions} 
-                currentUserId={currentUserId} 
-                photoId={moment.id} 
-                crownWinnerId={crownWinnerId} 
-                onOpenPicker={onOpenPicker} 
+              <ReactionsRow
+                reactions={moment.reactions}
+                currentUserId={currentUserId}
+                photoId={moment.id}
+                crownWinnerId={crownWinnerId}
+                onOpenPicker={onOpenPicker}
               />
             </Reanimated.View>
             {hasSecond && (
@@ -159,67 +199,67 @@ export const AudioMoment = ({
   );
 };
 
-const styles = StyleSheet.create({
-  fullscreenPage: { 
-    width: "100%", 
-    height: "100%", 
-    justifyContent: "center", 
-    alignItems: "center", 
-    backgroundColor: colors.black, 
-    paddingHorizontal: spacing.md 
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
+  fullscreenPage: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.bg,
+    paddingHorizontal: spacing.md
   },
-  momentWrapper: { 
-    flex: 1, 
-    width: '100%', 
-    borderRadius: radii.xl, 
-    overflow: "hidden", 
-    backgroundColor: "transparent" 
+  momentWrapper: {
+    flex: 1,
+    width: '100%',
+    borderRadius: radii.xl,
+    overflow: "hidden",
+    backgroundColor: "transparent"
   },
-  groupTag: { 
-    position: "absolute", 
-    top: spacing.md, 
-    left: spacing.md, 
-    zIndex: 5, 
-    backgroundColor: colors.overlay, 
-    borderRadius: radii.md, 
-    paddingHorizontal: 10, 
-    paddingVertical: 5, 
-    borderWidth: 1, 
-    borderColor: colors.cardBorder 
+  groupTag: {
+    position: "absolute",
+    top: spacing.md,
+    left: spacing.md,
+    zIndex: 5,
+    backgroundColor: colors.opacityLight,
+    borderRadius: radii.md,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: colors.cardBorder
   },
-  groupTagText: { 
-    color: colors.white, 
-    fontSize: typography.size.xs, 
-    fontFamily: typography.family.semibold 
+  groupTagText: {
+    color: colors.text,
+    fontSize: typography.size.xs,
+    fontFamily: typography.family.semibold
   },
-  textMomentBg: { 
-    flex: 1, 
-    width: "100%", 
-    justifyContent: "center", 
-    alignItems: "center", 
-    padding: spacing.xxl, 
-    backgroundColor: colors.black 
+  textMomentBg: {
+    flex: 1,
+    width: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.xxl,
+    backgroundColor: colors.bg
   },
-  quoteContainer: { 
-    width: "100%", 
-    alignItems: "center", 
-    gap: spacing.xxl 
+  quoteContainer: {
+    width: "100%",
+    alignItems: "center",
+    gap: spacing.xxl
   },
-  textMomentContent: { 
-    fontFamily: typography.family.bold, 
-    color: colors.white, 
-    textAlign: "center", 
-    letterSpacing: -0.5 
+  textMomentContent: {
+    fontFamily: typography.family.bold,
+    color: colors.text,
+    textAlign: "center",
+    letterSpacing: -0.5
   },
-  momentOverlay: { 
-    position: "absolute", 
-    bottom: 0, 
-    left: 0, 
-    right: 0, 
-    padding: spacing.xl, 
-    paddingBottom: spacing.xxl, 
-    paddingTop: 80, 
-    gap: spacing.md 
+  momentOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: spacing.xl,
+    paddingBottom: spacing.xxl,
+    paddingTop: 80,
+    gap: spacing.md
   },
   downloadBtnContainer: {
     position: "absolute",

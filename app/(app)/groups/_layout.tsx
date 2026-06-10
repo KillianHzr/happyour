@@ -1,8 +1,11 @@
 import { Stack } from "expo-router";
 import { View, StyleSheet } from "react-native";
-import { colors } from "../../../lib/theme";
+import { type ThemeColors } from "../../../lib/theme";
+import { useTheme, useThemedStyles } from "../../../lib/theme-context";
 
 export default function GroupsLayout() {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   return (
     <View style={styles.container}>
       <Stack
@@ -16,7 +19,7 @@ export default function GroupsLayout() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg,

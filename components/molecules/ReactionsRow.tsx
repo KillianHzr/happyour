@@ -2,7 +2,8 @@ import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { UserAvatar } from "../atoms/Avatar";
 import { TextSticker } from "../atoms/TextSticker";
-import { colors, spacing, radii, typography } from "../../lib/theme";
+import { spacing, radii, typography, type ThemeColors } from "../../lib/theme";
+import { useThemedStyles } from "../../lib/theme-context";
 
 const STANDARD_EMOJIS = ["🤷", "🤦", "🙋", "🫶", "👌", "🤞"];
 
@@ -17,6 +18,7 @@ interface ReactionsRowProps {
 }
 
 export const ReactionsRow = ({ reactions, currentUserId, photoId, crownWinnerId, onOpenPicker }: ReactionsRowProps) => {
+  const styles = useThemedStyles(makeStyles);
   if (reactions.length === 0) return null;
 
   // Group by text content (emoji or custom text)
@@ -38,8 +40,8 @@ export const ReactionsRow = ({ reactions, currentUserId, photoId, crownWinnerId,
           <TouchableOpacity
             key={id}
             style={[
-              styles.reactionBubble, 
-              iMine && styles.reactionBubbleMine, 
+              styles.reactionBubble,
+              iMine && styles.reactionBubbleMine,
               isCrownReaction && styles.reactionBubbleCrown,
               !emojiDetected && styles.stickerReactionBubble
             ]}
@@ -70,48 +72,48 @@ export const ReactionsRow = ({ reactions, currentUserId, photoId, crownWinnerId,
   );
 };
 
-const styles = StyleSheet.create({
-  reactionsRow: { 
-    flexDirection: "row", 
-    flexWrap: "wrap", 
-    gap: spacing.sm 
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
+  reactionsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm
   },
-  reactionBubble: { 
-    flexDirection: "row", 
-    alignItems: "center", 
-    gap: spacing.xs, 
-    backgroundColor: colors.glass, 
-    borderRadius: radii.xl, 
-    paddingHorizontal: spacing.sm, 
-    paddingVertical: 5, 
-    borderWidth: 1, 
-    borderColor: colors.cardBorder 
+  reactionBubble: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.opacityLight,
+    borderRadius: radii.xl,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: colors.cardBorder
   },
-  reactionBubbleMine: { 
-    backgroundColor: "rgba(255,255,255,0.28)", 
-    borderColor: "rgba(255,255,255,0.4)" 
+  reactionBubbleMine: {
+    backgroundColor: colors.opacityDark,
+    borderColor: colors.borderSecondary
   },
-  reactionBubbleCrown: { 
-    borderColor: colors.gold, 
-    borderWidth: 1.5 
+  reactionBubbleCrown: {
+    borderColor: colors.gold,
+    borderWidth: 1.5
   },
-  reactionAvatarStack: { 
-    flexDirection: "row" 
+  reactionAvatarStack: {
+    flexDirection: "row"
   },
-  reactionAvatarWrap: { 
-    borderRadius: radii.full, 
-    overflow: "hidden", 
-    borderWidth: 1.5, 
-    borderColor: "rgba(0,0,0,0.3)" 
+  reactionAvatarWrap: {
+    borderRadius: radii.full,
+    overflow: "hidden",
+    borderWidth: 1.5,
+    borderColor: colors.opacityLight
   },
-  reactionStickerWrap: { 
-    marginLeft: 2 
+  reactionStickerWrap: {
+    marginLeft: 2
   },
-  reactionCount: { 
-    color: colors.textMuted, 
-    fontFamily: typography.family.bold, 
-    fontSize: typography.size.xs, 
-    marginLeft: 2 
+  reactionCount: {
+    color: colors.textMuted,
+    fontFamily: typography.family.bold,
+    fontSize: typography.size.xs,
+    marginLeft: 2
   },
   stickerReactionBubble: {
     backgroundColor: "transparent",

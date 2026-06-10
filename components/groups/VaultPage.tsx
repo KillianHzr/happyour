@@ -12,7 +12,8 @@ import BottomSheet from "../BottomSheet";
 import { getChallengePrompt, getWinnerResponseIds, type ChallengeWithData, type ChallengeResponse } from "../../lib/challenges";
 import { r2Storage } from "../../lib/r2";
 import ChallengeAudioPlayer from "./ChallengeAudioPlayer";
-import { colors, radii, typography } from "../../lib/theme";
+import { radii, typography, type ThemeColors } from "../../lib/theme";
+import { useTheme, useThemedStyles } from "../../lib/theme-context";
 
 type GroupInfo = { id: string; name: string; invite_code: string };
 type MemberInfo = { user_id: string; username: string; avatar_url?: string | null; role?: string };
@@ -95,19 +96,25 @@ function formatRevealDeadline(date: Date): string {
   return DAY_FR[date.getDay()];
 }
 
-const LockIcon = () => (
-  <Svg width="32" height="32" viewBox="0 0 24 24" fill="none">
-    <Path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    <Path d="M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z" stroke="rgba(255,255,255,0.5)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-  </Svg>
-);
+const LockIcon = () => {
+  const { colors } = useTheme();
+  return (
+    <Svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+      <Path d="M7 11V7a5 5 0 0 1 10 0v4" stroke={colors.textSecondary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z" stroke={colors.textSecondary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+};
 
-const GearIcon = () => (
-  <Svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-    <Path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke={colors.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    <Path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" stroke={colors.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-  </Svg>
-);
+const GearIcon = () => {
+  const { colors } = useTheme();
+  return (
+    <Svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <Path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke={colors.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" stroke={colors.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+};
 
 const CrownIcon = () => (
   <Svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -124,6 +131,8 @@ export default function VaultPage({
   onDebugOpenCreateCustom, onDebugOpenQueueCustom, onGoToCamera,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const { text: timeLeft } = useCountdown(revealDate);
   const { text: revealEndLeft, msLeft: revealEndMsLeft } = useCountdown(revealEndDate ?? new Date(0));
   const revealExpiringSoon = !!revealEndDate && revealEndMsLeft > 0 && revealEndMsLeft < 4 * 3600000;
@@ -227,7 +236,7 @@ export default function VaultPage({
         <View style={[styles.avatarWrap, { width: size, height: size, borderRadius: size / 2 }, m.role === "admin" && styles.avatarAdmin]}>
           {m.avatar_url
             ? <Image source={{ uri: m.avatar_url }} style={{ width: "100%", height: "100%", borderRadius: size / 2 }} />
-            : <Text style={{ color: colors.white, fontFamily: typography.family.bold, fontSize: size * 0.38 }}>{m.username[0]?.toUpperCase()}</Text>}
+            : <Text style={{ color: colors.text, fontFamily: typography.family.bold, fontSize: size * 0.38 }}>{m.username[0]?.toUpperCase()}</Text>}
         </View>
         {hasCrown && (
           <View style={styles.crownWrap}>
@@ -286,7 +295,7 @@ export default function VaultPage({
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="rgba(255,255,255,0.4)"
+            tintColor={colors.textTertiary}
           />
         }
       >
@@ -373,7 +382,7 @@ export default function VaultPage({
               <LockIcon />
               <Text style={styles.revealLockedTitle}>Reveal verrouillé</Text>
               <Text style={styles.revealLockedHint}>
-                {"Poste au moins un moment pour accéder\nau reveal du "}<Text style={{ fontFamily: typography.family.bold, color: colors.white }}>{formatRevealDeadline(revealDate)}</Text>
+                {"Poste au moins un moment pour accéder\nau reveal du "}<Text style={{ fontFamily: typography.family.bold, color: colors.text }}>{formatRevealDeadline(revealDate)}</Text>
               </Text>
               {onGoToCamera && (
                 <TouchableOpacity 
@@ -556,11 +565,13 @@ function vcMediaType(path: string | null): "text" | "audio" | "drawing" | "photo
 const VC_MINI_WAVE = [5, 9, 7, 13, 9, 11, 6];
 
 function VcThumbContent({ r }: { r: ChallengeResponse }) {
+  const { colors } = useTheme();
+  const vcStyles = useThemedStyles(makeVcStyles);
   const type = vcMediaType(r.image_path);
   if (type === "text") {
     return (
-      <View style={[vcStyles.thumb, { backgroundColor: "#1A1A1A", justifyContent: "center", alignItems: "center", padding: 6 }]}>
-        <Text style={{ color: colors.white, fontSize: typography.size.xs, textAlign: "center", fontFamily: typography.family.semibold }} numberOfLines={4}>
+      <View style={[vcStyles.thumb, { backgroundColor: colors.card, justifyContent: "center", alignItems: "center", padding: 6 }]}>
+        <Text style={{ color: colors.text, fontSize: typography.size.xs, textAlign: "center", fontFamily: typography.family.semibold }} numberOfLines={4}>
           {r.note}
         </Text>
       </View>
@@ -568,14 +579,14 @@ function VcThumbContent({ r }: { r: ChallengeResponse }) {
   }
   if (type === "audio") {
     return (
-      <View style={[vcStyles.thumb, { backgroundColor: "#111", justifyContent: "center", alignItems: "center", gap: 4 }]}>
+      <View style={[vcStyles.thumb, { backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", gap: 4 }]}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
           {VC_MINI_WAVE.map((h, i) => (
-            <View key={i} style={{ width: 2.5, height: h, borderRadius: radii.xs, backgroundColor: "rgba(255,255,255,0.55)" }} />
+            <View key={i} style={{ width: 2.5, height: h, borderRadius: radii.xs, backgroundColor: colors.textSecondary }} />
           ))}
         </View>
-        <View style={{ width: 20, height: 20, borderRadius: radii.sm, backgroundColor: "rgba(255,255,255,0.12)", justifyContent: "center", alignItems: "center" }}>
-          <Svg width="8" height="8" viewBox="0 0 24 24" fill={colors.white}>
+        <View style={{ width: 20, height: 20, borderRadius: radii.sm, backgroundColor: colors.accentMuted, justifyContent: "center", alignItems: "center" }}>
+          <Svg width="8" height="8" viewBox="0 0 24 24" fill={colors.text}>
             <Path d="M8 5v14l11-7z" />
           </Svg>
         </View>
@@ -587,11 +598,12 @@ function VcThumbContent({ r }: { r: ChallengeResponse }) {
 }
 
 function VcModalMedia({ imagePath, url, note }: { imagePath: string | null; url: string | null; note: string | null }) {
+  const { colors } = useTheme();
   const type = vcMediaType(imagePath);
   if (type === "text") {
     return (
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#111", justifyContent: "center", alignItems: "center", padding: 28 }]}>
-        <Text style={{ color: colors.white, fontFamily: typography.family.semibold, fontSize: typography.size.xl, textAlign: "center", lineHeight: 28 }}>
+      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", padding: 28 }]}>
+        <Text style={{ color: colors.text, fontFamily: typography.family.semibold, fontSize: typography.size.xl, textAlign: "center", lineHeight: 28 }}>
           {note ?? ""}
         </Text>
       </View>
@@ -599,11 +611,11 @@ function VcModalMedia({ imagePath, url, note }: { imagePath: string | null; url:
   }
   if (type === "audio") {
     if (!url) return null;
-    return <ChallengeAudioPlayer key={url} url={url} />;
+    return <ChallengeAudioPlayer key={url} url={url} waveform={undefined} />;
   }
   if (type === "drawing") {
     return (
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#111", justifyContent: "center", alignItems: "center" }]}>
+      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.bg, justifyContent: "center", alignItems: "center" }]}>
         <Image source={{ uri: url ?? "" }} style={{ width: "100%", aspectRatio: 3 / 4 }} contentFit="fill" />
       </View>
     );
@@ -628,6 +640,8 @@ function VaultChallengeCard({
   members: MemberInfo[];
 }) {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const vcStyles = useThemedStyles(makeVcStyles);
   const [selected, setSelected] = useState<{ response: ChallengeResponse; challenge: ChallengeWithData } | null>(null);
   const [swapped, setSwapped] = useState(false);
 
@@ -664,7 +678,7 @@ function VaultChallengeCard({
   return (
     <View style={vcStyles.card}>
       <View style={vcStyles.header}>
-        <Svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <Svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={colors.secondary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <Path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
           <Path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
           <Path d="M4 22h16" />
@@ -765,7 +779,7 @@ function VaultChallengeCard({
               <View style={vcStyles.modalTopBar}>
                 <TouchableOpacity style={vcStyles.modalCloseBtn} onPress={() => setSelected(null)} activeOpacity={0.7}>
                   <Svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                    <Path d="M18 6L6 18M6 6l12 12" stroke={colors.white} strokeWidth="2.5" strokeLinecap="round" />
+                    <Path d="M18 6L6 18M6 6l12 12" stroke={colors.text} strokeWidth="2.5" strokeLinecap="round" />
                   </Svg>
                 </TouchableOpacity>
                 <View style={vcStyles.modalAuthorRow}>
@@ -780,7 +794,7 @@ function VaultChallengeCard({
                 </View>
                 {hasSecond && (
                   <TouchableOpacity style={vcStyles.swapBtn} onPress={() => setSwapped(v => !v)} activeOpacity={0.7}>
-                    <Svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={colors.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <Svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={colors.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <Path d="M7 16V4m0 0L3 8m4-4l4 4" /><Path d="M17 8v12m0 0l4-4m-4 4l-4-4" />
                     </Svg>
                     <Text style={vcStyles.swapBtnText}>{swapped ? "1ère" : "2ème"}</Text>
@@ -811,7 +825,7 @@ function VaultChallengeCard({
                           <Image source={{ uri: v.avatar_url }} style={vcStyles.voterAvatar} contentFit="cover" />
                         ) : (
                           <View style={[vcStyles.voterAvatar, vcStyles.avatarFallback]}>
-                            <Text style={{ color: colors.white, fontFamily: typography.family.bold, fontSize: typography.size.xs }}>{v.username[0]?.toUpperCase()}</Text>
+                            <Text style={{ color: colors.text, fontFamily: typography.family.bold, fontSize: typography.size.xs }}>{v.username[0]?.toUpperCase()}</Text>
                           </View>
                         )}
                         <Text style={vcStyles.voterName}>{v.username}</Text>
@@ -828,14 +842,14 @@ function VaultChallengeCard({
   );
 }
 
-const vcStyles = StyleSheet.create({
+const makeVcStyles = (colors: ThemeColors) => StyleSheet.create({
   card: {
-    backgroundColor: "#2C2C2E",
+    backgroundColor: colors.card,
     borderRadius: radii.lg,
     padding: 16,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    borderColor: colors.cardBorder,
     gap: 16,
   },
   header: {
@@ -844,7 +858,7 @@ const vcStyles = StyleSheet.create({
     gap: 8,
   },
   headerText: {
-    color: colors.white,
+    color: colors.text,
     fontFamily: typography.family.bold,
     fontSize: typography.size.sm,
   },
@@ -852,17 +866,17 @@ const vcStyles = StyleSheet.create({
     gap: 8,
     paddingTop: 12,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "rgba(255,255,255,0.1)",
+    borderTopColor: colors.cardBorder,
   },
   periodLabel: {
-    color: "rgba(255,255,255,0.4)",
+    color: colors.textTertiary,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.xs,
     letterSpacing: 0.5,
     textTransform: "uppercase",
   },
   prompt: {
-    color: colors.white,
+    color: colors.text,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.sm,
     lineHeight: 19,
@@ -891,7 +905,7 @@ const vcStyles = StyleSheet.create({
     height: 90,
     borderRadius: radii.md,
     overflow: "hidden",
-    backgroundColor: "#1A1A1A",
+    backgroundColor: colors.card,
   },
   thumb: {
     width: "100%",
@@ -903,7 +917,7 @@ const vcStyles = StyleSheet.create({
     gap: 4,
   },
   thumbName: {
-    color: "rgba(255,255,255,0.6)",
+    color: colors.secondary,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.xs,
   },
@@ -917,7 +931,7 @@ const vcStyles = StyleSheet.create({
     height: 22,
     borderRadius: radii.md,
     borderWidth: 1.5,
-    borderColor: colors.black,
+    borderColor: colors.bg,
   },
   avatarCenter: {
     width: 36,
@@ -925,12 +939,12 @@ const vcStyles = StyleSheet.create({
     borderRadius: radii.lg,
   },
   avatarFallback: {
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: colors.accentMuted,
     justifyContent: "center",
     alignItems: "center",
   },
   avatarLetter: {
-    color: colors.white,
+    color: colors.text,
     fontFamily: typography.family.bold,
     fontSize: typography.size.xs,
   },
@@ -939,12 +953,12 @@ const vcStyles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: colors.opacityLight,
     paddingVertical: 3,
     alignItems: "center",
   },
   targetLabelText: {
-    color: colors.white,
+    color: colors.text,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.xs,
   },
@@ -955,12 +969,12 @@ const vcStyles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: radii.md,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: colors.opacityLight,
     justifyContent: "center",
     alignItems: "center",
   },
   emptyText: {
-    color: "rgba(255,255,255,0.3)",
+    color: colors.textTertiary,
     fontFamily: typography.family.regular,
     fontSize: typography.size.xs,
     textAlign: "center",
@@ -972,12 +986,12 @@ const vcStyles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 3.5,
-    backgroundColor: "rgba(255,255,255,0.7)",
+    backgroundColor: colors.textSecondary,
   },
   // Modal
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.96)",
+    backgroundColor: colors.bg,
   },
   modalContainer: {
     flex: 1,
@@ -993,7 +1007,7 @@ const vcStyles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: radii.lg,
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: colors.accentMuted,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -1009,7 +1023,7 @@ const vcStyles = StyleSheet.create({
     borderRadius: radii.md,
   },
   modalAuthorName: {
-    color: colors.white,
+    color: colors.text,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.sm,
   },
@@ -1017,13 +1031,13 @@ const vcStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    backgroundColor: "rgba(255,255,255,0.1)",
+    backgroundColor: colors.accentMuted,
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: radii.lg,
   },
   swapBtnText: {
-    color: "rgba(255,255,255,0.8)",
+    color: colors.secondary,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.xs,
   },
@@ -1031,18 +1045,18 @@ const vcStyles = StyleSheet.create({
     flex: 1,
     borderRadius: radii.lg,
     overflow: "hidden",
-    backgroundColor: "#111",
+    backgroundColor: colors.bg,
     marginBottom: 12,
   },
   noteBox: {
-    backgroundColor: "rgba(255,255,255,0.07)",
+    backgroundColor: colors.card,
     borderRadius: radii.md,
     paddingHorizontal: 14,
     paddingVertical: 10,
     marginBottom: 12,
   },
   noteText: {
-    color: "rgba(255,255,255,0.75)",
+    color: colors.secondary,
     fontFamily: typography.family.regular,
     fontSize: typography.size.sm,
     textAlign: "center",
@@ -1052,7 +1066,7 @@ const vcStyles = StyleSheet.create({
     gap: 8,
   },
   votersLabel: {
-    color: "rgba(255,255,255,0.4)",
+    color: colors.textTertiary,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.xs,
     letterSpacing: 0.5,
@@ -1067,7 +1081,7 @@ const vcStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: colors.accentMuted,
     borderRadius: radii.lg,
     paddingHorizontal: 10,
     paddingVertical: 5,
@@ -1078,72 +1092,72 @@ const vcStyles = StyleSheet.create({
     borderRadius: radii.sm,
   },
   voterName: {
-    color: "rgba(255,255,255,0.8)",
+    color: colors.secondary,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.xs,
   },
 });
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.black },
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.bg },
 
   // Switcher
-  switcherContainer: { backgroundColor: colors.black, paddingHorizontal: 24, paddingBottom: 16 },
+  switcherContainer: { backgroundColor: colors.bg, paddingHorizontal: 24, paddingBottom: 16 },
   switcherSegment: {
     flexDirection: "row", height: 40,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.2)",
+    borderWidth: 1, borderColor: colors.borderSecondary,
     borderRadius: radii.sm, overflow: "hidden",
   },
   switcherSlot: { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 6 },
-  slotBorderLeft: { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: "rgba(255,255,255,0.2)" },
-  slotActive: { backgroundColor: colors.white },
-  slotText: { color: "rgba(255,255,255,0.55)", fontFamily: typography.family.semibold, fontSize: typography.size.xs },
-  slotTextActive: { color: colors.black },
-  slotAddText: { color: "rgba(255,255,255,0.85)", fontFamily: typography.family.semibold, fontSize: typography.size.xl, lineHeight: 22 },
+  slotBorderLeft: { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.borderSecondary },
+  slotActive: { backgroundColor: colors.text },
+  slotText: { color: colors.secondary, fontFamily: typography.family.semibold, fontSize: typography.size.xs },
+  slotTextActive: { color: colors.bg },
+  slotAddText: { color: colors.secondary, fontFamily: typography.family.semibold, fontSize: typography.size.xl, lineHeight: 22 },
 
   // Content
   scrollContent: { paddingHorizontal: 24, paddingTop: 14 },
 
   // Group header
   groupHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
-  groupTitle: { fontFamily: typography.family.bold, fontSize: typography.size.xxl, color: colors.white, letterSpacing: -1, flex: 1, marginRight: 12 },
-  iconBtn: { width: 40, height: 40, borderRadius: radii.lg, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center" },
+  groupTitle: { fontFamily: typography.family.bold, fontSize: typography.size.xxl, color: colors.text, letterSpacing: -1, flex: 1, marginRight: 12 },
+  iconBtn: { width: 40, height: 40, borderRadius: radii.lg, backgroundColor: colors.accentMuted, justifyContent: "center", alignItems: "center" },
   leaveBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: radii.sm, backgroundColor: "rgba(255,59,48,0.12)", borderWidth: 1, borderColor: "rgba(255,59,48,0.3)" },
   leaveBtnText: { color: "#FF3B30", fontFamily: typography.family.semibold, fontSize: typography.size.xs },
 
   // Stats card
-  statsCard: { backgroundColor: "#2C2C2E", borderRadius: radii.lg, padding: 20, marginBottom: 28, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
+  statsCard: { backgroundColor: colors.card, borderRadius: radii.lg, padding: 20, marginBottom: 28, borderWidth: 1, borderColor: colors.cardBorder },
   statsRow: { flexDirection: "row", alignItems: "center" },
   statBlock: { flex: 1, alignItems: "center" },
-  statNumber: { fontFamily: typography.family.bold, fontSize: typography.size.title, color: colors.white, letterSpacing: -2 },
-  statLabelText: { fontFamily: typography.family.semibold, fontSize: typography.size.xs, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: 1, marginTop: -2 },
-  statSeparator: { width: 1, height: 44, backgroundColor: "rgba(255,255,255,0.12)" },
+  statNumber: { fontFamily: typography.family.bold, fontSize: typography.size.title, color: colors.text, letterSpacing: -2 },
+  statLabelText: { fontFamily: typography.family.semibold, fontSize: typography.size.xs, color: colors.textTertiary, textTransform: "uppercase", letterSpacing: 1, marginTop: -2 },
+  statSeparator: { width: 1, height: 44, backgroundColor: colors.cardBorder },
   statLockWrap: { height: 56, justifyContent: "center", alignItems: "center" },
-  statHint: { fontFamily: typography.family.regular, fontSize: typography.size.xs, color: "rgba(255,255,255,0.45)", marginBottom: 3 },
-  statCountdown: { fontFamily: typography.family.bold, fontSize: typography.size.xl, color: colors.white, letterSpacing: 0.5 },
+  statHint: { fontFamily: typography.family.regular, fontSize: typography.size.xs, color: colors.textTertiary, marginBottom: 3 },
+  statCountdown: { fontFamily: typography.family.bold, fontSize: typography.size.xl, color: colors.text, letterSpacing: 0.5 },
 
   // Reveal card
-  revealCard: { backgroundColor: "#2C2C2E", borderRadius: radii.lg, paddingVertical: 32, alignItems: "center", marginBottom: 28, gap: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
+  revealCard: { backgroundColor: colors.card, borderRadius: radii.lg, paddingVertical: 32, alignItems: "center", marginBottom: 28, gap: 8, borderWidth: 1, borderColor: colors.cardBorder },
   revealEmoji: { fontSize: typography.size.title },
-  revealTitle: { fontFamily: typography.family.bold, fontSize: typography.size.xl, color: colors.white, textAlign: "center" },
-  revealEmptyHint: { fontFamily: typography.family.regular, fontSize: typography.size.xs, color: "rgba(255,255,255,0.35)", textAlign: "center", paddingHorizontal: 24, marginTop: 4 },
-  revealExpiry: { marginTop: 4, paddingHorizontal: 12, paddingVertical: 4, borderRadius: radii.md, backgroundColor: "rgba(255,255,255,0.1)" },
+  revealTitle: { fontFamily: typography.family.bold, fontSize: typography.size.xl, color: colors.text, textAlign: "center" },
+  revealEmptyHint: { fontFamily: typography.family.regular, fontSize: typography.size.xs, color: colors.textTertiary, textAlign: "center", paddingHorizontal: 24, marginTop: 4 },
+  revealExpiry: { marginTop: 4, paddingHorizontal: 12, paddingVertical: 4, borderRadius: radii.md, backgroundColor: colors.accentMuted },
   revealExpiryRed: { backgroundColor: "rgba(200,30,30,0.2)" },
-  revealExpiryText: { fontFamily: typography.family.semibold, fontSize: typography.size.xs, color: "rgba(255,255,255,0.55)" },
+  revealExpiryText: { fontFamily: typography.family.semibold, fontSize: typography.size.xs, color: colors.secondary },
   revealExpiryTextRed: { color: "#C81E1E" },
 
-  postFirstBtn: { 
+  postFirstBtn: {
     marginTop: 20,
-    backgroundColor: colors.white, 
-    borderRadius: radii.md, 
-    paddingVertical: 12, 
+    backgroundColor: colors.text,
+    borderRadius: radii.md,
+    paddingVertical: 12,
     paddingHorizontal: 24,
-    alignItems: "center" 
+    alignItems: "center"
   },
-  postFirstBtnText: { 
-    color: colors.black, 
-    fontSize: typography.size.sm, 
-    fontFamily: typography.family.bold 
+  postFirstBtnText: {
+    color: colors.bg,
+    fontSize: typography.size.sm,
+    fontFamily: typography.family.bold
   },
 
   // Post reminder (inside statsCard)
@@ -1152,41 +1166,41 @@ const styles = StyleSheet.create({
 
   // Reveal locked card
   revealLockedCard: {
-    backgroundColor: "#2C2C2E", borderRadius: radii.lg, paddingVertical: 32, alignItems: "center",
-    marginBottom: 28, gap: 10, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: colors.card, borderRadius: radii.lg, paddingVertical: 32, alignItems: "center",
+    marginBottom: 28, gap: 10, borderWidth: 1, borderColor: colors.cardBorder,
   },
-  revealLockedTitle: { fontFamily: typography.family.bold, fontSize: typography.size.xl, color: "rgba(255,255,255,0.55)", textAlign: "center" },
-  revealLockedHint: { fontFamily: typography.family.regular, fontSize: typography.size.xs, color: "rgba(255,255,255,0.35)", textAlign: "center", paddingHorizontal: 24 },
+  revealLockedTitle: { fontFamily: typography.family.bold, fontSize: typography.size.xl, color: colors.secondary, textAlign: "center" },
+  revealLockedHint: { fontFamily: typography.family.regular, fontSize: typography.size.xs, color: colors.textTertiary, textAlign: "center", paddingHorizontal: 24 },
 
   // Participants
-  sectionTitle: { fontFamily: typography.family.bold, fontSize: typography.size.md, color: colors.white, marginBottom: 14, marginTop: 4 },
+  sectionTitle: { fontFamily: typography.family.bold, fontSize: typography.size.md, color: colors.text, marginBottom: 14, marginTop: 4 },
   participantsRow: { flexDirection: "row", gap: 14, marginBottom: 28, alignItems: "flex-start" },
-  avatarWrap: { backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center", overflow: "hidden" },
+  avatarWrap: { backgroundColor: colors.accentMuted, justifyContent: "center", alignItems: "center", overflow: "hidden" },
   avatarAdmin: { borderWidth: 2, borderColor: "#FF3B30" },
   crownWrap: { position: "absolute", top: -8, left: 0, right: 0, alignItems: "center", zIndex: 1 },
-  memberLabel: { fontFamily: typography.family.regular, fontSize: typography.size.xs, color: "rgba(255,255,255,0.55)", textAlign: "center" },
-  seeMoreCircle: { width: 48, height: 48, borderRadius: radii.xl, backgroundColor: "rgba(255,255,255,0.12)", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
-  seeMoreCount: { color: colors.white, fontFamily: typography.family.semibold, fontSize: typography.size.xs },
+  memberLabel: { fontFamily: typography.family.regular, fontSize: typography.size.xs, color: colors.secondary, textAlign: "center" },
+  seeMoreCircle: { width: 48, height: 48, borderRadius: radii.xl, backgroundColor: colors.accentMuted, justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: colors.borderSecondary },
+  seeMoreCount: { color: colors.text, fontFamily: typography.family.semibold, fontSize: typography.size.xs },
 
   // Access
-  accessCard: { backgroundColor: "#111", borderRadius: radii.lg, overflow: "hidden", marginBottom: 28, borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(255,255,255,0.1)" },
+  accessCard: { backgroundColor: colors.card, borderRadius: radii.lg, overflow: "hidden", marginBottom: 28, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.cardBorder },
   accessRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, gap: 8 },
-  accessLabel: { fontFamily: typography.family.semibold, fontSize: typography.size.xs, color: "rgba(255,255,255,0.35)", width: 34 },
-  accessValue: { fontFamily: typography.family.semibold, fontSize: typography.size.xs, color: colors.white, flex: 1 },
-  accessDivider: { height: StyleSheet.hairlineWidth, backgroundColor: "rgba(255,255,255,0.08)", marginHorizontal: 16 },
-  copyBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: radii.sm, backgroundColor: "rgba(255,255,255,0.1)" },
-  copyBtnText: { fontFamily: typography.family.semibold, fontSize: typography.size.xs, color: colors.white },
+  accessLabel: { fontFamily: typography.family.semibold, fontSize: typography.size.xs, color: colors.textTertiary, width: 34 },
+  accessValue: { fontFamily: typography.family.semibold, fontSize: typography.size.xs, color: colors.text, flex: 1 },
+  accessDivider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.cardBorder, marginHorizontal: 16 },
+  copyBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: radii.sm, backgroundColor: colors.accentMuted },
+  copyBtnText: { fontFamily: typography.family.semibold, fontSize: typography.size.xs, color: colors.text },
 
   // Members / remove sheets
-  membersTitle: { fontFamily: typography.family.bold, fontSize: typography.size.lg, color: colors.white, marginBottom: 20 },
+  membersTitle: { fontFamily: typography.family.bold, fontSize: typography.size.lg, color: colors.text, marginBottom: 20 },
   membersGrid: { flexDirection: "row", flexWrap: "wrap", gap: 20 },
   membersGridItem: {},
-  removeBody: { color: "rgba(255,255,255,0.55)", fontFamily: typography.family.regular, fontSize: typography.size.sm, marginBottom: 24, lineHeight: 20 },
-  removeUsername: { color: colors.white, fontFamily: typography.family.semibold },
+  removeBody: { color: colors.secondary, fontFamily: typography.family.regular, fontSize: typography.size.sm, marginBottom: 24, lineHeight: 20 },
+  removeUsername: { color: colors.text, fontFamily: typography.family.semibold },
   removeBtn: { backgroundColor: "#FF3B30", borderRadius: radii.md, paddingVertical: 14, alignItems: "center", marginBottom: 10 },
-  removeBtnText: { color: colors.white, fontSize: typography.size.sm, fontFamily: typography.family.bold },
+  removeBtnText: { color: "#FFFFFF", fontSize: typography.size.sm, fontFamily: typography.family.bold },
   removeCancelWrap: { alignItems: "center", paddingVertical: 8 },
-  removeCancelText: { color: "rgba(255,255,255,0.4)", fontFamily: typography.family.semibold, fontSize: typography.size.sm },
+  removeCancelText: { color: colors.textTertiary, fontFamily: typography.family.semibold, fontSize: typography.size.sm },
 
   // Debug
   debugBtn: { paddingVertical: 12, borderRadius: radii.md, backgroundColor: "rgba(255,200,0,0.15)", borderWidth: 1, borderColor: "rgba(255,200,0,0.4)", alignItems: "center" },

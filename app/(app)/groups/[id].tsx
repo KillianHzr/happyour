@@ -1,8 +1,8 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { View, Text, StyleSheet, Dimensions, Animated, TouchableOpacity, Alert, TextInput, AppState, Modal, KeyboardAvoidingView, Platform, Pressable } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
-import { BlurView } from "expo-blur";
+import BlurView from "../../../components/atoms/BlurView";
 import { supabase } from "../../../lib/supabase";
 import { r2Storage } from "../../../lib/r2";
 import { useAuth } from "../../../lib/auth-context";
@@ -18,7 +18,7 @@ import PhotoFeed, { type PhotoEntry, type Reaction } from "../../../components/P
 import { TextSticker } from "../../../components/atoms/TextSticker";
 import { fetchChallengeData, getChallengeWeekStart, type ChallengeWithData } from "../../../lib/challenges";
 import Loader from "../../../components/Loader";
-import { ProfileIcon, VaultIcon, MomentIcon } from "../../../components/icons";
+import { ProfileIcon, VaultIcon, MomentIcon, FlowerIcon } from "../../../components/icons";
 import { CloseIcon } from "../../../components/groups/GroupIcons";
 
 import ProfilePage from "../../../components/groups/ProfilePage";
@@ -31,7 +31,30 @@ import BottomSheet from "../../../components/BottomSheet";
 import LiveReactions from "../../../components/reveal/LiveReactions";
 import MotivationalNotificationsModal from "../../../components/MotivationalNotificationsModal";
 import { scheduleImmediateLocalNotification, scheduleFirstMomentReminder, notifyReaction } from "../../../lib/notifications";
-import { colors, radii, typography } from "../../../lib/theme";
+import { radii, spacing, typography, textStyles, type ThemeColors } from "../../../lib/theme";
+import Icon from "../../../components/Icon";
+import Shape, { type ShapeName } from "../../../components/Shape";
+import { useTheme, useThemedStyles } from "../../../lib/theme-context";
+
+const captureToastShape = (mode: string): ShapeName => {
+  if (mode === "VIDEO") return "video";
+  if (mode === "DESSIN") return "dessin";
+  if (mode === "AUDIO") return "audio";
+  if (mode === "TEXTE") return "texte";
+  return "photo";
+};
+
+const captureToastMsg = (mode: string, groupName: string, isChallenge?: boolean): string => {
+  if (isChallenge) return `Participation au défi envoyée dans ${groupName}`;
+  const labels: Record<string, string> = {
+    PHOTO: "Photo partagée",
+    VIDEO: "Vidéo partagée",
+    DESSIN: "Dessin partagé",
+    AUDIO: "Audio partagé",
+    TEXTE: "Texte partagé",
+  };
+  return `${labels[mode] ?? "Moment partagé"} dans ${groupName}`;
+};
 
 const isEmoji = (str: string) => {
   const regexExp = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/gi;
@@ -79,7 +102,9 @@ export default function MainPagerScreen() {
   const { user } = useAuth();
   const { showToast } = useToast();
   const insets = useSafeAreaInsets();
-  const { activeUploads } = useUpload();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+  const { uploads: activeUploads } = useUpload();
 
   const scrollX = useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const scrollRef = useRef<Animated.ScrollView>(null);
@@ -100,6 +125,9 @@ export default function MainPagerScreen() {
   const [email, setEmail] = useState("");
   const [streakDays, setStreakDays] = useState(0);
   const [profileRefreshKey, setProfileRefreshKey] = useState(0);
+  const [captureToast, setCaptureToast] = useState<{ mode: string; groupName: string; isChallenge?: boolean } | null>(null);
+  const captureToastTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const captureToastAnim = useRef({ opacity: new Animated.Value(0), translateY: new Animated.Value(-12) }).current;
 
   const [dailyNotifs, setDailyNotifs] = useState(3);
   const [notifPeriods, setNotifPeriods] = useState<("morning" | "afternoon" | "evening")[]>(["morning", "afternoon", "evening"]);
@@ -107,6 +135,7 @@ export default function MainPagerScreen() {
   // Pager
   const [currentPage, setCurrentPage] = useState(1);
   const [cameraScrollLocked, setCameraScrollLocked] = useState(false);
+  const [cameraHideMenu, setCameraHideMenu] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   // Modals
@@ -121,6 +150,31 @@ export default function MainPagerScreen() {
   const lastSyncRef = useRef<number>(0);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
+
+  // Toast capture
+  const cameraFrameTop = SCREEN_HEIGHT - NAVBAR_HEIGHT - SCREEN_WIDTH * (16 / 9);
+
+  const dismissCaptureToast = () => {
+    if (captureToastTimerRef.current) clearTimeout(captureToastTimerRef.current);
+    Animated.parallel([
+      Animated.timing(captureToastAnim.opacity, { toValue: 0, duration: 220, useNativeDriver: true }),
+      Animated.timing(captureToastAnim.translateY, { toValue: -12, duration: 220, useNativeDriver: true }),
+    ]).start(() => setCaptureToast(null));
+  };
+
+  const showCaptureToast = (info: { mode: string; groupName: string; isChallenge?: boolean }) => {
+    if (captureToastTimerRef.current) clearTimeout(captureToastTimerRef.current);
+    captureToastAnim.opacity.setValue(0);
+    captureToastAnim.translateY.setValue(-12);
+    setCaptureToast(info);
+    Animated.parallel([
+      Animated.spring(captureToastAnim.opacity, { toValue: 1, useNativeDriver: true, tension: 60, friction: 10 }),
+      Animated.spring(captureToastAnim.translateY, { toValue: 0, useNativeDriver: true, tension: 60, friction: 10 }),
+    ]).start();
+    captureToastTimerRef.current = setTimeout(dismissCaptureToast, 3000);
+  };
+
+  useEffect(() => () => { if (captureToastTimerRef.current) clearTimeout(captureToastTimerRef.current); }, []);
 
   // Reactions
   const [activeReactionPhotoId, setActiveReactionPhotoId] = useState<string | null>(null);
@@ -238,7 +292,7 @@ export default function MainPagerScreen() {
           const [membersRes, photosRes] = await Promise.all([
             supabase.from("group_members").select("user_id, role, profiles:user_id(username, avatar_url)").eq("group_id", g.id),
             supabase.from("photos")
-              .select("id, image_path, second_image_path, second_note, created_at, note, user_id, profiles:user_id(username, avatar_url)")
+              .select("id, image_path, second_image_path, audio_note_path, waveform, caption_waveform, created_at, note, user_id, profiles:user_id(username, avatar_url)")
               .eq("group_id", g.id)
               .gte("created_at", photoStart.toISOString())
               .lt("created_at", photoEnd.toISOString())
@@ -331,6 +385,9 @@ export default function MainPagerScreen() {
                 image_path: p.image_path,
                 second_image_path: p.second_image_path ?? null,
                 second_note: p.second_note ?? null,
+                audio_note_path: p.audio_note_path ?? null,
+                waveform: p.waveform ?? null,
+                caption_waveform: p.caption_waveform ?? null,
                 user_id: p.user_id,
                 reactions: reactionsByPhoto[p.id] ?? [],
                 hasNewComments: !!hasNewComments,
@@ -856,10 +913,20 @@ export default function MainPagerScreen() {
 
   // ── Pager ──
   const jumpTo = (page: number) => {
+    if (page === currentPage) return;
     scrollRef.current?.scrollTo({ x: page * SCREEN_WIDTH, animated: false });
     scrollX.setValue(page * SCREEN_WIDTH);
     setCurrentPage(page);
   };
+
+  const tab0ActiveOpacity = scrollX.interpolate({ inputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH], outputRange: [0, 1, 0], extrapolate: 'clamp' });
+  const tab0InactiveOpacity = scrollX.interpolate({ inputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH], outputRange: [1, 0, 1], extrapolate: 'clamp' });
+
+  const tab1ActiveOpacity = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [0, 1, 0], extrapolate: 'clamp' });
+  const tab1InactiveOpacity = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [1, 0, 1], extrapolate: 'clamp' });
+
+  const tab2ActiveOpacity = scrollX.interpolate({ inputRange: [SCREEN_WIDTH, 2 * SCREEN_WIDTH, 3 * SCREEN_WIDTH], outputRange: [0, 1, 0], extrapolate: 'clamp' });
+  const tab2InactiveOpacity = scrollX.interpolate({ inputRange: [SCREEN_WIDTH, 2 * SCREEN_WIDTH, 3 * SCREEN_WIDTH], outputRange: [1, 0, 1], extrapolate: 'clamp' });
 
   const cameraTranslateX = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH] });
   const cameraScale = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [0.9, 1, 0.9] });
@@ -951,6 +1018,101 @@ export default function MainPagerScreen() {
     }
   }, [user, activeGroupId, groupData]);
 
+  const memoizedVaultPage = useMemo(() => (
+    <VaultPage
+      allGroups={allGroups}
+      activeGroupId={activeGroupId}
+      onSwitchGroup={handleSwitchGroup}
+      onAddGroup={() => setShowAddGroupModal(true)}
+      groupName={groupName}
+      inviteCode={groupInviteCode}
+      isAdmin={isAdmin}
+      currentUserId={user?.id}
+      members={members}
+      photoCount={photoCount}
+      photos={photos}
+      revealDate={lockedRevealDate}
+      revealEndDate={unlocked ? activeRevealEndDate : undefined}
+      unlocked={unlocked}
+      currentUserPostedThisWeek={currentUserPostedThisWeek}
+      onOpenReveal={() => { if (currentUserPostedThisWeek) setShowReveal(true); }}
+      onOpenSettings={() => setShowGroupSettings(true)}
+      onLeaveGroup={() => setShowLeaveConfirm(true)}
+      onRemoveMember={async (memberId) => {
+        const { error } = await supabase.from("group_members").delete().eq("group_id", activeGroupId).eq("user_id", memberId);
+        if (error) throw new Error(error.message);
+        await fetchAllData();
+      }}
+      groupId={activeGroupId}
+      vaultChallenges={debugVaultChallenges ?? challenges}
+      refreshing={refreshing}
+      onRefresh={async () => {
+        setRefreshing(true);
+        await fetchAllData({ force: true });
+        setRefreshing(false);
+      }}
+      onSimulateReveal={__DEV__ ? () => setDebugUnlocked(true) : undefined}
+      onDebugNotifReveal={__DEV__ ? () => scheduleImmediateLocalNotification("Le coffre est ouvert !", `Les moments de "${groupName}" sont disponibles`, { type: "recap", groupId: activeGroupId }) : undefined}
+      onDebugNotifPhoto={__DEV__ ? () => scheduleImmediateLocalNotification(groupName || "Groupe", "Un ami a partagé un moment !", { type: "new_photo", groupId: activeGroupId }) : undefined}
+      onDebugNotifInvite={__DEV__ ? () => scheduleImmediateLocalNotification("Nouvelle invitation !", `Tu as été invité à rejoindre "${groupName}"`, { type: "invite", groupName: groupName || "Groupe" }) : undefined}
+      onDebugResetChallenges={__DEV__ ? async () => {
+        const weekStart = getChallengeWeekStart();
+        await supabase.from("weekly_challenges").delete().eq("group_id", activeGroupId).eq("week_start", weekStart);
+        await fetchAllData();
+      } : undefined}
+      onDebugResetMyResponse={__DEV__ ? async () => {
+        const weekStart = getChallengeWeekStart();
+        const { data: ch } = await supabase.from("weekly_challenges").select("id").eq("group_id", activeGroupId).eq("week_start", weekStart);
+        if (ch && ch.length > 0) {
+          const ids = ch.map((c: any) => c.id);
+          await supabase.from("challenge_responses").delete().eq("user_id", user?.id ?? "").in("challenge_id", ids);
+        }
+        await fetchAllData();
+      } : undefined}
+      onDebugShowCurrentChallenges={__DEV__ ? async () => {
+        const currentWeekStart = getChallengeWeekStart();
+        const result = await fetchChallengeData(activeGroupId, currentWeekStart, members);
+        setDebugVaultChallenges(result);
+      } : undefined}
+      onDebugOpenCreateCustom={__DEV__ ? () => setShowCustomChallengeCreate(true) : undefined}
+      onDebugOpenQueueCustom={__DEV__ ? () => setShowCustomChallengeQueue(true) : undefined}
+      onGoToCamera={() => jumpTo(1)}
+    />
+  ), [
+    allGroups, activeGroupId, handleSwitchGroup, groupName, groupInviteCode, isAdmin, user?.id, members, photoCount, photos,
+    lockedRevealDate, unlocked, activeRevealEndDate, currentUserPostedThisWeek, refreshing, challenges, debugVaultChallenges, fetchAllData, debugUnlocked
+  ]);
+
+  const memoizedCameraPage = useMemo(() => (
+    <CameraPage
+      groupId={activeGroupId}
+      userId={user?.id ?? ""}
+      isActive={currentPage === 1}
+      allGroups={allGroups}
+      onScrollLock={(v) => { setCameraScrollLocked(v); scrollRef.current?.setNativeProps({ scrollEnabled: !v }); }}
+      onHideMenu={setCameraHideMenu}
+      onCaptureSent={(info) => { setProfileRefreshKey(k => k + 1); showCaptureToast(info); }}
+    />
+  ), [activeGroupId, user?.id, currentPage === 1, allGroups]);
+
+  const memoizedProfilePage = useMemo(() => (
+    <ProfilePage
+      userId={user?.id ?? ""}
+      username={username}
+      avatarUrl={avatarUrl}
+      email={email}
+      groupName={groupName}
+      allGroups={allGroups}
+      revealConfig={revealConfig}
+      onAvatarUpdate={setAvatarUrl}
+      onUsernameUpdate={setUsername}
+      onEmailUpdate={setEmail}
+      onStreakUpdate={setStreakDays}
+      isActive={currentPage === 2}
+      refreshKey={profileRefreshKey}
+    />
+  ), [user?.id, username, avatarUrl, email, groupName, allGroups, revealConfig, profileRefreshKey, currentPage === 2]);
+
   if (!dataLoaded) return <View style={styles.loaderWrap}><Loader size={48} /></View>;
 
   return (
@@ -973,128 +1135,92 @@ export default function MainPagerScreen() {
         contentOffset={{ x: SCREEN_WIDTH, y: 0 }}
         style={styles.pager}
       >
-        {/* PAGE 0: PROFILE */}
+        {/* PAGE 0: COFFRE */}
         <View style={[styles.page, { zIndex: 2 }]}>
-          <ProfilePage
-            userId={user?.id ?? ""}
-            username={username}
-            avatarUrl={avatarUrl}
-            email={email}
-            allGroups={allGroups}
-            revealConfig={revealConfig}
-            onAvatarUpdate={setAvatarUrl}
-            onUsernameUpdate={setUsername}
-            onStreakUpdate={setStreakDays}
-            isActive={currentPage === 0}
-            refreshKey={profileRefreshKey}
-          />
+          {memoizedVaultPage}
         </View>
 
         {/* PAGE 1: CAMERA */}
         <Animated.View style={[styles.page, { transform: [{ translateX: cameraTranslateX }, { scale: cameraScale }], opacity: cameraOpacity }]}>
-          <CameraPage
-            groupId={activeGroupId}
-            userId={user?.id ?? ""}
-            isActive={currentPage === 1}
-            allGroups={allGroups}
-            onScrollLock={(v) => { setCameraScrollLocked(v); scrollRef.current?.setNativeProps({ scrollEnabled: !v }); }}
-            onCaptureSent={() => setProfileRefreshKey(k => k + 1)}
-          />
+          {memoizedCameraPage}
         </Animated.View>
 
-        {/* PAGE 2: VAULT */}
+        {/* PAGE 2: PROFIL */}
         <View style={[styles.page, { zIndex: 2 }]}>
-          <VaultPage
-            allGroups={allGroups}
-            activeGroupId={activeGroupId}
-            onSwitchGroup={handleSwitchGroup}
-            onAddGroup={() => setShowAddGroupModal(true)}
-            groupName={groupName}
-            inviteCode={groupInviteCode}
-            isAdmin={isAdmin}
-            currentUserId={user?.id}
-            members={members}
-            photoCount={photoCount}
-            photos={photos}
-            revealDate={lockedRevealDate}
-            revealEndDate={unlocked ? activeRevealEndDate : undefined}
-            unlocked={unlocked}
-            currentUserPostedThisWeek={currentUserPostedThisWeek}
-            onOpenReveal={() => { if (currentUserPostedThisWeek) setShowReveal(true); }}
-            onOpenSettings={() => setShowGroupSettings(true)}
-            onLeaveGroup={() => setShowLeaveConfirm(true)}
-            onRemoveMember={async (memberId) => {
-              const { error } = await supabase.from("group_members").delete().eq("group_id", activeGroupId).eq("user_id", memberId);
-              if (error) throw new Error(error.message);
-              await fetchAllData();
-            }}
-            groupId={activeGroupId}
-            vaultChallenges={debugVaultChallenges ?? challenges}
-            refreshing={refreshing}
-            onRefresh={async () => {
-              setRefreshing(true);
-              await fetchAllData({ force: true });
-              setRefreshing(false);
-            }}
-            onSimulateReveal={__DEV__ ? () => setDebugUnlocked(true) : undefined}
-            onDebugNotifReveal={__DEV__ ? () => scheduleImmediateLocalNotification("Le coffre est ouvert !", `Les moments de "${groupName}" sont disponibles`, { type: "recap", groupId: activeGroupId }) : undefined}
-            onDebugNotifPhoto={__DEV__ ? () => scheduleImmediateLocalNotification(groupName || "Groupe", "Un ami a partagé un moment !", { type: "new_photo", groupId: activeGroupId }) : undefined}
-            onDebugNotifInvite={__DEV__ ? () => scheduleImmediateLocalNotification("Nouvelle invitation !", `Tu as été invité à rejoindre "${groupName}"`, { type: "invite", groupName: groupName || "Groupe" }) : undefined}
-            onDebugResetChallenges={__DEV__ ? async () => {
-              const weekStart = getChallengeWeekStart();
-              await supabase.from("weekly_challenges").delete().eq("group_id", activeGroupId).eq("week_start", weekStart);
-              await fetchAllData();
-            } : undefined}
-            onDebugResetMyResponse={__DEV__ ? async () => {
-              const weekStart = getChallengeWeekStart();
-              const { data: ch } = await supabase.from("weekly_challenges").select("id").eq("group_id", activeGroupId).eq("week_start", weekStart);
-              if (ch && ch.length > 0) {
-                const ids = ch.map((c: any) => c.id);
-                await supabase.from("challenge_responses").delete().eq("user_id", user?.id ?? "").in("challenge_id", ids);
-              }
-              await fetchAllData();
-            } : undefined}
-            onDebugShowCurrentChallenges={__DEV__ ? async () => {
-              const currentWeekStart = getChallengeWeekStart();
-              const result = await fetchChallengeData(activeGroupId, currentWeekStart, members);
-              setDebugVaultChallenges(result);
-            } : undefined}
-            onDebugOpenCreateCustom={__DEV__ ? () => setShowCustomChallengeCreate(true) : undefined}
-            onDebugOpenQueueCustom={__DEV__ ? () => setShowCustomChallengeQueue(true) : undefined}
-            onGoToCamera={() => jumpTo(1)}
-          />
+          {memoizedProfilePage}
         </View>
       </Animated.ScrollView>
 
       {/* NAV BAR — masquée pendant une capture ou le reveal */}
-      {!cameraScrollLocked && !showReveal && (
-        <View style={[styles.tabBarContainer, { paddingBottom: insets.bottom }]}>
-          <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
+      {!cameraHideMenu && !showReveal && (
+        <View style={[styles.tabBarContainer, { backgroundColor: currentPage === 1 ? 'transparent' : colors.card }]}>
           <View style={styles.tabBarContent}>
             <TouchableOpacity style={styles.tab} onPress={() => jumpTo(0)}>
-              <View style={{ position: "relative" }}>
-                <ProfileIcon color={currentPage === 0 ? colors.white : "rgba(255,255,255,0.4)"} size={24} />
-                {streakDays > 0 && (
-                  <View style={styles.streakBadge}>
-                    <Svg width="10" height="13" viewBox="0 0 16 21" fill="none">
-                      <Path d="M8 1C8.66667 3.66667 10 5.83333 12 7.5C14 9.16667 15 11 15 13C15 14.8565 14.2625 16.637 12.9497 17.9497C11.637 19.2625 9.85652 20 8 20C6.14348 20 4.36301 19.2625 3.05025 17.9497C1.7375 16.637 1 14.8565 1 13C1 11.9181 1.35089 10.8655 2 10C2 10.663 2.26339 11.2989 2.73223 11.7678C3.20107 12.2366 3.83696 12.5 4.5 12.5C5.16304 12.5 5.79893 12.2366 6.26777 11.7678C6.73661 11.2989 7 10.663 7 10C7 8 5.5 7 5.5 5C5.5 3.66667 6.33333 2.33333 8 1Z" fill="#FFA600" stroke="#FFA600" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    </Svg>
-                    <Text style={styles.streakBadgeText}>{streakDays}</Text>
-                  </View>
-                )}
+              <Animated.View style={[{ position: "absolute", alignItems: "center", gap: spacing.sm }, { opacity: tab0InactiveOpacity }]}>
+                <FlowerIcon size={24} color={colors.iconSecondary} filled={false} />
+                <Text style={styles.tabLabel}>Jardin</Text>
+              </Animated.View>
+              <Animated.View style={[{ position: "absolute", alignItems: "center", gap: spacing.sm }, { opacity: tab0ActiveOpacity }]}>
+                <FlowerIcon size={24} color={colors.icon} filled={true} />
+                <Text style={[styles.tabLabel, styles.tabLabelActive]}>Jardin</Text>
+              </Animated.View>
+              {/* Invisible placeholder for layout sizing */}
+              <View style={{ opacity: 0, alignItems: "center", gap: spacing.sm }}>
+                <FlowerIcon size={24} filled={true} />
+                <Text style={[styles.tabLabel, styles.tabLabelActive]}>Jardin</Text>
               </View>
-              <Text style={[styles.tabLabel, currentPage === 0 && styles.tabLabelActive]}>Profil</Text>
             </TouchableOpacity>
+
             <TouchableOpacity style={styles.tab} onPress={() => jumpTo(1)}>
-              <MomentIcon color={currentPage === 1 ? colors.white : "rgba(255,255,255,0.4)"} size={28} />
-              <Text style={[styles.tabLabel, currentPage === 1 && styles.tabLabelActive]}>Moment</Text>
+              <Animated.View style={[{ position: "absolute", alignItems: "center", gap: spacing.sm }, { opacity: tab1InactiveOpacity }]}>
+                <Icon name="circle" size={24} color={colors.iconSecondary} />
+                <Text style={styles.tabLabel}>Capture</Text>
+              </Animated.View>
+              <Animated.View style={[{ position: "absolute", alignItems: "center", gap: spacing.sm }, { opacity: tab1ActiveOpacity }]}>
+                <Icon name="circle-filled" size={24} color={colors.icon} />
+                <Text style={[styles.tabLabel, styles.tabLabelActive]}>Capture</Text>
+              </Animated.View>
+              <View style={{ opacity: 0, alignItems: "center", gap: spacing.sm }}>
+                <Icon name="circle-filled" size={24} />
+                <Text style={[styles.tabLabel, styles.tabLabelActive]}>Capture</Text>
+              </View>
             </TouchableOpacity>
+
             <TouchableOpacity style={styles.tab} onPress={() => jumpTo(2)}>
-              <VaultIcon color={currentPage === 2 ? colors.white : "rgba(255,255,255,0.4)"} size={24} />
-              <Text style={[styles.tabLabel, currentPage === 2 && styles.tabLabelActive]}>Coffre</Text>
+              <Animated.View style={[{ position: "absolute", alignItems: "center", gap: spacing.sm }, { opacity: tab2InactiveOpacity }]}>
+                <Icon name="user" size={24} color={colors.iconSecondary} />
+                <Text style={styles.tabLabel}>Profil</Text>
+              </Animated.View>
+              <Animated.View style={[{ position: "absolute", alignItems: "center", gap: spacing.sm }, { opacity: tab2ActiveOpacity }]}>
+                <Icon name="user-filled" size={24} color={colors.icon} />
+                <Text style={[styles.tabLabel, styles.tabLabelActive]}>Profil</Text>
+              </Animated.View>
+              <View style={{ opacity: 0, alignItems: "center", gap: spacing.sm }}>
+                <Icon name="user-filled" size={24} />
+                <Text style={[styles.tabLabel, styles.tabLabelActive]}>Profil</Text>
+              </View>
+
             </TouchableOpacity>
           </View>
         </View>
+      )}
+
+      {/* ── Toast capture ── */}
+      {captureToast && (
+        <Animated.View
+          style={[
+            styles.captureToast,
+            { top: cameraFrameTop + spacing.lg },
+            { opacity: captureToastAnim.opacity, transform: [{ translateY: captureToastAnim.translateY }] },
+          ]}
+          pointerEvents="box-none"
+        >
+          <Shape name={captureToastShape(captureToast.mode)} size={20} color={colors.iconBrandTertiary} />
+          <Text style={styles.captureToastText}>{captureToastMsg(captureToast.mode, captureToast.groupName, captureToast.isChallenge)}</Text>
+          <TouchableOpacity onPress={dismissCaptureToast} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Icon name="x" size={20} color={colors.icon} />
+          </TouchableOpacity>
+        </Animated.View>
       )}
 
       {/* ── REVEAL OVERLAY ── */}
@@ -1105,7 +1231,7 @@ export default function MainPagerScreen() {
             onPress={() => setShowReveal(false)}
           >
             <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <Path d="M19 12H5M12 5l-7 7 7 7" stroke={colors.white} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              <Path d="M19 12H5M12 5l-7 7 7 7" stroke={colors.text} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
           </TouchableOpacity>
           <PhotoFeed
@@ -1169,7 +1295,7 @@ export default function MainPagerScreen() {
                       onPress={openCustomTextInput} 
                       style={[styles.wheelBtn, isCustomText && styles.wheelBtnActive]}
                     >
-                      <Svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={colors.white} strokeWidth="2.5">
+                      <Svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={colors.text} strokeWidth="2.5">
                         <Path d="M12 19l7-7 3 3-7 7-3-3zM18 13l-1.5-1.5M14 17l-1.5-1.5M10 21l-1.5-1.5" />
                         <Path d="M3 21h4.5l10.5-10.5-4.5-4.5L3 16.5V21z" strokeLinecap="round" strokeLinejoin="round" />
                       </Svg>
@@ -1198,7 +1324,7 @@ export default function MainPagerScreen() {
                       ref={customInputRef}
                       style={[styles.customTextInput, { fontSize: customReactionText.length <= 6 ? 38 : 24 }]}
                       placeholder="Ton message..."
-                      placeholderTextColor="rgba(255,255,255,0.3)"
+                      placeholderTextColor={colors.textTertiary}
                       value={customReactionText}
                       onChangeText={(val) => {
                         const emojiRegex = /[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FEFF}\u{200D}\u{20E3}]/gu;
@@ -1340,10 +1466,10 @@ export default function MainPagerScreen() {
             <TextInput
               style={styles.sheetInput}
               placeholder="Nom du groupe"
-              placeholderTextColor="rgba(255,255,255,0.3)"
+              placeholderTextColor={colors.textTertiary}
               value={newGroupName}
               onChangeText={setNewGroupName}
-              maxLength={25}
+              maxLength={9}
               autoFocus
               returnKeyType="done"
               onSubmitEditing={handleCreateGroup}
@@ -1367,7 +1493,7 @@ export default function MainPagerScreen() {
             <TextInput
               style={[styles.sheetInput, styles.sheetCodeInput]}
               placeholder="CODE-1234"
-              placeholderTextColor="rgba(255,255,255,0.3)"
+              placeholderTextColor={colors.textTertiary}
               autoCapitalize="characters"
               value={joinCode}
               onChangeText={setJoinCode}
@@ -1416,71 +1542,86 @@ export default function MainPagerScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.black },
-  loaderWrap: { flex: 1, backgroundColor: colors.black, justifyContent: "center", alignItems: "center" },
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.bg },
+  loaderWrap: { flex: 1, backgroundColor: colors.bg, justifyContent: "center", alignItems: "center" },
   pager: { flex: 1 },
-  page: { width: SCREEN_WIDTH, height: "100%", backgroundColor: colors.black },
+  page: { width: SCREEN_WIDTH, height: "100%", backgroundColor: colors.bg },
+
+  // Toast capture
+  captureToast: {
+    position: "absolute",
+    left: spacing.lg,
+    right: spacing.lg,
+    zIndex: 150,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 16,
+    borderRadius: radii.sm,
+    backgroundColor: colors.card,
+  },
+  captureToastText: { flex: 1, color: colors.text, ...textStyles.bodyStrong },
 
   // Navbar
-  tabBarContainer: { position: "absolute", bottom: 0, left: 0, right: 0, height: NAVBAR_HEIGHT, overflow: "hidden", zIndex: 100, backgroundColor: "rgba(10,10,10,1)" },
-  tabBarContent: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-evenly", paddingTop: 12 },
-  tab: { alignItems: "center", justifyContent: "center", gap: 4, flex: 1 },
-  tabLabel: { fontSize: typography.size.xs, fontFamily: typography.family.semibold, color: "rgba(255,255,255,0.4)" },
-  tabLabelActive: { color: colors.white },
+  tabBarContainer: { position: "absolute", bottom: 26, left: 16, right: 16, zIndex: 100, paddingVertical: spacing.sm, paddingHorizontal: 0, borderRadius: radii.lg },
+  tabBarContent: { flexDirection: "row" },
+  tab: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.sm, paddingVertical: spacing.xs, paddingHorizontal: spacing.sm },
+  tabLabel: { ...textStyles.singleLineBodyExtraSmallStrong, color: colors.textSecondary },
+  tabLabelActive: { color: colors.text },
   streakBadge: { position: "absolute", top: -5, right: -8, width: 16, height: 16, borderRadius: radii.sm, justifyContent: "center", alignItems: "center" },
-  streakBadgeText: { position: "absolute", fontSize: typography.size.xs, fontFamily: typography.family.bold, color: colors.white, textAlign: "center", bottom: 1 },
+  streakBadgeText: { position: "absolute", fontSize: typography.size.xs, fontFamily: typography.family.bold, color: "#FFFFFF", textAlign: "center", bottom: 1 },
 
   // Reveal overlay
-  revealOverlay: { zIndex: 200, backgroundColor: colors.black },
+  revealOverlay: { zIndex: 200, backgroundColor: colors.bg },
   revealBackBtn: {
     position: "absolute", left: 16, zIndex: 201,
     width: 40, height: 40, borderRadius: radii.lg,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: colors.opacityLight,
     justifyContent: "center", alignItems: "center",
   },
 
   // Leave confirm
-  leaveTitle: { fontSize: typography.size.xl, fontFamily: typography.family.bold, color: colors.white, marginBottom: 12 },
-  leaveBody: { fontSize: typography.size.sm, fontFamily: typography.family.regular, color: "rgba(255,255,255,0.55)", marginBottom: 28, lineHeight: 22 },
+  leaveTitle: { fontSize: typography.size.xl, fontFamily: typography.family.bold, color: colors.text, marginBottom: 12 },
+  leaveBody: { fontSize: typography.size.sm, fontFamily: typography.family.regular, color: colors.secondary, marginBottom: 28, lineHeight: 22 },
   leaveConfirmBtn: { backgroundColor: "#FF3B30", borderRadius: radii.lg, paddingVertical: 15, alignItems: "center", marginBottom: 10 },
-  leaveConfirmText: { color: colors.white, fontSize: typography.size.md, fontFamily: typography.family.bold },
+  leaveConfirmText: { color: "#FFFFFF", fontSize: typography.size.md, fontFamily: typography.family.bold },
   leaveCancelWrap: { alignItems: "center", paddingVertical: 8 },
-  leaveCancelText: { color: "rgba(255,255,255,0.35)", fontSize: typography.size.sm, fontFamily: typography.family.semibold },
+  leaveCancelText: { color: colors.textTertiary, fontSize: typography.size.sm, fontFamily: typography.family.semibold },
 
   // Add group
-  addGroupTitle: { fontSize: typography.size.xl, fontFamily: typography.family.bold, color: colors.white, marginBottom: 8 },
-  addGroupSub: { fontSize: typography.size.sm, fontFamily: typography.family.regular, color: "rgba(255,255,255,0.45)", marginBottom: 24 },
-  addGroupPrimary: { backgroundColor: colors.white, borderRadius: radii.lg, paddingVertical: 16, alignItems: "center", marginBottom: 12 },
-  addGroupPrimaryText: { color: colors.black, fontSize: typography.size.md, fontFamily: typography.family.bold },
-  addGroupSecondary: { backgroundColor: "rgba(255,255,255,0.08)", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)", borderRadius: radii.lg, paddingVertical: 16, alignItems: "center", marginBottom: 12 },
-  addGroupSecondaryText: { color: colors.white, fontSize: typography.size.md, fontFamily: typography.family.semibold },
+  addGroupTitle: { fontSize: typography.size.xl, fontFamily: typography.family.bold, color: colors.text, marginBottom: 8 },
+  addGroupSub: { fontSize: typography.size.sm, fontFamily: typography.family.regular, color: colors.textTertiary, marginBottom: 24 },
+  addGroupPrimary: { backgroundColor: colors.text, borderRadius: radii.lg, paddingVertical: 16, alignItems: "center", marginBottom: 12 },
+  addGroupPrimaryText: { color: colors.bg, fontSize: typography.size.md, fontFamily: typography.family.bold },
+  addGroupSecondary: { backgroundColor: colors.accentMuted, borderWidth: 1, borderColor: colors.borderSecondary, borderRadius: radii.lg, paddingVertical: 16, alignItems: "center", marginBottom: 12 },
+  addGroupSecondaryText: { color: colors.text, fontSize: typography.size.md, fontFamily: typography.family.semibold },
   // Sheet inputs
   sheetInput: {
-    backgroundColor: "rgba(255,255,255,0.08)", borderRadius: radii.md,
-    paddingHorizontal: 16, paddingVertical: 14, color: colors.white,
+    backgroundColor: colors.card, borderRadius: radii.md,
+    paddingHorizontal: 16, paddingVertical: 14, color: colors.text,
     fontFamily: typography.family.semibold, fontSize: typography.size.md,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.15)",
+    borderWidth: 1, borderColor: colors.cardBorder,
     marginBottom: 16,
   },
   sheetCodeInput: { fontSize: typography.size.xl, textAlign: "center", letterSpacing: 3, fontFamily: typography.family.bold },
   sheetCancelWrap: { alignItems: "center", paddingVertical: 8 },
-  sheetCancelText: { color: "rgba(255,255,255,0.4)", fontFamily: typography.family.semibold, fontSize: typography.size.sm },
+  sheetCancelText: { color: colors.textTertiary, fontFamily: typography.family.semibold, fontSize: typography.size.sm },
 
   // New Reactions UI
   emojiWheel: {
     position: "absolute",
     right: 24, // Match the padding of the momentOverlay
     bottom: NAVBAR_HEIGHT + 140, // Elevated further to ensure it sits above the + button
-    backgroundColor: "rgba(255,255,255,0.05)",
+    backgroundColor: colors.card,
     borderRadius: radii.xl,
     padding: 8,
     gap: 10,
     alignItems: "center",
     borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.25)",
+    borderColor: colors.borderSecondary,
     elevation: 12,
-    shadowColor: colors.black,
+    shadowColor: "#000000",
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
     shadowRadius: 12,
@@ -1492,23 +1633,23 @@ const styles = StyleSheet.create({
     borderRadius: radii.full,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: colors.accentMuted,
   },
   wheelBtnActive: {
-    backgroundColor: "rgba(255,255,255,0.4)",
+    backgroundColor: colors.opacityDark,
     borderColor: "#FFF065",
     borderWidth: 2.5,
   },
   wheelEmoji: { fontSize: typography.size.xxl },
-  
+
   customModalContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  customModalClose: { position: "absolute", top: 60, right: 20, width: 44, height: 44, borderRadius: radii.xl, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", zIndex: 10 },
+  customModalClose: { position: "absolute", top: 60, right: 20, width: 44, height: 44, borderRadius: radii.xl, backgroundColor: colors.opacityLight, justifyContent: "center", alignItems: "center", zIndex: 10 },
   customInputWrapper: { width: "100%", alignItems: "center", paddingHorizontal: 40, gap: 32 },
   customPreviewSticker: { marginBottom: 10, transform: [{ scale: 1.2 }] },
-  customTextInput: { width: "100%", color: colors.white, fontFamily: typography.family.extrabold, textAlign: "center", padding: 20, height: 90 },
-  customSendBtn: { backgroundColor: colors.white, paddingHorizontal: 32, paddingVertical: 14, borderRadius: radii.xl },
+  customTextInput: { width: "100%", color: colors.text, fontFamily: typography.family.extrabold, textAlign: "center", padding: 20, height: 90 },
+  customSendBtn: { backgroundColor: colors.text, paddingHorizontal: 32, paddingVertical: 14, borderRadius: radii.xl },
   customSendBtnDisabled: { opacity: 0.5 },
-  customSendText: { color: colors.black, fontFamily: typography.family.bold, fontSize: typography.size.md },
+  customSendText: { color: colors.bg, fontFamily: typography.family.bold, fontSize: typography.size.md },
   customModalActions: { alignItems: "center", gap: 16, width: "100%" },
   customDeleteBtn: { paddingVertical: 8 },
   customDeleteText: { color: "#FF3B30", fontFamily: typography.family.semibold, fontSize: typography.size.sm },
@@ -1516,13 +1657,13 @@ const styles = StyleSheet.create({
   emojiTooltip: {
     position: "absolute", bottom: "100%", alignSelf: "center", marginBottom: 8,
     flexDirection: "row", alignItems: "center", gap: 6,
-    backgroundColor: "rgba(28,28,30,0.95)", borderRadius: radii.lg,
+    backgroundColor: colors.card, borderRadius: radii.lg,
     paddingHorizontal: 14, paddingVertical: 8,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
+    borderWidth: 1, borderColor: colors.cardBorder,
   },
   emojiTooltipIcon: { fontSize: typography.size.xs },
-  emojiTooltipText: { color: "rgba(255,255,255,0.8)", fontFamily: typography.family.semibold, fontSize: typography.size.xs },
+  emojiTooltipText: { color: colors.secondary, fontFamily: typography.family.semibold, fontSize: typography.size.xs },
   historyRow: { flexDirection: "row", gap: 8, justifyContent: "center", flexWrap: "wrap" },
-  historyChip: { backgroundColor: "rgba(255,255,255,0.15)", borderRadius: radii.lg, paddingHorizontal: 14, paddingVertical: 7 },
-  historyChipText: { color: colors.white, fontFamily: typography.family.bold, fontSize: typography.size.xs },
+  historyChip: { backgroundColor: colors.accentMuted, borderRadius: radii.lg, paddingHorizontal: 14, paddingVertical: 7 },
+  historyChipText: { color: colors.text, fontFamily: typography.family.bold, fontSize: typography.size.xs },
 });

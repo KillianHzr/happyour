@@ -13,7 +13,8 @@ import Svg, { Path } from "react-native-svg";
 import { useAuth } from "../lib/auth-context";
 import { useToast } from "../lib/toast-context";
 import { supabase } from "../lib/supabase";
-import { colors, radii, theme, typography } from "../lib/theme";
+import { radii, typography, type ThemeColors } from "../lib/theme";
+import { useThemedStyles } from "../lib/theme-context";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -38,6 +39,7 @@ export default function DeleteAccountModal({ visible, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const { logout, user } = useAuth();
   const { showToast } = useToast();
+  const styles = useThemedStyles(makeStyles);
   const [loading, setLoading] = useState(false);
 
   const handleDeleteAccount = async () => {
@@ -46,7 +48,7 @@ export default function DeleteAccountModal({ visible, onClose }: Props) {
     try {
       // Appel de la fonction SQL SECURITY DEFINER
       const { error } = await supabase.rpc('delete_user_account');
-      
+
       if (error) {
         console.error("Erreur suppression compte:", error);
         throw error;
@@ -102,7 +104,7 @@ export default function DeleteAccountModal({ visible, onClose }: Props) {
               onPress={handleDeleteAccount}
               disabled={loading}
             >
-              {loading ? <ActivityIndicator color={colors.white} /> : <Text style={styles.deleteBtnText}>Supprimer définitivement</Text>}
+              {loading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.deleteBtnText}>Supprimer définitivement</Text>}
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -127,10 +129,10 @@ export default function DeleteAccountModal({ visible, onClose }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.black,
+    backgroundColor: colors.bg,
   },
   content: {
     flex: 1,
@@ -153,7 +155,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: typography.size.subtitle,
     fontFamily: typography.family.bold,
-    color: colors.white,
+    color: colors.text,
     textAlign: "center",
     marginBottom: 16,
     letterSpacing: -1,
@@ -161,7 +163,7 @@ const styles = StyleSheet.create({
   description: {
     fontSize: typography.size.lg,
     fontFamily: typography.family.regular,
-    color: "rgba(255,255,255,0.6)",
+    color: colors.secondary,
     textAlign: "center",
     lineHeight: 26,
     paddingHorizontal: 10,
@@ -197,17 +199,17 @@ const styles = StyleSheet.create({
     backgroundColor: "#FF3B30",
   },
   deleteBtnText: {
-    color: colors.white,
+    color: "#FFFFFF",
     fontSize: typography.size.lg,
     fontFamily: typography.family.bold,
   },
   logoutBtn: {
-    backgroundColor: "rgba(255,255,255,0.1)",
+    backgroundColor: colors.accentMuted,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.15)",
+    borderColor: colors.cardBorder,
   },
   logoutBtnText: {
-    color: colors.white,
+    color: colors.text,
     fontSize: typography.size.lg,
     fontFamily: typography.family.semibold,
   },
@@ -218,7 +220,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   cancelBtnText: {
-    color: "rgba(255,255,255,0.4)",
+    color: colors.textTertiary,
     fontSize: typography.size.md,
     fontFamily: typography.family.semibold,
   },

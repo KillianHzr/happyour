@@ -2,7 +2,8 @@ import { View, Text, StyleSheet, Modal, FlatList, TouchableOpacity, Alert } from
 import { Image } from "expo-image";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { colors, radii, theme, typography } from "../../lib/theme";
+import { radii, typography, type ThemeColors } from "../../lib/theme";
+import { useTheme, useThemedStyles } from "../../lib/theme-context";
 
 type Member = {
   user_id: string;
@@ -23,6 +24,8 @@ type Props = {
 
 export default function MembersModal({ visible, onClose, members, isAdmin, userId, groupId, onRemoveMember, onLeave }: Props) {
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
+  const styles = useThemedStyles(makeStyles);
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -80,17 +83,17 @@ export default function MembersModal({ visible, onClose, members, isAdmin, userI
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: colors.black },
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: colors.bg },
   content: { flex: 1, paddingHorizontal: 24 },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 32 },
-  title: { fontFamily: typography.family.bold, fontSize: typography.size.xxl, color: colors.white },
+  title: { fontFamily: typography.family.bold, fontSize: typography.size.xxl, color: colors.text },
   closeText: { color: colors.secondary, fontFamily: typography.family.semibold },
   avatarImg: { width: "100%", height: "100%" },
-  memberItem: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16, backgroundColor: "rgba(255,255,255,0.08)", padding: 14, borderRadius: radii.lg },
-  memberAvatar: { width: 44, height: 44, borderRadius: radii.xl, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center", overflow: "hidden" },
-  memberAvatarText: { color: colors.white, fontFamily: typography.family.bold },
-  memberName: { color: colors.white, fontFamily: typography.family.semibold, fontSize: typography.size.md, flex: 1 },
+  memberItem: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16, backgroundColor: colors.card, padding: 14, borderRadius: radii.lg },
+  memberAvatar: { width: 44, height: 44, borderRadius: radii.xl, backgroundColor: colors.accentMuted, justifyContent: "center", alignItems: "center", overflow: "hidden" },
+  memberAvatarText: { color: colors.text, fontFamily: typography.family.bold },
+  memberName: { color: colors.text, fontFamily: typography.family.semibold, fontSize: typography.size.md, flex: 1 },
   removeBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: radii.sm, backgroundColor: "rgba(255,60,60,0.15)" },
   removeText: { color: "#FF3C3C", fontFamily: typography.family.semibold, fontSize: typography.size.xs },
   footer: { marginTop: 24, marginBottom: 40 },

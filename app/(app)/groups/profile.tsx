@@ -3,10 +3,11 @@ import { View, ActivityIndicator } from "react-native";
 import { router } from "expo-router";
 import { supabase } from "../../../lib/supabase";
 import { useAuth } from "../../../lib/auth-context";
-import { colors } from "../../../lib/theme";
+import { useTheme } from "../../../lib/theme-context";
 
 export default function ProfileRedirect() {
   const { user } = useAuth();
+  const { colors } = useTheme();
 
   useEffect(() => {
     if (!user) return;
@@ -28,7 +29,7 @@ export default function ProfileRedirect() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, justifyContent: "center", alignItems: "center" }}>
-      <ActivityIndicator color={colors.white} />
+      <ActivityIndicator color={colors.text} />
     </View>
   );
 }

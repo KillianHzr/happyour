@@ -6,7 +6,8 @@ import {
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
-import { colors, radii, typography } from "../../lib/theme";
+import { radii, typography, type ThemeColors } from "../../lib/theme";
+import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import {
   fetchMyCustomChallengeQueue, fetchGroupQueuePending,
   updateCustomChallenge, deleteCustomChallenge,
@@ -35,6 +36,8 @@ export default function CustomChallengeQueuePage({
   visible, onClose, groupId, currentUserId, members,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const s = useThemedStyles(makeStyles);
   const [items, setItems] = useState<CustomChallengeQueueItem[]>([]);
   const [groupQueue, setGroupQueue] = useState<{ id: string; created_at: string }[]>([]);
   const [loading, setLoading] = useState(false);
@@ -146,11 +149,11 @@ export default function CustomChallengeQueuePage({
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: colors.black }}>
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
         <View style={[s.header, { paddingTop: insets.top + 8 }]}>
           <TouchableOpacity style={s.backBtn} onPress={onClose}>
             <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <Path d="M18 6L6 18M6 6l12 12" stroke={colors.white} strokeWidth="2.5" strokeLinecap="round" />
+              <Path d="M18 6L6 18M6 6l12 12" stroke={colors.text} strokeWidth="2.5" strokeLinecap="round" />
             </Svg>
           </TouchableOpacity>
           <Text style={s.title}>Ma file de défis</Text>
@@ -158,7 +161,7 @@ export default function CustomChallengeQueuePage({
 
         {loading ? (
           <View style={s.loaderWrap}>
-            <ActivityIndicator color="rgba(255,255,255,0.5)" size="large" />
+            <ActivityIndicator color={colors.textSecondary} size="large" />
           </View>
         ) : (
           <ScrollView
@@ -210,7 +213,7 @@ export default function CustomChallengeQueuePage({
                         {!isEditing && (
                           <View style={s.pendingActions}>
                             <TouchableOpacity style={s.editBtn} onPress={() => startEdit(item)}>
-                              <Svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round">
+                              <Svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={colors.secondary} strokeWidth="2" strokeLinecap="round">
                                 <Path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                                 <Path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4L18.5 2.5z" />
                               </Svg>
@@ -244,7 +247,7 @@ export default function CustomChallengeQueuePage({
                                         <Text style={s.avatarLetter}>{m.username[0]?.toUpperCase()}</Text>
                                       </View>
                                     )}
-                                    <Text style={[s.editMemberName, editTargetUserId === m.user_id && { color: colors.white }]}>
+                                    <Text style={[s.editMemberName, editTargetUserId === m.user_id && { color: colors.text }]}>
                                       {m.username}
                                     </Text>
                                   </TouchableOpacity>
@@ -261,7 +264,7 @@ export default function CustomChallengeQueuePage({
                                 value={editTheme}
                                 onChangeText={setEditTheme}
                                 placeholder="Thème..."
-                                placeholderTextColor="rgba(255,255,255,0.3)"
+                                placeholderTextColor={colors.textTertiary}
                                 maxLength={60}
                                 returnKeyType="done"
                               />
@@ -279,7 +282,7 @@ export default function CustomChallengeQueuePage({
                                     onPress={() => setEditCaptureType(type)}
                                   >
                                     <Text style={s.editCaptureIcon}>{icon}</Text>
-                                    <Text style={[s.editCaptureLabel, editCaptureType === type && { color: colors.white }]}>{label}</Text>
+                                    <Text style={[s.editCaptureLabel, editCaptureType === type && { color: colors.text }]}>{label}</Text>
                                   </TouchableOpacity>
                                 ))}
                               </View>
@@ -295,7 +298,7 @@ export default function CustomChallengeQueuePage({
                               disabled={saving}
                             >
                               {saving ? (
-                                <ActivityIndicator color={colors.black} size="small" />
+                                <ActivityIndicator color={colors.bg} size="small" />
                               ) : (
                                 <Text style={s.saveEditText}>Enregistrer</Text>
                               )}
@@ -317,7 +320,7 @@ export default function CustomChallengeQueuePage({
   );
 }
 
-const s = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -325,7 +328,7 @@ const s = StyleSheet.create({
     paddingBottom: 16,
     gap: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.08)",
+    borderBottomColor: colors.cardBorder,
   },
   backBtn: {
     width: 36,
@@ -334,7 +337,7 @@ const s = StyleSheet.create({
     alignItems: "center",
   },
   title: {
-    color: colors.white,
+    color: colors.text,
     fontFamily: typography.family.bold,
     fontSize: typography.size.xl,
   },
@@ -355,12 +358,12 @@ const s = StyleSheet.create({
   },
   emptyEmoji: { fontSize: typography.size.subtitle },
   emptyTitle: {
-    color: colors.white,
+    color: colors.text,
     fontFamily: typography.family.bold,
     fontSize: typography.size.lg,
   },
   emptyHint: {
-    color: "rgba(255,255,255,0.4)",
+    color: colors.textTertiary,
     fontFamily: typography.family.regular,
     fontSize: typography.size.sm,
     textAlign: "center",
@@ -368,7 +371,7 @@ const s = StyleSheet.create({
     lineHeight: 20,
   },
   sectionLabel: {
-    color: "rgba(255,255,255,0.35)",
+    color: colors.textTertiary,
     fontFamily: typography.family.bold,
     fontSize: typography.size.xs,
     letterSpacing: 1,
@@ -396,21 +399,21 @@ const s = StyleSheet.create({
     fontSize: typography.size.xs,
   },
   itemLabel: {
-    color: colors.white,
+    color: colors.text,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.sm,
     lineHeight: 20,
   },
   itemHint: {
-    color: "rgba(255,255,255,0.35)",
+    color: colors.textTertiary,
     fontFamily: typography.family.regular,
     fontSize: typography.size.xs,
   },
   pendingCard: {
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: colors.card,
     borderRadius: radii.lg,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    borderColor: colors.cardBorder,
     padding: 14,
     gap: 8,
   },
@@ -420,13 +423,13 @@ const s = StyleSheet.create({
     justifyContent: "space-between",
   },
   positionPill: {
-    backgroundColor: "rgba(255,255,255,0.1)",
+    backgroundColor: colors.accentMuted,
     borderRadius: radii.sm,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
   positionPillText: {
-    color: "rgba(255,255,255,0.6)",
+    color: colors.secondary,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.xs,
   },
@@ -438,7 +441,7 @@ const s = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: radii.lg,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: colors.accentMuted,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -455,7 +458,7 @@ const s = StyleSheet.create({
     marginTop: 4,
   },
   editLabel: {
-    color: "rgba(255,255,255,0.4)",
+    color: colors.textTertiary,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.xs,
     letterSpacing: 0.5,
@@ -469,16 +472,16 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    backgroundColor: "rgba(255,255,255,0.05)",
+    backgroundColor: colors.card,
     borderRadius: radii.sm,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: colors.cardBorder,
     paddingHorizontal: 12,
     paddingVertical: 9,
   },
   editMemberRowActive: {
-    backgroundColor: "rgba(255,255,255,0.14)",
-    borderColor: "rgba(255,255,255,0.35)",
+    backgroundColor: colors.accentMuted,
+    borderColor: colors.borderSecondary,
   },
   editAvatar: {
     width: 28,
@@ -486,29 +489,29 @@ const s = StyleSheet.create({
     borderRadius: radii.md,
   },
   avatarFallback: {
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: colors.accentMuted,
     justifyContent: "center",
     alignItems: "center",
   },
   avatarLetter: {
-    color: colors.white,
+    color: colors.text,
     fontFamily: typography.family.bold,
     fontSize: typography.size.xs,
   },
   editMemberName: {
     flex: 1,
-    color: "rgba(255,255,255,0.6)",
+    color: colors.secondary,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.sm,
   },
   editInput: {
-    backgroundColor: "rgba(255,255,255,0.07)",
+    backgroundColor: colors.card,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: colors.cardBorder,
     paddingHorizontal: 14,
     paddingVertical: 11,
-    color: colors.white,
+    color: colors.text,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.sm,
   },
@@ -521,20 +524,20 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: colors.card,
     borderRadius: radii.lg,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    borderColor: colors.cardBorder,
     paddingHorizontal: 12,
     paddingVertical: 7,
   },
   editCapturePillActive: {
-    backgroundColor: "rgba(255,255,255,0.16)",
-    borderColor: "rgba(255,255,255,0.4)",
+    backgroundColor: colors.accentMuted,
+    borderColor: colors.borderSecondary,
   },
   editCaptureIcon: { fontSize: typography.size.sm },
   editCaptureLabel: {
-    color: "rgba(255,255,255,0.55)",
+    color: colors.secondary,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.xs,
   },
@@ -547,11 +550,11 @@ const s = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: radii.md,
-    backgroundColor: "rgba(255,255,255,0.07)",
+    backgroundColor: colors.card,
     alignItems: "center",
   },
   cancelEditText: {
-    color: "rgba(255,255,255,0.55)",
+    color: colors.secondary,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.sm,
   },
@@ -559,12 +562,12 @@ const s = StyleSheet.create({
     flex: 2,
     paddingVertical: 12,
     borderRadius: radii.md,
-    backgroundColor: colors.white,
+    backgroundColor: colors.text,
     alignItems: "center",
     justifyContent: "center",
   },
   saveEditText: {
-    color: colors.black,
+    color: colors.bg,
     fontFamily: typography.family.bold,
     fontSize: typography.size.sm,
   },

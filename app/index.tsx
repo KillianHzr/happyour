@@ -4,10 +4,12 @@ import { useRouter, Redirect } from "expo-router";
 import { useAuth } from "../lib/auth-context";
 import { supabase } from "../lib/supabase";
 import Loader from "../components/Loader";
-import { colors } from "../lib/theme";
+import { type ThemeColors } from "../lib/theme";
+import { useThemedStyles } from "../lib/theme-context";
 
 export default function Index() {
   const { session, loading: authLoading } = useAuth();
+  const styles = useThemedStyles(makeStyles);
   const [checkingGroup, setCheckingGroup] = useState(true);
   const [targetGroupId, setTargetGroupId] = useState<string | null>(null);
 
@@ -63,7 +65,7 @@ export default function Index() {
   return <Redirect href="/(app)/groups" />;
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg,

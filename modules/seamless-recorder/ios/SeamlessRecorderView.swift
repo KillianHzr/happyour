@@ -45,11 +45,24 @@ public class SeamlessRecorderView: ExpoView {
     previewLayer.frame = bounds
   }
 
-  // Stop the session when the view leaves the screen (mode switch, unmount).
+  // Stop the session just before the view leaves the screen.
   public override func willMove(toWindow newWindow: UIWindow?) {
     super.willMove(toWindow: newWindow)
     if newWindow == nil {
       sessionQueue.async { [weak self] in self?.session.stopRunning() }
+    }
+  }
+
+  // Restart the session once the view is actually in a window.
+  // willMove(toWindow:) fires *before* the move and isn't reliable for restarts;
+  // didMoveToWindow fires *after*, so self.window is guaranteed non-nil here.
+  // This handles React Native's brief detach/reattach during reconciliation and JS reloads.
+  public override func didMoveToWindow() {
+    super.didMoveToWindow()
+    guard window != nil else { return }
+    sessionQueue.async { [weak self] in
+      guard let self, !self.session.isRunning else { return }
+      self.session.startRunning()
     }
   }
 
@@ -153,6 +166,10 @@ public class SeamlessRecorderView: ExpoView {
   func capturePhoto(promise: Promise) {
     sessionQueue.async { [weak self] in
       guard let self else { return }
+      // Self-heal: if the session was stopped (e.g. by a brief RN detach), restart it.
+      // startRunning() is synchronous on sessionQueue so the session is running by the
+      // time capturePhoto executes below.
+      if !self.session.isRunning { self.session.startRunning() }
       guard self.pendingPhotoPromise == nil else {
         promise.reject("PHOTO_ERROR", "Photo capture already in progress"); return
       }
@@ -166,6 +183,10 @@ public class SeamlessRecorderView: ExpoView {
   }
 
   func startRecording() {
+    sessionQueue.async { [weak self] in
+      guard let self else { return }
+      if !self.session.isRunning { self.session.startRunning() }
+    }
     writerQueue.async { [weak self] in self?.prepareWriter() }
   }
 

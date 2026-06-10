@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { Image } from "expo-image";
-import { colors, radii, theme, typography } from "../lib/theme";
+import { radii, typography, type ThemeColors } from "../lib/theme";
+import { useTheme, useThemedStyles } from "../lib/theme-context";
 
 type Props = {
   totalCount: number;
@@ -16,10 +17,11 @@ import VaultStars from "../assets/icons/Vault_stars.svg";
 import VaultFull from "../assets/icons/Vault_stars2.svg";
 
 const VaultIcon = ({ count }: { count: number }) => {
+  const { colors } = useTheme();
   const iconProps = {
     width: 80,
     height: 80,
-    color: colors.white, // This will be used as currentColor in the SVGs
+    color: colors.text, // This will be used as currentColor in the SVGs
   };
 
   if (count >= 15) {
@@ -32,6 +34,8 @@ const VaultIcon = ({ count }: { count: number }) => {
 };
 
 export default function VaultCounter({ totalCount, unlockDate, lastPoster }: Props) {
+  const { theme } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [timeLeft, setTimeLeft] = useState("");
 
   useEffect(() => {
@@ -58,7 +62,7 @@ export default function VaultCounter({ totalCount, unlockDate, lastPoster }: Pro
 
   return (
     <View style={[theme.glassCard, styles.container]}>
-    
+
 
       {lastPoster && (
         <View style={styles.lastPosterWrap}>
@@ -82,7 +86,7 @@ export default function VaultCounter({ totalCount, unlockDate, lastPoster }: Pro
       <View style={styles.iconContainer}>
         <VaultIcon count={totalCount} />
       </View>
-      
+
       <View style={styles.statsRow}>
         <View style={styles.statItem}>
           <Text style={styles.count}>{totalCount}</Text>
@@ -95,14 +99,14 @@ export default function VaultCounter({ totalCount, unlockDate, lastPoster }: Pro
       </Text>
 
       <View style={styles.divider} />
-      
+
       <Text style={styles.countdownTitle}>Déverrouillage dans</Text>
       <Text style={styles.countdownValue}>{timeLeft}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     alignItems: "center",
     paddingVertical: 40,
@@ -115,10 +119,10 @@ const styles = StyleSheet.create({
   lastPosterWrap: { alignItems: "center", marginBottom: 24 },
   crownWrap: { marginBottom: -8, zIndex: 1 },
   lastPosterAvatar: { width: 56, height: 56, borderRadius: radii.full, borderWidth: 2, borderColor: "rgba(255,215,0,0.7)" },
-  lastPosterAvatarFallback: { backgroundColor: colors.white, justifyContent: "center", alignItems: "center" },
-  lastPosterInitial: { fontFamily: typography.family.bold, fontSize: typography.size.xl, color: colors.black },
-  lastPosterName: { fontFamily: typography.family.semibold, fontSize: typography.size.xs, color: "rgba(255,255,255,0.7)", marginTop: 8 },
-  lastPosterHint: { fontFamily: typography.family.regular, fontSize: typography.size.xs, color: "rgba(255,255,255,0.4)", marginTop: 4, textAlign: "center" },
+  lastPosterAvatarFallback: { backgroundColor: colors.text, justifyContent: "center", alignItems: "center" },
+  lastPosterInitial: { fontFamily: typography.family.bold, fontSize: typography.size.xl, color: colors.bg },
+  lastPosterName: { fontFamily: typography.family.semibold, fontSize: typography.size.xs, color: colors.secondary, marginTop: 8 },
+  lastPosterHint: { fontFamily: typography.family.regular, fontSize: typography.size.xs, color: colors.textTertiary, marginTop: 4, textAlign: "center" },
   statsRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -131,16 +135,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flex: 1,
   },
-  count: { 
-    fontFamily: typography.family.bold, 
-    fontSize: typography.size.title, 
+  count: {
+    fontFamily: typography.family.bold,
+    fontSize: typography.size.title,
     color: colors.text,
     letterSpacing: -1,
   },
-  label: { 
-    fontFamily: typography.family.semibold, 
-    fontSize: typography.size.xs, 
-    color: colors.secondary, 
+  label: {
+    fontFamily: typography.family.semibold,
+    fontSize: typography.size.xs,
+    color: colors.secondary,
     textTransform: "uppercase",
     letterSpacing: 1,
     marginTop: -4,
@@ -148,7 +152,7 @@ const styles = StyleSheet.create({
   verticalDivider: {
     width: 1,
     height: 40,
-    backgroundColor: "rgba(255,255,255,0.1)",
+    backgroundColor: colors.cardBorder,
   },
   description: {
     fontFamily: typography.family.regular,
@@ -173,7 +177,7 @@ const styles = StyleSheet.create({
   countdownValue: {
     fontFamily: typography.family.bold,
     fontSize: typography.size.xxl,
-    color: colors.white,
+    color: colors.text,
     letterSpacing: 1,
   },
 });

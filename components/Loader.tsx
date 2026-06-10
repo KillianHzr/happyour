@@ -1,8 +1,10 @@
 import React, { useEffect, useRef } from "react";
 import { View, Animated, StyleSheet, Easing } from "react-native";
-import { colors } from "../lib/theme";
+import { type ThemeColors } from "../lib/theme";
+import { useThemedStyles } from "../lib/theme-context";
 
 export default function Loader({ size = 40 }: { size?: number }) {
+  const styles = useThemedStyles(makeStyles);
   const rotation = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -38,7 +40,7 @@ export default function Loader({ size = 40 }: { size?: number }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     justifyContent: "center",
     alignItems: "center",
@@ -46,7 +48,7 @@ const styles = StyleSheet.create({
   ring: {
     borderWidth: 2,
     borderColor: "transparent",
-    borderTopColor: colors.white,
-    borderRightColor: "rgba(255,255,255,0.1)",
+    borderTopColor: colors.text,
+    borderRightColor: colors.cardBorder,
   },
 });

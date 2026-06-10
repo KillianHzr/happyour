@@ -2,10 +2,12 @@ import { useEffect, useState } from "react";
 import { Slot } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold } from "@expo-google-fonts/inter";
+import { useAssets } from "expo-asset";
 import { View, StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import * as Updates from "expo-updates";
 import { AuthProvider } from "../lib/auth-context";
+import { ThemeProvider, useTheme } from "../lib/theme-context";
 import { UploadProvider } from "../lib/upload-context";
 import { ToastProvider } from "../lib/toast-context";
 import { setupNotificationHandler } from "../lib/notifications";
@@ -26,6 +28,7 @@ if (_ErrorUtils) {
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold });
+  const [assetsLoaded] = useAssets([require("../assets/images/background-gradient-orange.png")]);
   const [checksReady, setChecksReady] = useState(false);
   const [splashDone, setSplashDone] = useState(false);
 
@@ -34,29 +37,37 @@ export default function RootLayout() {
     setChecksReady(true);
   }, []);
 
-  const appReady = fontsLoaded && checksReady;
+  const appReady = fontsLoaded && !!assetsLoaded && checksReady;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
-        <UploadProvider>
-          <ToastProvider>
-            <View style={{ flex: 1 }}>
-              <StatusBar style="light" />
-              {!splashDone && (
-                <SplashScreen ready={appReady} onFinish={() => setSplashDone(true)} />
-              )}
-              {appReady && (
-                <View style={splashDone ? styles.visible : styles.hidden}>
-                  <Slot />
-                </View>
-              )}
-            </View>
-          </ToastProvider>
-        </UploadProvider>
+        <ThemeProvider>
+          <UploadProvider>
+            <ToastProvider>
+              <View style={{ flex: 1 }}>
+                <ThemedStatusBar />
+                {!splashDone && (
+                  <SplashScreen ready={appReady} onFinish={() => setSplashDone(true)} />
+                )}
+                {appReady && (
+                  <View style={splashDone ? styles.visible : styles.hidden}>
+                    <Slot />
+                  </View>
+                )}
+              </View>
+            </ToastProvider>
+          </UploadProvider>
+        </ThemeProvider>
       </AuthProvider>
     </GestureHandlerRootView>
   );
+}
+
+/** StatusBar dont le style suit le mode de thème actif. */
+function ThemedStatusBar() {
+  const { mode } = useTheme();
+  return <StatusBar style={mode === "Dark" ? "light" : "dark"} />;
 }
 
 async function checkOTAUpdate() {

@@ -5,13 +5,16 @@ import { useAuth } from "../../../lib/auth-context";
 import { useToast } from "../../../lib/toast-context";
 import { translateError } from "../../../lib/error-messages";
 import { supabase } from "../../../lib/supabase";
-import { colors, theme, typography } from "../../../lib/theme";
+import { typography, type ThemeColors } from "../../../lib/theme";
+import { useTheme, useThemedStyles } from "../../../lib/theme-context";
 
 const MAX_GROUPS = 3;
 
 export default function CreateGroupScreen() {
   const { user } = useAuth();
   const { showToast } = useToast();
+  const { colors, theme } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -61,7 +64,7 @@ export default function CreateGroupScreen() {
         placeholderTextColor={colors.muted}
         value={name}
         onChangeText={setName}
-        maxLength={25}
+        maxLength={9}
       />
 
       <TouchableOpacity style={theme.accentButton} onPress={handleCreate} disabled={loading}>
@@ -71,7 +74,7 @@ export default function CreateGroupScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 32, paddingTop: 80, backgroundColor: colors.bg },
   title: { fontFamily: typography.family.bold, fontSize: typography.size.xxl, marginBottom: 24, color: colors.text },
   input: { marginBottom: 16 },

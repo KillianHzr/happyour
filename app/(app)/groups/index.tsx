@@ -4,7 +4,8 @@ import { router, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../../../lib/supabase";
 import { useAuth } from "../../../lib/auth-context";
-import { colors, radii, typography } from "../../../lib/theme";
+import { radii, typography, type ThemeColors } from "../../../lib/theme";
+import { useTheme, useThemedStyles } from "../../../lib/theme-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Loader from "../../../components/Loader";
 import Svg, { Path } from "react-native-svg";
@@ -17,21 +18,28 @@ const LogoutIcon = () => (
   </Svg>
 );
 
-const PlusIcon = () => (
-  <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-    <Path d="M12 5V19M5 12H19" stroke={colors.black} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-  </Svg>
-);
+const PlusIcon = () => {
+  const { colors } = useTheme();
+  return (
+    <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+      <Path d="M12 5V19M5 12H19" stroke={colors.bg} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+};
 
-const GroupIcon = () => (
-  <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-    <Path d="M17 21V19C17 17.9391 16.5786 16.9217 15.8284 16.1716C15.0783 15.4214 14.0609 15 13 15H5C3.93913 15 2.92172 15.4214 2.17157 16.1716C1.42143 16.9217 1 17.9391 1 19V21M13 7C13 9.20914 11.2091 11 9 11C6.79086 11 5 9.20914 5 7C5 4.79086 6.79086 3 9 3C11.2091 3 13 4.79086 13 7Z" stroke={colors.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-  </Svg>
-);
+const GroupIcon = () => {
+  const { colors } = useTheme();
+  return (
+    <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+      <Path d="M17 21V19C17 17.9391 16.5786 16.9217 15.8284 16.1716C15.0783 15.4214 14.0609 15 13 15H5C3.93913 15 2.92172 15.4214 2.17157 16.1716C1.42143 16.9217 1 17.9391 1 19V21M13 7C13 9.20914 11.2091 11 9 11C6.79086 11 5 9.20914 5 7C5 4.79086 6.79086 3 9 3C11.2091 3 13 4.79086 13 7Z" stroke={colors.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+};
 
 export default function GroupsHomeScreen() {
   const { user, logout } = useAuth();
   const insets = useSafeAreaInsets();
+  const styles = useThemedStyles(makeStyles);
   const [loading, setLoading] = useState(true);
 
   useFocusEffect(useCallback(() => {
@@ -112,30 +120,30 @@ export default function GroupsHomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 24 },
   centered: { alignItems: "center" },
   logoMark: {
-    width: 40, height: 40, borderWidth: 3, borderColor: colors.white,
+    width: 40, height: 40, borderWidth: 3, borderColor: colors.text,
     borderRadius: radii.sm, transform: [{ rotate: "45deg" }], marginBottom: 32,
   },
-  title: { color: colors.white, fontSize: typography.size.xxl, fontFamily: typography.family.bold, textAlign: "center", marginBottom: 12 },
+  title: { color: colors.text, fontSize: typography.size.xxl, fontFamily: typography.family.bold, textAlign: "center", marginBottom: 12 },
   subtitle: {
     color: colors.secondary, fontSize: typography.size.sm, fontFamily: typography.family.regular,
     textAlign: "center", lineHeight: 22, paddingHorizontal: 16, marginBottom: 48,
   },
   actions: { width: "100%", gap: 16 },
-  primaryBtn: { flexDirection: "row", alignItems: "center", backgroundColor: colors.white, padding: 20, borderRadius: radii.lg, gap: 16 },
+  primaryBtn: { flexDirection: "row", alignItems: "center", backgroundColor: colors.text, padding: 20, borderRadius: radii.lg, gap: 16 },
   secondaryBtn: {
     flexDirection: "row", alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.1)", borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)", padding: 20, borderRadius: radii.lg, gap: 16,
+    backgroundColor: colors.accentMuted, borderWidth: 1,
+    borderColor: colors.cardBorder, padding: 20, borderRadius: radii.lg, gap: 16,
   },
-  btnIcon: { width: 44, height: 44, borderRadius: radii.md, backgroundColor: "rgba(0,0,0,0.05)", justifyContent: "center", alignItems: "center" },
-  btnIconDark: { backgroundColor: "rgba(255,255,255,0.1)" },
-  primaryBtnText: { fontSize: typography.size.lg, fontFamily: typography.family.bold, color: colors.black },
-  secondaryBtnText: { fontSize: typography.size.lg, fontFamily: typography.family.bold, color: colors.white },
-  logoutCard: { backgroundColor: "rgba(255,255,255,0.06)", borderRadius: radii.lg, overflow: "hidden" },
+  btnIcon: { width: 44, height: 44, borderRadius: radii.md, backgroundColor: colors.opacityDark, justifyContent: "center", alignItems: "center" },
+  btnIconDark: { backgroundColor: colors.accentMuted },
+  primaryBtnText: { fontSize: typography.size.lg, fontFamily: typography.family.bold, color: colors.bg },
+  secondaryBtnText: { fontSize: typography.size.lg, fontFamily: typography.family.bold, color: colors.text },
+  logoutCard: { backgroundColor: colors.card, borderRadius: radii.lg, overflow: "hidden" },
   logoutRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 13, gap: 12 },
   logoutIconWrap: { width: 36, height: 36, borderRadius: radii.sm, backgroundColor: "rgba(255,59,48,0.12)", justifyContent: "center", alignItems: "center" },
   logoutLabel: { fontSize: typography.size.md, color: "#FF3B30", fontFamily: typography.family.semibold },

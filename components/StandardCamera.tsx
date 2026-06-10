@@ -1,7 +1,8 @@
 import React, { forwardRef, useEffect, useRef, useState } from "react";
 import { View, StyleSheet, Text, TouchableOpacity, Dimensions } from "react-native";
 import { CameraView, useCameraPermissions, useMicrophonePermissions, FlashMode, CameraType } from "expo-camera";
-import { colors, radii, typography } from "../lib/theme";
+import { radii, typography, type ThemeColors } from "../lib/theme";
+import { useThemedStyles } from "../lib/theme-context";
 
 interface Props {
   isActive?: boolean;
@@ -28,6 +29,7 @@ const StandardCamera = forwardRef<CameraView, Props>(({
   onDoubleTap,
   onCameraReady,
 }, ref) => {
+  const styles = useThemedStyles(makeStyles);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [micPermission, requestMicPermission] = useMicrophonePermissions();
   const [localZoom, setLocalZoom] = useState(initialZoom);
@@ -164,17 +166,17 @@ const StandardCamera = forwardRef<CameraView, Props>(({
 StandardCamera.displayName = "StandardCamera";
 export default StandardCamera;
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.black },
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.bg },
   cameraWrapper: {
     flex: 1,
     width: '100%',
-    backgroundColor: colors.black,
+    backgroundColor: colors.bg,
     borderRadius: radii.xl,
     overflow: "hidden",
   },
   center: { justifyContent: "center", alignItems: "center", padding: 40 },
-  errorText: { color: colors.white, textAlign: "center", marginBottom: 20, fontFamily: typography.family.regular },
-  button: { backgroundColor: colors.white, paddingHorizontal: 24, paddingVertical: 12, borderRadius: radii.md },
-  buttonText: { color: colors.black, fontFamily: typography.family.bold },
+  errorText: { color: colors.text, textAlign: "center", marginBottom: 20, fontFamily: typography.family.regular },
+  button: { backgroundColor: colors.text, paddingHorizontal: 24, paddingVertical: 12, borderRadius: radii.md },
+  buttonText: { color: colors.bg, fontFamily: typography.family.bold },
 });

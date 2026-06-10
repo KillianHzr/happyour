@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet, Modal, Pressable, TouchableOpacity, ActivityIndicator } from "react-native";
-import { colors, radii, typography } from "../../lib/theme";
+import { radii, typography, type ThemeColors } from "../../lib/theme";
+import { useThemedStyles } from "../../lib/theme-context";
 
 type Props = {
   visible: boolean;
@@ -11,6 +12,7 @@ type Props = {
 };
 
 export default function LeaveGroupModal({ visible, onClose, onConfirm, isAdmin, leaveNextAdmin, isLeaving }: Props) {
+  const styles = useThemedStyles(makeStyles);
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
@@ -24,7 +26,7 @@ export default function LeaveGroupModal({ visible, onClose, onConfirm, isAdmin, 
           </Text>
           <TouchableOpacity style={styles.confirmBtn} onPress={onConfirm} disabled={isLeaving}>
             {isLeaving
-              ? <ActivityIndicator color={colors.white} />
+              ? <ActivityIndicator color="#FFFFFF" />
               : <Text style={styles.confirmText}>Quitter le groupe</Text>}
           </TouchableOpacity>
           <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
@@ -36,14 +38,14 @@ export default function LeaveGroupModal({ visible, onClose, onConfirm, isAdmin, 
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "flex-end" },
-  sheet: { backgroundColor: "#161616", borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, padding: 24, paddingBottom: 44 },
-  handle: { width: 36, height: 4, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: radii.xs, alignSelf: "center", marginBottom: 24 },
-  title: { fontSize: typography.size.xl, fontFamily: typography.family.bold, color: colors.white, marginBottom: 12 },
-  body: { fontSize: typography.size.sm, fontFamily: typography.family.regular, color: "rgba(255,255,255,0.55)", marginBottom: 28, lineHeight: 22 },
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: colors.opacityLight, justifyContent: "flex-end" },
+  sheet: { backgroundColor: colors.card, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, padding: 24, paddingBottom: 44 },
+  handle: { width: 36, height: 4, backgroundColor: colors.borderSecondary, borderRadius: radii.xs, alignSelf: "center", marginBottom: 24 },
+  title: { fontSize: typography.size.xl, fontFamily: typography.family.bold, color: colors.text, marginBottom: 12 },
+  body: { fontSize: typography.size.sm, fontFamily: typography.family.regular, color: colors.secondary, marginBottom: 28, lineHeight: 22 },
   confirmBtn: { backgroundColor: "#FF3B30", borderRadius: radii.lg, paddingVertical: 15, alignItems: "center", marginBottom: 10 },
-  confirmText: { color: colors.white, fontSize: typography.size.md, fontFamily: typography.family.bold },
+  confirmText: { color: "#FFFFFF", fontSize: typography.size.md, fontFamily: typography.family.bold },
   cancelBtn: { paddingVertical: 12, alignItems: "center" },
-  cancelText: { color: "rgba(255,255,255,0.35)", fontSize: typography.size.sm, fontFamily: typography.family.semibold },
+  cancelText: { color: colors.textTertiary, fontSize: typography.size.sm, fontFamily: typography.family.semibold },
 });

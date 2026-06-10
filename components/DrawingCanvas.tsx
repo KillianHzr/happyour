@@ -1,13 +1,13 @@
 import React, { forwardRef, useImperativeHandle, useRef, useState, useEffect } from "react";
 import { View, StyleSheet, PanResponder } from "react-native";
 import { Canvas, Path, Fill, Skia, useCanvasRef } from "@shopify/react-native-skia";
-import { colors } from "../lib/theme";
 import * as FileSystem from "expo-file-system/legacy";
 
 export interface DrawingCanvasRef {
   capture: () => Promise<string | null>;
   undo: () => void;
   redo: () => void;
+  clear: () => void;
 }
 
 type Point = { x: number; y: number };
@@ -63,6 +63,12 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { color: string; strok
         redoStackRef.current = redoStackRef.current.slice(0, -1);
         setCompletedStrokes((prev) => [...prev, next]);
       },
+      clear: () => {
+        redoStackRef.current = [];
+        activeStrokeRef.current = null;
+        lastPointRef.current = null;
+        setCompletedStrokes([]);
+      },
     }));
 
     const panResponder = useRef(
@@ -79,6 +85,9 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { color: string; strok
           lastPointRef.current = { x, y };
           activeStrokeRef.current = { path, color: selectedColorRef.current, strokeWidth: selectedStrokeWidthRef.current };
           forceUpdate((n) => n + 1);
+
+          // Notify immediately that we are drawing to update UI (hide placeholder, etc.)
+          onHistoryChange?.(true, redoStackRef.current.length > 0);
         },
         onPanResponderMove: (evt) => {
           if (!activeStrokeRef.current) return;
@@ -100,11 +109,14 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { color: string; strok
             setCompletedStrokes((prev) => [...prev, stroke]);
             activeStrokeRef.current = null;
             lastPointRef.current = null;
+            onHistoryChange?.(true, false);
           }
         },
         onPanResponderTerminate: () => {
           activeStrokeRef.current = null;
           lastPointRef.current = null;
+          // Re-sync with actual history
+          onHistoryChange?.(completedStrokes.length > 0, redoStackRef.current.length > 0);
         },
       })
     ).current;
@@ -121,7 +133,7 @@ export const DrawingCanvas = forwardRef<DrawingCanvasRef, { color: string; strok
         {...panResponder.panHandlers}
       >
         <Canvas ref={canvasRef} style={StyleSheet.absoluteFill}>
-          <Fill color={colors.white} />
+          <Fill color="#FFFFFF" />
           {completedStrokes.map((stroke, i) => (
             <Path
               key={i}

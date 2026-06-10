@@ -4,7 +4,9 @@ import {
   Pressable, View, Easing, KeyboardAvoidingView, Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { radii } from "../lib/theme";
+import { radii, spacing, blur, blurIntensity, type ThemeColors } from "../lib/theme";
+import { useThemedStyles, useTheme } from "../lib/theme-context";
+import BlurView from "./atoms/BlurView";
 
 
 type Props = {
@@ -15,6 +17,8 @@ type Props = {
 
 export default function BottomSheet({ visible, onClose, children }: Props) {
   const insets = useSafeAreaInsets();
+  const styles = useThemedStyles(makeStyles);
+  const { colors } = useTheme();
   const [mounted, setMounted] = useState(false);
   const overlayAnim = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(600)).current;
@@ -109,8 +113,14 @@ export default function BottomSheet({ visible, onClose, children }: Props) {
         style={styles.root}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
-        {/* Overlay */}
-        <Animated.View style={[styles.overlay, { opacity: overlayAnim }]}>
+        {/* Overlay — BlurView on iOS, opacityLight background on Android */}
+        <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: overlayAnim }]}>
+          <BlurView
+            intensity={blurIntensity(blur.xl)}
+            tint="dark"
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.opacityLight }]} />
           <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
         </Animated.View>
 
@@ -133,27 +143,22 @@ export default function BottomSheet({ visible, onClose, children }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   root: { flex: 1, justifyContent: "flex-end" },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.72)",
-  },
   sheet: {
-    backgroundColor: "#161616",
-    borderTopLeftRadius: radii.xl,
-    borderTopRightRadius: radii.xl,
-    paddingHorizontal: 24,
+    backgroundColor: colors.card,
+    borderTopLeftRadius: radii.lg,
+    borderTopRightRadius: radii.lg,
+    paddingHorizontal: spacing.lg,
   },
-  // Tall tap/drag target around the handle bar
   handleArea: {
     alignItems: "center",
     paddingTop: 14,
     paddingBottom: 10,
   },
   handle: {
-    width: 36, height: 4,
-    backgroundColor: "rgba(255,255,255,0.25)",
-    borderRadius: radii.xs,
+    width: 48, height: 4,
+    backgroundColor: colors.accentMuted,
+    borderRadius: 9999,
   },
 });

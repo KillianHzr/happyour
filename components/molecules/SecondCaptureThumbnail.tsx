@@ -3,7 +3,8 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Image } from "expo-image";
 import { Svg, Path } from "react-native-svg";
 import { r2Storage } from "../../lib/r2";
-import { colors, radii, spacing, typography } from "../../lib/theme";
+import { radii, spacing, typography, type ThemeColors } from "../../lib/theme";
+import { useTheme, useThemedStyles } from "../../lib/theme-context";
 
 interface SecondCaptureThumbnailProps {
   secondPath: string;
@@ -12,6 +13,8 @@ interface SecondCaptureThumbnailProps {
 }
 
 export const SecondCaptureThumbnail = ({ secondPath, secondNote, onPress }: SecondCaptureThumbnailProps) => {
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const isText = secondPath === "text_mode";
   const isAudio = secondPath.endsWith(".m4a");
   const isVideo = secondPath.endsWith(".mp4");
@@ -20,14 +23,14 @@ export const SecondCaptureThumbnail = ({ secondPath, secondNote, onPress }: Seco
   const renderContent = () => {
     if (isText) {
       return (
-        <View style={[styles.secondThumbBg, { backgroundColor: colors.black, justifyContent: "center", padding: spacing.xs }]}>
+        <View style={[styles.secondThumbBg, { justifyContent: "center", padding: spacing.xs }]}>
           <Text style={styles.secondThumbText} numberOfLines={5}>{secondNote ?? ""}</Text>
         </View>
       );
     }
     if (isAudio) {
       return (
-        <View style={[styles.secondThumbBg, { backgroundColor: colors.black, gap: spacing.xs }]}>
+        <View style={[styles.secondThumbBg, { gap: spacing.xs }]}>
           {/* Mini waveform */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
             {[8, 14, 10, 18, 12, 16, 9].map((h, i) => (
@@ -36,7 +39,7 @@ export const SecondCaptureThumbnail = ({ secondPath, secondNote, onPress }: Seco
           </View>
           {/* Play icon */}
           <View style={styles.secondThumbPlayBadge}>
-            <Svg width="8" height="8" viewBox="0 0 24 24" fill={colors.white}>
+            <Svg width="8" height="8" viewBox="0 0 24 24" fill={colors.text}>
               <Path d="M8 5v14l11-7z" />
             </Svg>
           </View>
@@ -45,7 +48,7 @@ export const SecondCaptureThumbnail = ({ secondPath, secondNote, onPress }: Seco
     }
     if (isVideo) {
       return (
-        <View style={[styles.secondThumbBg, { backgroundColor: colors.black }]}>
+        <View style={styles.secondThumbBg}>
           <Image
             source={{ uri: r2Storage.getPublicUrl(secondPath) }}
             style={styles.secondThumbImage}
@@ -54,7 +57,7 @@ export const SecondCaptureThumbnail = ({ secondPath, secondNote, onPress }: Seco
           {/* Play badge over video */}
           <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center" }]}>
             <View style={styles.secondThumbPlayCircle}>
-              <Svg width="10" height="10" viewBox="0 0 24 24" fill={colors.white}>
+              <Svg width="10" height="10" viewBox="0 0 24 24" fill={colors.text}>
                 <Path d="M8 5v14l11-7z" />
               </Svg>
             </View>
@@ -92,67 +95,67 @@ export const SecondCaptureThumbnail = ({ secondPath, secondNote, onPress }: Seco
       {/* Swap indicator */}
       <View style={styles.secondThumbOverlay}>
         <Svg width="8" height="8" viewBox="0 0 20 18" fill="none">
-          <Path d="M1 13L5 17M5 17L9 13M5 17L5 1M19 5L15 1M15 1L11 5M15 1L15 17" stroke={colors.white} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+          <Path d="M1 13L5 17M5 17L9 13M5 17L5 1M19 5L15 1M15 1L11 5M15 1L15 17" stroke={colors.text} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
         </Svg>
       </View>
     </TouchableOpacity>
   );
 };
 
-const styles = StyleSheet.create({
-  secondThumb: { 
-    position: "absolute", 
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
+  secondThumb: {
+    position: "absolute",
     bottom: 189,
     right: spacing.lg,
     borderRadius: radii.md,
-    overflow: "hidden", 
-    borderWidth: 2, 
-    borderColor: colors.glassBorder
+    overflow: "hidden",
+    borderWidth: 2,
+    borderColor: colors.cardBorder
   },
-  secondThumbBg: { 
-    flex: 1, 
-    backgroundColor: colors.black,
-    justifyContent: "center", 
-    alignItems: "center" 
+  secondThumbBg: {
+    flex: 1,
+    backgroundColor: colors.bg,
+    justifyContent: "center",
+    alignItems: "center"
   },
-  secondThumbText: { 
+  secondThumbText: {
     color: colors.text,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.xs,
-    textAlign: "center", 
-    lineHeight: 13 
+    textAlign: "center",
+    lineHeight: 13
   },
-  secondThumbImage: { 
-    width: "100%", 
-    height: "100%" 
+  secondThumbImage: {
+    width: "100%",
+    height: "100%"
   },
-  secondThumbOverlay: { 
-    position: "absolute", 
+  secondThumbOverlay: {
+    position: "absolute",
     bottom: spacing.xs,
     right: spacing.xs,
-    width: 26, 
-    height: 26, 
+    width: 26,
+    height: 26,
     borderRadius: radii.sm,
-    backgroundColor: colors.overlay,
-    justifyContent: "center", 
-    alignItems: "center" 
+    backgroundColor: colors.card,
+    justifyContent: "center",
+    alignItems: "center"
   },
-  secondThumbPlayBadge: { 
-    width: 22, 
-    height: 22, 
-    borderRadius: radii.md, 
-    backgroundColor: colors.glass,
-    justifyContent: "center", 
-    alignItems: "center", 
-    paddingLeft: 1 
+  secondThumbPlayBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: radii.md,
+    backgroundColor: colors.opacityLight,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingLeft: 1
   },
-  secondThumbPlayCircle: { 
-    width: 28, 
-    height: 28, 
-    borderRadius: radii.md, 
-    backgroundColor: colors.overlay,
-    justifyContent: "center", 
-    alignItems: "center", 
-    paddingLeft: 2 
+  secondThumbPlayCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: radii.md,
+    backgroundColor: colors.card,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingLeft: 2
   },
 });

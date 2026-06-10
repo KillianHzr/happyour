@@ -6,7 +6,8 @@ import {
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
-import { colors, radii, typography } from "../../lib/theme";
+import { radii, typography, type ThemeColors } from "../../lib/theme";
+import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import {
   addCustomChallenge, getQueuePendingCount,
   type ChallengeCapture,
@@ -41,6 +42,8 @@ export default function CustomChallengeCreatePage({
   visible, onClose, groupId, currentUserId, members, onAdded,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const s = useThemedStyles(makeStyles);
   const [option, setOption] = useState<1 | 2 | 3 | null>(null);
   const [targetUserId, setTargetUserId] = useState<string | null>(null);
   const [customTheme, setCustomTheme] = useState("");
@@ -106,13 +109,13 @@ export default function CustomChallengeCreatePage({
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
       <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: colors.black }}
+        style={{ flex: 1, backgroundColor: colors.bg }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <View style={[s.header, { paddingTop: insets.top + 8 }]}>
           <TouchableOpacity style={s.backBtn} onPress={onClose}>
             <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <Path d="M18 6L6 18M6 6l12 12" stroke={colors.white} strokeWidth="2.5" strokeLinecap="round" />
+              <Path d="M18 6L6 18M6 6l12 12" stroke={colors.text} strokeWidth="2.5" strokeLinecap="round" />
             </Svg>
           </TouchableOpacity>
           <Text style={s.title}>Défi custom</Text>
@@ -169,7 +172,7 @@ export default function CustomChallengeCreatePage({
                       {targetUserId === m.user_id && (
                         <View style={s.checkmark}>
                           <Svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                            <Path d="M20 6L9 17l-5-5" stroke={colors.black} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                            <Path d="M20 6L9 17l-5-5" stroke={colors.bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
                           </Svg>
                         </View>
                       )}
@@ -187,7 +190,7 @@ export default function CustomChallengeCreatePage({
               <TextInput
                 style={s.themeInput}
                 placeholder="Ex: voiture, cuisine, enfance..."
-                placeholderTextColor="rgba(255,255,255,0.3)"
+                placeholderTextColor={colors.textTertiary}
                 value={customTheme}
                 onChangeText={setCustomTheme}
                 maxLength={60}
@@ -215,7 +218,7 @@ export default function CustomChallengeCreatePage({
           {isValid && (
             <View style={s.positionBox}>
               {loadingCount ? (
-                <ActivityIndicator color="rgba(255,255,255,0.5)" size="small" />
+                <ActivityIndicator color={colors.textSecondary} size="small" />
               ) : positionText ? (
                 <Text style={s.positionText}>{positionText}</Text>
               ) : null}
@@ -230,7 +233,7 @@ export default function CustomChallengeCreatePage({
             activeOpacity={0.8}
           >
             {loading ? (
-              <ActivityIndicator color={colors.black} size="small" />
+              <ActivityIndicator color={colors.bg} size="small" />
             ) : (
               <Text style={s.confirmBtnText}>Ajouter à la file</Text>
             )}
@@ -241,7 +244,7 @@ export default function CustomChallengeCreatePage({
   );
 }
 
-const s = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -249,7 +252,7 @@ const s = StyleSheet.create({
     paddingBottom: 16,
     gap: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.08)",
+    borderBottomColor: colors.cardBorder,
   },
   backBtn: {
     width: 36,
@@ -258,7 +261,7 @@ const s = StyleSheet.create({
     alignItems: "center",
   },
   title: {
-    color: colors.white,
+    color: colors.text,
     fontFamily: typography.family.bold,
     fontSize: typography.size.xl,
   },
@@ -268,7 +271,7 @@ const s = StyleSheet.create({
     gap: 8,
   },
   sectionTitle: {
-    color: "rgba(255,255,255,0.55)",
+    color: colors.secondary,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.xs,
     letterSpacing: 0.8,
@@ -280,26 +283,26 @@ const s = StyleSheet.create({
     gap: 10,
   },
   optionCard: {
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: colors.card,
     borderRadius: radii.lg,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    borderColor: colors.cardBorder,
     padding: 16,
     gap: 4,
   },
   optionCardActive: {
-    backgroundColor: "rgba(255,255,255,0.12)",
-    borderColor: "rgba(255,255,255,0.4)",
+    backgroundColor: colors.accentMuted,
+    borderColor: colors.borderSecondary,
   },
   optionIcon: { fontSize: typography.size.xl },
   optionTitle: {
-    color: "rgba(255,255,255,0.7)",
+    color: colors.secondary,
     fontFamily: typography.family.bold,
     fontSize: typography.size.sm,
   },
-  optionTitleActive: { color: colors.white },
+  optionTitleActive: { color: colors.text },
   optionDesc: {
-    color: "rgba(255,255,255,0.4)",
+    color: colors.textTertiary,
     fontFamily: typography.family.regular,
     fontSize: typography.size.xs,
   },
@@ -310,16 +313,16 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: colors.card,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    borderColor: colors.cardBorder,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   memberRowActive: {
-    backgroundColor: "rgba(255,255,255,0.14)",
-    borderColor: "rgba(255,255,255,0.4)",
+    backgroundColor: colors.accentMuted,
+    borderColor: colors.borderSecondary,
   },
   memberAvatar: {
     width: 36,
@@ -327,45 +330,45 @@ const s = StyleSheet.create({
     borderRadius: radii.lg,
   },
   avatarFallback: {
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: colors.accentMuted,
     justifyContent: "center",
     alignItems: "center",
   },
   avatarLetter: {
-    color: colors.white,
+    color: colors.text,
     fontFamily: typography.family.bold,
     fontSize: typography.size.sm,
   },
   memberName: {
     flex: 1,
-    color: "rgba(255,255,255,0.7)",
+    color: colors.secondary,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.sm,
   },
-  memberNameActive: { color: colors.white },
+  memberNameActive: { color: colors.text },
   checkmark: {
     width: 24,
     height: 24,
     borderRadius: radii.md,
-    backgroundColor: colors.white,
+    backgroundColor: colors.text,
     justifyContent: "center",
     alignItems: "center",
   },
   emptyText: {
-    color: "rgba(255,255,255,0.3)",
+    color: colors.textTertiary,
     fontFamily: typography.family.regular,
     fontSize: typography.size.sm,
     textAlign: "center",
     paddingVertical: 8,
   },
   themeInput: {
-    backgroundColor: "rgba(255,255,255,0.07)",
+    backgroundColor: colors.card,
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.15)",
+    borderColor: colors.cardBorder,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    color: colors.white,
+    color: colors.text,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.md,
   },
@@ -378,43 +381,43 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "rgba(255,255,255,0.07)",
+    backgroundColor: colors.card,
     borderRadius: radii.lg,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: colors.cardBorder,
     paddingHorizontal: 14,
     paddingVertical: 9,
   },
   capturePillActive: {
-    backgroundColor: "rgba(255,255,255,0.18)",
-    borderColor: "rgba(255,255,255,0.5)",
+    backgroundColor: colors.accentMuted,
+    borderColor: colors.borderSecondary,
   },
   captureIcon: { fontSize: typography.size.md },
   captureLabel: {
-    color: "rgba(255,255,255,0.6)",
+    color: colors.secondary,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.xs,
   },
-  captureLabelActive: { color: colors.white },
+  captureLabelActive: { color: colors.text },
   positionBox: {
     marginTop: 20,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: colors.card,
     borderRadius: radii.md,
     paddingHorizontal: 16,
     paddingVertical: 14,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
+    borderColor: colors.cardBorder,
   },
   positionText: {
-    color: colors.white,
+    color: colors.text,
     fontFamily: typography.family.semibold,
     fontSize: typography.size.sm,
     textAlign: "center",
   },
   confirmBtn: {
     marginTop: 24,
-    backgroundColor: colors.white,
+    backgroundColor: colors.text,
     borderRadius: radii.lg,
     paddingVertical: 16,
     alignItems: "center",
@@ -422,7 +425,7 @@ const s = StyleSheet.create({
   },
   confirmBtnDisabled: { opacity: 0.35 },
   confirmBtnText: {
-    color: colors.black,
+    color: colors.bg,
     fontFamily: typography.family.bold,
     fontSize: typography.size.md,
   },

@@ -16,31 +16,41 @@ import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, router } from "expo-router";
 import { supabase } from "../../../../lib/supabase";
 import { useAuth } from "../../../../lib/auth-context";
-import { colors, radii, theme, typography } from "../../../../lib/theme";
+import { radii, typography, type ThemeColors } from "../../../../lib/theme";
+import { useTheme, useThemedStyles } from "../../../../lib/theme-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Loader from "../../../../components/Loader";
 import Svg, { Path } from "react-native-svg";
 
-const CopyIcon = () => (
-  <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-    <Path d="M20 9H11C9.89543 9 9 9.89543 9 11V20C9 21.1046 9.89543 22 11 22H20C21.1046 22 22 21.1046 22 20V11C22 9.89543 21.1046 9 20 9Z" stroke={colors.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    <Path d="M5 15H4C3.46957 15 2.96086 14.7893 2.58579 14.4142C2.21071 14.0391 2 13.5304 2 13V4C2 3.46957 2.21071 2.96086 2.58579 2.58579C2.96086 2.21071 3.46957 2 4 2H13C13.5304 2 14.0391 2.21071 14.4142 2.58579C14.7893 2.96086 15 3.46957 15 4V5" stroke={colors.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-  </Svg>
-);
+const CopyIcon = () => {
+  const { colors } = useTheme();
+  return (
+    <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <Path d="M20 9H11C9.89543 9 9 9.89543 9 11V20C9 21.1046 9.89543 22 11 22H20C21.1046 22 22 21.1046 22 20V11C22 9.89543 21.1046 9 20 9Z" stroke={colors.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <Path d="M5 15H4C3.46957 15 2.96086 14.7893 2.58579 14.4142C2.21071 14.0391 2 13.5304 2 13V4C2 3.46957 2.21071 2.96086 2.58579 2.58579C2.96086 2.21071 3.46957 2 4 2H13C13.5304 2 14.0391 2.21071 14.4142 2.58579C14.7893 2.96086 15 3.46957 15 4V5" stroke={colors.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </Svg>
+  );
+};
 
-const ShareIcon = () => (
-  <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-    <Path d="M4 12V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V12M16 6L12 2M12 2L8 6M12 2V15" stroke={colors.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-  </Svg>
-);
+const ShareIcon = () => {
+  const { colors } = useTheme();
+  return (
+    <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+      <Path d="M4 12V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V12M16 6L12 2M12 2L8 6M12 2V15" stroke={colors.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </Svg>
+  );
+};
 
-const RefreshIcon = () => (
-  <Svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-    <Path d="M23 4V10H17" stroke={colors.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    <Path d="M1 20V14H7" stroke={colors.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    <Path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" stroke={colors.white} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-  </Svg>
-);
+const RefreshIcon = () => {
+  const { colors } = useTheme();
+  return (
+    <Svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+      <Path d="M23 4V10H17" stroke={colors.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <Path d="M1 20V14H7" stroke={colors.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      <Path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" stroke={colors.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </Svg>
+  );
+};
 
 function generateCode(length = 6): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -51,6 +61,8 @@ export default function InviteScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const { colors, theme } = useTheme();
+  const styles = useThemedStyles(makeStyles);
   const [inviteCode, setInviteCode] = useState("");
   const [targetEmail, setTargetEmail] = useState("");
   const [loading, setLoading] = useState(false);
@@ -150,7 +162,7 @@ export default function InviteScreen() {
         </TouchableOpacity>
 
         <Text style={styles.title}>Inviter</Text>
-        
+
         {/* Section "Par email" temporairement désactivée */}
         {/* Pour réactiver : retirer ce commentaire et décommenter le bloc ci-dessous
         <View style={styles.section}>
@@ -177,7 +189,7 @@ export default function InviteScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Partager le code</Text>
           <Text style={styles.sectionDesc}>Envoie un lien magique à tes amis sur n'importe quelle plateforme.</Text>
-          
+
           <View style={[theme.glassCard, styles.codeCard]}>
             <Text style={styles.codeLabel}>TON CODE D'INVITATION</Text>
             <View style={styles.codeRow}>
@@ -187,7 +199,7 @@ export default function InviteScreen() {
               </TouchableOpacity>
               {isAdmin && (
                 <TouchableOpacity style={styles.copyBtn} onPress={() => setShowConfirm(true)} disabled={regenerating}>
-                  {regenerating ? <ActivityIndicator color={colors.white} size="small" /> : <RefreshIcon />}
+                  {regenerating ? <ActivityIndicator color={colors.text} size="small" /> : <RefreshIcon />}
                 </TouchableOpacity>
               )}
             </View>
@@ -220,39 +232,39 @@ export default function InviteScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { flex: 1, paddingHorizontal: 24 },
   backBtn: { marginBottom: 32 },
   backText: { color: colors.secondary, fontFamily: typography.family.semibold, fontSize: typography.size.md },
-  title: { fontFamily: typography.family.bold, fontSize: typography.size.subtitle, color: colors.white, marginBottom: 40, letterSpacing: -1 },
-  
+  title: { fontFamily: typography.family.bold, fontSize: typography.size.subtitle, color: colors.text, marginBottom: 40, letterSpacing: -1 },
+
   section: { marginBottom: 32 },
-  sectionTitle: { fontFamily: typography.family.bold, fontSize: typography.size.lg, color: colors.white, marginBottom: 8 },
+  sectionTitle: { fontFamily: typography.family.bold, fontSize: typography.size.lg, color: colors.text, marginBottom: 8 },
   sectionDesc: { fontFamily: typography.family.regular, fontSize: typography.size.sm, color: colors.secondary, marginBottom: 20, lineHeight: 20 },
-  
+
   row: { flexDirection: "row", gap: 12 },
   input: { flex: 1, height: 56, paddingVertical: 0 },
   addBtn: { width: 100, height: 56, justifyContent: "center" },
-  addBtnText: { color: colors.black, fontFamily: typography.family.bold, fontSize: typography.size.sm },
-  
-  divider: { height: 1, backgroundColor: "rgba(255,255,255,0.1)", marginVertical: 12, marginBottom: 40 },
-  
-  codeCard: { padding: 32, alignItems: "center", backgroundColor: "rgba(255,255,255,0.03)", marginBottom: 24 },
+  addBtnText: { color: colors.bg, fontFamily: typography.family.bold, fontSize: typography.size.sm },
+
+  divider: { height: 1, backgroundColor: colors.cardBorder, marginVertical: 12, marginBottom: 40 },
+
+  codeCard: { padding: 32, alignItems: "center", backgroundColor: colors.card, marginBottom: 24 },
   codeLabel: { fontSize: typography.size.xs, fontFamily: typography.family.bold, color: colors.secondary, letterSpacing: 2, marginBottom: 12 },
   codeRow: { flexDirection: "row", alignItems: "center", gap: 16 },
-  codeValue: { fontSize: typography.size.subtitle, fontFamily: typography.family.bold, color: colors.white, letterSpacing: 4 },
-  copyBtn: { width: 44, height: 44, borderRadius: radii.md, backgroundColor: "rgba(255,255,255,0.1)", justifyContent: "center", alignItems: "center" },
-  
-  shareBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, backgroundColor: "rgba(255,255,255,0.1)", padding: 20, borderRadius: radii.lg, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
-  shareBtnText: { color: colors.white, fontFamily: typography.family.bold, fontSize: typography.size.md },
+  codeValue: { fontSize: typography.size.subtitle, fontFamily: typography.family.bold, color: colors.text, letterSpacing: 4 },
+  copyBtn: { width: 44, height: 44, borderRadius: radii.md, backgroundColor: colors.accentMuted, justifyContent: "center", alignItems: "center" },
 
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center", padding: 24 },
-  modalBox: { backgroundColor: "#1A1A1A", borderRadius: radii.lg, padding: 28, width: "100%", borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
-  modalTitle: { fontFamily: typography.family.bold, fontSize: typography.size.xl, color: colors.white, marginBottom: 12 },
+  shareBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, backgroundColor: colors.accentMuted, padding: 20, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.cardBorder },
+  shareBtnText: { color: colors.text, fontFamily: typography.family.bold, fontSize: typography.size.md },
+
+  modalOverlay: { flex: 1, backgroundColor: colors.opacityLight, justifyContent: "center", alignItems: "center", padding: 24 },
+  modalBox: { backgroundColor: colors.card, borderRadius: radii.lg, padding: 28, width: "100%", borderWidth: 1, borderColor: colors.cardBorder },
+  modalTitle: { fontFamily: typography.family.bold, fontSize: typography.size.xl, color: colors.text, marginBottom: 12 },
   modalDesc: { fontFamily: typography.family.regular, fontSize: typography.size.sm, color: colors.secondary, lineHeight: 20, marginBottom: 28 },
   modalConfirmBtn: { backgroundColor: "#E53E3E", padding: 16, borderRadius: radii.md, alignItems: "center", marginBottom: 10 },
-  modalConfirmText: { fontFamily: typography.family.bold, fontSize: typography.size.md, color: colors.white },
+  modalConfirmText: { fontFamily: typography.family.bold, fontSize: typography.size.md, color: "#FFFFFF" },
   modalCancelBtn: { padding: 16, borderRadius: radii.md, alignItems: "center" },
   modalCancelText: { fontFamily: typography.family.semibold, fontSize: typography.size.md, color: colors.secondary },
 });
