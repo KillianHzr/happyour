@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, Component } from "react";
 import {
   View, Text, StyleSheet, Animated, Easing, LayoutAnimation, TouchableOpacity,
-  Alert, Keyboard, KeyboardAvoidingView, Platform, TextInput, Modal, Pressable, PanResponder, UIManager, useWindowDimensions,
+  Alert, Keyboard, KeyboardAvoidingView, Platform, TextInput, Modal, Pressable, PanResponder, UIManager, useWindowDimensions, AppState,
 } from "react-native";
 import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
@@ -225,6 +225,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const handleSelectMode = (m: CameraMode) => {
     if (cameraMode === m) return;
     
+    setShowColorPalette(false);
+
     if (cameraMode === "PHOTO" && m === "VIDEO") {
        activeLottieIndex.value = 0;
        progressPhotoVideo.value = 0;
@@ -714,6 +716,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     capturingSecondRef.current = false;
     setTextModeContent("");
     setIsDrawingActive(false);
+    setShowColorPalette(false);
     setActiveChallenge(null);
     setZoom(0);
     savedZoomRef.current = 0;
@@ -1131,12 +1134,49 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   capturingRef.current = capturing;
   const cameraModeRef = useRef(cameraMode);
   cameraModeRef.current = cameraMode;
+  // Timestamp of the last time the app became active — used to ignore spurious
+  // volume events fired by iOS when the audio session is re-initialised on foreground.
+  const appBecameActiveAt = useRef(0);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (nextState === "active") {
+        appBecameActiveAt.current = Date.now();
+      }
+    });
+    return () => subscription.remove();
+  }, []);
+
+  // SeamlessRecorder is inside {isCapturing && ...}, so it unmounts when the preview
+  // is shown and remounts when the preview is closed. The remount restarts the iOS
+  // AVCaptureSession which re-initialises the audio session and can fire a spurious
+  // VolumeManager event. Apply the same cooldown on every isCapturing false→true edge.
+  const prevIsCapturing = useRef(isCapturing);
+  useEffect(() => {
+    if (isCapturing && !prevIsCapturing.current) {
+      appBecameActiveAt.current = Date.now();
+    }
+    prevIsCapturing.current = isCapturing;
+  }, [isCapturing]);
 
   useEffect(() => {
     if (!isActive) return;
 
+    // Resync lastVolumeRef immediately so the first comparison after becoming
+    // active is accurate and doesn't produce a false "volume up".
+    VolumeManager.getVolume().then(res => {
+      if (res && typeof res.volume === 'number') {
+        lastVolumeRef.current = res.volume;
+        if (res.volume >= 0.98) {
+          VolumeManager.setVolume(0.94).catch(() => {});
+          lastVolumeRef.current = 0.94;
+        }
+      }
+    }).catch(() => {});
+    // Mark this activation so the listener cooldown starts now.
+    appBecameActiveAt.current = Date.now();
+
     if (Platform.OS === "ios") {
-      // iOS specific configuration for hardware button interception
       VolumeManager.enable(true, true).catch(() => {});
       VolumeManager.setActive(true, true).catch(() => {});
       VolumeManager.setCategory("ambient", true).catch(() => {});
@@ -1147,41 +1187,29 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       try {
         const result = newVolume ?? (await VolumeManager.getVolume());
         const volume = result?.volume ?? 0;
-        
-        // Use a small epsilon for float comparison
+
         const isUp = volume > (lastVolumeRef.current + 0.001);
-        
+
         if (volume >= 0.98) {
-          // On iOS, resetting needs to be very explicit
           const resetVol = 0.94 - (Math.random() * 0.05);
           await VolumeManager.setVolume(resetVol, { showUI: false }).catch(() => {});
           lastVolumeRef.current = resetVol;
         } else {
           lastVolumeRef.current = volume;
         }
-        
+
         return isUp;
       } catch (e) {
         return false;
       }
     };
 
-    // Initial sync
-    VolumeManager.getVolume().then(res => {
-      if (res && typeof res.volume === 'number') {
-        lastVolumeRef.current = res.volume;
-        // If already at max, reset immediately so the first press works
-        if (res.volume >= 0.98) {
-          VolumeManager.setVolume(0.94).catch(() => {});
-          lastVolumeRef.current = 0.94;
-        }
-      }
-    }).catch(() => {});
-
     const volumeListener = VolumeManager.addVolumeListener(async (result) => {
-      // Process volume change
-      const wasVolumeUp = await handleVolume(result);
+      // Ignore volume events fired within 1.5s of the app becoming active —
+      // iOS re-initialises the audio session and may emit a spurious change.
+      if (Date.now() - appBecameActiveAt.current < 1500) return;
 
+      const wasVolumeUp = await handleVolume(result);
       if (!wasVolumeUp) return;
 
       const now = Date.now();
@@ -1372,6 +1400,13 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 </TouchableOpacity>
               )}
 
+              {showColorPalette && (
+                <Pressable 
+                  style={StyleSheet.absoluteFillObject} 
+                  onPress={() => setShowColorPalette(false)} 
+                />
+              )}
+
               {/* Colonne haut-droite : couleur / annuler / corbeille (sibling du canvas → tap OK) */}
               <View style={styles.cameraControls}>
                 <View>
@@ -1537,7 +1572,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       {isCapturing && (
         <View style={styles.fill} pointerEvents="box-none">
           {/* Challenge top area is hidden when activeChallenge is present because we use the custom header */}
-          {!capturingSecond && !isRecording && !(cameraMode === "DESSIN" && canUndo) && (
+          {!capturingSecond && !isRecording && !(cameraMode === "DESSIN" && canUndo) && !showColorPalette && (
             activeChallenge === null ? (
               <View style={[challengeStyles.topContainer, { paddingTop: cameraFrameTop + CHALLENGE_GAP }]} pointerEvents="box-none">
                 <TouchableOpacity
@@ -2440,7 +2475,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   cameraInner: { width: "100%", aspectRatio: 9 / 16 },
   flashBtn: { position: "absolute", top: 16, right: 16, width: 48, height: 48, borderRadius: radii.xl, backgroundColor: colors.opacityLight, justifyContent: "center", alignItems: "center" },
   // Colonne de contrôles caméra, 16px du haut et de la droite du cadre.
-  cameraControls: { position: "absolute", top: spacing.lg, right: spacing.lg, gap: spacing.sm },
+  cameraControls: { position: "absolute", top: spacing.lg, right: spacing.lg, gap: spacing.sm, zIndex: 20 },
   cameraCtrlBtn: { width: 40, height: 40, borderRadius: radii.md, overflow: "hidden", justifyContent: "center", alignItems: "center" },
   textModeContainer: { flex: 1, justifyContent: "flex-start", backgroundColor: colors.bg, paddingHorizontal: 32 },
   textModeInput: { color: colors.text, fontFamily: typography.family.bold, textAlign: "center", width: "100%", paddingTop: 0 },
@@ -2465,7 +2500,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   // Pastille de couleur dans le bouton couleur (8px de padding dans le 40).
   colorDot: { width: 24, height: 24, borderRadius: radii.full },
   // Palette : s'ouvre à gauche du bouton (8px d'écart), même fond/radius que le bouton.
-  colorPalette: { position: "absolute", top: 0, right: 40 + spacing.sm, overflow: "hidden", borderRadius: radii.md, padding: spacing.sm, gap: spacing.sm },
+  colorPalette: { position: "absolute", top: 0, right: 40 + spacing.sm, overflow: "hidden", borderRadius: radii.md, padding: spacing.sm, gap: spacing.sm, zIndex: 20 },
   colorPaletteRow: { flexDirection: "row", gap: spacing.xs },
   colorSwatch: { width: 24, height: 24, borderRadius: radii.full },
   colorSwatchSelected: { borderWidth: stroke.sm, borderColor: colors.cardBorder },
