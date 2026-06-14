@@ -20,7 +20,7 @@ import {
 } from "../../lib/challenges";
 import BlurView from "../atoms/BlurView";
 import { BlurView as NativeBlurView } from "@sbaiahmed1/react-native-blur";
-import { TextSticker } from "../atoms/TextSticker";
+import { NameTag } from "../atoms/NameTag";
 import Shape, { type ShapeName } from "../Shape";
 
 // Hauteur occupée par les dots (marginTop + paddingVertical*2 + dot)
@@ -266,9 +266,7 @@ export function ChallengesSlider({
         )}
         <View style={[StyleSheet.absoluteFillObject, { backgroundColor: Platform.OS === "android" ? "rgba(8, 8, 10, 0.7)" : "rgba(8, 8, 10, 0.5)" }]} pointerEvents="none" />
         <View style={sliderStyles.cardContent}>
-          <View style={{ transform: [{ rotate: "2deg" }] }}>
-            <TextSticker text={gc.groupName} backgroundColor={colors.icon} />
-          </View>
+          <NameTag text={gc.groupName} />
           {gc.loading ? (
             <ActivityIndicator color={colors.text} size="large" />
           ) : gc.challenge ? (

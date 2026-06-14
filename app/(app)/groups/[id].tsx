@@ -24,6 +24,7 @@ import { CloseIcon } from "../../../components/groups/GroupIcons";
 import ProfilePage from "../../../components/groups/ProfilePage";
 import CameraPage from "../../../components/groups/CameraPage";
 import VaultPage from "../../../components/groups/VaultPage";
+import GroupsPage from "../../../components/groups/GroupsPage";
 import GroupSettingsModal from "../../../components/groups/GroupSettingsModal";
 import CustomChallengeCreatePage from "../../../components/groups/CustomChallengeCreatePage";
 import CustomChallengeQueuePage from "../../../components/groups/CustomChallengeQueuePage";
@@ -31,10 +32,10 @@ import BottomSheet from "../../../components/BottomSheet";
 import LiveReactions from "../../../components/reveal/LiveReactions";
 import MotivationalNotificationsModal from "../../../components/MotivationalNotificationsModal";
 import { scheduleImmediateLocalNotification, scheduleFirstMomentReminder, notifyReaction } from "../../../lib/notifications";
-import { radii, spacing, typography, textStyles, type ThemeColors } from "../../../lib/theme";
+import { radii, spacing, typography, textStyles, buildColors, type ThemeColors } from "../../../lib/theme";
 import Icon from "../../../components/Icon";
 import Shape, { type ShapeName } from "../../../components/Shape";
-import { useTheme, useThemedStyles } from "../../../lib/theme-context";
+import { useTheme, useThemedStyles, ForceThemeMode } from "../../../lib/theme-context";
 
 const captureToastShape = (mode: string): ShapeName => {
   if (mode === "VIDEO") return "video";
@@ -109,6 +110,8 @@ export default function MainPagerScreen() {
   const scrollX = useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const scrollRef = useRef<Animated.ScrollView>(null);
   const pagerTouchRef = useRef<{ x: number; y: number; decided: boolean } | null>(null);
+  // Désactive complètement le swipe du pager quand on est sur la vue de sélection de groupe
+  const [groupsPagerLocked, setGroupsPagerLocked] = useState(false);
 
   // Multi-group
   const [allGroups, setAllGroups] = useState<GroupInfo[]>([]);
@@ -134,6 +137,9 @@ export default function MainPagerScreen() {
 
   // Pager
   const [currentPage, setCurrentPage] = useState(1);
+  // Page "active" différée : pilote l'activation des pages lourdes (caméra, fetch…)
+  // APRÈS la transition, pour ne pas geler le swipe ni retarder l'affichage du menu.
+  const [activePage, setActivePage] = useState(1);
   const [cameraScrollLocked, setCameraScrollLocked] = useState(false);
   const [cameraHideMenu, setCameraHideMenu] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -912,11 +918,23 @@ export default function MainPagerScreen() {
   };
 
   // ── Pager ──
+  // Le menu ne dépend que de currentPage → mis à jour instantanément au tap (re-render léger).
+  const commitPage = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  // L'activation lourde des pages (caméra, fetch…) est repoussée APRÈS que le menu se soit
+  // peint, pour que le changement de menu soit instantané et ne soit pas bloqué par ce re-render.
+  useEffect(() => {
+    const id = setTimeout(() => setActivePage(currentPage), 60);
+    return () => clearTimeout(id);
+  }, [currentPage]);
+
   const jumpTo = (page: number) => {
     if (page === currentPage) return;
     scrollRef.current?.scrollTo({ x: page * SCREEN_WIDTH, animated: false });
     scrollX.setValue(page * SCREEN_WIDTH);
-    setCurrentPage(page);
+    commitPage(page);
   };
 
   const tab0ActiveOpacity = scrollX.interpolate({ inputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH], outputRange: [0, 1, 0], extrapolate: 'clamp' });
@@ -932,7 +950,11 @@ export default function MainPagerScreen() {
   const cameraScale = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [0.9, 1, 0.9] });
   const cameraOpacity = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [0.4, 1, 0.4] });
 
-  const scrollEnabled = !cameraScrollLocked;
+  const scrollEnabled = !cameraScrollLocked && !groupsPagerLocked;
+
+  // Le menu (tab bar) est forcé en mode sombre sur la vue de capture
+  const darkColors = useMemo(() => buildColors("Dark"), []);
+  const menuColors = currentPage === 1 ? darkColors : colors;
 
   const lockScrollDirect = useCallback((locked: boolean) => {
     if (!locked && cameraScrollLocked) return;
@@ -1083,17 +1105,31 @@ export default function MainPagerScreen() {
     lockedRevealDate, unlocked, activeRevealEndDate, currentUserPostedThisWeek, refreshing, challenges, debugVaultChallenges, fetchAllData, debugUnlocked
   ]);
 
-  const memoizedCameraPage = useMemo(() => (
-    <CameraPage
-      groupId={activeGroupId}
-      userId={user?.id ?? ""}
-      isActive={currentPage === 1}
+  const memoizedGroupsPage = useMemo(() => (
+    <GroupsPage
       allGroups={allGroups}
-      onScrollLock={(v) => { setCameraScrollLocked(v); scrollRef.current?.setNativeProps({ scrollEnabled: !v }); }}
-      onHideMenu={setCameraHideMenu}
-      onCaptureSent={(info) => { setProfileRefreshKey(k => k + 1); showCaptureToast(info); }}
+      groupData={groupData}
+      revealConfig={revealConfig}
+      isActive={activePage === 0}
+      onSelectGroup={handleSwitchGroup}
+      onAddGroup={() => setShowAddGroupModal(true)}
+      onScrollLock={setGroupsPagerLocked}
     />
-  ), [activeGroupId, user?.id, currentPage === 1, allGroups]);
+  ), [allGroups, groupData, revealConfig, activePage === 0, handleSwitchGroup]);
+
+  const memoizedCameraPage = useMemo(() => (
+    <ForceThemeMode mode="Dark">
+      <CameraPage
+        groupId={activeGroupId}
+        userId={user?.id ?? ""}
+        isActive={activePage === 1}
+        allGroups={allGroups}
+        onScrollLock={(v) => { setCameraScrollLocked(v); scrollRef.current?.setNativeProps({ scrollEnabled: !v }); }}
+        onHideMenu={setCameraHideMenu}
+        onCaptureSent={(info) => { setProfileRefreshKey(k => k + 1); showCaptureToast(info); }}
+      />
+    </ForceThemeMode>
+  ), [activeGroupId, user?.id, activePage === 1, allGroups]);
 
   const memoizedProfilePage = useMemo(() => (
     <ProfilePage
@@ -1108,10 +1144,10 @@ export default function MainPagerScreen() {
       onUsernameUpdate={setUsername}
       onEmailUpdate={setEmail}
       onStreakUpdate={setStreakDays}
-      isActive={currentPage === 2}
+      isActive={activePage === 2}
       refreshKey={profileRefreshKey}
     />
-  ), [user?.id, username, avatarUrl, email, groupName, allGroups, revealConfig, profileRefreshKey, currentPage === 2]);
+  ), [user?.id, username, avatarUrl, email, groupName, allGroups, revealConfig, profileRefreshKey, activePage === 2]);
 
   if (!dataLoaded) return <View style={styles.loaderWrap}><Loader size={48} /></View>;
 
@@ -1129,15 +1165,15 @@ export default function MainPagerScreen() {
         bounces={false} overScrollMode="never"
         scrollEnabled={scrollEnabled}
         delaysContentTouches={false}
-        onMomentumScrollEnd={(e) => { const p = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH); setCurrentPage(p); }}
+        onMomentumScrollEnd={(e) => { const p = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH); commitPage(p); }}
         onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], { useNativeDriver: true })}
         scrollEventThrottle={16}
         contentOffset={{ x: SCREEN_WIDTH, y: 0 }}
         style={styles.pager}
       >
-        {/* PAGE 0: COFFRE */}
+        {/* PAGE 0: GROUPES */}
         <View style={[styles.page, { zIndex: 2 }]}>
-          {memoizedVaultPage}
+          {memoizedGroupsPage}
         </View>
 
         {/* PAGE 1: CAMERA */}
@@ -1151,34 +1187,34 @@ export default function MainPagerScreen() {
         </View>
       </Animated.ScrollView>
 
-      {/* NAV BAR — masquée pendant une capture ou le reveal */}
-      {!cameraHideMenu && !showReveal && (
-        <View style={[styles.tabBarContainer, { backgroundColor: currentPage === 1 ? 'transparent' : colors.card }]}>
+      {/* NAV BAR — le hide-menu de la caméra ne s'applique que sur la page capture */}
+      {(currentPage !== 1 || !cameraHideMenu) && !showReveal && (
+        <View style={[styles.tabBarContainer, { backgroundColor: currentPage === 1 ? darkColors.bg : menuColors.card }]}>
           <View style={styles.tabBarContent}>
             <TouchableOpacity style={styles.tab} onPress={() => jumpTo(0)}>
               <Animated.View style={[{ position: "absolute", alignItems: "center", gap: spacing.sm }, { opacity: tab0InactiveOpacity }]}>
-                <FlowerIcon size={24} color={colors.iconSecondary} filled={false} />
-                <Text style={styles.tabLabel}>Jardin</Text>
+                <FlowerIcon size={24} color={menuColors.iconSecondary} filled={false} />
+                <Text style={[styles.tabLabel, { color: menuColors.textSecondary }]}>Groupes</Text>
               </Animated.View>
               <Animated.View style={[{ position: "absolute", alignItems: "center", gap: spacing.sm }, { opacity: tab0ActiveOpacity }]}>
-                <FlowerIcon size={24} color={colors.icon} filled={true} />
-                <Text style={[styles.tabLabel, styles.tabLabelActive]}>Jardin</Text>
+                <FlowerIcon size={24} color={menuColors.icon} filled={true} />
+                <Text style={[styles.tabLabel, styles.tabLabelActive, { color: menuColors.text }]}>Groupes</Text>
               </Animated.View>
               {/* Invisible placeholder for layout sizing */}
               <View style={{ opacity: 0, alignItems: "center", gap: spacing.sm }}>
                 <FlowerIcon size={24} filled={true} />
-                <Text style={[styles.tabLabel, styles.tabLabelActive]}>Jardin</Text>
+                <Text style={[styles.tabLabel, styles.tabLabelActive]}>Groupes</Text>
               </View>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.tab} onPress={() => jumpTo(1)}>
               <Animated.View style={[{ position: "absolute", alignItems: "center", gap: spacing.sm }, { opacity: tab1InactiveOpacity }]}>
-                <Icon name="circle" size={24} color={colors.iconSecondary} />
-                <Text style={styles.tabLabel}>Capture</Text>
+                <Icon name="circle" size={24} color={menuColors.iconSecondary} />
+                <Text style={[styles.tabLabel, { color: menuColors.textSecondary }]}>Capture</Text>
               </Animated.View>
               <Animated.View style={[{ position: "absolute", alignItems: "center", gap: spacing.sm }, { opacity: tab1ActiveOpacity }]}>
-                <Icon name="circle-filled" size={24} color={colors.icon} />
-                <Text style={[styles.tabLabel, styles.tabLabelActive]}>Capture</Text>
+                <Icon name="circle-filled" size={24} color={menuColors.icon} />
+                <Text style={[styles.tabLabel, styles.tabLabelActive, { color: menuColors.text }]}>Capture</Text>
               </Animated.View>
               <View style={{ opacity: 0, alignItems: "center", gap: spacing.sm }}>
                 <Icon name="circle-filled" size={24} />
@@ -1188,12 +1224,12 @@ export default function MainPagerScreen() {
 
             <TouchableOpacity style={styles.tab} onPress={() => jumpTo(2)}>
               <Animated.View style={[{ position: "absolute", alignItems: "center", gap: spacing.sm }, { opacity: tab2InactiveOpacity }]}>
-                <Icon name="user" size={24} color={colors.iconSecondary} />
-                <Text style={styles.tabLabel}>Profil</Text>
+                <Icon name="user" size={24} color={menuColors.iconSecondary} />
+                <Text style={[styles.tabLabel, { color: menuColors.textSecondary }]}>Profil</Text>
               </Animated.View>
               <Animated.View style={[{ position: "absolute", alignItems: "center", gap: spacing.sm }, { opacity: tab2ActiveOpacity }]}>
-                <Icon name="user-filled" size={24} color={colors.icon} />
-                <Text style={[styles.tabLabel, styles.tabLabelActive]}>Profil</Text>
+                <Icon name="user-filled" size={24} color={menuColors.icon} />
+                <Text style={[styles.tabLabel, styles.tabLabelActive, { color: menuColors.text }]}>Profil</Text>
               </Animated.View>
               <View style={{ opacity: 0, alignItems: "center", gap: spacing.sm }}>
                 <Icon name="user-filled" size={24} />

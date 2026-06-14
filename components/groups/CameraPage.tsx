@@ -660,8 +660,14 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   ).current;
 
   useEffect(() => {
-    if (!isActive) setShowChallengesInline(false);
-  }, [isActive]);
+    if (!isActive) {
+      // En quittant la capture : on réaffiche le menu et on déverrouille le pager
+      // (sinon un état de geste resté "bloqué" garde le menu caché quelques secondes).
+      setShowChallengesInline(false);
+      onHideMenu?.(false);
+      onScrollLock(false);
+    }
+  }, [isActive]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const base = slot1 !== null || isPinching || isZoomDragging || isRecording || showChallengesInline || activeChallenge !== null;

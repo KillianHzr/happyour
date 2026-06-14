@@ -97,11 +97,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setPreferenceState(p);
     AsyncStorage.setItem(STORAGE_KEY, p).catch(() => {});
     if (user?.id) {
+      // .select() pour détecter un échec silencieux (RLS → 0 ligne mise à jour sans erreur)
       supabase
         .from("profiles")
         .update({ theme_preference: p })
         .eq("id", user.id)
-        .then(undefined, () => {});
+        .select("id")
+        .then(({ data, error }) => {
+          if (error) {
+            console.warn("[theme] échec sauvegarde theme_preference:", error.message);
+          } else if (!data || data.length === 0) {
+            console.warn("[theme] update sans effet (0 ligne) — vérifie la policy RLS UPDATE sur public.profiles");
+          }
+        });
     }
   };
 
@@ -124,6 +132,30 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     [preference, mode, colors, shadows, theme]
   );
 
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+}
+
+/**
+ * Force un mode de thème ("Dark" | "Light") pour tout un sous-arbre, quelle que
+ * soit la préférence globale de l'utilisateur. Utilisé pour les écrans qui doivent
+ * toujours s'afficher en sombre (capture, défis, sélection de groupe…).
+ */
+export function ForceThemeMode({ mode, children }: { mode: ThemeMode; children: React.ReactNode }) {
+  const parent = useContext(ThemeContext);
+  const colors = useMemo(() => buildColors(mode), [mode]);
+  const shadows = useMemo(() => buildShadows(mode), [mode]);
+  const theme = useMemo(() => buildTheme(colors, shadows), [colors, shadows]);
+  const value = useMemo<ThemeContextValue>(
+    () => ({
+      preference: parent?.preference ?? (mode === "Dark" ? "dark" : "light"),
+      setPreference: parent?.setPreference ?? (() => {}),
+      mode,
+      colors,
+      shadows,
+      theme,
+    }),
+    [parent, mode, colors, shadows, theme]
+  );
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
