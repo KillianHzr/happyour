@@ -6,6 +6,7 @@ import { r2Storage } from "../../lib/r2";
 import { radii, spacing, textStyles, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import Icon from "../Icon";
+import EdgeSwipeBack from "../EdgeSwipeBack";
 import { type ShapeName } from "../Shape";
 import GroupsSlider, { type GroupCard } from "./GroupsSlider";
 
@@ -229,22 +230,22 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
         <GroupsSlider cards={cards} revealDate={revealDate} onSelect={openGroup} showActiveBorder={!viewingGroupId} />
       </View>
 
-      {/* Page groupe (provisoire) — slide depuis la droite, comme les paramètres */}
+      {/* Page groupe (provisoire) — slide à l'entrée + retour par glissement depuis le bord gauche */}
       {groupViewMounted && (
-        <Animated.View
-          style={[
-            StyleSheet.absoluteFillObject,
-            { backgroundColor: colors.bg, paddingTop: insets.top, transform: [{ translateX: slideAnim }] },
-          ]}
-        >
-          <View style={styles.header}>
-            <View style={styles.headerRow}>
-              <TouchableOpacity style={styles.iconBtn} onPress={closeGroup} activeOpacity={0.7}>
-                <Icon name="chevron-left" size={20} color={colors.icon} />
-              </TouchableOpacity>
-              <Text style={styles.title}>{openedGroup?.name ?? ""}</Text>
+        <Animated.View style={[StyleSheet.absoluteFillObject, { transform: [{ translateX: slideAnim }] }]}>
+          <EdgeSwipeBack
+            style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.bg, paddingTop: insets.top }]}
+            onBack={() => { setViewingGroupId(null); setGroupViewMounted(false); }}
+          >
+            <View style={styles.header}>
+              <View style={styles.headerRow}>
+                <TouchableOpacity style={styles.iconBtn} onPress={closeGroup} activeOpacity={0.7}>
+                  <Icon name="chevron-left" size={20} color={colors.icon} />
+                </TouchableOpacity>
+                <Text style={styles.title}>{openedGroup?.name ?? ""}</Text>
+              </View>
             </View>
-          </View>
+          </EdgeSwipeBack>
         </Animated.View>
       )}
     </View>

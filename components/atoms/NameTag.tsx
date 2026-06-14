@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text } from "react-native";
-import { radii, spacing, typography } from "../../lib/theme";
+import { spacing, typography } from "../../lib/theme";
 import { useTheme } from "../../lib/theme-context";
 
 /**
@@ -14,7 +14,6 @@ export function NameTag({ text, fontSize = 32 }: { text: string; fontSize?: numb
       <View
         style={{
           backgroundColor: colors.brand,
-          borderRadius: radii.sm,
           paddingHorizontal: spacing.md,
           paddingVertical: spacing.sm,
           alignSelf: "flex-start",

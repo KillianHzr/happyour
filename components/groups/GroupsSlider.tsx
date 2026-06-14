@@ -113,10 +113,10 @@ const SliderCard = memo(function SliderCard({
             <ActivityIndicator color={colors.text} />
           ) : (
             <>
-              {card.shape ? (
+              {card.momentCount > 0 && card.shape ? (
                 <Shape name={card.shape} size={80} color={colors.icon} />
               ) : (
-                // Aucun moment → cercle plein (comme l'onglet capture actif)
+                // Aucun moment depuis le reveal → cercle plein (comme l'onglet capture actif)
                 <Icon name="circle-filled" size={80} color={colors.icon} />
               )}
               <View style={s.dataTextRow}>

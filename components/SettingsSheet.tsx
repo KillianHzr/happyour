@@ -3,12 +3,14 @@ import {
   Animated, Dimensions, Easing, Modal, StyleSheet, Text, TouchableOpacity, View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { spacing, radii, textStyles } from "../lib/theme";
 import { useTheme } from "../lib/theme-context";
 import { useAuth } from "../lib/auth-context";
 import { supabase } from "../lib/supabase";
 import Icon from "./Icon";
 import Shape from "./Shape";
+import EdgeSwipeBack from "./EdgeSwipeBack";
 
 export type SettingsData = {
   recovery_email: string | null;
@@ -375,6 +377,24 @@ export default function SettingsSheet({ visible, onClose, initialPage }: Props) 
     });
   }, [triggerClose]);
 
+  // Versions "immédiates" pour le retour par glissement (le geste a déjà animé la sortie)
+  const popImmediate = useCallback(() => {
+    const s = stackRef.current;
+    if (s.length <= 1) return;
+    const top = s[s.length - 1];
+    stackRef.current = s.filter(e => e.id !== top.id);
+    setStack(prev => prev.filter(e => e.id !== top.id));
+  }, []);
+
+  const closeImmediate = useCallback(() => {
+    if (!componentMountedRef.current) return;
+    isAnimating.current = false;
+    setMounted(false);
+    stackRef.current = [];
+    setStack([]);
+    onClose();
+  }, [onClose]);
+
   if (!mounted) return null;
 
   // Header height: paddingTop (safe area) + marginTop (spacing.lg=16) + iconBtn (40) + marginTop below header
@@ -388,13 +408,14 @@ export default function SettingsSheet({ visible, onClose, initialPage }: Props) 
       onRequestClose={pop}
       statusBarTranslucent
     >
+      {/* Requis pour que les gestes (swipe-back) fonctionnent à l'intérieur d'un Modal RN */}
+      <GestureHandlerRootView style={{ flex: 1 }}>
+      {/* Fond transparent : chaque page porte son propre fond, donc le swipe-back révèle
+          directement le contenu derrière (profil) pendant le glissement, pas à la fin. */}
       <Animated.View
         style={[
           StyleSheet.absoluteFillObject,
-          {
-            backgroundColor: colors.bg,
-            transform: [{ translateX: sheetAnim }],
-          },
+          { transform: [{ translateX: sheetAnim }] },
         ]}
       >
         <SettingsNavContext.Provider value={{ push, pop, updateTopConfig, showToast, settingsData, refetchSettingsData: fetchSettingsData }}>
@@ -403,18 +424,21 @@ export default function SettingsSheet({ visible, onClose, initialPage }: Props) 
               key={entry.id}
               style={[
                 StyleSheet.absoluteFillObject,
-                {
-                  backgroundColor: colors.bg,
-                  transform: [{ translateX: entry.translateX }],
-                },
+                { transform: [{ translateX: entry.translateX }] },
               ]}
             >
-              <SettingsPageHeader
-                title={entry.config.title}
-                onBack={index === 0 ? triggerClose : pop}
-                trailingButton={entry.config.trailingButton}
-              />
-              {entry.config.content}
+              <EdgeSwipeBack
+                style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.bg }]}
+                enabled={index === stack.length - 1}
+                onBack={index === 0 ? closeImmediate : popImmediate}
+              >
+                <SettingsPageHeader
+                  title={entry.config.title}
+                  onBack={index === 0 ? triggerClose : pop}
+                  trailingButton={entry.config.trailingButton}
+                />
+                {entry.config.content}
+              </EdgeSwipeBack>
             </Animated.View>
           ))}
 
@@ -443,6 +467,7 @@ export default function SettingsSheet({ visible, onClose, initialPage }: Props) 
           )}
         </SettingsNavContext.Provider>
       </Animated.View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }

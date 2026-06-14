@@ -25,6 +25,7 @@ import ProfilePage from "../../../components/groups/ProfilePage";
 import CameraPage from "../../../components/groups/CameraPage";
 import VaultPage from "../../../components/groups/VaultPage";
 import GroupsPage from "../../../components/groups/GroupsPage";
+import PagerTabBar from "../../../components/groups/PagerTabBar";
 import GroupSettingsModal from "../../../components/groups/GroupSettingsModal";
 import CustomChallengeCreatePage from "../../../components/groups/CustomChallengeCreatePage";
 import CustomChallengeQueuePage from "../../../components/groups/CustomChallengeQueuePage";
@@ -932,19 +933,15 @@ export default function MainPagerScreen() {
 
   const jumpTo = (page: number) => {
     if (page === currentPage) return;
-    scrollRef.current?.scrollTo({ x: page * SCREEN_WIDTH, animated: false });
-    scrollX.setValue(page * SCREEN_WIDTH);
+    // Scroll natif (thread UI) → fluide comme le swipe ; scrollX suit via onScroll donc le
+    // fondu du menu reste synchronisé (pas de flash). Le re-render JS d'activation ne le bloque pas.
+    scrollRef.current?.scrollTo({ x: page * SCREEN_WIDTH, animated: true });
     commitPage(page);
   };
 
-  const tab0ActiveOpacity = scrollX.interpolate({ inputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH], outputRange: [0, 1, 0], extrapolate: 'clamp' });
-  const tab0InactiveOpacity = scrollX.interpolate({ inputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH], outputRange: [1, 0, 1], extrapolate: 'clamp' });
-
-  const tab1ActiveOpacity = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [0, 1, 0], extrapolate: 'clamp' });
-  const tab1InactiveOpacity = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [1, 0, 1], extrapolate: 'clamp' });
-
-  const tab2ActiveOpacity = scrollX.interpolate({ inputRange: [SCREEN_WIDTH, 2 * SCREEN_WIDTH, 3 * SCREEN_WIDTH], outputRange: [0, 1, 0], extrapolate: 'clamp' });
-  const tab2InactiveOpacity = scrollX.interpolate({ inputRange: [SCREEN_WIDTH, 2 * SCREEN_WIDTH, 3 * SCREEN_WIDTH], outputRange: [1, 0, 1], extrapolate: 'clamp' });
+  // Fondu natif entre le menu "capture" (sombre, page 1) et le menu "app" (pages 0 et 2)
+  const captureMenuOpacity = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [0, 1, 0], extrapolate: 'clamp' });
+  const appMenuOpacity = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [1, 0, 1], extrapolate: 'clamp' });
 
   const cameraTranslateX = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH] });
   const cameraScale = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [0.9, 1, 0.9] });
@@ -952,9 +949,8 @@ export default function MainPagerScreen() {
 
   const scrollEnabled = !cameraScrollLocked && !groupsPagerLocked;
 
-  // Le menu (tab bar) est forcé en mode sombre sur la vue de capture
+  // Palette sombre fixe pour le menu de la vue capture
   const darkColors = useMemo(() => buildColors("Dark"), []);
-  const menuColors = currentPage === 1 ? darkColors : colors;
 
   const lockScrollDirect = useCallback((locked: boolean) => {
     if (!locked && cameraScrollLocked) return;
@@ -1187,58 +1183,30 @@ export default function MainPagerScreen() {
         </View>
       </Animated.ScrollView>
 
-      {/* NAV BAR — le hide-menu de la caméra ne s'applique que sur la page capture */}
-      {(currentPage !== 1 || !cameraHideMenu) && !showReveal && (
-        <View style={[styles.tabBarContainer, { backgroundColor: currentPage === 1 ? darkColors.bg : menuColors.card }]}>
-          <View style={styles.tabBarContent}>
-            <TouchableOpacity style={styles.tab} onPress={() => jumpTo(0)}>
-              <Animated.View style={[{ position: "absolute", alignItems: "center", gap: spacing.sm }, { opacity: tab0InactiveOpacity }]}>
-                <FlowerIcon size={24} color={menuColors.iconSecondary} filled={false} />
-                <Text style={[styles.tabLabel, { color: menuColors.textSecondary }]}>Groupes</Text>
-              </Animated.View>
-              <Animated.View style={[{ position: "absolute", alignItems: "center", gap: spacing.sm }, { opacity: tab0ActiveOpacity }]}>
-                <FlowerIcon size={24} color={menuColors.icon} filled={true} />
-                <Text style={[styles.tabLabel, styles.tabLabelActive, { color: menuColors.text }]}>Groupes</Text>
-              </Animated.View>
-              {/* Invisible placeholder for layout sizing */}
-              <View style={{ opacity: 0, alignItems: "center", gap: spacing.sm }}>
-                <FlowerIcon size={24} filled={true} />
-                <Text style={[styles.tabLabel, styles.tabLabelActive]}>Groupes</Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.tab} onPress={() => jumpTo(1)}>
-              <Animated.View style={[{ position: "absolute", alignItems: "center", gap: spacing.sm }, { opacity: tab1InactiveOpacity }]}>
-                <Icon name="circle" size={24} color={menuColors.iconSecondary} />
-                <Text style={[styles.tabLabel, { color: menuColors.textSecondary }]}>Capture</Text>
-              </Animated.View>
-              <Animated.View style={[{ position: "absolute", alignItems: "center", gap: spacing.sm }, { opacity: tab1ActiveOpacity }]}>
-                <Icon name="circle-filled" size={24} color={menuColors.icon} />
-                <Text style={[styles.tabLabel, styles.tabLabelActive, { color: menuColors.text }]}>Capture</Text>
-              </Animated.View>
-              <View style={{ opacity: 0, alignItems: "center", gap: spacing.sm }}>
-                <Icon name="circle-filled" size={24} />
-                <Text style={[styles.tabLabel, styles.tabLabelActive]}>Capture</Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.tab} onPress={() => jumpTo(2)}>
-              <Animated.View style={[{ position: "absolute", alignItems: "center", gap: spacing.sm }, { opacity: tab2InactiveOpacity }]}>
-                <Icon name="user" size={24} color={menuColors.iconSecondary} />
-                <Text style={[styles.tabLabel, { color: menuColors.textSecondary }]}>Profil</Text>
-              </Animated.View>
-              <Animated.View style={[{ position: "absolute", alignItems: "center", gap: spacing.sm }, { opacity: tab2ActiveOpacity }]}>
-                <Icon name="user-filled" size={24} color={menuColors.icon} />
-                <Text style={[styles.tabLabel, styles.tabLabelActive, { color: menuColors.text }]}>Profil</Text>
-              </Animated.View>
-              <View style={{ opacity: 0, alignItems: "center", gap: spacing.sm }}>
-                <Icon name="user-filled" size={24} />
-                <Text style={[styles.tabLabel, styles.tabLabelActive]}>Profil</Text>
-              </View>
-
-            </TouchableOpacity>
-          </View>
-        </View>
+      {/* NAV BAR — deux menus thémés (capture sombre / app) qui se croisent en fondu natif */}
+      {!showReveal && (
+        <>
+          {/* Menu de l'app (Groupes/Profil) — invisible sur la capture via l'opacité */}
+          <PagerTabBar
+            scrollX={scrollX}
+            colors={colors}
+            backgroundColor={colors.card}
+            opacity={appMenuOpacity}
+            pointerEvents={currentPage === 1 ? "none" : "auto"}
+            onJump={jumpTo}
+          />
+          {/* Menu de la capture (sombre) — caché pendant une capture active */}
+          {!cameraHideMenu && (
+            <PagerTabBar
+              scrollX={scrollX}
+              colors={darkColors}
+              backgroundColor={darkColors.bg}
+              opacity={captureMenuOpacity}
+              pointerEvents={currentPage === 1 ? "auto" : "none"}
+              onJump={jumpTo}
+            />
+          )}
+        </>
       )}
 
       {/* ── Toast capture ── */}
