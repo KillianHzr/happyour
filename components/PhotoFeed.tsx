@@ -41,13 +41,14 @@ import { CrownRevealPage } from "./organisms/CrownRevealPage";
 import { RevealEndPage } from "./organisms/RevealEndPage";
 import { RefreshIcon } from "./atoms/RefreshIcon";
 import { AnimatedPageWrapper } from "./molecules/AnimatedPageWrapper";
-import { radii, spacing, typography, type ThemeColors } from "../lib/theme";
+import { radii, spacing, typography, textStyles, type ThemeColors } from "../lib/theme";
 import { useTheme, useThemedStyles, ForceTheme } from "../lib/theme-context";
 
 export { PhotoEntry, Reaction };
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const FEED_HEIGHT = SCREEN_HEIGHT - 100;
+const COMMENT_MODAL_HEIGHT = 392;
 
 
 
@@ -179,6 +180,8 @@ const PhotoFeedContent = forwardRef(({
   
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [commentModalMode, setCommentModalMode] = useState<"comment" | "sticker">("comment");
+  const [activeModalMode, setActiveModalMode] = useState<"comment" | "sticker">("comment");
+  const [sheetHeight, setSheetHeight] = useState(392);
 
   useEffect(() => {
     onCommentModalChange?.(commentModalVisible);
@@ -217,31 +220,55 @@ const PhotoFeedContent = forwardRef(({
     setActivePhotoId(photoId);
     if (ownerId) setActivePhotoOwnerId(ownerId);
     setCommentModalMode(mode);
+    setActiveModalMode(mode);
     setCommentModalVisible(true);
   };
 
   useEffect(() => {
     const config = { duration: 250, easing: Easing.out(Easing.cubic) };
-    
+
     if (commentModalVisible) {
       const hasKeyboard = keyboardHeight > 0;
-      const MODAL_HEIGHT = 392;
-      const currentModalHeight = Platform.OS === "ios" ? (hasKeyboard ? MODAL_HEIGHT / 2 : MODAL_HEIGHT) : MODAL_HEIGHT;
-      const targetBottom = SCREEN_HEIGHT - currentModalHeight - (hasKeyboard ? keyboardHeight + 24: 24);
-      
-      const targetBottomNoKeyboard = SCREEN_HEIGHT - MODAL_HEIGHT - 24;
-      const OPEN_MODAL_POST_HEIGHT = Math.min(380, (targetBottomNoKeyboard - insets.top) / (1 - insets.top / FEED_HEIGHT));
-      const scaleX = OPEN_MODAL_POST_HEIGHT / FEED_HEIGHT;
-      
-      const PREVIEW_TOP = insets.top * ( scaleX);
-      const TARGET_HEIGHT = Math.max(80, (targetBottom ) - PREVIEW_TOP);
-      
-      const scaleY = TARGET_HEIGHT / FEED_HEIGHT;
-      const ty = PREVIEW_TOP - (FEED_HEIGHT / 2) + (TARGET_HEIGHT / 2);
+      const targetBottom = SCREEN_HEIGHT - sheetHeight - (hasKeyboard ? keyboardHeight : 0) - 24;
 
-      contentScaleX.value = withTiming(scaleX, config);
-      contentScaleY.value = withTiming(scaleY, config);
-      contentTranslateY.value = withTiming(ty, config);
+      // The momentWrapper inside each FlatList item starts at y=insets.top (paddingTop).
+      // To keep that inner top fixed as we scale the outer container:
+      //   s = (targetBottom - insets.top) / (FEED_HEIGHT - insets.top)
+      //   ty = (1 - s) * (insets.top - FEED_HEIGHT / 2)
+      // This guarantees: scaled_padding (insets.top * s) + outer_top_offset = insets.top always.
+      const INNER_HEIGHT = FEED_HEIGHT - insets.top;
+      const ty = (s: number) => (1 - s) * (insets.top - FEED_HEIGHT / 2);
+
+      if (!hasKeyboard) {
+        // No keyboard: uniform scale, whole image visible.
+        // Sticker mode reuses COMMENT_MODAL_HEIGHT so the post stays at
+        // the same size/position as when the comment modal was open.
+        const effectiveSheet = activeModalMode === "sticker" ? COMMENT_MODAL_HEIGHT : sheetHeight;
+        const effectiveTarget = SCREEN_HEIGHT - effectiveSheet - 24;
+        const s = Math.max(0.1, Math.min(0.95, (effectiveTarget - insets.top) / INNER_HEIGHT));
+        contentScaleX.value = withTiming(s, config);
+        contentScaleY.value = withTiming(s, config);
+        contentTranslateY.value = withTiming(ty(s), config);
+      } else if (activeModalMode === "sticker") {
+        // Sticker mode + keyboard: uniform scale so the whole image fits above
+        // the keyboard+modal combo (post shrinks uniformly, no cropping).
+        const s = Math.max(0.1, Math.min(0.95, (targetBottom - insets.top) / INNER_HEIGHT));
+        contentScaleX.value = withTiming(s, config);
+        contentScaleY.value = withTiming(s, config);
+        contentTranslateY.value = withTiming(ty(s), config);
+      } else {
+        // Comment mode + keyboard: pin the inner top, crop the bottom upward.
+        // scaleX stays frozen (width doesn't change); only scaleY shrinks.
+        // iOS: sheetHeight halves via LayoutAnimation *after* keyboardWillShow fires,
+        // so the first render still has the old (full) sheetHeight → would overshoot.
+        // Skip that intermediate render; the next one (with correct sheetHeight) is correct.
+        if (Platform.OS === "ios" && sheetHeight >= COMMENT_MODAL_HEIGHT) return;
+
+        const scaleY = Math.max(0.05, (targetBottom - insets.top) / INNER_HEIGHT);
+        contentScaleY.value = withTiming(scaleY, config);
+        contentTranslateY.value = withTiming(ty(scaleY), config);
+      }
+
       contentBorderRadius.value = withTiming(radii.xxl, config);
     } else {
       contentScaleX.value = withTiming(1, config);
@@ -249,7 +276,7 @@ const PhotoFeedContent = forwardRef(({
       contentTranslateY.value = withTiming(0, config);
       contentBorderRadius.value = withTiming(0, config);
     }
-  }, [commentModalVisible, keyboardHeight, insets.top, insets.bottom]);
+  }, [commentModalVisible, keyboardHeight, sheetHeight, activeModalMode, insets.top]);
 
   const animatedContentStyle = useAnimatedStyle(() => ({
     transform: [
@@ -529,6 +556,7 @@ const PhotoFeedContent = forwardRef(({
             overScrollMode="never"
             style={styles.list}
             scrollEnabled={!commentModalVisible}
+            keyboardShouldPersistTaps="always"
           />
           {/* Countdown timer pill is now rendered in RevealHeader */}
         </Reanimated.View>
@@ -581,7 +609,11 @@ const PhotoFeedContent = forwardRef(({
               >
                 <Text style={styles.reactionsBtnText}>Réactions</Text>
                 {currentItem.data?.hasNewComments && (
-                  <View style={styles.reactionsBtnBadge} />
+                  <View style={styles.reactionsBtnBadge}>
+                    <Text style={styles.reactionsBtnBadgeText}>
+                      {currentItem.data?.newCommentsCount ?? 0}
+                    </Text>
+                  </View>
                 )}
               </AnimatedTouchableOpacity>
               <AnimatedTouchableOpacity
@@ -600,9 +632,11 @@ const PhotoFeedContent = forwardRef(({
                       Share.share({ url, message: url });
                       return;
                     }
-                    const filename = url.split('/').pop()?.split('?')[0] || 'shared_media.jpg';
-                    // PhotoFeed uses FileSystem from legacy which might not have cacheDirectory defined the same way, but it should.
-                    // Wait, let's use the actual cacheDirectory.
+                    // Custom shared name (the share sheet shows the file's
+                    // basename). Keep the source extension for media-type detection.
+                    const ext = url.split('?')[0].split('.').pop()?.toLowerCase();
+                    const safeExt = ext && ext.length <= 5 ? ext : 'jpg';
+                    const filename = `Disclose - You've never been this close!.${safeExt}`;
                     const localUri = FileSystem.cacheDirectory + filename;
                     const { uri } = await FileSystem.downloadAsync(url, localUri);
                     await Sharing.shareAsync(uri);
@@ -654,6 +688,8 @@ const PhotoFeedContent = forwardRef(({
           visible={commentModalVisible}
           onClose={() => setCommentModalVisible(false)}
           onKeyboardHeightChange={(h) => setKeyboardHeight(h)}
+          onSheetHeightChange={(h) => setSheetHeight(h)}
+          onModeChange={(m) => setActiveModalMode(m)}
           onSeen={(pid) => {
             if (onOpenComments) {
               onOpenComments(pid, activePhotoOwnerId);
@@ -785,10 +821,18 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     position: "absolute",
     top: -6,
     right: -6,
-    width: 24,
+    minWidth: 24,
     height: 24,
+    paddingHorizontal: 6,
     borderRadius: radii.full,
     backgroundColor: colors.bgInverse,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  reactionsBtnBadgeText: {
+    ...textStyles.bodySmall,
+    color: colors.textBrandTertiary,
+    textAlign: "center",
   },
   placeholderBtn: {
     width: 52,

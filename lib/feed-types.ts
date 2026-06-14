@@ -24,4 +24,6 @@ export type PhotoEntry = {
   reactions: Reaction[];
   groupName?: string | null;
   hasNewComments?: boolean;
+  /** Number of comments from others added since the user last opened this post's comments. */
+  newCommentsCount?: number;
 };

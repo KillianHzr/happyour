@@ -21,6 +21,12 @@ interface CommentItemProps {
   isMyComment: boolean;
   /** Fired after 800 ms hold — only for the current user's own comments */
   onLongPressDelete: (id: string, pageY: number) => void;
+  /**
+   * Known group members — used to highlight the *full* username of a mention,
+   * including usernames that contain spaces (the plain `@word` regex would stop
+   * at the first space and only colour the first word).
+   */
+  groupMembers?: { user_id: string; username: string }[];
 }
 
 const getRelativeTime = (dateStr: string) => {
@@ -39,37 +45,69 @@ const getRelativeTime = (dateStr: string) => {
 
 /**
  * Split a comment string into plain text and @mention parts.
- * Mentions are stored as plain "@username" — matched via word boundary regex.
+ *
+ * Mentions are stored as plain "@username". A username can contain spaces, so a
+ * naive `@\w+` regex would only colour the first word. To highlight the whole
+ * name we greedily match the text after each "@" against the known group
+ * usernames (longest first), and fall back to a single word when none matches.
  */
 function parseMentionContent(
-  content: string
+  content: string,
+  usernames: string[] = []
 ): Array<{ text: string; isMention: boolean }> {
   const parts: Array<{ text: string; isMention: boolean }> = [];
-  // Match @username (letters, digits, underscores — no space)
-  const regex = /@[\w.]+/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
+  // Longest first so multi-word names win over a shorter name that is a prefix.
+  const sorted = [...usernames].sort((a, b) => b.length - a.length);
 
-  while ((match = regex.exec(content)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push({ text: content.slice(lastIndex, match.index), isMention: false });
+  let buffer = "";
+  const flushBuffer = () => {
+    if (buffer) {
+      parts.push({ text: buffer, isMention: false });
+      buffer = "";
     }
-    parts.push({ text: match[0], isMention: true });
-    lastIndex = match.index + match[0].length;
-  }
+  };
 
-  if (lastIndex < content.length) {
-    parts.push({ text: content.slice(lastIndex), isMention: false });
+  let i = 0;
+  while (i < content.length) {
+    if (content[i] === "@") {
+      const after = content.slice(i + 1);
+      const lowerAfter = after.toLocaleLowerCase();
+      // Prefer the full known username (handles spaces inside usernames).
+      const matched = sorted.find(
+        (u) => u.length > 0 && lowerAfter.startsWith(u.toLocaleLowerCase())
+      );
+      if (matched) {
+        flushBuffer();
+        // Keep the original casing from the comment text.
+        parts.push({ text: "@" + content.slice(i + 1, i + 1 + matched.length), isMention: true });
+        i += 1 + matched.length;
+        continue;
+      }
+      // Fallback: single-word mention (letters, digits, underscores, dots).
+      const word = /^@[\w.]+/.exec(content.slice(i));
+      if (word) {
+        flushBuffer();
+        parts.push({ text: word[0], isMention: true });
+        i += word[0].length;
+        continue;
+      }
+    }
+    buffer += content[i];
+    i++;
   }
+  flushBuffer();
 
   return parts.length > 0 ? parts : [{ text: content, isMention: false }];
 }
 
-export const CommentItem = ({ item, isMyComment, onLongPressDelete }: CommentItemProps) => {
+export const CommentItem = ({ item, isMyComment, onLongPressDelete, groupMembers = [] }: CommentItemProps) => {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
 
-  const contentParts = parseMentionContent(item.content);
+  const contentParts = parseMentionContent(
+    item.content,
+    groupMembers.map((m) => m.username)
+  );
 
   return (
     // Pressable handles long-press natively on both iOS and Android — avoids

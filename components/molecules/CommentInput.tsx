@@ -17,6 +17,8 @@ import {
   spacing as themeSpacing,
   radii as themeRadii,
   typography,
+  textStyles,
+  stroke,
   type ThemeColors,
   shadows,
 } from "../../lib/theme";
@@ -154,7 +156,17 @@ export const CommentInput = ({
               styles.sendBtn,
               !content.trim() && !isStickerMode && styles.sendBtnDisabled,
             ]}
-            onPress={onSubmit}
+            // Submit on touch-DOWN, not release. When the comment sheet is
+            // embedded inside another modal (challenge responses), the keyboard
+            // is owned by the parent modal's window; the first tap on this button
+            // resigns first-responder (dismisses the keyboard) and that gesture
+            // swallows the touch before `onPress` (touch-release) can fire — so
+            // the input would just blur instead of sending. `onPressIn` fires on
+            // touch-down, before the dismissal can cancel the gesture, matching
+            // the single-modal reveal feed behaviour. We intentionally do NOT also
+            // pass `onPress` to avoid a double submit (which in sticker mode would
+            // re-run with empty content and delete the sticker we just posted).
+            onPressIn={onSubmit}
             disabled={isDisabled}
           >
             {submitting ? (
@@ -202,9 +214,12 @@ export const MentionSuggestionsPopup = ({
 
   if (keyword === null || members.length === 0) return null;
 
-  const filtered = members.filter((m) =>
-    m.username.toLocaleLowerCase().includes(keyword.toLocaleLowerCase())
-  );
+  // Cap at 3 suggestions so the popup stays compact and never clutters the UI.
+  const filtered = members
+    .filter((m) =>
+      m.username.toLocaleLowerCase().includes(keyword.toLocaleLowerCase())
+    )
+    .slice(0, 3);
 
   if (filtered.length === 0) return null;
 
@@ -232,7 +247,7 @@ export const MentionSuggestionsPopup = ({
               </Text>
             )}
           </View>
-          <Text style={styles.name}>@{member.username}</Text>
+          <Text style={styles.name}>{member.username}</Text>
         </Pressable>
       ))}
     </View>
@@ -295,13 +310,22 @@ const makeStyles = (colors: ThemeColors) =>
 const makeSuggestionStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     popup: {
-      marginHorizontal: themeSpacing.lg,
+      // Floats absolutely above the comment list, anchored 8px above the input
+      // row and matching the text-field width (input row padding + avatar + gap
+      // on each side). left/right keep it flush with the rounded text input.
+      position: "absolute",
+      bottom: "100%",
+      left: themeSpacing.lg + themeSpacing.xl3 + themeSpacing.sm,
+      right: themeSpacing.lg + themeSpacing.xl3 + themeSpacing.sm,
       marginBottom: 8,
       backgroundColor: colors.card,
       borderRadius: themeRadii.lg,
-      borderWidth: 1,
+      borderWidth: stroke.sm,
       borderColor: colors.borderSecondary,
       overflow: "hidden",
+      // Keep the popup above the comment list so comments don't bleed through it.
+      zIndex: 50,
+      elevation: 24,
       ...shadows.md,
     },
     item: {
@@ -329,8 +353,7 @@ const makeSuggestionStyles = (colors: ThemeColors) =>
       fontSize: typography.size.sm,
     },
     name: {
+      ...textStyles.bodySmall,
       color: colors.text,
-      fontFamily: typography.family.semibold,
-      fontSize: typography.size.md,
     },
   });

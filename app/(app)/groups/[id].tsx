@@ -5,6 +5,7 @@ import { View, Text, StyleSheet, ScrollView, Dimensions, Animated, TouchableOpac
 import { useLocalSearchParams, router } from "expo-router";
 import BlurView from "../../../components/atoms/BlurView";
 import { SvgCutout } from "../../../components/atoms/SvgCutout";
+import { RightSlideModal } from "../../../components/atoms/RightSlideModal";
 import { supabase } from "../../../lib/supabase";
 import { r2Storage } from "../../../lib/r2";
 import { useAuth } from "../../../lib/auth-context";
@@ -249,6 +250,14 @@ export default function MainPagerScreen() {
     const myPhotos = photos.filter((p) => p.user_id === user.id);
     const myPhotoIds = new Set(myPhotos.map((p) => p.id));
 
+    // Current user's username — mentions are stored as "@<username>" using the
+    // exact group_members profile username, so we match against the same source.
+    const myUsername =
+      members.find((m) => m.user_id === user.id)?.username || username || "";
+    const mentionNeedle = myUsername ? `@${myUsername.toLowerCase()}` : null;
+    const mentionsMe = (content: string | null | undefined) =>
+      !!mentionNeedle && (content || "").toLowerCase().includes(mentionNeedle);
+
     // 1. Reactions on my photos
     for (const photo of myPhotos) {
       for (const rx of photo.reactions) {
@@ -266,9 +275,9 @@ export default function MainPagerScreen() {
       }
     }
 
-    // 2. Comments on my photos
+    // 2. Comments on my photos (a comment that also tags me is handled below)
     for (const comment of activeData.comments || []) {
-      if (myPhotoIds.has(comment.photo_id) && comment.user_id !== user.id) {
+      if (myPhotoIds.has(comment.photo_id) && comment.user_id !== user.id && !mentionsMe(comment.content)) {
         const photoObj = myPhotos.find((p) => p.id === comment.photo_id);
         list.push({
           id: `comment-${comment.id}`,
@@ -281,8 +290,24 @@ export default function MainPagerScreen() {
         });
       }
     }
+
+    // 3. Comments that tag me — on any post, not just mine
+    for (const comment of activeData.comments || []) {
+      if (comment.user_id !== user.id && mentionsMe(comment.content)) {
+        const photoObj = photos.find((p) => p.id === comment.photo_id);
+        list.push({
+          id: `mention-${comment.id}`,
+          username: comment.profiles?.username ?? "Anonyme",
+          avatarUrl: comment.profiles?.avatar_url ?? null,
+          photoUrl: photoObj?.video_thumbnail_url ?? photoObj?.url ?? "",
+          photoId: comment.photo_id,
+          created_at: comment.created_at,
+          context: "T'as tagué en commentaire",
+        });
+      }
+    }
     return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  }, [activeData, photos, user]);
+  }, [activeData, photos, user, members, username]);
 
   const handleActivityClick = useCallback((item: any) => {
     setShowNotificationsModal(false);
@@ -452,10 +477,14 @@ export default function MainPagerScreen() {
             }
 
             const viewsMap = Object.fromEntries((viewsRes.data ?? []).map((v: any) => [v.photo_id, v.last_viewed_at]));
-            const latestCommentsMap: Record<string, string> = {};
+            // Count, per photo, comments from *others* added since the user last
+            // opened that post's comments. Own comments never count as "unseen".
+            const newCommentsCountMap: Record<string, number> = {};
             for (const c of commentsRes.data ?? []) {
-              if (!latestCommentsMap[c.photo_id]) {
-                latestCommentsMap[c.photo_id] = c.created_at;
+              if (c.user_id === user.id) continue;
+              const lastViewedAt = viewsMap[c.photo_id];
+              if (!lastViewedAt || new Date(c.created_at) > new Date(lastViewedAt)) {
+                newCommentsCountMap[c.photo_id] = (newCommentsCountMap[c.photo_id] || 0) + 1;
               }
             }
 
@@ -476,9 +505,8 @@ export default function MainPagerScreen() {
             const groupPhotos = filteredPhotosData.map((p: any) => {
               const r2Url = p.image_path === "text_mode" ? "" : r2Storage.getPublicUrl(p.image_path);
               const url = mediaCache.getLocalUri(p.image_path) ?? r2Url;
-              const lastViewedAt = viewsMap[p.id];
-              const latestCommentAt = latestCommentsMap[p.id];
-              const hasNewComments = latestCommentAt && (!lastViewedAt || new Date(latestCommentAt) > new Date(lastViewedAt));
+              const newCommentsCount = newCommentsCountMap[p.id] ?? 0;
+              const hasNewComments = newCommentsCount > 0;
 
               const videoThumbnailUrl = p.video_thumbnail_path ? (mediaCache.getLocalUri(p.video_thumbnail_path) ?? r2Storage.getPublicUrl(p.video_thumbnail_path)) : null;
               const secondVideoThumbnailUrl = p.second_video_thumbnail_path ? (mediaCache.getLocalUri(p.second_video_thumbnail_path) ?? r2Storage.getPublicUrl(p.second_video_thumbnail_path)) : null;
@@ -500,6 +528,7 @@ export default function MainPagerScreen() {
                 user_id: p.user_id,
                 reactions: reactionsByPhoto[p.id] ?? [],
                 hasNewComments: !!hasNewComments,
+                newCommentsCount,
                 video_thumbnail_path: p.video_thumbnail_path ?? null,
                 second_video_thumbnail_path: p.second_video_thumbnail_path ?? null,
                 video_thumbnail_url: videoThumbnailUrl,
@@ -1097,7 +1126,7 @@ export default function MainPagerScreen() {
       const pIdx = g.photos.findIndex(p => p.id === photoId);
       if (pIdx !== -1 && g.photos[pIdx].hasNewComments) {
         const newPhotos = [...g.photos];
-        newPhotos[pIdx] = { ...newPhotos[pIdx], hasNewComments: false };
+        newPhotos[pIdx] = { ...newPhotos[pIdx], hasNewComments: false, newCommentsCount: 0 };
         next[activeGroupId] = { ...g, photos: newPhotos };
         return next;
       }
@@ -1110,16 +1139,19 @@ export default function MainPagerScreen() {
       const photoIds = currentPhotos.map(p => p.id);
       if (photoIds.length === 0) return;
 
-      const [viewsRes, latestCommentsRes] = await Promise.all([
+      const [viewsRes, commentsRes] = await Promise.all([
         supabase.from("comment_views").select("photo_id, last_viewed_at").eq("user_id", user.id).in("photo_id", photoIds),
-        supabase.from("comments").select("photo_id, created_at").in("photo_id", photoIds).order("created_at", { ascending: false })
+        supabase.from("comments").select("photo_id, user_id, created_at").in("photo_id", photoIds).order("created_at", { ascending: false })
       ]);
 
       const viewsMap = Object.fromEntries((viewsRes.data ?? []).map((v: any) => [v.photo_id, v.last_viewed_at]));
-      const latestCommentsMap: Record<string, string> = {};
-      for (const c of latestCommentsRes.data ?? []) {
-        if (!latestCommentsMap[c.photo_id]) {
-          latestCommentsMap[c.photo_id] = c.created_at;
+      // Count unseen comments from others, mirroring fetchAllData.
+      const countMap: Record<string, number> = {};
+      for (const c of commentsRes.data ?? []) {
+        if (c.user_id === user.id) continue;
+        const lastViewedAt = viewsMap[c.photo_id];
+        if (!lastViewedAt || new Date(c.created_at) > new Date(lastViewedAt)) {
+          countMap[c.photo_id] = (countMap[c.photo_id] || 0) + 1;
         }
       }
 
@@ -1131,10 +1163,8 @@ export default function MainPagerScreen() {
           [activeGroupId]: {
             ...g,
             photos: g.photos.map(p => {
-              const lastViewedAt = viewsMap[p.id];
-              const latestCommentAt = latestCommentsMap[p.id];
-              const hasNew = latestCommentAt && (!lastViewedAt || new Date(latestCommentAt) > new Date(lastViewedAt));
-              return { ...p, hasNewComments: !!hasNew };
+              const count = countMap[p.id] ?? 0;
+              return { ...p, hasNewComments: count > 0, newCommentsCount: count };
             })
           }
         };
@@ -1401,9 +1431,8 @@ export default function MainPagerScreen() {
           )}
 
           {/* Notifications Modal */}
-          <Modal
+          <RightSlideModal
             visible={showNotificationsModal}
-            animationType="slide"
             onRequestClose={() => setShowNotificationsModal(false)}
           >
             <ForceTheme mode="Dark">
@@ -1413,7 +1442,7 @@ export default function MainPagerScreen() {
                 handleActivityClick={handleActivityClick}
               />
             </ForceTheme>
-          </Modal>
+          </RightSlideModal>
 
           {/* Custom Text Input Modal */}
           <Modal visible={showCustomTextInput} transparent animationType="fade" onRequestClose={() => setShowCustomTextInput(false)}>
