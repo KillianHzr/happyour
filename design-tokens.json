@@ -123,61 +123,61 @@
     "color/brand/100": {
       "type": "COLOR",
       "values": {
-        "Value": "#FFECE5"
+        "Value": "#FFDCD1"
       }
     },
     "color/brand/200": {
       "type": "COLOR",
       "values": {
-        "Value": "#FFC7B2"
+        "Value": "#FFB59E"
       }
     },
     "color/brand/300": {
       "type": "COLOR",
       "values": {
-        "Value": "#FFA180"
+        "Value": "#FF8D6B"
       }
     },
     "color/brand/400": {
       "type": "COLOR",
       "values": {
-        "Value": "#FF7B4D"
+        "Value": "#FF6031"
       }
     },
     "color/brand/500": {
       "type": "COLOR",
       "values": {
-        "Value": "#FF561A"
+        "Value": "#FF3F05"
       }
     },
     "color/brand/600": {
       "type": "COLOR",
       "values": {
-        "Value": "#E53C00"
+        "Value": "#D13100"
       }
     },
     "color/brand/700": {
       "type": "COLOR",
       "values": {
-        "Value": "#B22F00"
+        "Value": "#9E2500"
       }
     },
     "color/brand/800": {
       "type": "COLOR",
       "values": {
-        "Value": "#802100"
+        "Value": "#6B1900"
       }
     },
     "color/brand/900": {
       "type": "COLOR",
       "values": {
-        "Value": "#4D1400"
+        "Value": "#380D00"
       }
     },
     "color/brand/1000": {
       "type": "COLOR",
       "values": {
-        "Value": "#1A0700"
+        "Value": "#050100"
       }
     },
     "color/red/100": {
@@ -603,13 +603,13 @@
     "typography/family-sans": {
       "type": "STRING",
       "values": {
-        "Value": "Neulis Sans"
+        "Value": "Parkinsans"
       }
     },
     "typography/family-cursive": {
       "type": "STRING",
       "values": {
-        "Value": "Neulis Cursive"
+        "Value": "Parkinsans"
       }
     },
     "typography/family-mono": {
@@ -935,6 +935,12 @@
       "values": {
         "Value": 10
       }
+    },
+    "size/0,5": {
+      "type": "FLOAT",
+      "values": {
+        "Value": 0.5
+      }
     }
   },
   "-> Color": {
@@ -1054,7 +1060,7 @@
       "type": "COLOR",
       "values": {
         "Light": "{Primitives/color/brand/100}",
-        "Dark": "{Primitives/color/brand/600}"
+        "Dark": "{Primitives/color/brand/100}"
       }
     },
     "background/brand/tertiary-hover": {
@@ -1313,7 +1319,7 @@
       "type": "COLOR",
       "values": {
         "Light": "{Primitives/color/brand/100}",
-        "Dark": "{Primitives/color/brand/900}"
+        "Dark": "{Primitives/color/brand/100}"
       }
     },
     "text/brand/on-brand-secondary": {
@@ -1719,7 +1725,7 @@
       "type": "COLOR",
       "values": {
         "Light": "{Primitives/color/brand/100}",
-        "Dark": "{Primitives/color/brand/900}"
+        "Dark": "{Primitives/color/brand/100}"
       }
     },
     "icon/brand/on-brand-secondary": {
@@ -2233,6 +2239,18 @@
       "values": {
         "Mode 1": "{Primitives/size/96}"
       }
+    },
+    "space/1000": {
+      "type": "FLOAT",
+      "values": {
+        "Mode 1": "{Primitives/size/40}"
+      }
+    },
+    "stroke/012": {
+      "type": "FLOAT",
+      "values": {
+        "Mode 1": "{Primitives/size/0,5}"
+      }
     }
   },
   "-> Typography": {
@@ -2471,6 +2489,10 @@
         "color": "{Primitives/color/slate/200}",
         "opacity": 1
       },
+      "orange-gradient": {
+        "type": "IMAGE",
+        "url": "Mettre_une_URL_ici_si_besoin"
+      },
       "image-team/théo": {
         "type": "IMAGE",
         "url": "Mettre_une_URL_ici_si_besoin"
@@ -2587,6 +2609,14 @@
         "type": "IMAGE",
         "url": "Mettre_une_URL_ici_si_besoin"
       },
+      "capture-image/bathroom": {
+        "type": "IMAGE",
+        "url": "Mettre_une_URL_ici_si_besoin"
+      },
+      "capture-image/field": {
+        "type": "IMAGE",
+        "url": "Mettre_une_URL_ici_si_besoin"
+      },
       "capture-draw/draw-star": {
         "color": "#FFFFFF",
         "opacity": 1
@@ -2679,7 +2709,7 @@
       },
       "heading": {
         "fontFamily": "{-> Typography/heading/font-family}",
-        "fontStyle": "Semi Bold",
+        "fontStyle": "SemiBold",
         "fontWeight": "{-> Typography/heading/font-weight}",
         "fontSize": "{-> Typography/heading/size-base}",
         "lineHeight": {
@@ -2695,7 +2725,7 @@
       },
       "subheading": {
         "fontFamily": "{-> Typography/subheading/font-family}",
-        "fontStyle": "Semi Bold",
+        "fontStyle": "SemiBold",
         "fontWeight": "{-> Typography/subheading/font-weight-strong}",
         "fontSize": "{-> Typography/subheading/size-medium}",
         "lineHeight": {
@@ -2727,7 +2757,7 @@
       },
       "body-strong": {
         "fontFamily": "{-> Typography/body/font-family}",
-        "fontStyle": "Semi Bold",
+        "fontStyle": "SemiBold",
         "fontWeight": "{-> Typography/body/font-weight-strong}",
         "fontSize": "{-> Typography/body/size-medium}",
         "lineHeight": {
@@ -2806,7 +2836,7 @@
       },
       "body-small-strong": {
         "fontFamily": "{-> Typography/body/font-family}",
-        "fontStyle": "Semi Bold",
+        "fontStyle": "SemiBold",
         "fontWeight": "{-> Typography/body/font-weight-strong}",
         "fontSize": "{-> Typography/body/size-small}",
         "lineHeight": {
@@ -2822,7 +2852,7 @@
       },
       "body-extra-small-strong": {
         "fontFamily": "{-> Typography/body/font-family}",
-        "fontStyle": "Semi Bold",
+        "fontStyle": "SemiBold",
         "fontWeight": "{-> Typography/body/font-weight-strong}",
         "fontSize": "{-> Typography/body/size-extra-small}",
         "lineHeight": {
@@ -2854,7 +2884,7 @@
       },
       "single-line/subheading-strong": {
         "fontFamily": "{-> Typography/subheading/font-family}",
-        "fontStyle": "Semi Bold",
+        "fontStyle": "SemiBold",
         "fontWeight": "{-> Typography/subheading/font-weight-strong}",
         "fontSize": "{-> Typography/body/size-large}",
         "lineHeight": {
@@ -2870,7 +2900,7 @@
       },
       "single-line/body-base-strong": {
         "fontFamily": "{-> Typography/body/font-family}",
-        "fontStyle": "Semi Bold",
+        "fontStyle": "SemiBold",
         "fontWeight": "{-> Typography/body/font-weight-strong}",
         "fontSize": "{-> Typography/body/size-medium}",
         "lineHeight": {
@@ -2918,7 +2948,7 @@
       },
       "single-line/body-small-strong": {
         "fontFamily": "{-> Typography/body/font-family}",
-        "fontStyle": "Semi Bold",
+        "fontStyle": "SemiBold",
         "fontWeight": "{-> Typography/body/font-weight-strong}",
         "fontSize": "{-> Typography/body/size-small}",
         "lineHeight": {
@@ -2934,7 +2964,7 @@
       },
       "single-line/body-extra-small-strong": {
         "fontFamily": "{-> Typography/body/font-family}",
-        "fontStyle": "Semi Bold",
+        "fontStyle": "SemiBold",
         "fontWeight": "{-> Typography/body/font-weight-strong}",
         "fontSize": "{-> Typography/body/size-extra-small}",
         "lineHeight": {
