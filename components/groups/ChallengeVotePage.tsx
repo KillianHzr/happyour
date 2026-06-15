@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, Dimensions, Platform, TouchableOpacity, ScrollView, Animated, Share } from "react-native";
+import { View, Text, StyleSheet, Dimensions, Platform, TouchableOpacity, ScrollView, Animated, Share, KeyboardAvoidingView, LayoutAnimation } from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -115,6 +115,7 @@ const ResponseCard = React.memo(function ResponseCard({
   marginRight,
   showDetails,
   styles,
+  opacity = 1,
 }: {
   item: ChallengeResponse;
   isActive: boolean;
@@ -124,6 +125,7 @@ const ResponseCard = React.memo(function ResponseCard({
   marginRight: number;
   showDetails: boolean;
   styles: any;
+  opacity?: number;
 }) {
   const slideImagePath = swapped ? (item.second_image_path ?? item.image_path) : item.image_path;
   const slideUrl = swapped ? (getSecondUrl(item) ?? item.url) : item.url;
@@ -131,23 +133,51 @@ const ResponseCard = React.memo(function ResponseCard({
   const isTextOnly = mediaType(slideImagePath) === "text";
   const isDrawing = mediaType(slideImagePath) === "drawing";
   return (
-    <View style={[styles.slideCard, { width, height, marginRight }]}>
-      <View style={styles.slideMediaWrapper}>
-        <ModalMedia imagePath={slideImagePath} url={slideUrl} note={slideNote} />
-      </View>
+    <View 
+      style={{ 
+        width: CARD_WIDTH, 
+        height: CAROUSEL_HEIGHT, 
+        marginRight,
+        opacity,
+        justifyContent: "center",
+        alignItems: "center",
+      }}
+      pointerEvents={opacity === 0 ? "none" : "auto"}
+    >
+      <View 
+        style={[
+          styles.slideCard, 
+          { 
+            width, 
+            height,
+          }
+        ]}
+      >
+        <View style={styles.slideMediaWrapper}>
+          <ModalMedia imagePath={slideImagePath} url={slideUrl} note={slideNote} />
+        </View>
 
-      {showDetails && !isTextOnly && !isDrawing && (
-        <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+        <View 
+          style={[
+            StyleSheet.absoluteFillObject, 
+            { opacity: showDetails && !isTextOnly && !isDrawing ? 1 : 0 }
+          ]} 
+          pointerEvents="none"
+        >
           <LinearGradient
             colors={["transparent", "rgba(0,0,0,0.85)"]}
             style={StyleSheet.absoluteFill}
             pointerEvents="none"
           />
         </View>
-      )}
 
-      {showDetails && (
-        <View style={styles.cardDetailsContainer} pointerEvents="box-none">
+        <View 
+          style={[
+            styles.cardDetailsContainer, 
+            { opacity: showDetails ? 1 : 0 }
+          ]} 
+          pointerEvents={showDetails ? "box-none" : "none"}
+        >
           <View style={styles.authorInfoRow} pointerEvents="box-none">
             {item.avatar_url ? (
               <Image source={{ uri: item.avatar_url }} style={styles.authorAvatar} contentFit="cover" />
@@ -166,12 +196,19 @@ const ResponseCard = React.memo(function ResponseCard({
             </View>
           </View>
         </View>
-      )}
 
-      {/* Bordure active EN DERNIER → au-dessus du média, du gradient et des détails,
-          pour qu'aucun calque (notamment le gradient) ne l'assombrisse. Overlay absolu :
-          ne décale pas le contenu (pas de cadre noir, pas de clignotement au swipe). */}
-      {isActive && <View pointerEvents="none" style={[StyleSheet.absoluteFillObject, styles.cardActiveBorder]} />}
+        {/* Bordure active EN DERNIER → au-dessus du média, du gradient et des détails,
+            pour qu'aucun calque (notamment le gradient) ne l'assombrisse. Overlay absolu :
+            ne décale pas le contenu (pas de cadre noir, pas de clignotement au swipe). */}
+        <View 
+          pointerEvents="none" 
+          style={[
+            StyleSheet.absoluteFillObject, 
+            styles.cardActiveBorder, 
+            { opacity: isActive && showDetails ? 1 : 0 }
+          ]} 
+        />
+      </View>
     </View>
   );
 });
@@ -278,6 +315,7 @@ export default function ChallengeVotePage({
   }, [showResponsesModal]);
 
   const updateActiveFromOffset = (x: number) => {
+    if (commentModalVisible) return;
     if (count === 0 || SNAP_INTERVAL === 0) return;
     const idx = Math.max(0, Math.min(count - 1, Math.round(x / SNAP_INTERVAL)));
     if (idx !== activeIndex) {
@@ -291,28 +329,21 @@ export default function ChallengeVotePage({
   const activeResponse = challenge.responses[activeIndex];
   const hasSecond = activeResponse ? !!(activeResponse.second_image_path) : false;
 
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [sheetHeight, setSheetHeight] = useState(392);
-  // Bas mesuré du header (titre + question) — délimite la zone flex de la carte soulevée.
-  const [headerBottom, setHeaderBottom] = useState(Math.max(insets.top, 16) + 130);
+  const [carouselLayoutHeight, setCarouselLayoutHeight] = useState(CAROUSEL_HEIGHT);
+  const handleCarouselLayout = (e: any) => {
+    const h = e.nativeEvent.layout.height;
+    if (h > 0) {
+      setCarouselLayoutHeight(h);
+    }
+  };
 
-  // Fondu carousel <-> carte soulevée. Sans transform/scale (qui causaient le lag) :
-  // une simple opacité native croisée. 0 = carousel visible, 1 = mode commentaires.
-  const commentAnim = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.timing(commentAnim, {
-      toValue: commentModalVisible ? 1 : 0,
-      duration: 220,
-      useNativeDriver: true,
-    }).start();
-  }, [commentModalVisible]);
-  const carouselOpacity = commentAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+  const shrunkenHeight = Math.min(250, SCREEN_HEIGHT * 0.3);
+  const cardHeight = commentModalVisible 
+    ? shrunkenHeight 
+    : Math.min(CAROUSEL_HEIGHT, carouselLayoutHeight - 40);
+  const cardWidth = cardHeight * (CARD_WIDTH / CAROUSEL_HEIGHT);
 
-  // Carte soulevée : centrée en flexbox entre le header et la feuille de commentaires,
-  // dimensionnée pour tenir dans l'espace dispo (ratio conservé, aucune distorsion).
-  const liftAvailH = Math.max(80, SCREEN_HEIGHT - headerBottom - sheetHeight - keyboardHeight - spacing.md * 2);
-  const liftH = Math.min(CAROUSEL_HEIGHT, liftAvailH);
-  const liftW = liftH * (CARD_WIDTH / CAROUSEL_HEIGHT);
+
 
   return (
     <View style={cvStyles.container}>
@@ -352,19 +383,16 @@ export default function ChallengeVotePage({
         visible={showResponsesModal}
         transparent
         onRequestClose={() => {
-          // The embedded CommentModal has no native Modal of its own, so Android back
-          // lands here — close the comment sheet first if it's open.
           if (commentModalVisible) setCommentModalVisible(false);
           else onCloseResponsesModal?.();
         }}
       >
-        <View style={cvStyles.modalOverlay}>
-          {/* Top Bar / Header */}
-          <View
-            style={{ paddingTop: Math.max(insets.top, 16), zIndex: 10 }}
-            onLayout={(e) => setHeaderBottom(e.nativeEvent.layout.y + e.nativeEvent.layout.height)}
-          >
-            <View style={[cvStyles.modalHeader, { paddingTop: 0 }]}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={cvStyles.modalOverlay}
+        >
+          <View style={cvStyles.modalHeaderContainer}>
+            <View style={[cvStyles.modalHeader, { paddingTop: Math.max(insets.top, 16) }]}>
               <View style={cvStyles.headerLeft}>
                 <TouchableOpacity onPress={onCloseResponsesModal} activeOpacity={0.7} style={cvStyles.backBtn}>
                   <Svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={colors.text} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -373,7 +401,6 @@ export default function ChallengeVotePage({
                 </TouchableOpacity>
                 <Text style={cvStyles.headerTitle}>Défi</Text>
               </View>
-
               {hasSecond && (
                 <TouchableOpacity style={cvStyles.swapBtn} onPress={() => setSwapped(v => !v)} activeOpacity={0.7}>
                   <Svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={colors.text} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -383,7 +410,6 @@ export default function ChallengeVotePage({
                 </TouchableOpacity>
               )}
             </View>
-
             <Text style={cvStyles.modalQuestionText}>
               Si{" "}
               <Text style={cvStyles.orangeText}>{challenge.target_username}</Text>
@@ -393,66 +419,72 @@ export default function ChallengeVotePage({
             </Text>
           </View>
 
-          {/* Carousel horizontal — peek + boucle infinie (format ChallengesSlider de disclose).
-              Toujours monté : il conserve sa position de scroll quand on ouvre/ferme les
-              commentaires. On le masque par simple opacité (pas de remontage, pas de scale). */}
           {responsesCount > 0 ? (
-            <View style={cvStyles.carouselFlexContainer}>
-              <Animated.View
-                style={{ width: SCREEN_WIDTH, opacity: carouselOpacity }}
-                pointerEvents={commentModalVisible ? "none" : "auto"}
+            <View 
+              style={cvStyles.carouselFlexContainer}
+              onLayout={handleCarouselLayout}
+            >
+              <ScrollView
+                ref={scrollRef}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                snapToInterval={SNAP_INTERVAL}
+                decelerationRate="fast"
+                contentContainerStyle={{ 
+                  paddingHorizontal: SIDE_MARGIN, 
+                  alignItems: "center" 
+                }}
+                onScroll={handleScroll}
+                onMomentumScrollEnd={handleMomentumScrollEnd}
+                scrollEventThrottle={16}
+                bounces={false}
+                overScrollMode="never"
+                removeClippedSubviews={false}
+                keyboardShouldPersistTaps="always"
+                style={{ width: SCREEN_WIDTH }}
+                scrollEnabled={!commentModalVisible}
               >
-                <ScrollView
-                  ref={scrollRef}
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  snapToInterval={SNAP_INTERVAL}
-                  decelerationRate="fast"
-                  contentContainerStyle={{ paddingHorizontal: SIDE_MARGIN }}
-                  onScroll={handleScroll}
-                  onMomentumScrollEnd={handleMomentumScrollEnd}
-                  scrollEventThrottle={16}
-                  bounces={false}
-                  overScrollMode="never"
-                  // Android : sans ça, les cartes voisines partiellement hors-cadre (le « peek »)
-                  // ne sont pas dessinées et apparaissent noires jusqu'au swipe.
-                  removeClippedSubviews={false}
-                  scrollEnabled={!commentModalVisible}
-                  // Without this the carousel's keyboard-dismiss tap recognizer eats the
-                  // first tap on the embedded comment sheet's submit button.
-                  keyboardShouldPersistTaps="always"
-                  style={{ width: SCREEN_WIDTH, height: CAROUSEL_HEIGHT }}
-                >
-                  {challenge.responses.map((r, idx) => (
+                {challenge.responses.map((r, idx) => {
+                  const isActive = idx === activeIndex;
+                  return (
                     <ResponseCard
                       key={r.id}
                       item={r}
-                      isActive={idx === activeIndex}
-                      swapped={idx === activeIndex ? swapped : false}
-                      width={CARD_WIDTH}
-                      height={CAROUSEL_HEIGHT}
+                      isActive={isActive}
+                      swapped={isActive ? swapped : false}
+                      width={commentModalVisible ? (isActive ? cardWidth : CARD_WIDTH) : CARD_WIDTH}
+                      height={commentModalVisible ? (isActive ? cardHeight : CAROUSEL_HEIGHT) : CAROUSEL_HEIGHT}
                       marginRight={CARD_GAP}
-                      showDetails
+                      showDetails={!commentModalVisible}
                       styles={cvStyles}
+                      opacity={commentModalVisible ? (isActive ? 1 : 0) : 1}
                     />
-                  ))}
-                </ScrollView>
+                  );
+                })}
+              </ScrollView>
 
-                {/* Stepper Dot Page Indicators */}
-                {responsesCount > 1 && (
-                  <View style={cvStyles.stepperContainer}>
-                    {challenge.responses.map((_, index) => (
-                      <StepperDot
-                        key={index}
-                        isActive={activeIndex === index}
-                        inactiveColor={colors.iconTertiary}
-                        activeColor={colors.icon}
-                        style={cvStyles.stepperDot}
-                      />
-                    ))}
-                  </View>
-                )}
-              </Animated.View>
+              <View 
+                style={[
+                  cvStyles.stepperContainer, 
+                  { 
+                    opacity: commentModalVisible ? 0 : 1,
+                    height: commentModalVisible ? 0 : "auto",
+                    marginTop: commentModalVisible ? 0 : 24,
+                    paddingVertical: commentModalVisible ? 0 : spacing.sm,
+                  }
+                ]}
+                pointerEvents={commentModalVisible ? "none" : "auto"}
+              >
+                {responsesCount > 1 && challenge.responses.map((_, index) => (
+                  <StepperDot
+                    key={index}
+                    isActive={activeIndex === index}
+                    inactiveColor={colors.iconTertiary}
+                    activeColor={colors.icon}
+                    style={cvStyles.stepperDot}
+                  />
+                ))}
+              </View>
             </View>
           ) : (
             <View style={cvStyles.emptyContainer}>
@@ -460,32 +492,23 @@ export default function ChallengeVotePage({
             </View>
           )}
 
-          {/* Carte soulevée au-dessus de la feuille de commentaires.
-              Positionnée nativement en flexbox dans l'espace header → feuille (s'ajuste au
-              clavier et à la hauteur de la feuille). Toujours montée et pilotée par l'opacité
-              `commentAnim` → fondu fluide à l'ouverture comme à la fermeture. */}
-          {activeResponse && (
-            <Animated.View
-              pointerEvents="none"
-              style={[
-                cvStyles.liftLayer,
-                { top: headerBottom, bottom: sheetHeight + keyboardHeight, opacity: commentAnim },
-              ]}
-            >
-              <ResponseCard
-                item={activeResponse}
-                isActive
-                swapped={swapped}
-                width={liftW}
-                height={liftH}
-                marginRight={0}
-                showDetails={false}
-                styles={cvStyles}
-              />
-            </Animated.View>
+          {commentActiveResponse && commentModalVisible && (
+            <CommentModal
+              inline
+              visible={commentModalVisible}
+              onClose={() => {
+                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                setCommentModalVisible(false);
+              }}
+              photoId={commentActiveResponse.id}
+              photoOwnerId={commentActiveResponse.user_id}
+              groupId={challenge.group_id}
+              reactions={reactionsMap[commentActiveResponse.id] || []}
+              initialMode={commentModalMode}
+              style={cvStyles.commentsFlexContainer}
+            />
           )}
 
-          {/* Bottom Control Bar */}
           {activeResponse && !commentModalVisible && (
             <View style={cvStyles.modalFooter}>
               <TouchableOpacity 
@@ -493,6 +516,7 @@ export default function ChallengeVotePage({
                 onPress={() => {
                   setCommentActiveResponse(activeResponse);
                   setCommentModalMode("comment");
+                  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
                   setCommentModalVisible(true);
                 }}
                 activeOpacity={0.85}
@@ -511,9 +535,6 @@ export default function ChallengeVotePage({
                       Share.share({ url, message: url });
                       return;
                     }
-                    // Download to cache before sharing, with a custom shared name
-                    // (the share sheet shows the file's basename). Keep the source
-                    // extension so the OS still detects the media type.
                     const ext = url.split('?')[0].split('.').pop()?.toLowerCase();
                     const safeExt = ext && ext.length <= 5 ? ext : 'jpg';
                     const filename = `Disclose - You've never been this close!.${safeExt}`;
@@ -532,29 +553,7 @@ export default function ChallengeVotePage({
               </TouchableOpacity>
             </View>
           )}
-
-          {/* ── Comment / Reactions Modal for Active Slide ── */}
-          {/* Mount on commentActiveResponse (mirrors PhotoFeed's activePhotoId) and
-              drive open/close via the `visible` prop only. Keeping it mounted while
-              closing lets CommentModal play its own slide-out, sticker pop and toast
-              animations — instead of being torn down instantly — matching the reveal. */}
-          {commentActiveResponse && (
-            <CommentModal
-              embedded
-              visible={commentModalVisible}
-              onClose={() => {
-                setCommentModalVisible(false);
-              }}
-              photoId={commentActiveResponse.id}
-              photoOwnerId={commentActiveResponse.user_id}
-              groupId={challenge.group_id}
-              reactions={reactionsMap[commentActiveResponse.id] || []}
-              initialMode={commentModalMode}
-              onKeyboardHeightChange={(h) => setKeyboardHeight(h)}
-              onSheetHeightChange={(h) => setSheetHeight(h)}
-            />
-          )}
-        </View>
+        </KeyboardAvoidingView>
       </RightSlideModal>
     </View>
   );
@@ -684,17 +683,9 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   // Carousel & Slides Styles
   carouselFlexContainer: {
     flex: 1,
+    flexShrink: 1,
     justifyContent: "center",
     alignItems: "center",
-  },
-  liftLayer: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: spacing.md,
-    zIndex: 5,
   },
   slideCard: {
     borderRadius: radii.xl,
@@ -823,5 +814,12 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.textSecondary || colors.textMuted,
     fontFamily: typography.family.medium,
     fontSize: typography.size.sm,
+  },
+  modalHeaderContainer: {
+    flexShrink: 0,
+  },
+  commentsFlexContainer: {
+    flex: 1.2,
+    flexShrink: 1,
   },
 });

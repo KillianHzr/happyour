@@ -19,7 +19,7 @@ import Svg, { Path } from "react-native-svg";
 
 import PhotoFeed, { type PhotoEntry, type Reaction } from "../../../components/PhotoFeed";
 import { TextSticker } from "../../../components/atoms/TextSticker";
-import { fetchChallengeData, getChallengeWeekStart, type ChallengeWithData } from "../../../lib/challenges";
+import { fetchChallengeData, getChallengeWeekStart, getChallengePrompt, type ChallengeWithData } from "../../../lib/challenges";
 import Loader from "../../../components/Loader";
 import { ProfileIcon, VaultIcon, MomentIcon } from "../../../components/icons";
 import { CloseIcon } from "../../../components/groups/GroupIcons";
@@ -422,6 +422,44 @@ export default function MainPagerScreen() {
             if (currentWeekStart !== challengeWeekStart) {
               challenges = await fetchChallengeData(g.id, currentWeekStart, membersData);
             }
+          }
+
+          // Log active group challenges to help developers add artificial responses
+          if (__DEV__ && g.id === activeGroupId) {
+            console.log("\n======================================================================");
+            console.log(`[DEV] 🎯 CURRENT REVEAL CHALLENGES FOR ACTIVE GROUP: "${g.name}" (${g.id})`);
+            console.log(`[DEV] Week Start: ${challengeWeekStart}`);
+            console.log("----------------------------------------------------------------------");
+            console.log("[DEV] GROUP MEMBERS (for user_id options):");
+            membersData.forEach(m => {
+              console.log(`  - ${m.username}: "${m.user_id}"`);
+            });
+            console.log("----------------------------------------------------------------------");
+            
+            const logPeriod = (periodNum: 1 | 2, challenge: any) => {
+              console.log(`[DEV] Period ${periodNum} Challenge:`);
+              if (challenge) {
+                console.log(`  • ID (challenge_id): "${challenge.id}"`);
+                console.log(`  • Theme: "${challenge.theme?.label}" (Capture Type: ${challenge.theme?.capture_type})`);
+                console.log(`  • Target User: ${challenge.target_username} (${challenge.target_user_id})`);
+                console.log(`  • Prompt: "${getChallengePrompt(challenge.target_username, challenge.theme?.label)}"`);
+                console.log(`  • Existing Responses Count: ${challenge.responses?.length ?? 0}`);
+                
+                console.log("  👉 SQL Template to insert standard response:");
+                console.log(`     INSERT INTO challenge_responses (challenge_id, user_id, image_path, is_target_response, note)`);
+                console.log(`     VALUES ('${challenge.id}', '<USER_ID_FROM_MEMBERS>', 'text_mode', false, 'Mock response from standard user');\n`);
+                
+                console.log("  👉 SQL Template to insert TARGET response:");
+                console.log(`     INSERT INTO challenge_responses (challenge_id, user_id, image_path, is_target_response, note)`);
+                console.log(`     VALUES ('${challenge.id}', '${challenge.target_user_id}', 'text_mode', true, 'Mock response from target user');\n`);
+              } else {
+                console.log("  • None / Not generated yet.");
+              }
+            };
+            
+            logPeriod(1, challenges.period1);
+            logPeriod(2, challenges.period2);
+            console.log("======================================================================\n");
           }
 
           const challengeResponseIds = new Set<string>();

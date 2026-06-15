@@ -8,7 +8,6 @@ import {
   ViewToken,
   Platform,
   TouchableOpacity,
-  Keyboard,
   Share,
 } from "react-native";
 import Reanimated, {
@@ -40,15 +39,21 @@ import { RevealIntroPage } from "./organisms/RevealIntroPage";
 import { CrownRevealPage } from "./organisms/CrownRevealPage";
 import { RevealEndPage } from "./organisms/RevealEndPage";
 import { RefreshIcon } from "./atoms/RefreshIcon";
+import { TextSticker } from "./atoms/TextSticker";
 import { AnimatedPageWrapper } from "./molecules/AnimatedPageWrapper";
+import { Image } from "expo-image";
 import { radii, spacing, typography, textStyles, type ThemeColors } from "../lib/theme";
 import { useTheme, useThemedStyles, ForceTheme } from "../lib/theme-context";
 
 export { PhotoEntry, Reaction };
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+
 const FEED_HEIGHT = SCREEN_HEIGHT - 100;
-const COMMENT_MODAL_HEIGHT = 392;
+// Comment sheet heights (also defined in CommentModal.tsx). The drawer = keyboard +
+// sheet height; the post is simply scaled to fit whatever space is left above it.
+const SHEET_BASE = Math.round(SCREEN_HEIGHT * 0.46);
+const SHEET_KB = Math.round(SCREEN_HEIGHT * 0.22);
 
 
 
@@ -99,6 +104,50 @@ function formatDayLabel(dateStr: string) {
 
 const AnimatedFlatList = Reanimated.createAnimatedComponent(FlatList) as unknown as typeof FlatList<FeedItem>;
 const AnimatedTouchableOpacity = Reanimated.createAnimatedComponent(TouchableOpacity);
+
+// ── Reaction stickers shown over the post while the comments sheet is open ──────
+// Rendered inside the scaled container so they shrink with the post automatically.
+function FloatingSticker({ x, y, rotation, text, avatarUrl, username }: {
+  x: number; y: number; rotation: number; text: string; avatarUrl: string | null; username: string;
+}) {
+  const styles = useThemedStyles(makeStyles);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  return (
+    <View
+      onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
+      style={{ position: "absolute", top: y - size.h / 2, left: x - size.w / 2, transform: [{ rotate: `${rotation}deg` }] }}
+    >
+      <TextSticker text={text} fontSize={28} isPostSticker={true} />
+      <View style={styles.stickerAvatar}>
+        {avatarUrl ? (
+          <Image source={{ uri: avatarUrl }} style={StyleSheet.absoluteFill} />
+        ) : (
+          <Text style={styles.avatarFallbackText}>{(username || "?")[0].toUpperCase()}</Text>
+        )}
+      </View>
+    </View>
+  );
+}
+
+function ReactionStickers({ reactions, topInset }: { reactions: Reaction[]; topInset: number }) {
+  const text = useMemo(() => reactions.filter((r) => !isEmoji(r.sticker_id)), [reactions]);
+  if (text.length === 0) return null;
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {text.map((r, i) => (
+        <FloatingSticker
+          key={r.id}
+          x={i % 2 === 0 ? SCREEN_WIDTH * 0.22 : SCREEN_WIDTH * 0.78}
+          y={topInset + FEED_HEIGHT * 0.24 + i * FEED_HEIGHT * 0.12}
+          rotation={(i % 2 === 0 ? -1 : 1) * 6}
+          text={r.sticker_id}
+          avatarUrl={r.avatar_url ?? null}
+          username={r.username ?? ""}
+        />
+      ))}
+    </View>
+  );
+}
 
 const PhotoFeed = forwardRef((props: Props, ref) => {
   return (
@@ -181,7 +230,9 @@ const PhotoFeedContent = forwardRef(({
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [commentModalMode, setCommentModalMode] = useState<"comment" | "sticker">("comment");
   const [activeModalMode, setActiveModalMode] = useState<"comment" | "sticker">("comment");
-  const [sheetHeight, setSheetHeight] = useState(392);
+  // True while the keyboard is up — reaction stickers hide so they don't clutter
+  // the shrunken post while typing.
+  const [keyboardActive, setKeyboardActive] = useState(false);
 
   useEffect(() => {
     onCommentModalChange?.(commentModalVisible);
@@ -189,32 +240,19 @@ const PhotoFeedContent = forwardRef(({
 
   const [activePhotoId, setActivePhotoId] = useState<string | null>(null);
   const [activePhotoOwnerId, setActivePhotoOwnerId] = useState<string | null>(null);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const activePhoto = useMemo(() => photos.find(p => p.id === activePhotoId), [photos, activePhotoId]);
 
-  useEffect(() => {
-    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-
-    const showListener = Keyboard.addListener(showEvent, (e) => {
-      setKeyboardHeight(e.endCoordinates.height);
-    });
-    const hideListener = Keyboard.addListener(hideEvent, (e) => {
-      setKeyboardHeight(0);
-    });
-
-    return () => {
-      showListener.remove();
-      hideListener.remove();
-    };
-  }, []);
-
-  // Shrink animation shared values
-  const contentScaleX = useSharedValue(1);
-  const contentScaleY = useSharedValue(1);
-  const contentTranslateY = useSharedValue(0);
-  const contentBorderRadius = useSharedValue(0);
+  // ── Comment-sheet preview scaling ──────────────────────────────────────────
+  // Two shared values only:
+  //  • kb     — live keyboard height (px), updated frame-by-frame by CommentModal
+  //             (it lives in the modal window that owns the keyboard — on Android
+  //             the main window never sees it).
+  //  • progress — 0 closed → 1 open, a plain timing transition.
+  // sheetSV mirrors the sheet height (a couple of discrete values) for the formula.
+  const kb = useSharedValue(0);
+  const progress = useSharedValue(0);
+  const sheetSV = useSharedValue(SHEET_BASE);
 
   const openComments = (photoId: string, ownerId?: string, mode: "comment" | "sticker" = "comment") => {
     setActivePhotoId(photoId);
@@ -225,77 +263,22 @@ const PhotoFeedContent = forwardRef(({
   };
 
   useEffect(() => {
-    const config = { duration: 250, easing: Easing.out(Easing.cubic) };
+    progress.value = withTiming(commentModalVisible ? 1 : 0, { duration: 250 });
+  }, [commentModalVisible]);
 
-    if (commentModalVisible) {
-      const hasKeyboard = keyboardHeight > 0;
-      const targetBottom = SCREEN_HEIGHT - sheetHeight - (hasKeyboard ? keyboardHeight : 0) - 24;
-
-      // The momentWrapper inside each FlatList item starts at y=insets.top (paddingTop).
-      // To keep that inner top fixed as we scale the outer container:
-      //   s = (targetBottom - insets.top) / (FEED_HEIGHT - insets.top)
-      //   ty = (1 - s) * (insets.top - FEED_HEIGHT / 2)
-      // This guarantees: scaled_padding (insets.top * s) + outer_top_offset = insets.top always.
-      const INNER_HEIGHT = FEED_HEIGHT - insets.top;
-      const ty = (s: number) => (1 - s) * (insets.top - FEED_HEIGHT / 2);
-
-      if (!hasKeyboard) {
-        // No keyboard: uniform scale, whole image visible.
-        // Sticker mode reuses COMMENT_MODAL_HEIGHT so the post stays at
-        // the same size/position as when the comment modal was open.
-        const effectiveSheet = activeModalMode === "sticker" ? COMMENT_MODAL_HEIGHT : sheetHeight;
-        const effectiveTarget = SCREEN_HEIGHT - effectiveSheet - 24;
-        const s = Math.max(0.1, Math.min(0.95, (effectiveTarget - insets.top) / INNER_HEIGHT));
-        contentScaleX.value = withTiming(s, config);
-        contentScaleY.value = withTiming(s, config);
-        contentTranslateY.value = withTiming(ty(s), config);
-      } else if (activeModalMode === "sticker") {
-        // Sticker mode + keyboard: uniform scale so the whole image fits above
-        // the keyboard+modal combo (post shrinks uniformly, no cropping).
-        const s = Math.max(0.1, Math.min(0.95, (targetBottom - insets.top) / INNER_HEIGHT));
-        contentScaleX.value = withTiming(s, config);
-        contentScaleY.value = withTiming(s, config);
-        contentTranslateY.value = withTiming(ty(s), config);
-      } else {
-        // Comment mode + keyboard: pin the inner top, crop the bottom upward.
-        // scaleX stays frozen (width doesn't change); only scaleY shrinks.
-        // iOS: sheetHeight halves via LayoutAnimation *after* keyboardWillShow fires,
-        // so the first render still has the old (full) sheetHeight → would overshoot.
-        // Skip that intermediate render; the next one (with correct sheetHeight) is correct.
-        if (Platform.OS === "ios" && sheetHeight >= COMMENT_MODAL_HEIGHT) return;
-
-        const scaleY = Math.max(0.05, (targetBottom - insets.top) / INNER_HEIGHT);
-        contentScaleY.value = withTiming(scaleY, config);
-        contentTranslateY.value = withTiming(ty(scaleY), config);
-      }
-
-      contentBorderRadius.value = withTiming(radii.xxl, config);
-    } else {
-      contentScaleX.value = withTiming(1, config);
-      contentScaleY.value = withTiming(1, config);
-      contentTranslateY.value = withTiming(0, config);
-      contentBorderRadius.value = withTiming(0, config);
-    }
-  }, [commentModalVisible, keyboardHeight, sheetHeight, activeModalMode, insets.top]);
-
-  const animatedContentStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: contentTranslateY.value },
-      { scaleX: contentScaleX.value },
-      { scaleY: contentScaleY.value },
-    ],
-    borderRadius: contentBorderRadius.value,
-    overflow: 'hidden',
-  }));
-
-  const animatedInnerStyle = useAnimatedStyle(() => {
-    const scaleY = contentScaleY.value === 0 ? 1 : (contentScaleX.value / contentScaleY.value);
-    const ty = (FEED_HEIGHT / 2) * (scaleY - 1);
+  // Scale the post to fit whatever space is left above the drawer (keyboard + sheet),
+  // pinned to the top. One formula, transforms only → fluid. `progress` blends from
+  // identity (closed) to the fitted scale (open).
+  const animatedContentStyle = useAnimatedStyle(() => {
+    const drawerTop = kb.value + sheetSV.value; // measured from the screen bottom
+    const available = SCREEN_HEIGHT - drawerTop - insets.top - 24;
+    const fit = Math.max(0.2, Math.min(1, available / FEED_HEIGHT));
+    const scale = 1 + (fit - 1) * progress.value;
+    const translateY = (1 - scale) * (insets.top - FEED_HEIGHT / 2); // keep top locked to insets.top below status bar
     return {
-      transform: [
-        { translateY: ty },
-        { scaleY: scaleY },
-      ],
+      transform: [{ translateY }, { scale }],
+      borderRadius: radii.xxl * progress.value,
+      overflow: "hidden",
     };
   });
 
@@ -532,7 +515,7 @@ const PhotoFeedContent = forwardRef(({
   return (
     <View style={styles.list}>
       <Reanimated.View style={[styles.contentWrapper, animatedContentStyle]}>
-        <Reanimated.View style={[{ flex: 1 }, animatedInnerStyle]}>
+        <View style={{ flex: 1 }}>
           <AnimatedFlatList
             ref={flatListRef}
             data={items}
@@ -558,8 +541,13 @@ const PhotoFeedContent = forwardRef(({
             scrollEnabled={!commentModalVisible}
             keyboardShouldPersistTaps="always"
           />
+          {/* Reaction stickers live INSIDE the scaled container, so they shrink with
+              the post for free (no positioning math). Hidden while typing. */}
+          {commentModalVisible && !keyboardActive && activePhoto && (
+            <ReactionStickers reactions={activePhoto.reactions || []} topInset={insets.top} />
+          )}
           {/* Countdown timer pill is now rendered in RevealHeader */}
-        </Reanimated.View>
+        </View>
       </Reanimated.View>
 
       {showBottomSection && currentItem && !commentModalVisible && (
@@ -685,10 +673,12 @@ const PhotoFeedContent = forwardRef(({
       
       {activePhotoId && activePhotoOwnerId && (
         <CommentModal
+          embedded
           visible={commentModalVisible}
           onClose={() => setCommentModalVisible(false)}
-          onKeyboardHeightChange={(h) => setKeyboardHeight(h)}
-          onSheetHeightChange={(h) => setSheetHeight(h)}
+          keyboardHeightShared={kb}
+          sheetHeightShared={sheetSV}
+          onKeyboardActiveChange={setKeyboardActive}
           onModeChange={(m) => setActiveModalMode(m)}
           onSeen={(pid) => {
             if (onOpenComments) {
@@ -841,6 +831,25 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.card, // background/default/secondary
     justifyContent: "center",
     alignItems: "center",
+  },
+  stickerAvatar: {
+    position: "absolute",
+    top: -10,
+    left: -10,
+    width: 24,
+    height: 24,
+    borderRadius: radii.xs,
+    backgroundColor: colors.brand,
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: colors.borderNeutral,
+  },
+  avatarFallbackText: {
+    color: colors.white,
+    fontFamily: typography.family.bold,
+    fontSize: 10,
   },
 });
 

@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
   Modal,
@@ -15,9 +14,20 @@ import {
   Easing,
   Keyboard,
   TouchableWithoutFeedback,
-  LayoutAnimation,
 } from "react-native";
-import { Image } from "expo-image";
+import {
+  KeyboardProvider,
+  useKeyboardHandler,
+} from "react-native-keyboard-controller";
+import Reanimated, {
+  runOnJS,
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withSpring,
+  useDerivedValue,
+  type SharedValue,
+} from "react-native-reanimated";
 import BlurView from "./atoms/BlurView";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
@@ -32,8 +42,12 @@ import { useTheme, useThemedStyles, ForceTheme } from "../lib/theme-context";
 import { Reaction } from "../lib/feed-types";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
-const MODAL_HEIGHT = 392;
 const IS_IOS = Platform.OS === "ios";
+// Sheet heights (also in PhotoFeed.tsx). Shorter when the keyboard is up so the drawer
+// top stays around mid-screen and the image preview keeps the upper portion.
+const SHEET_BASE = Math.round(SCREEN_HEIGHT * 0.46);
+const SHEET_KB = Math.round(SCREEN_HEIGHT * 0.22);
+const SHEET_TIMING = { duration: 260 };
 
 const isEmoji = (str: string) => {
   const regexExp = /(©|®|[ -㌀]|\ud83c[퀀-\udfff]|\ud83d[퀀-\udfff]|\ud83e[퀀-\udfff])/gi;
@@ -45,6 +59,16 @@ interface CommentModalProps {
   onClose: () => void;
   onSeen?: (photoId: string) => void;
   onKeyboardHeightChange?: (height: number) => void;
+  /**
+   * Shared value the parent (PhotoFeed) reads to scale its preview frame-by-frame.
+   * Updated here because the keyboard belongs to *this* (modal) window — on Android
+   * the parent's window never receives the modal's keyboard events.
+   */
+  keyboardHeightShared?: SharedValue<number>;
+  /** Shared value to animate and report sheet height in real-time. */
+  sheetHeightShared?: SharedValue<number>;
+  /** Notifies the parent when the keyboard opens/closes so it can hide the stickers. */
+  onKeyboardActiveChange?: (active: boolean) => void;
   /** Reports the rendered sheet height so the parent can keep the post preview aligned. */
   onSheetHeightChange?: (height: number) => void;
   /** Reports whenever the user switches between comment/sticker mode. */
@@ -65,63 +89,15 @@ interface CommentModalProps {
    * stays the sole keyboard owner — matching the single-modal reveal feed.
    */
   embedded?: boolean;
-}
-
-// ── Sticker overlay item — measures itself to avoid percentage-string transforms
-// that crash on Android (native bridge requires numeric values for translateX/Y).
-function StickerItem({
-  anchorX,
-  y,
-  rotation,
-  avatarUrl,
-  username,
-  stickerText,
-}: {
-  anchorX: number;
-  y: number;
-  rotation: number;
-  avatarUrl: string | null;
-  username: string;
-  stickerText: string;
-}) {
-  const styles = useThemedStyles(makeStyles);
-  const [size, setSize] = useState({ w: 0, h: 0 });
-  return (
-    <View
-      onLayout={(e) =>
-        setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })
-      }
-      style={[
-        styles.stickerContainer,
-        {
-          top: y - size.h / 2,
-          left: anchorX - size.w / 2,
-          transform: [{ rotate: `${rotation}deg` }],
-          alignItems: "center",
-          justifyContent: "center",
-        },
-      ]}
-    >
-      <View>
-        <TextSticker text={stickerText} fontSize={28} isPostSticker={true} />
-        <View style={styles.stickerAvatar}>
-          {avatarUrl ? (
-            <Image source={{ uri: avatarUrl }} style={StyleSheet.absoluteFill} />
-          ) : (
-            <Text style={styles.avatarFallbackText}>
-              {(username || "?")[0].toUpperCase()}
-            </Text>
-          )}
-        </View>
-      </View>
-    </View>
-  );
+  inline?: boolean;
+  style?: any;
 }
 
 // ── Mounting shell ────────────────────────────────────────────────────────────
 // Keeps the Modal in the tree until the close animation finishes, then unmounts.
 export default function CommentModal(props: CommentModalProps) {
-  const { visible, onClose, embedded } = props;
+  const { visible, onClose, embedded, inline, style, sheetHeightShared } = props;
+  const { colors } = useTheme();
   const [mounted, setMounted] = useState(visible);
   // Populated by CommentModalContent so the Android back button can redirect
   // to comment mode when the sheet is in sticker mode.
@@ -141,6 +117,25 @@ export default function CommentModal(props: CommentModalProps) {
     />
   );
 
+  // Inline: render as an in-flow component with styling and background
+  if (inline) {
+    return (
+      <View
+        style={[
+          style,
+          {
+            backgroundColor: colors.card,
+            borderTopLeftRadius: themeRadii.xl,
+            borderTopRightRadius: themeRadii.xl,
+            overflow: "hidden",
+          },
+        ]}
+      >
+        {content}
+      </View>
+    );
+  }
+
   // Embedded: render as a plain overlay (no second native modal) so the enclosing
   // modal keeps keyboard ownership. zIndex keeps it above the carousel/header/footer.
   if (embedded) {
@@ -155,7 +150,10 @@ export default function CommentModal(props: CommentModalProps) {
       onRequestClose={() => requestCloseRef.current()}
       statusBarTranslucent
     >
-      {content}
+      {/* A native Modal is a separate window; keyboard-controller events only fire
+          inside a KeyboardProvider mounted in that window. (embedded/inline render
+          in the main window and rely on the root provider.) */}
+      <KeyboardProvider>{content}</KeyboardProvider>
     </Modal>
   );
 }
@@ -166,6 +164,9 @@ function CommentModalContent({
   onClose,
   onSeen,
   onKeyboardHeightChange,
+  keyboardHeightShared,
+  sheetHeightShared,
+  onKeyboardActiveChange,
   onSheetHeightChange,
   onModeChange,
   photoId,
@@ -177,6 +178,8 @@ function CommentModalContent({
   groupId,
   requestCloseRef,
   embedded,
+  inline,
+  style,
 }: CommentModalProps & { onCloseComplete: () => void; requestCloseRef?: React.MutableRefObject<() => void> }) {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
@@ -225,56 +228,45 @@ function CommentModalContent({
     sheetTopY: number;
   } | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [pendingSticker, setPendingSticker] = useState<{
-    text: string;
-    anchorX: number;
-    y: number;
-    rotation: number;
-    avatarUrl: string | null;
-    username: string;
-  } | null>(null);
-  const [pendingStickerSize, setPendingStickerSize] = useState({ w: 0, h: 0 });
-
-  // Measured height of the rendered sheet — updated via onLayout each time the
-  // sheet resizes (mode switch, keyboard appear/hide). Used to keep the post
-  // preview bottom exactly 24px above the sheet top on every platform/state.
-  const [sheetHeight, setSheetHeight] = useState(MODAL_HEIGHT);
+  // True while the keyboard is up; set at keyboard-start so the sheet shrinks and
+  // the parent hides the stickers immediately (not after the keyboard settles).
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   const modalContainerRef = useRef<any>(null);
-  const translateY = useRef(new Animated.Value(MODAL_HEIGHT)).current;
+  // One Reanimated pass drives the whole sheet (open/close slide + drag + keyboard
+  // lift) using transforms only — no per-frame layout, no competing animators.
+  const sheetProgress = useSharedValue(0); // 0 = closed (off-screen), 1 = open
+  const dragY = useSharedValue(0); // drag-to-dismiss offset
+  const localKb = useSharedValue(0);
+  const kbSV = keyboardHeightShared ?? localKb; // live keyboard height (px)
   const overlayOpacity = useRef(new Animated.Value(0)).current;
-  const stickersOpacity = useRef(new Animated.Value(0)).current;
-  const stickersScale = useRef(new Animated.Value(0.9)).current;
   const toastAnim = useRef(new Animated.Value(0)).current;
-  const stickerPopAnim = useRef(new Animated.Value(1)).current;
-  const animGenRef = useRef(0);
 
-  const hasKeyboard = keyboardHeight > 0;
+  const hasKeyboard = keyboardVisible;
   const isOwner = user?.id === photoOwnerId;
+  const sheetH = keyboardVisible || mode === "sticker" ? SHEET_KB : SHEET_BASE;
 
-  // iOS shrinks the sheet when the keyboard opens; Android uses flex:1 instead
-  // (handled in androidContainerStyle below) to avoid KAV padding-bottom flicker.
-  const currentModalHeight = IS_IOS && hasKeyboard ? MODAL_HEIGHT / 2 : MODAL_HEIGHT;
+  const targetKbHeight = useSharedValue(290);
+  const localSheetHeight = useSharedValue(SHEET_BASE);
+  const sheetHeightSV = sheetHeightShared ?? localSheetHeight;
 
-  // ── Sticker bounds (synchronized with PhotoFeed.tsx) ─────────────────────────
-  const FEED_HEIGHT = SCREEN_HEIGHT - 100;
-  // In sticker mode without keyboard PhotoFeed pins the post to the comment-mode
-  // position (uses MODAL_HEIGHT, not the smaller sticker modal height). Mirror that
-  // here so sticker overlays land exactly on the post edges.
-  const effectiveSheetHeight =
-    mode === "sticker" && !hasKeyboard ? MODAL_HEIGHT : sheetHeight;
-  const targetBottom =
-    SCREEN_HEIGHT - effectiveSheetHeight - (hasKeyboard ? keyboardHeight : 0) - 24;
-  const INNER_HEIGHT = FEED_HEIGHT - insets.top;
-  const scale = Math.max(0.1, Math.min(0.95, (targetBottom - insets.top) / INNER_HEIGHT));
-  const scaleX = scale;
-  const PREVIEW_TOP = insets.top;
-  const POST_HEIGHT_DYNAMIC = INNER_HEIGHT * scale;
-  const POST_WIDTH_DYNAMIC = SCREEN_WIDTH * scale;
-  const postTop = PREVIEW_TOP;
-  const postCenterX = SCREEN_WIDTH / 2;
-  const postLeft = postCenterX - POST_WIDTH_DYNAMIC / 2;
-  const postRight = postCenterX + POST_WIDTH_DYNAMIC / 2;
+  useDerivedValue(() => {
+    if (targetKbHeight.value <= 0) {
+      sheetHeightSV.value = SHEET_BASE;
+      return;
+    }
+    const h = SHEET_BASE - (kbSV.value / targetKbHeight.value) * (SHEET_BASE - SHEET_KB);
+    sheetHeightSV.value = Math.max(SHEET_KB, Math.min(SHEET_BASE, h));
+  }, [SHEET_BASE, SHEET_KB]);
+
+  // Sheet transform: slide in from below + drag offset − keyboard lift. Height comes
+  // from Reanimated `sheetHeightSV` for frame-by-frame smoothness.
+  const sheetStyle = useAnimatedStyle(() => ({
+    height: sheetHeightSV.value,
+    transform: [
+      { translateY: (1 - sheetProgress.value) * SHEET_BASE + dragY.value - kbSV.value },
+    ],
+  }));
 
   // ── Fetch group members ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -315,66 +307,56 @@ function CommentModalContent({
     return () => { active = false; };
   }, [photoId, groupId]);
 
-  // ── Sticker data ──────────────────────────────────────────────────────────────
-  const textReactions = useMemo(
-    () => reactions.filter((r) => !isEmoji(r.sticker_id)),
-    [reactions]
-  );
-
-  const randomFactorsRef = useRef<Record<string, { scatterY: number; rotation: number }>>({});
-  const stickersData = useMemo(() => {
-    return textReactions.map((reaction, index) => {
-      if (!randomFactorsRef.current[reaction.id]) {
-        randomFactorsRef.current[reaction.id] = {
-          scatterY: Math.random() - 0.5,
-          rotation: Math.random() - 0.5,
-        };
-      }
-      const { scatterY: sy, rotation: ro } = randomFactorsRef.current[reaction.id];
-      const isLeft = index % 2 === 0;
-      return {
-        id: reaction.id,
-        reaction,
-        anchorX: isLeft ? postLeft : postRight,
-        y: postTop + POST_HEIGHT_DYNAMIC / 2 + sy * (POST_HEIGHT_DYNAMIC * 0.7),
-        rotation: ro * 20,
-      };
-    });
-  }, [textReactions, postTop, postLeft, postRight, POST_HEIGHT_DYNAMIC]);
-
-  // ── Keyboard listeners ────────────────────────────────────────────────────────
-  // iOS uses Will* events (fire before keyboard appears) + LayoutAnimation for
-  // smooth height transitions. Android uses Did* events (fire after appearance).
+  // Report the (discrete) sheet height + keyboard state up to the parent so it can
+  // fit/hide the preview stickers.
   useEffect(() => {
-    const showEvent = IS_IOS ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent = IS_IOS ? "keyboardWillHide" : "keyboardDidHide";
+    onSheetHeightChange?.(sheetH);
+  }, [sheetH]);
+  useEffect(() => {
+    onKeyboardActiveChange?.(keyboardVisible);
+  }, [keyboardVisible]);
 
-    const showListener = Keyboard.addListener(showEvent, (e) => {
-      if (IS_IOS) LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      const height = e.endCoordinates.height;
+  // ── Keyboard ─────────────────────────────────────────────────────────────────
+  // `onStart` flips keyboardVisible immediately (sheet shrinks, parent hides
+  // stickers); `onMove` feeds the live height to the shared value driving the sheet
+  // + preview every frame; `onEnd` mirrors the settled height for the delete popup.
+  const setKbVisible = useCallback(
+    (active: boolean) => {
+      if (!active && intentionalCloseRef.current) return;
+      setKeyboardVisible(active);
+    },
+    []
+  );
+  const applyKeyboardHeight = useCallback(
+    (height: number) => {
+      if (height === 0 && intentionalCloseRef.current) return;
       setKeyboardHeight(height);
       onKeyboardHeightChange?.(height);
-    });
+    },
+    [onKeyboardHeightChange]
+  );
 
-    const hideListener = Keyboard.addListener(hideEvent, () => {
-      // During an intentional close the slide animation is already running —
-      // skip all state updates so nothing re-layouts mid-animation.
-      if (intentionalCloseRef.current) return;
-      if (IS_IOS) LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      setKeyboardHeight(0);
-      onKeyboardHeightChange?.(0);
-      // NOTE: do NOT auto-revert sticker→comment here. The keyboard can drop for
-      // many reasons (incl. tapping the send button inside a nested Modal, as in
-      // the challenge responses view), and flipping the mode mid-compose makes the
-      // next submit run the comment branch instead of posting the reaction.
-      // Drag-to-dismiss → comment is handled explicitly in the panResponder.
-    });
-
-    return () => {
-      showListener.remove();
-      hideListener.remove();
-    };
-  }, []);
+  useKeyboardHandler(
+    {
+      onStart: (e) => {
+        "worklet";
+        if (e.height > 0) {
+          targetKbHeight.value = e.height;
+        }
+        runOnJS(setKbVisible)(e.height > 0);
+      },
+      onMove: (e) => {
+        "worklet";
+        kbSV.value = e.height;
+      },
+      onEnd: (e) => {
+        "worklet";
+        kbSV.value = e.height;
+        runOnJS(applyKeyboardHeight)(e.height);
+      },
+    },
+    [applyKeyboardHeight, setKbVisible]
+  );
 
   // ── markAsSeen ────────────────────────────────────────────────────────────────
   const markAsSeen = useCallback(async () => {
@@ -393,107 +375,57 @@ function CommentModalContent({
     }
   }, [user?.id, photoId, onSeen]);
 
-  // ── Animations ────────────────────────────────────────────────────────────────
-  const animateIn = useCallback(() => {
-    animGenRef.current++;
-    requestAnimationFrame(() => {
-      Animated.parallel([
-        Animated.timing(overlayOpacity, {
-          toValue: 1,
-          duration: 250,
-          useNativeDriver: true,
-          easing: Easing.out(Easing.quad),
-        }),
-        Animated.timing(translateY, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-          easing: Easing.out(Easing.cubic),
-        }),
-      ]).start();
-
-      Animated.sequence([
-        Animated.delay(150),
-        Animated.parallel([
-          Animated.timing(stickersOpacity, {
-            toValue: 1,
-            duration: 300,
-            useNativeDriver: true,
-            easing: Easing.out(Easing.quad),
-          }),
-          Animated.spring(stickersScale, {
-            toValue: 1,
-            useNativeDriver: true,
-            tension: 50,
-            friction: 7,
-          }),
-        ]),
-      ]).start();
-    });
-  }, [overlayOpacity, translateY, stickersOpacity, stickersScale]);
-
-  const animateOut = useCallback(
-    (callback?: () => void) => {
-      // iOS: dismiss keyboard before the slide so KAV shrinks first — no gap.
-      // Android: dismiss after the slide to avoid a mid-animation layout jump
-      //          when the keyboard was still up.
-      if (IS_IOS) {
-        intentionalCloseRef.current = true;
-        Keyboard.dismiss();
-      }
-
-      // Notify the parent immediately so its un-shrink animation starts in
-      // parallel with the sheet slide — avoids the 2-step "empty gap then expand"
-      // that happens when the callback fires after the animation completes.
-      callback?.();
-
-      const capturedHasKeyboard = hasKeyboard; // capture before any async state change
-      const myGen = ++animGenRef.current;
-
-      stickersOpacity.setValue(0);
-      stickersScale.setValue(0.9);
-
-      Animated.parallel([
-        Animated.timing(overlayOpacity, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-          easing: Easing.in(Easing.quad),
-        }),
-        Animated.timing(translateY, {
-          // Android: slide to full screen height when keyboard was open so the
-          // sheet doesn't leave a visible gap where the keyboard used to be.
-          toValue: !IS_IOS && capturedHasKeyboard ? SCREEN_HEIGHT : MODAL_HEIGHT,
-          duration: 250,
-          useNativeDriver: true,
-          easing: Easing.in(Easing.quad),
-        }),
-      ]).start(({ finished }) => {
-        if (finished && animGenRef.current === myGen) {
-          if (!IS_IOS) {
-            intentionalCloseRef.current = true;
-            Keyboard.dismiss();
-            setKeyboardHeight(0);
-          }
-          onKeyboardHeightChange?.(0);
-          onCloseComplete();
-        }
-      });
-    },
-    [overlayOpacity, translateY, stickersOpacity, stickersScale, onCloseComplete, hasKeyboard]
-  );
+  // ── Open / close ──────────────────────────────────────────────────────────────
+  // One Reanimated `sheetProgress` transition for the slide; a parallel RN Animated
+  // fade for the backdrop. No layout animation, nothing else competing.
+  const finishClose = useCallback(() => {
+    intentionalCloseRef.current = true;
+    Keyboard.dismiss();
+    onKeyboardHeightChange?.(0);
+    onCloseComplete();
+  }, [onKeyboardHeightChange, onCloseComplete]);
 
   useEffect(() => {
+    if (inline) {
+      // Inline has no slide/overlay; just drive data + unmount.
+      if (visible) {
+        fetchComments();
+        markAsSeen();
+      } else {
+        onCloseComplete();
+      }
+      return;
+    }
+
     if (visible) {
-      animateIn();
+      intentionalCloseRef.current = false;
+      dragY.value = 0;
+      sheetProgress.value = withTiming(1, SHEET_TIMING);
+      Animated.timing(overlayOpacity, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.quad),
+      }).start();
       fetchComments();
       markAsSeen();
     } else {
-      animateOut();
+      if (IS_IOS) Keyboard.dismiss();
+      Animated.timing(overlayOpacity, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+        easing: Easing.in(Easing.quad),
+      }).start();
+      // `finished` is false if reopened mid-close, so finishClose won't unmount.
+      sheetProgress.value = withTiming(0, SHEET_TIMING, (fin) => {
+        "worklet";
+        if (fin) runOnJS(finishClose)();
+      });
     }
   }, [visible]);
 
-  const handleClose = () => animateOut(onClose);
+  const handleClose = () => onClose();
 
   // Shows the toast in place (no modal close) and auto-dismisses it. Used for
   // actions that stay inside the sheet, e.g. deleting a comment.
@@ -515,44 +447,13 @@ function CommentModalContent({
     }, 2000);
   };
 
-  const showToastAndClose = (message: string, submittedText?: string) => {
+  // Shows the toast briefly, then closes. The posted sticker appears on the post on
+  // the next data refresh (no bespoke pop animation).
+  const showToastAndClose = (message: string) => {
     setToastMessage(message);
     toastAnim.setValue(0);
     Animated.spring(toastAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 10 }).start();
-    if (submittedText) {
-      // If the user already has a sticker, reuse its exact position so the
-      // animation plays in-place rather than spawning a second sticker.
-      const existing = stickersData.find((s) => s.reaction.user_id === user?.id);
-      let anchorX: number, y: number, rotation: number;
-      let avatarUrl: string | null = null;
-      let username = "";
-      if (existing) {
-        ({ anchorX, y, rotation } = existing);
-        avatarUrl = existing.reaction.avatar_url ?? null;
-        username = existing.reaction.username ?? "";
-      } else {
-        const nextIndex = textReactions.length;
-        const isLeft = nextIndex % 2 === 0;
-        const sy = Math.random() - 0.5;
-        const ro = Math.random() - 0.5;
-        anchorX = isLeft ? postLeft : postRight;
-        y = postTop + POST_HEIGHT_DYNAMIC / 2 + sy * (POST_HEIGHT_DYNAMIC * 0.7);
-        rotation = ro * 20;
-        const member = fetchedGroupMembers.find((m) => m.user_id === user?.id);
-        avatarUrl = member?.avatar_url ?? null;
-        username = member?.username ?? "";
-      }
-      setPendingSticker({ text: submittedText, anchorX, y, rotation, avatarUrl, username });
-      stickerPopAnim.setValue(0);
-      Animated.spring(stickerPopAnim, {
-        toValue: 1,
-        useNativeDriver: true,
-        tension: 180,
-        friction: 7,
-      }).start(() => handleClose());
-    } else {
-      setTimeout(() => handleClose(), 500);
-    }
+    setTimeout(() => handleClose(), 600);
   };
 
   // ── Pan responder (drag to dismiss) ──────────────────────────────────────────
@@ -565,29 +466,20 @@ function CommentModalContent({
       onMoveShouldSetPanResponder: (_, { dy, dx }) =>
         dy > 2 && Math.abs(dy) > Math.abs(dx),
       onPanResponderMove: (_, { dy }) => {
-        if (dy > 0) translateY.setValue(dy);
+        if (dy > 0) dragY.value = dy;
       },
       onPanResponderRelease: (_, { dy, vy }) => {
         if (modeRef.current === "sticker") {
           if (dy > 80 || vy > 0.3) setMode("comment");
           // Always spring back so the sheet returns to its resting position.
-          Animated.spring(translateY, {
-            toValue: 0,
-            useNativeDriver: true,
-            tension: 80,
-            friction: 12,
-          }).start();
+          dragY.value = withSpring(0, { stiffness: 220, damping: 26 });
           return;
         }
         if (dy > 120 || vy > 0.5) {
+          // onClose flips `visible`; the close effect slides the sheet out.
           handleClose();
         } else {
-          Animated.spring(translateY, {
-            toValue: 0,
-            useNativeDriver: true,
-            tension: 80,
-            friction: 12,
-          }).start();
+          dragY.value = withSpring(0, { stiffness: 220, damping: 26 });
         }
       },
     })
@@ -642,7 +534,7 @@ function CommentModalContent({
       }
       setContent("");
       intentionalCloseRef.current = true;
-      showToastAndClose(isDelete ? "Réaction supprimé" : "Réaction ajouté", isDelete ? undefined : text);
+      showToastAndClose(isDelete ? "Réaction supprimé" : "Réaction ajouté");
       return;
     }
 
@@ -698,28 +590,12 @@ function CommentModalContent({
         setDeletePopup({
           commentId,
           anchorY,
-          sheetTopY: SCREEN_HEIGHT - sheetHeight - (IS_IOS && hasKeyboard ? keyboardHeight : 0),
+          // The sheet bottom sits at the keyboard top; its top is sheetH above that.
+          sheetTopY: SCREEN_HEIGHT - sheetH - (hasKeyboard ? keyboardHeight : 0),
         });
       }
     },
-    [sheetHeight, hasKeyboard, keyboardHeight]
-  );
-
-  // ── Sheet height measurement ──────────────────────────────────────────────────
-  const handleSheetLayout = useCallback(
-    (e: any) => {
-      const h = e.nativeEvent.layout.height;
-      if (h <= 0) return;
-      // Skip the flex:1 expansion that happens on Android when the keyboard is
-      // open in comment mode — in that state the sheet fills the available space
-      // above the keyboard, not its natural content height. The sticker layer is
-      // hidden in this state anyway, so we just leave sheetHeight at its last
-      // valid value (MODAL_HEIGHT or the sticker content height).
-      if (!IS_IOS && hasKeyboard && mode !== "sticker") return;
-      setSheetHeight(h);
-      onSheetHeightChange?.(h);
-    },
-    [hasKeyboard, mode, onSheetHeightChange]
+    [sheetH, hasKeyboard, keyboardHeight]
   );
 
   // ── Content helpers ───────────────────────────────────────────────────────────
@@ -752,16 +628,45 @@ function CommentModalContent({
     />
   );
 
-  // ── Android-specific container style ─────────────────────────────────────────
-  // When the keyboard is open, switching to flex:1 lets the sheet naturally fill
-  // the space above the keyboard instead of relying on KAV's padding adjustment,
-  // which avoids the padding-bottom flicker/jump on close.
-  const androidContainerStyle = {
-    transform: [{ translateY }],
-    height: mode === "sticker" ? undefined : hasKeyboard ? undefined : MODAL_HEIGHT,
-    flex: mode === "sticker" ? 0 : hasKeyboard ? 1 : 0,
-    marginTop: mode === "sticker" ? 0 : hasKeyboard ? insets.top : 0,
-  };
+  if (inline) {
+    return (
+      <ForceTheme mode="Light">
+        <View style={{ flex: 1 }}>
+          <CommentModalBody
+            loading={loading}
+            comments={comments}
+            renderComment={renderComment}
+            isOwner={isOwner}
+            userComment={userComment}
+            insets={insets}
+            panResponder={panResponder}
+            content={content}
+            setContent={handleContentChange}
+            handleSubmit={handleSubmit}
+            submitting={submitting}
+            hasKeyboard={hasKeyboard}
+            mode={mode}
+            onStickerToggle={toggleMode}
+            groupMembers={fetchedGroupMembers}
+            embedded={embedded}
+          />
+
+          {toastMessage !== null && (
+            <StickerToast message={toastMessage} animValue={toastAnim} topInset={insets.top} />
+          )}
+
+          {deletePopup && (
+            <DeleteCommentPopup
+              anchorY={deletePopup.anchorY}
+              sheetTopY={deletePopup.sheetTopY}
+              onConfirm={() => handleDeleteComment(deletePopup.commentId)}
+              onDismiss={() => setDeletePopup(null)}
+            />
+          )}
+        </View>
+      </ForceTheme>
+    );
+  }
 
   return (
     <View style={styles.root}>
@@ -772,136 +677,40 @@ function CommentModalContent({
         <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
       </Animated.View>
 
-      {/* Sticker layer — hidden when typing a comment (keyboard up, comment mode) */}
-      <Animated.View
-        style={[
-          styles.stickerLayer,
-          { opacity: stickersOpacity, transform: [{ scale: stickersScale }] },
-          hasKeyboard && mode !== "sticker" && { display: "none" },
-        ]}
-        pointerEvents="none"
-      >
-        {stickersData.filter((item) => !pendingSticker || item.reaction.user_id !== user?.id).map((item) => (
-          <StickerItem
-            key={item.id}
-            anchorX={item.anchorX}
-            y={item.y}
-            rotation={item.rotation}
-            stickerText={item.reaction.sticker_id}
-            avatarUrl={item.reaction.avatar_url ?? null}
-            username={item.reaction.username ?? ""}
-          />
-        ))}
-        {pendingSticker && (
-          <View
-            onLayout={(e) =>
-              setPendingStickerSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })
-            }
-            style={[
-              styles.stickerContainer,
-              {
-                top: pendingSticker.y - pendingStickerSize.h / 2,
-                left: pendingSticker.anchorX - pendingStickerSize.w / 2,
-                alignItems: "center",
-                justifyContent: "center",
-              },
-            ]}
-          >
-            <Animated.View
-              style={{
-                transform: [
-                  { rotate: `${pendingSticker.rotation}deg` },
-                  { scale: stickerPopAnim },
-                ],
-              }}
-            >
-              <View>
-                <TextSticker text={pendingSticker.text} fontSize={28} isPostSticker={true} />
-                <View style={styles.stickerAvatar}>
-                  {pendingSticker.avatarUrl ? (
-                    <Image source={{ uri: pendingSticker.avatarUrl }} style={StyleSheet.absoluteFill} />
-                  ) : (
-                    <Text style={styles.avatarFallbackText}>
-                      {(pendingSticker.username || "?")[0].toUpperCase()}
-                    </Text>
-                  )}
-                </View>
-              </View>
-            </Animated.View>
-          </View>
-        )}
-      </Animated.View>
+      {/* (Reaction stickers now render on the post itself in PhotoFeed, so they scale
+          with it — no overlay/positioning math here.) */}
 
-      {/* Sheet + keyboard avoidance */}
-      <KeyboardAvoidingView
-        behavior={hasKeyboard ? "padding" : undefined}
-        style={styles.kbdContainer}
-      >
+      {/* Sheet — a single Reanimated transition handles open/close slide, drag, AND
+          the keyboard lift (translateY -keyboard), transforms only → fluid. Its
+          height is a couple of discrete values so the drawer stays near mid-screen
+          when the keyboard is up. */}
+      <View style={styles.kbdContainer} pointerEvents="box-none">
         <ForceTheme mode="Light">
-          {IS_IOS ? (
-            // iOS: outer wrapper carries the slide transform; inner view owns the
-            // height so LayoutAnimation can animate height changes independently
-            // when the keyboard appears/disappears.
-            <Animated.View style={{ transform: [{ translateY }], width: "100%" }}>
-              <Animated.View
-                ref={modalContainerRef}
-                onLayout={handleSheetLayout}
-                style={[
-                  styles.modalContainer,
-                  { height: mode === "sticker" ? undefined : currentModalHeight },
-                ]}
-              >
-                <CommentModalBody
-                  loading={loading}
-                  comments={comments}
-                  renderComment={renderComment}
-                  isOwner={isOwner}
-                  userComment={userComment}
-                  insets={insets}
-                  panResponder={panResponder}
-                  content={content}
-                  setContent={handleContentChange}
-                  handleSubmit={handleSubmit}
-                  submitting={submitting}
-                  hasKeyboard={hasKeyboard}
-                  mode={mode}
-                  onStickerToggle={toggleMode}
-                  groupMembers={fetchedGroupMembers}
-                  embedded={embedded}
-                />
-              </Animated.View>
-            </Animated.View>
-          ) : (
-            // Android: translateY lives on the same element as height/flex so that
-            // the flex:1 switch and the slide animation remain in sync.
-            <Animated.View
-              ref={modalContainerRef}
-              onLayout={handleSheetLayout}
-              style={[styles.modalContainer, androidContainerStyle]}
-            >
-              <CommentModalBody
-                loading={loading}
-                comments={comments}
-                renderComment={renderComment}
-                isOwner={isOwner}
-                userComment={userComment}
-                insets={insets}
-                panResponder={panResponder}
-                content={content}
-                setContent={handleContentChange}
-                handleSubmit={handleSubmit}
-                submitting={submitting}
-                hasKeyboard={hasKeyboard}
-                mode={mode}
-                onStickerToggle={toggleMode}
-                groupMembers={fetchedGroupMembers}
-                stickerPopAnim={stickerPopAnim}
-                embedded={embedded}
-              />
-            </Animated.View>
-          )}
+          <Reanimated.View
+            ref={modalContainerRef}
+            style={[styles.modalContainer, { width: "100%" }, sheetStyle]}
+          >
+            <CommentModalBody
+              loading={loading}
+              comments={comments}
+              renderComment={renderComment}
+              isOwner={isOwner}
+              userComment={userComment}
+              insets={insets}
+              panResponder={panResponder}
+              content={content}
+              setContent={handleContentChange}
+              handleSubmit={handleSubmit}
+              submitting={submitting}
+              hasKeyboard={hasKeyboard}
+              mode={mode}
+              onStickerToggle={toggleMode}
+              groupMembers={fetchedGroupMembers}
+              embedded={embedded}
+            />
+          </Reanimated.View>
         </ForceTheme>
-      </KeyboardAvoidingView>
+      </View>
 
       {toastMessage !== null && (
         <StickerToast message={toastMessage} animValue={toastAnim} topInset={insets.top} />
@@ -941,7 +750,10 @@ function CommentModalBody({
 }: any) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
-  const paddingBottom = hasKeyboard ? 8 : Math.max(insets.bottom, 20);
+  // Sticker mode always opens the keyboard (autofocus) and the sheet rides above it,
+  // so keep a fixed 8px — flipping insets.bottom → 8 at keyboard-settle caused a
+  // visible bottom-padding jump at the end of the open animation.
+  const paddingBottom = mode === "sticker" ? 8 : hasKeyboard ? 8 : Math.max(insets.bottom, 20);
   const [mentionKeyword, setMentionKeyword] = useState<string | null>(null);
   // Cleared when the input blurs so the popup never lingers without focus.
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
