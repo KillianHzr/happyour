@@ -220,9 +220,14 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
       <View style={styles.header}>
         <View style={[styles.headerRow, { justifyContent: "space-between" }]}>
           <Text style={styles.title}>Groupes</Text>
-          <TouchableOpacity style={styles.addBtn} onPress={onAddGroup} activeOpacity={0.8}>
-            <Icon name="plus" size={20} color={colors.iconNeutral} />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.addBtn} onPress={() => {}} activeOpacity={0.8}>
+              <Icon name="search" size={20} color={colors.iconNeutral} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.addBtn} onPress={onAddGroup} activeOpacity={0.8}>
+              <Icon name="plus" size={20} color={colors.iconNeutral} />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -257,6 +262,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   // Même espace en haut que les paramètres : insets.top (container) + marginTop spacing.lg
   header: { paddingHorizontal: spacing.lg, marginTop: spacing.lg },
   headerRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, minHeight: 40 },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   iconBtn: {
     width: 40, height: 40, borderRadius: radii.md,
     justifyContent: "center", alignItems: "center",

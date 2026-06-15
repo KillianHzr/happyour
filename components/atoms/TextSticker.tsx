@@ -35,8 +35,7 @@ export const TextSticker = ({
           <SvgText
             fill={staticColors.black}
             fontSize={fontSize}
-            fontWeight={String(typography.weight.black)}
-            fontFamily={typography.family.bold}
+            fontFamily={typography.familyPS.bold}
             x={xCenter}
             y={yCenter}
             textAnchor="middle"

@@ -9,6 +9,8 @@ import { useTheme } from "../../lib/theme-context";
  */
 export function NameTag({ text, fontSize = 32 }: { text: string; fontSize?: number }) {
   const { colors } = useTheme();
+  // Seulement la première lettre du nom en majuscule (le reste tel que saisi)
+  const display = text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
   return (
     <View style={{ transform: [{ rotate: "2deg" }] }}>
       <View
@@ -24,11 +26,10 @@ export function NameTag({ text, fontSize = 32 }: { text: string; fontSize?: numb
             color: colors.text,
             fontFamily: typography.family.bold,
             fontSize,
-            textTransform: "uppercase",
           }}
           numberOfLines={1}
         >
-          {text}
+          {display}
         </Text>
       </View>
     </View>

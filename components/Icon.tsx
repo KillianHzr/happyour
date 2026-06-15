@@ -11,7 +11,7 @@ import { useTheme } from "../lib/theme-context";
  * design system. On peut la surcharger via `color`, mais jamais via la couleur
  * d'origine du SVG.
  */
-export type IconName = "flash" | "flash-on" | "rotate" | "zoom" | "rollback" | "trash" | "lock" | "lock-filled" | "user" | "user-filled" | "circle" | "circle-filled" | "check" | "x" | "mic" | "play" | "chevron-left" | "chevron-right" | "more-vertical" | "menu" | "droplet" | "bell" | "moon" | "eye" | "plus" | "shield" | "life-buoy" | "info" | "log-out" | "key";
+export type IconName = "flash" | "flash-on" | "rotate" | "zoom" | "rollback" | "trash" | "lock" | "lock-filled" | "user" | "user-filled" | "circle" | "circle-filled" | "check" | "x" | "mic" | "play" | "chevron-left" | "chevron-right" | "more-vertical" | "menu" | "droplet" | "bell" | "moon" | "eye" | "plus" | "shield" | "life-buoy" | "info" | "log-out" | "key" | "search";
 
 type IconDef = { viewBox: string; paths: string[]; stroke?: boolean; strokeWidth?: number };
 
@@ -155,6 +155,12 @@ const ICONS: Record<IconName, IconDef> = {
     viewBox: "0 0 16 16",
     paths: [
       "M7.19971 12.666V8.7998H3.3335C2.89178 8.7998 2.53387 8.44168 2.53369 8C2.53369 7.55817 2.89167 7.19922 3.3335 7.19922H7.19971V3.33301C7.19971 2.89118 7.55866 2.5332 8.00049 2.5332C8.44217 2.53338 8.80029 2.89129 8.80029 3.33301V7.19922H12.6665C13.1083 7.19922 13.4673 7.55817 13.4673 8C13.4671 8.44168 13.1082 8.7998 12.6665 8.7998H8.80029V12.666C8.80029 13.1077 8.44217 13.4666 8.00049 13.4668C7.55866 13.4668 7.19971 13.1078 7.19971 12.666Z",
+    ],
+  },
+  search: {
+    viewBox: "0 0 20 20",
+    paths: [
+      "M14.833 9.16699C14.833 6.03749 12.2965 3.50018 9.16699 3.5C6.03738 3.5 3.5 6.03738 3.5 9.16699C3.50018 12.2965 6.03749 14.833 9.16699 14.833C10.6949 14.8329 12.0805 14.2274 13.0996 13.2441C13.121 13.218 13.1436 13.1924 13.168 13.168C13.1925 13.1434 13.2178 13.1201 13.2441 13.0986C14.2271 12.0796 14.8329 10.6946 14.833 9.16699ZM16.833 9.16699C16.8329 10.9234 16.2406 12.5403 15.2471 13.833L18.207 16.793C18.5976 17.1835 18.5976 17.8165 18.207 18.207C17.8165 18.5976 17.1835 18.5976 16.793 18.207L13.833 15.2471C12.5403 16.2406 10.9234 16.8329 9.16699 16.833C4.93292 16.833 1.50018 13.401 1.5 9.16699C1.5 4.93281 4.93281 1.5 9.16699 1.5C13.401 1.50018 16.833 4.93292 16.833 9.16699Z",
     ],
   },
   shield: {

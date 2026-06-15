@@ -660,22 +660,17 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   ).current;
 
   useEffect(() => {
-    if (!isActive) {
-      // En quittant la capture : on réaffiche le menu et on déverrouille le pager
-      // (sinon un état de geste resté "bloqué" garde le menu caché quelques secondes).
-      setShowChallengesInline(false);
-      onHideMenu?.(false);
-      onScrollLock(false);
-    }
-  }, [isActive]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!isActive) setShowChallengesInline(false);
+  }, [isActive]);
 
   useEffect(() => {
     const base = slot1 !== null || isPinching || isZoomDragging || isRecording || showChallengesInline || activeChallenge !== null;
-    // Swipe entre les vues : verrouillé dès qu'on est en DESSIN (même sans dessiner).
-    onScrollLock(base || cameraMode === "DESSIN");
-    // Menu de l'app : masqué seulement en capture (en DESSIN : une fois qu'on dessine).
-    onHideMenu?.(base || (cameraMode === "DESSIN" && canUndo));
-  }, [slot1, isPinching, cameraMode, canUndo, isZoomDragging, isRecording, showChallengesInline, activeChallenge]);
+    // Verrou du pager + masquage du menu UNIQUEMENT quand on est réellement sur la capture
+    // (isActive), et réappliqués à l'arrivée — sinon revenir en mode DESSIN depuis une autre
+    // page laisse le pager déverrouillé et le swipe annule le dessin.
+    onScrollLock(isActive && (base || cameraMode === "DESSIN"));
+    onHideMenu?.(isActive && (base || (cameraMode === "DESSIN" && canUndo)));
+  }, [isActive, slot1, isPinching, cameraMode, canUndo, isZoomDragging, isRecording, showChallengesInline, activeChallenge]);
 
   useEffect(() => {
     if (cameraMode === "AUDIO" && isCapturing && !capturedAudioUri) {

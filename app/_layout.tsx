@@ -27,7 +27,18 @@ if (_ErrorUtils) {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({ Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold });
+  const [fontsLoaded] = useFonts({
+    // Inter conservé en secours
+    Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold,
+    // Police du design system : Parkinsans (familles internes uniques par graisse)
+    ParkinsansRegular: require("../assets/fonts/Parkinsans-Regular.ttf"),
+    ParkinsansMedium: require("../assets/fonts/Parkinsans-Medium.ttf"),
+    ParkinsansSemiBold: require("../assets/fonts/Parkinsans-SemiBold.ttf"),
+    ParkinsansBold: require("../assets/fonts/Parkinsans-Bold.ttf"),
+    ParkinsansExtraBold: require("../assets/fonts/Parkinsans-ExtraBold.ttf"),
+    // Nunito Sans (variable) chargée et disponible
+    NunitoSans: require("../assets/fonts/NunitoSans.ttf"),
+  });
   const [assetsLoaded] = useAssets([require("../assets/images/background-gradient-orange.png")]);
   const [checksReady, setChecksReady] = useState(false);
   const [splashDone, setSplashDone] = useState(false);

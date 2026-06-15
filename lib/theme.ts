@@ -81,9 +81,9 @@ const resolveShadow = (effectStyleName: string, mode: "Light" | "Dark" = "Light"
 };
 
 /**
- * Mappe un poids numérique (issu des tokens) vers la police Inter nommée
- * réellement chargée dans l'app (cf. app/_layout.tsx). Avec des polices Inter
- * nommées, on règle le poids via le `fontFamily`, pas via `fontWeight`.
+ * Mappe un poids numérique (issu des tokens) vers la police Parkinsans nommée
+ * réellement chargée dans l'app (cf. app/_layout.tsx). Avec des polices nommées,
+ * on règle le poids via le `fontFamily`, pas via `fontWeight`.
  * Les poids non chargés retombent sur la variante la plus proche.
  */
 const interFamilyForWeight = (weight: number): string => {
@@ -123,10 +123,21 @@ const resolveTextStyle = (textStyleName: string, mode: "Light" | "Dark" = "Light
   const weightRaw = getVal(style.fontWeight);
   const weight = typeof weightRaw === "number" ? weightRaw : Number(weightRaw);
 
+  // Parkinsans a des glyphes hauts (ascent ~1.05em) + jambages (~0.27em) : un lineHeight
+  // trop serré (ex: les styles single-line à 100%) rogne/décentre le texte. On garantit donc
+  // un minimum qui contient les glyphes (~1.32em) sans toucher aux valeurs plus grandes.
+  if (typeof fontSize === "number" && typeof lineHeight === "number") {
+    lineHeight = Math.max(lineHeight, Math.round(fontSize * 1.32));
+  }
+
   return {
     fontFamily: interFamilyForWeight(Number.isFinite(weight) ? weight : 400),
     fontSize,
     lineHeight,
+    // Android ajoute un padding vertical basé sur les métriques de la police (ascent/descent).
+    // Parkinsans ayant un ascent large, ça décale/rogne le texte dans les conteneurs serrés.
+    // On le désactive pour un centrage fidèle (sans effet sur iOS).
+    includeFontPadding: false,
   };
 };
 
@@ -571,13 +582,26 @@ export const iconSize = {
 
 // ─── Typographie (mode-indépendante) ─────────────────────────────────────────
 export const typography = {
+  // Police du design system : Parkinsans. Chaque graisse a une famille interne UNIQUE
+  // (= clé de chargement = nom PostScript), donc le même nom marche en RN Text et en SVG,
+  // sur iOS comme Android, sans conflit de famille.
   family: {
-    regular:   "Inter_400Regular",
-    medium:    "Inter_500Medium",
-    semibold:  "Inter_600SemiBold",
-    bold:      "Inter_700Bold",
-    extrabold: "Inter_800ExtraBold",
+    regular:   "ParkinsansRegular",
+    medium:    "ParkinsansMedium",
+    semibold:  "ParkinsansSemiBold",
+    bold:      "ParkinsansBold",
+    extrabold: "ParkinsansExtraBold",
   },
+  // Alias : même noms (conservé pour les composants SVG déjà migrés)
+  familyPS: {
+    regular:   "ParkinsansRegular",
+    medium:    "ParkinsansMedium",
+    semibold:  "ParkinsansSemiBold",
+    bold:      "ParkinsansBold",
+    extrabold: "ParkinsansExtraBold",
+  },
+  // Nunito Sans (variable) chargée et disponible — poids via fontWeight
+  nunitoSans: "NunitoSans",
   size: {
     xxs:          resolveToken("-> Typography/body/size-extra-small",  "Value") as number,  // 12 (ex 10)
     xs:           resolveToken("Primitives/typography/scale-01",       "Value") as number,  // 12
