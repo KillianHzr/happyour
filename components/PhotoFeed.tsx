@@ -54,6 +54,8 @@ export { PhotoEntry, Reaction };
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const FEED_HEIGHT = SCREEN_HEIGHT - 100;
+// Gap (px) between the bottom of the comment/sticker preview and the top of the drawer.
+const PREVIEW_GAP = 24;
 
 
 
@@ -285,6 +287,13 @@ const PhotoFeedContent = forwardRef(({
   const kb = useSharedValue(0);
   const progress = useSharedValue(0);
   const sheetSV = useSharedValue(SHEET_BASE);
+  // 1 in sticker mode, 0 in comment mode. In comment mode the preview scale ignores the
+  // keyboard (uses the keyboard-down drawer = SHEET_BASE), so the preview keeps its
+  // comment-view width and the rising keyboard/sheet just crops its bottom (square-ish).
+  const isStickerModeSV = useSharedValue(0);
+  useEffect(() => {
+    isStickerModeSV.value = withTiming(activeModalMode === "sticker" ? 1 : 0, { duration: 260 });
+  }, [activeModalMode]);
 
   const openComments = (photoId: string, ownerId?: string, mode: "comment" | "sticker" = "comment") => {
     setActivePhotoId(photoId);
@@ -302,12 +311,37 @@ const PhotoFeedContent = forwardRef(({
   // pinned to the top. One formula, transforms only → fluid. `progress` blends from
   // identity (closed) to the fitted scale (open).
   const animatedContentStyle = useAnimatedStyle(() => {
-    const drawerTop = kb.value + sheetSV.value; // measured from the screen bottom
-    const available = SCREEN_HEIGHT - drawerTop - insets.top - 0;
-    const fit = Math.max(0.05, Math.min(1, available / FEED_HEIGHT));
-    const scale = 1 + (fit - 1) * progress.value;
-    const translateY = (1 - scale) * (insets.top - FEED_HEIGHT / 2); // keep top locked to insets.top below status bar
+    const liveDrawer = kb.value + sheetSV.value;
+    // UNIFORM scale → no distortion, round corners. Comment mode locks the drawer at
+    // SHEET_BASE so the preview keeps its comment-view width; sticker mode tracks the
+    // live drawer. isStickerModeSV blends 0→1 so toggling modes doesn't jump. The
+    // preview top is anchored at the top safe-area inset, and it uses the vertical space
+    // from there down to 12px above the drawer.
+    const drawerTopX = SHEET_BASE + isStickerModeSV.value * (liveDrawer - SHEET_BASE);
+    const availableX = SCREEN_HEIGHT - drawerTopX - insets.top - PREVIEW_GAP;
+    // Divide by (FEED_HEIGHT - insets.top): the post's top padding scales too, so this
+    // makes the scaled bottom land exactly PREVIEW_GAP above the drawer (real hug).
+    const fitX = Math.max(0.05, Math.min(1, availableX / (FEED_HEIGHT - insets.top)));
+    const scale = 1 + (fitX - 1) * progress.value;
+
+    // Height is CROPPED via layout (not a vertical scale) so the image isn't squished
+    // and the corners stay round. cropRatio 1 = full post, <1 = bottom cropped. Comment
+    // mode crops to the live space above the drawer; sticker mode never crops. The
+    // (1-scale)*insets.top term cancels the scaled-padding lift so the bottom truly hugs.
+    const availableY = SCREEN_HEIGHT - liveDrawer - PREVIEW_GAP - (1 - scale) * insets.top;
+    const fullScaledH = FEED_HEIGHT * scale;
+    const cropOpen =
+      (1 - isStickerModeSV.value) * Math.min(1, availableY / Math.max(fullScaledH, 1)) +
+      isStickerModeSV.value * 1;
+    const cropRatio = 1 + (cropOpen - 1) * progress.value; // 1 when closed
+    const animatedHeight = FEED_HEIGHT * cropRatio;
+
+    // Keep the image top at the SAME place as when closed (the post's own paddingTop is
+    // insets.top). This formula accounts for that, so the top never moves on open/close.
+    const translateY = (1 - scale) * (insets.top - animatedHeight / 2);
+
     return {
+      height: animatedHeight,
       transform: [{ translateY }, { scale }],
       borderRadius: radii.xxl * progress.value,
       overflow: "hidden",
@@ -316,20 +350,24 @@ const PhotoFeedContent = forwardRef(({
 
   // Same transform as the preview, but NOTHING that clips (no overflow/borderRadius).
   // Used by the sticker overlay so reaction stickers can spill past the post edges.
+  // Matches the post's WIDTH transform (scaleX). Stickers live on the horizontal edges,
+  // so they track the post width; vertical squish only happens while typing, when the
+  // stickers are hidden anyway.
   const animatedStickerOverlayStyle = useAnimatedStyle(() => {
-    const drawerTop = kb.value + sheetSV.value;
-    const available = SCREEN_HEIGHT - drawerTop - insets.top - 24;
-    const fit = Math.max(0.05, Math.min(1, available / FEED_HEIGHT));
+    const drawerTopX = SHEET_BASE + isStickerModeSV.value * ((kb.value + sheetSV.value) - SHEET_BASE);
+    const available = SCREEN_HEIGHT - drawerTopX - insets.top - PREVIEW_GAP;
+    const fit = Math.max(0.05, Math.min(1, available / (FEED_HEIGHT - insets.top)));
     const scale = 1 + (fit - 1) * progress.value;
+    // Matches the post's top-anchor (full-height box: stickers only show when uncropped).
     const translateY = (1 - scale) * (insets.top - FEED_HEIGHT / 2);
     return { transform: [{ translateY }, { scale }] };
   });
 
   // Live preview scale, so stickers can counter-scale and keep a fixed on-screen size.
   const previewScaleSV = useDerivedValue(() => {
-    const drawerTop = kb.value + sheetSV.value;
-    const available = SCREEN_HEIGHT - drawerTop - insets.top - 24;
-    const fit = Math.max(0.05, Math.min(1, available / FEED_HEIGHT));
+    const drawerTopX = SHEET_BASE + isStickerModeSV.value * ((kb.value + sheetSV.value) - SHEET_BASE);
+    const available = SCREEN_HEIGHT - drawerTopX - insets.top - PREVIEW_GAP;
+    const fit = Math.max(0.05, Math.min(1, available / (FEED_HEIGHT - insets.top)));
     return 1 + (fit - 1) * progress.value;
   });
 
@@ -566,7 +604,9 @@ const PhotoFeedContent = forwardRef(({
   return (
     <View style={styles.list}>
       <Reanimated.View style={[styles.contentWrapper, animatedContentStyle]}>
-        <View style={{ flex: 1 }}>
+        {/* Fixed full height so the cropped (shorter) contentWrapper clips it from the
+            bottom instead of the FlatList re-fitting the image. */}
+        <View style={{ height: FEED_HEIGHT, width: "100%" }}>
           <AnimatedFlatList
             ref={flatListRef}
             data={items}
