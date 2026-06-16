@@ -52,7 +52,7 @@ export const PhotoMoment = ({
   onOpenComments,
   isVisible,
   isShrunken = false,
-  postCountText
+  postCountText,
 }: PhotoMomentProps) => {
   const insets = useSafeAreaInsets();
   const { mode } = useTheme();
@@ -65,8 +65,15 @@ export const PhotoMoment = ({
   const uiOpacity = useSharedValue(1);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Fade the in-preview UI (author, description, gradient, badges) in/out when
+  // entering/exiting comments instead of hard-toggling it.
+  const shrinkProgress = useSharedValue(isShrunken ? 1 : 0);
+  useEffect(() => {
+    shrinkProgress.value = withTiming(isShrunken ? 1 : 0, { duration: 250 });
+  }, [isShrunken]);
+
   const animatedUiStyle = useAnimatedStyle(() => ({
-    opacity: isShrunken ? 0 : uiOpacity.value,
+    opacity: uiOpacity.value * (1 - shrinkProgress.value),
   }));
 
   const hasSecond = !!moment.second_image_path;

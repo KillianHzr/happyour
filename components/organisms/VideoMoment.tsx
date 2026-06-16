@@ -52,7 +52,7 @@ export const VideoMoment = ({
   isVisible,
   cachedUrl,
   isShrunken = false,
-  postCountText
+  postCountText,
 }: VideoMomentProps) => {
   const insets = useSafeAreaInsets();
   const { colors, mode } = useTheme();
@@ -65,8 +65,14 @@ export const VideoMoment = ({
   const uiOpacity = useSharedValue(1);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Fade the in-preview UI in/out when entering/exiting comments instead of toggling.
+  const shrinkProgress = useSharedValue(isShrunken ? 1 : 0);
+  useEffect(() => {
+    shrinkProgress.value = withTiming(isShrunken ? 1 : 0, { duration: 250 });
+  }, [isShrunken]);
+
   const animatedUiStyle = useAnimatedStyle(() => ({
-    opacity: isShrunken ? 0 : uiOpacity.value,
+    opacity: uiOpacity.value * (1 - shrinkProgress.value),
   }));
 
   const hasSecond = !!moment.second_image_path;

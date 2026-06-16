@@ -38,16 +38,17 @@ import { CommentInput, MentionSuggestionsPopup, GroupMember } from "./molecules/
 import { TextSticker } from "./atoms/TextSticker";
 import { StickerToast } from "./atoms/StickerToast";
 import { radii as themeRadii, spacing as themeSpacing, typography, type ThemeColors, shadows } from "../lib/theme";
+import { SHEET_BASE, SHEET_KB, SHEET_STICKER, SHEET_TIMING } from "../lib/comment-sheet";
 import { useTheme, useThemedStyles, ForceTheme } from "../lib/theme-context";
 import { Reaction } from "../lib/feed-types";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const IS_IOS = Platform.OS === "ios";
-// Sheet heights (also in PhotoFeed.tsx). Shorter when the keyboard is up so the drawer
-// top stays around mid-screen and the image preview keeps the upper portion.
-const SHEET_BASE = Math.round(SCREEN_HEIGHT * 0.46);
-const SHEET_KB = Math.round(SCREEN_HEIGHT * 0.22);
-const SHEET_TIMING = { duration: 260 };
+// How long the just-posted sticker stays visible (popping on the post) before the sheet
+// closes — long enough to clearly see the pop animation.
+const STICKER_POP_MS = 1100;
+// How long a deleted sticker shrinks out before the sheet closes.
+const STICKER_DELETE_MS = 500;
 
 const isEmoji = (str: string) => {
   const regexExp = /(©|®|[ -㌀]|\ud83c[퀀-\udfff]|\ud83d[퀀-\udfff]|\ud83e[퀀-\udfff])/gi;
@@ -73,6 +74,12 @@ interface CommentModalProps {
   onSheetHeightChange?: (height: number) => void;
   /** Reports whenever the user switches between comment/sticker mode. */
   onModeChange?: (mode: "comment" | "sticker") => void;
+  /** Fires when a text sticker is posted, with the sticker text — lets the parent
+   *  pop it onto the post before the sheet closes. */
+  onStickerPosted?: (text: string) => void;
+  /** Fires when the user's text sticker is deleted (empty submit) — lets the parent
+   *  shrink it out + show the toast before the sheet closes. */
+  onStickerDeleted?: () => void;
   photoId: string;
   photoOwnerId: string;
   reactions?: Reaction[];
@@ -169,6 +176,8 @@ function CommentModalContent({
   onKeyboardActiveChange,
   onSheetHeightChange,
   onModeChange,
+  onStickerPosted,
+  onStickerDeleted,
   photoId,
   photoOwnerId,
   reactions = [],
@@ -244,20 +253,39 @@ function CommentModalContent({
 
   const hasKeyboard = keyboardVisible;
   const isOwner = user?.id === photoOwnerId;
-  const sheetH = keyboardVisible || mode === "sticker" ? SHEET_KB : SHEET_BASE;
+  // Collapsed (keyboard-up) target height: sticker mode gets its own value so it can
+  // be tuned independently of the comment-mode keyboard height.
+  const collapsedH = mode === "sticker" ? SHEET_STICKER : SHEET_KB;
+  const sheetH = keyboardVisible || mode === "sticker" ? collapsedH : SHEET_BASE;
 
   const targetKbHeight = useSharedValue(290);
   const localSheetHeight = useSharedValue(SHEET_BASE);
   const sheetHeightSV = sheetHeightShared ?? localSheetHeight;
+  // Shared mirror of `collapsedH` so the height worklet (which can't read React
+  // state) interpolates toward the right floor for the current mode. Animated with
+  // withTiming: on a mode switch the keyboard often stays up (the input keeps
+  // focus), so the worklet sits at `floor` — a plain assignment would snap the
+  // sheet (and PhotoFeed's preview, which reads the same value) between
+  // SHEET_STICKER and SHEET_KB. Easing the floor makes the resize smooth.
+  const collapsedHeightSV = useSharedValue(collapsedH);
+  useEffect(() => {
+    collapsedHeightSV.value = withTiming(collapsedH, SHEET_TIMING);
+  }, [collapsedH]);
+  // 1 while gracefully closing from a keyboard-up state: freezes the sheet height so
+  // it doesn't expand to SHEET_BASE (leaving empty padding) as the keyboard retracts
+  // ahead of the slide-out. Reset on open.
+  const closingSV = useSharedValue(0);
 
   useDerivedValue(() => {
+    if (closingSV.value > 0) return; // hold last height while closing
+    const floor = collapsedHeightSV.value;
     if (targetKbHeight.value <= 0) {
       sheetHeightSV.value = SHEET_BASE;
       return;
     }
-    const h = SHEET_BASE - (kbSV.value / targetKbHeight.value) * (SHEET_BASE - SHEET_KB);
-    sheetHeightSV.value = Math.max(SHEET_KB, Math.min(SHEET_BASE, h));
-  }, [SHEET_BASE, SHEET_KB]);
+    const h = SHEET_BASE - (kbSV.value / targetKbHeight.value) * (SHEET_BASE - floor);
+    sheetHeightSV.value = Math.max(floor, Math.min(SHEET_BASE, h));
+  }, [SHEET_BASE]);
 
   // Sheet transform: slide in from below + drag offset − keyboard lift. Height comes
   // from Reanimated `sheetHeightSV` for frame-by-frame smoothness.
@@ -382,6 +410,12 @@ function CommentModalContent({
     intentionalCloseRef.current = true;
     Keyboard.dismiss();
     onKeyboardHeightChange?.(0);
+    // The keyboard shared value is owned by the parent (PhotoFeed) and survives this
+    // modal's unmount. On Android the modal window can tear down before the
+    // keyboard-hide worklet fires (esp. on the sticker-submit auto-close), leaving
+    // kbSV stuck at the last height — which lifts the sheet on the next open. Reset
+    // it here so the next open starts with the keyboard considered closed.
+    kbSV.value = 0;
     onCloseComplete();
   }, [onKeyboardHeightChange, onCloseComplete]);
 
@@ -400,6 +434,11 @@ function CommentModalContent({
     if (visible) {
       intentionalCloseRef.current = false;
       dragY.value = 0;
+      // Defensive: the keyboard is never up at open time, but kbSV (owned by the
+      // parent) may be stale from a prior Android teardown — clear it before the
+      // first frame so the sheet doesn't open pre-lifted with empty space below.
+      kbSV.value = 0;
+      closingSV.value = 0;
       sheetProgress.value = withTiming(1, SHEET_TIMING);
       Animated.timing(overlayOpacity, {
         toValue: 1,
@@ -427,6 +466,25 @@ function CommentModalContent({
 
   const handleClose = () => onClose();
 
+  // Closes from a keyboard-up state (sticker submit, or dragging the sticker nudge)
+  // in ONE smooth motion: freeze the sheet height (no growth → no empty padding),
+  // then retract the keyboard and slide the sheet off simultaneously. They stay in
+  // sync because the sheet's translateY subtracts kbSV — as the keyboard retracts the
+  // sheet rides just above it the whole way down, so it never lands behind the
+  // keyboard window (the old jank) and there's no two-part dock-then-slide.
+  const gracefulCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const gracefulClose = useCallback(() => {
+    intentionalCloseRef.current = true;
+    closingSV.value = 1;
+    dragY.value = withTiming(0, SHEET_TIMING);
+    Keyboard.dismiss();
+    handleClose();
+  }, []);
+  useEffect(() => () => {
+    if (gracefulCloseTimer.current) clearTimeout(gracefulCloseTimer.current);
+    if (toastHideTimer.current) clearTimeout(toastHideTimer.current);
+  }, []);
+
   // Shows the toast in place (no modal close) and auto-dismisses it. Used for
   // actions that stay inside the sheet, e.g. deleting a comment.
   const toastHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -447,15 +505,6 @@ function CommentModalContent({
     }, 2000);
   };
 
-  // Shows the toast briefly, then closes. The posted sticker appears on the post on
-  // the next data refresh (no bespoke pop animation).
-  const showToastAndClose = (message: string) => {
-    setToastMessage(message);
-    toastAnim.setValue(0);
-    Animated.spring(toastAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 10 }).start();
-    setTimeout(() => handleClose(), 600);
-  };
-
   // ── Pan responder (drag to dismiss) ──────────────────────────────────────────
   const panResponder = useRef(
     PanResponder.create({
@@ -470,9 +519,14 @@ function CommentModalContent({
       },
       onPanResponderRelease: (_, { dy, vy }) => {
         if (modeRef.current === "sticker") {
-          if (dy > 80 || vy > 0.3) setMode("comment");
-          // Always spring back so the sheet returns to its resting position.
-          dragY.value = withSpring(0, { stiffness: 220, damping: 26 });
+          // Dragging the sticker nudge down exits all the way to the full view
+          // (closes the modal + keyboard together), not back to the comments.
+          if (dy > 80 || vy > 0.3) {
+            gracefulClose();
+          } else {
+            // Ease back (no spring) so the sheet doesn't wobble on a small drag.
+            dragY.value = withTiming(0, SHEET_TIMING);
+          }
           return;
         }
         if (dy > 120 || vy > 0.5) {
@@ -533,8 +587,20 @@ function CommentModalContent({
           .then(({ error }) => { if (error) console.error("Error posting sticker:", error); });
       }
       setContent("");
-      intentionalCloseRef.current = true;
-      showToastAndClose(isDelete ? "Réaction supprimé" : "Réaction ajouté");
+      // Reveal feed: the parent (PhotoFeed) handles the on-post animation (pop / shrink)
+      // and a toast on the MAIN feed once the sheet closes. Other contexts (no callbacks)
+      // fall back to an in-modal toast. Keyboard stays up during the wait.
+      if (isDelete) {
+        if (onStickerDeleted) onStickerDeleted();
+        else showToast("Réaction supprimé");
+        if (gracefulCloseTimer.current) clearTimeout(gracefulCloseTimer.current);
+        gracefulCloseTimer.current = setTimeout(() => gracefulClose(), STICKER_DELETE_MS);
+      } else {
+        if (onStickerPosted) onStickerPosted(text);
+        else showToast("Réaction Ajouté");
+        if (gracefulCloseTimer.current) clearTimeout(gracefulCloseTimer.current);
+        gracefulCloseTimer.current = setTimeout(() => gracefulClose(), STICKER_POP_MS);
+      }
       return;
     }
 
@@ -555,6 +621,7 @@ function CommentModalContent({
       setUserComment(data as any);
       setContent("");
       Keyboard.dismiss();
+      showToast("Commentaire Ajouté");
     } catch (err) {
       console.error("Error posting comment:", err);
     } finally {
@@ -670,9 +737,15 @@ function CommentModalContent({
 
   return (
     <View style={styles.root}>
-      {/* Tappable backdrop */}
+      {/* Tappable backdrop. In the reveal (embedded) we don't darken the preview —
+          transparent fill, but still tap-to-close. */}
       <Animated.View
-        style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: overlayOpacity }]}
+        style={[
+          StyleSheet.absoluteFill,
+          styles.backdrop,
+          embedded && { backgroundColor: "transparent" },
+          { opacity: overlayOpacity },
+        ]}
       >
         <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
       </Animated.View>

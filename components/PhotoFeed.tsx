@@ -9,11 +9,14 @@ import {
   Platform,
   TouchableOpacity,
   Share,
+  Animated as RNAnimated,
+  Easing as RNEasing,
 } from "react-native";
 import Reanimated, {
   useSharedValue,
   useAnimatedScrollHandler,
   useAnimatedStyle,
+  useDerivedValue,
   withTiming,
   Easing,
   LinearTransition,
@@ -33,16 +36,17 @@ import ChallengeVotePage from "./groups/ChallengeVotePage";
 // Atomic Design Imports
 import { PhotoEntry, Reaction } from "../lib/feed-types";
 import { PhotoMoment } from "./organisms/PhotoMoment";
+import { ReactionStickers, type ReactionDisplay } from "./molecules/ReactionStickers";
 import { AudioMoment } from "./organisms/AudioMoment";
 import { VideoMoment } from "./organisms/VideoMoment";
 import { RevealIntroPage } from "./organisms/RevealIntroPage";
 import { CrownRevealPage } from "./organisms/CrownRevealPage";
 import { RevealEndPage } from "./organisms/RevealEndPage";
 import { RefreshIcon } from "./atoms/RefreshIcon";
-import { TextSticker } from "./atoms/TextSticker";
 import { AnimatedPageWrapper } from "./molecules/AnimatedPageWrapper";
-import { Image } from "expo-image";
+import { StickerToast } from "./atoms/StickerToast";
 import { radii, spacing, typography, textStyles, type ThemeColors } from "../lib/theme";
+import { SHEET_BASE } from "../lib/comment-sheet";
 import { useTheme, useThemedStyles, ForceTheme } from "../lib/theme-context";
 
 export { PhotoEntry, Reaction };
@@ -50,10 +54,6 @@ export { PhotoEntry, Reaction };
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const FEED_HEIGHT = SCREEN_HEIGHT - 100;
-// Comment sheet heights (also defined in CommentModal.tsx). The drawer = keyboard +
-// sheet height; the post is simply scaled to fit whatever space is left above it.
-const SHEET_BASE = Math.round(SCREEN_HEIGHT * 0.46);
-const SHEET_KB = Math.round(SCREEN_HEIGHT * 0.22);
 
 
 
@@ -92,6 +92,8 @@ type Props = {
   onVoteChallenge?: (challengeId: string, responseId: string) => void;
   onBackToCapture?: () => void;
   members?: any[];
+  currentUserAvatarUrl?: string | null;
+  currentUsername?: string;
   onCommentModalChange?: (visible: boolean) => void;
 };
 
@@ -104,50 +106,6 @@ function formatDayLabel(dateStr: string) {
 
 const AnimatedFlatList = Reanimated.createAnimatedComponent(FlatList) as unknown as typeof FlatList<FeedItem>;
 const AnimatedTouchableOpacity = Reanimated.createAnimatedComponent(TouchableOpacity);
-
-// ── Reaction stickers shown over the post while the comments sheet is open ──────
-// Rendered inside the scaled container so they shrink with the post automatically.
-function FloatingSticker({ x, y, rotation, text, avatarUrl, username }: {
-  x: number; y: number; rotation: number; text: string; avatarUrl: string | null; username: string;
-}) {
-  const styles = useThemedStyles(makeStyles);
-  const [size, setSize] = useState({ w: 0, h: 0 });
-  return (
-    <View
-      onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
-      style={{ position: "absolute", top: y - size.h / 2, left: x - size.w / 2, transform: [{ rotate: `${rotation}deg` }] }}
-    >
-      <TextSticker text={text} fontSize={28} isPostSticker={true} />
-      <View style={styles.stickerAvatar}>
-        {avatarUrl ? (
-          <Image source={{ uri: avatarUrl }} style={StyleSheet.absoluteFill} />
-        ) : (
-          <Text style={styles.avatarFallbackText}>{(username || "?")[0].toUpperCase()}</Text>
-        )}
-      </View>
-    </View>
-  );
-}
-
-function ReactionStickers({ reactions, topInset }: { reactions: Reaction[]; topInset: number }) {
-  const text = useMemo(() => reactions.filter((r) => !isEmoji(r.sticker_id)), [reactions]);
-  if (text.length === 0) return null;
-  return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      {text.map((r, i) => (
-        <FloatingSticker
-          key={r.id}
-          x={i % 2 === 0 ? SCREEN_WIDTH * 0.22 : SCREEN_WIDTH * 0.78}
-          y={topInset + FEED_HEIGHT * 0.24 + i * FEED_HEIGHT * 0.12}
-          rotation={(i % 2 === 0 ? -1 : 1) * 6}
-          text={r.sticker_id}
-          avatarUrl={r.avatar_url ?? null}
-          username={r.username ?? ""}
-        />
-      ))}
-    </View>
-  );
-}
 
 const PhotoFeed = forwardRef((props: Props, ref) => {
   return (
@@ -181,6 +139,8 @@ const PhotoFeedContent = forwardRef(({
   onVoteChallenge,
   onBackToCapture,
   members = [],
+  currentUserAvatarUrl,
+  currentUsername,
   onCommentModalChange,
 }: Props, ref) => {
   const insets = useSafeAreaInsets();
@@ -233,15 +193,87 @@ const PhotoFeedContent = forwardRef(({
   // True while the keyboard is up — reaction stickers hide so they don't clutter
   // the shrunken post while typing.
   const [keyboardActive, setKeyboardActive] = useState(false);
+  // Optimistic just-posted sticker, shown popping onto the post the moment the user
+  // submits (before the DB round-trip / data refresh). Cleared when the sheet closes;
+  // the real reaction then renders via the normal data path.
+  const [poppedReaction, setPoppedReaction] = useState<Reaction | null>(null);
+  // User id whose reaction is being deleted → its sticker shrinks to 0 before close.
+  const [removingReactionUserId, setRemovingReactionUserId] = useState<string | null>(null);
+  // Reaction toast shown on the MAIN feed (add/delete feedback). It's a top-of-screen
+  // overlay (zIndex 999) so it can fire instantly — even over the open sheet — and it
+  // outlives the sheet close.
+  const [reactionToast, setReactionToast] = useState<string | null>(null);
+  const reactionToastAnim = useRef(new RNAnimated.Value(0)).current;
+  const reactionToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     onCommentModalChange?.(commentModalVisible);
   }, [commentModalVisible, onCommentModalChange]);
 
+  const showReactionToast = useCallback((message: string) => {
+    if (reactionToastTimer.current) clearTimeout(reactionToastTimer.current);
+    setReactionToast(message);
+    reactionToastAnim.setValue(0);
+    RNAnimated.spring(reactionToastAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 10 }).start();
+    reactionToastTimer.current = setTimeout(() => {
+      RNAnimated.timing(reactionToastAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+        easing: RNEasing.in(RNEasing.quad),
+      }).start(({ finished }) => {
+        if (finished) setReactionToast(null);
+      });
+    }, 2200);
+  }, [reactionToastAnim]);
+
+  // On close: hide the stickers (no lingering) and reset the delete state.
+  useEffect(() => {
+    if (commentModalVisible) return;
+    setPoppedReaction(null);
+    setRemovingReactionUserId(null);
+  }, [commentModalVisible]);
+
+  const handleStickerPosted = useCallback((text: string) => {
+    const me = members.find((m: any) => m.user_id === currentUserId);
+    setPoppedReaction({
+      id: "optimistic-sticker",
+      user_id: currentUserId ?? "",
+      username: currentUsername ?? me?.username ?? "",
+      avatar_url: currentUserAvatarUrl ?? me?.avatar_url ?? null,
+      sticker_id: text,
+    } as Reaction);
+    showReactionToast("Réaction Ajouté"); // fire immediately (don't wait for close)
+  }, [members, currentUserId, currentUsername, currentUserAvatarUrl, showReactionToast]);
+
+  const handleStickerDeleted = useCallback(() => {
+    if (currentUserId) setRemovingReactionUserId(currentUserId);
+    showReactionToast("Réaction supprimé"); // fire immediately
+  }, [currentUserId, showReactionToast]);
+
+  useEffect(() => () => { if (reactionToastTimer.current) clearTimeout(reactionToastTimer.current); }, []);
+
   const [activePhotoId, setActivePhotoId] = useState<string | null>(null);
   const [activePhotoOwnerId, setActivePhotoOwnerId] = useState<string | null>(null);
 
   const activePhoto = useMemo(() => photos.find(p => p.id === activePhotoId), [photos, activePhotoId]);
+
+  // Reaction stickers over the open sheet. Kept mounted whenever the sheet is open and
+  // there's something to show — so typing a comment doesn't unmount them (they shrink
+  // out via `stickersHidden` instead). Null = no stickers (e.g. closed feed).
+  const activeReactionDisplay = useMemo<ReactionDisplay | null>(() => {
+    if (!activePhoto || !commentModalVisible) return null;
+    const base = activePhoto.reactions || [];
+    if (poppedReaction) {
+      const deduped = base.filter((r) => r.user_id !== poppedReaction.user_id);
+      return { reactions: [...deduped, poppedReaction], popId: poppedReaction.id };
+    }
+    if (base.length > 0) return { reactions: base };
+    return null;
+  }, [activePhoto, poppedReaction, commentModalVisible]);
+
+  // Hide (shrink) the stickers while typing a comment (comment mode + keyboard up).
+  const stickersHidden = activeModalMode === "comment" && keyboardActive;
 
   // ── Comment-sheet preview scaling ──────────────────────────────────────────
   // Two shared values only:
@@ -271,8 +303,8 @@ const PhotoFeedContent = forwardRef(({
   // identity (closed) to the fitted scale (open).
   const animatedContentStyle = useAnimatedStyle(() => {
     const drawerTop = kb.value + sheetSV.value; // measured from the screen bottom
-    const available = SCREEN_HEIGHT - drawerTop - insets.top - 24;
-    const fit = Math.max(0.2, Math.min(1, available / FEED_HEIGHT));
+    const available = SCREEN_HEIGHT - drawerTop - insets.top - 0;
+    const fit = Math.max(0.05, Math.min(1, available / FEED_HEIGHT));
     const scale = 1 + (fit - 1) * progress.value;
     const translateY = (1 - scale) * (insets.top - FEED_HEIGHT / 2); // keep top locked to insets.top below status bar
     return {
@@ -280,6 +312,25 @@ const PhotoFeedContent = forwardRef(({
       borderRadius: radii.xxl * progress.value,
       overflow: "hidden",
     };
+  });
+
+  // Same transform as the preview, but NOTHING that clips (no overflow/borderRadius).
+  // Used by the sticker overlay so reaction stickers can spill past the post edges.
+  const animatedStickerOverlayStyle = useAnimatedStyle(() => {
+    const drawerTop = kb.value + sheetSV.value;
+    const available = SCREEN_HEIGHT - drawerTop - insets.top - 24;
+    const fit = Math.max(0.05, Math.min(1, available / FEED_HEIGHT));
+    const scale = 1 + (fit - 1) * progress.value;
+    const translateY = (1 - scale) * (insets.top - FEED_HEIGHT / 2);
+    return { transform: [{ translateY }, { scale }] };
+  });
+
+  // Live preview scale, so stickers can counter-scale and keep a fixed on-screen size.
+  const previewScaleSV = useDerivedValue(() => {
+    const drawerTop = kb.value + sheetSV.value;
+    const available = SCREEN_HEIGHT - drawerTop - insets.top - 24;
+    const fit = Math.max(0.05, Math.min(1, available / FEED_HEIGHT));
+    return 1 + (fit - 1) * progress.value;
   });
 
   useEffect(() => {
@@ -473,8 +524,8 @@ const PhotoFeedContent = forwardRef(({
               flatListRef.current?.setNativeProps({ scrollEnabled: !locked }); 
               onScrollLock?.(locked); 
             }} 
-            onOpenPicker={onOpenPicker} 
-            onOpenComments={(pid, oid) => { openComments(pid, oid); onOpenComments?.(pid, oid); }} 
+            onOpenPicker={onOpenPicker}
+            onOpenComments={(pid, oid) => { openComments(pid, oid); onOpenComments?.(pid, oid); }}
             isShrunken={commentModalVisible}
             postCountText={postCountTexts[index]}
           />
@@ -495,13 +546,13 @@ const PhotoFeedContent = forwardRef(({
         );
       } else {
         content = (
-          <PhotoMoment 
-            moment={moment} 
-            currentUserId={currentUserId} 
-            crownWinnerId={crownWinnerId} 
-            onOpenPicker={onOpenPicker} 
-            onOpenComments={(pid, oid) => { openComments(pid, oid); onOpenComments?.(pid, oid); }} 
-            isVisible={index === visibleIndex} 
+          <PhotoMoment
+            moment={moment}
+            currentUserId={currentUserId}
+            crownWinnerId={crownWinnerId}
+            onOpenPicker={onOpenPicker}
+            onOpenComments={(pid, oid) => { openComments(pid, oid); onOpenComments?.(pid, oid); }}
+            isVisible={index === visibleIndex}
             isShrunken={commentModalVisible}
             postCountText={postCountTexts[index]}
           />
@@ -520,6 +571,7 @@ const PhotoFeedContent = forwardRef(({
             ref={flatListRef}
             data={items}
             renderItem={renderItem}
+            extraData={activeReactionDisplay}
             keyExtractor={(_, i) => i.toString()}
             pagingEnabled={true}
             snapToInterval={FEED_HEIGHT}
@@ -541,14 +593,27 @@ const PhotoFeedContent = forwardRef(({
             scrollEnabled={!commentModalVisible}
             keyboardShouldPersistTaps="always"
           />
-          {/* Reaction stickers live INSIDE the scaled container, so they shrink with
-              the post for free (no positioning math). Hidden while typing. */}
-          {commentModalVisible && !keyboardActive && activePhoto && (
-            <ReactionStickers reactions={activePhoto.reactions || []} topInset={insets.top} />
-          )}
           {/* Countdown timer pill is now rendered in RevealHeader */}
         </View>
       </Reanimated.View>
+
+      {/* Reaction stickers ride in a sibling overlay that mirrors the preview's
+          transform but with overflow VISIBLE, so they can spill past the post's
+          horizontal edges (the card/FlatList clip the post, so they can't live inside
+          it). Same transform → it tracks the scaled post exactly. */}
+      {activeReactionDisplay && (
+        <Reanimated.View
+          pointerEvents="none"
+          style={[styles.stickerOverlay, animatedStickerOverlayStyle]}
+        >
+          <ReactionStickers
+            reactions={activeReactionDisplay.reactions}
+            previewScale={previewScaleSV}
+            removingUserId={removingReactionUserId}
+            hidden={stickersHidden}
+          />
+        </Reanimated.View>
+      )}
 
       {showBottomSection && currentItem && !commentModalVisible && (
         <View style={styles.bottomSection}>
@@ -680,6 +745,8 @@ const PhotoFeedContent = forwardRef(({
           sheetHeightShared={sheetSV}
           onKeyboardActiveChange={setKeyboardActive}
           onModeChange={(m) => setActiveModalMode(m)}
+          onStickerPosted={handleStickerPosted}
+          onStickerDeleted={handleStickerDeleted}
           onSeen={(pid) => {
             if (onOpenComments) {
               onOpenComments(pid, activePhotoOwnerId);
@@ -692,6 +759,11 @@ const PhotoFeedContent = forwardRef(({
           groupMembers={members}
         />
       )}
+
+      {/* Reaction add/delete toast, on the main feed (after the sheet closes). */}
+      {reactionToast !== null && (
+        <StickerToast message={reactionToast} animValue={reactionToastAnim} topInset={insets.top} />
+      )}
     </View>
   );
 });
@@ -701,6 +773,17 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   contentWrapper: {
     height: FEED_HEIGHT,
     backgroundColor: colors.bg,
+  },
+  // Sticker overlay: same box as contentWrapper, laid over it, so applying the same
+  // transform tracks the scaled post. Overflow visible (set inline) lets stickers spill.
+  stickerOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: FEED_HEIGHT,
+    overflow: "visible",
+    backgroundColor: "transparent",
   },
   fullscreenPage: {
     width: SCREEN_WIDTH,
@@ -831,25 +914,6 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.card, // background/default/secondary
     justifyContent: "center",
     alignItems: "center",
-  },
-  stickerAvatar: {
-    position: "absolute",
-    top: -10,
-    left: -10,
-    width: 24,
-    height: 24,
-    borderRadius: radii.xs,
-    backgroundColor: colors.brand,
-    justifyContent: "center",
-    alignItems: "center",
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: colors.borderNeutral,
-  },
-  avatarFallbackText: {
-    color: colors.white,
-    fontFamily: typography.family.bold,
-    fontSize: 10,
   },
 });
 

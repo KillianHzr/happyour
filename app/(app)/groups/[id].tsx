@@ -1399,6 +1399,8 @@ export default function MainPagerScreen() {
             crownDurationMs={crownDurationMs}
             crownAllDurations={activeData?.allDurations ?? {}}
             groupName={groupName}
+            currentUserAvatarUrl={avatarUrl ?? null}
+            currentUsername={username}
             onScrollLock={lockScrollDirect}
             onOpenPicker={setActiveReactionPhotoId}
             onOpenComments={handleCommentSeen}
