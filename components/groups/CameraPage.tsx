@@ -22,6 +22,7 @@ import { type ActiveChallenge, getCurrentChallengePeriod, TARGET_CHALLENGE_PROMP
 import { radii, spacing, stroke, blur, typography, textStyles, glassBlurIntensity, buildColors, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import Shape, { type ShapeName } from "../Shape";
+import GroupPickerSheet from "./GroupPickerSheet";
 import Icon, { type IconName } from "../Icon";
 import { AudioCaptionPlayer } from "../molecules/AudioCaptionPlayer";
 import LottieView from "lottie-react-native";
@@ -1970,85 +1971,15 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         </Pressable>
       </Modal>
 
-      {/* ── Group Picker ──
-           iOS  : Modal + dimezisBlurView (UIVisualEffectView, blur natif, marche sans blurTarget).
-           Android : overlay absolu + dimezisBlurView avec blurTarget → vrai blur GPU. */}
-      {Platform.OS === "ios" ? (
-        <Modal visible={showGroupPicker} transparent animationType="fade" onRequestClose={() => setShowGroupPicker(false)} statusBarTranslucent>
-          <View style={StyleSheet.absoluteFillObject}>
-            {/* Preview plein écran derrière le blur */}
-            {slot1 && (
-              <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
-                {(slot1.mode === "PHOTO" || slot1.mode === "DESSIN") && slot1.uri ? (
-                  <Image source={{ uri: slot1.uri }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
-                ) : slot1.mode === "VIDEO" && slot1.uri ? (
-                  <VideoSlotThumbnail uri={slot1.uri} />
-                ) : slot1.mode === "TEXTE" ? (
-                  <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#0A0A0A", justifyContent: "center", alignItems: "center", padding: 32 }]}>
-                    <Text style={{ color: "#FFFFFF", fontFamily: typography.family.bold, textAlign: "center", fontSize: 24 }} numberOfLines={6}>{slot1.textContent}</Text>
-                  </View>
-                ) : (
-                  <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#0A0A0A" }]} />
-                )}
-              </View>
-            )}
-            <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod="dimezisBlurView" style={StyleSheet.absoluteFillObject}>
-              <GroupPickerContent
-                shapes={previewCaptureShapes}
-                groups={allGroups}
-                selectedGroupIds={selectedGroupIds}
-                onToggle={toggleGroup}
-                onConfirm={() => confirmUpload(selectedGroupIds)}
-                onCancel={() => setShowGroupPicker(false)}
-                pickerStyles={pickerStyles}
-                colors={colors}
-              />
-            </BlurView>
-          </View>
-        </Modal>
-      ) : showGroupPicker ? (
-        <Animated.View style={[StyleSheet.absoluteFillObject, { zIndex: 999, opacity: pickerOpacity }]}>
-          {/* Preview plein écran derrière l'overlay */}
-          {slot1 && (
-            <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
-              {(slot1.mode === "PHOTO" || slot1.mode === "DESSIN") && slot1.uri ? (
-                <Image source={{ uri: slot1.uri }} style={StyleSheet.absoluteFillObject} contentFit="cover" />
-              ) : slot1.mode === "VIDEO" && slot1.uri ? (
-                <VideoSlotThumbnail uri={slot1.uri} />
-              ) : slot1.mode === "TEXTE" ? (
-                <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#0A0A0A", justifyContent: "center", alignItems: "center", padding: 32 }]}>
-                  <Text style={{ color: "#FFFFFF", fontFamily: typography.family.bold, textAlign: "center", fontSize: 24 }} numberOfLines={6}>{slot1.textContent}</Text>
-                </View>
-              ) : (
-                <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#0A0A0A" }]} />
-              )}
-            </View>
-          )}
-          {/* Flou intense à 50 uniquement pour Android ici */}
-          <NativeBlurView
-            blurAmount={50}
-            blurType="dark" 
-            blurRounds={3} 
-            style={StyleSheet.absoluteFillObject}
-          />
-          {/* Voile pour éclaircir/harmoniser comme sur iOS */}
-          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(255,255,255,0.05)" }]} pointerEvents="none" />
-          
-          <GroupPickerContent
-            shapes={previewCaptureShapes}
-            groups={allGroups}
-            selectedGroupIds={selectedGroupIds}
-            onToggle={toggleGroup}
-            onConfirm={() => {
-              confirmUpload(selectedGroupIds);
-              closeGroupPicker();
-            }}
-            onCancel={closeGroupPicker}
-            pickerStyles={pickerStyles}
-            colors={colors}
-          />
-        </Animated.View>
-      ) : null}
+      {/* ── Group Picker (modal type paramètres : recherche + liste à cocher) ── */}
+      <GroupPickerSheet
+        visible={showGroupPicker}
+        onClose={closeGroupPicker}
+        groups={allGroups}
+        selectedIds={selectedGroupIds}
+        onToggle={toggleGroup}
+        onConfirm={() => { confirmUpload(selectedGroupIds); closeGroupPicker(); }}
+      />
 
     </>
   );

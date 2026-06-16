@@ -28,6 +28,8 @@ type Props = {
   groupData: Record<string, GroupDataLike>;
   revealConfig: { day: number; hour: number };
   isActive: boolean;
+  enterGroupId?: string | null;        // ouvrir directement la vue de ce groupe (après ajout)
+  onEnteredGroup?: () => void;         // consommé → réinitialise enterGroupId côté parent
   onSelectGroup: (groupId: string) => void;
   onAddGroup: () => void;
   onScrollLock?: (locked: boolean) => void;
@@ -68,7 +70,7 @@ function computeNextRevealDate(revealDayOfWeek: number, revealHour: number): Dat
   return reveal;
 }
 
-export default function GroupsPage({ allGroups, groupData, revealConfig, isActive, onSelectGroup, onAddGroup, onScrollLock }: Props) {
+export default function GroupsPage({ allGroups, groupData, revealConfig, isActive, enterGroupId, onEnteredGroup, onSelectGroup, onAddGroup, onScrollLock }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -199,6 +201,14 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
     const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
     return () => sub.remove();
   }, [isActive, viewingGroupId, closeGroup]);
+
+  // Après ajout d'un groupe : on entre directement dans sa vue
+  useEffect(() => {
+    if (!enterGroupId) return;
+    // Avec un seul groupe la vue single s'affiche déjà ; sinon on ouvre l'overlay
+    if (cards.length > 1) openGroup(enterGroupId);
+    onEnteredGroup?.();
+  }, [enterGroupId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Un seul groupe : on entre directement, sans transition ─────────────────
   if (singleGroup) {

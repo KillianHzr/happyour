@@ -26,6 +26,7 @@ import CameraPage from "../../../components/groups/CameraPage";
 import VaultPage from "../../../components/groups/VaultPage";
 import GroupsPage from "../../../components/groups/GroupsPage";
 import PagerTabBar from "../../../components/groups/PagerTabBar";
+import AddGroupFlow from "../../../components/groups/AddGroupFlow";
 import GroupSettingsModal from "../../../components/groups/GroupSettingsModal";
 import CustomChallengeCreatePage from "../../../components/groups/CustomChallengeCreatePage";
 import CustomChallengeQueuePage from "../../../components/groups/CustomChallengeQueuePage";
@@ -149,6 +150,8 @@ export default function MainPagerScreen() {
   const [showReveal, setShowReveal] = useState(false);
   const [showGroupSettings, setShowGroupSettings] = useState(false);
   const [showAddGroupModal, setShowAddGroupModal] = useState(false);
+  // Quand le flow d'ajout se termine : ouvrir la vue du nouveau groupe dans GroupsPage
+  const [enterGroupId, setEnterGroupId] = useState<string | null>(null);
   const [showNotifOnboarding, setShowNotifOnboarding] = useState(false);
   const [addGroupView, setAddGroupView] = useState<null | "create" | "join">(null);
   const [newGroupName, setNewGroupName] = useState("");
@@ -1107,11 +1110,13 @@ export default function MainPagerScreen() {
       groupData={groupData}
       revealConfig={revealConfig}
       isActive={activePage === 0}
+      enterGroupId={enterGroupId}
+      onEnteredGroup={() => setEnterGroupId(null)}
       onSelectGroup={handleSwitchGroup}
       onAddGroup={() => setShowAddGroupModal(true)}
       onScrollLock={setGroupsPagerLocked}
     />
-  ), [allGroups, groupData, revealConfig, activePage === 0, handleSwitchGroup]);
+  ), [allGroups, groupData, revealConfig, activePage === 0, enterGroupId, handleSwitchGroup]);
 
   const memoizedCameraPage = useMemo(() => (
     <ForceThemeMode mode="Dark">
@@ -1443,81 +1448,14 @@ export default function MainPagerScreen() {
         </TouchableOpacity>
       </BottomSheet>
 
-      {/* ── ADD GROUP (choix + formulaires en sous-vues) ── */}
-      <BottomSheet visible={showAddGroupModal} onClose={closeAddGroupModal}>
-        {addGroupView === null && (
-          <>
-            <Text style={styles.addGroupTitle}>Ajouter un groupe</Text>
-            <Text style={styles.addGroupSub}>Tu peux rejoindre ou créer jusqu'à 3 groupes.</Text>
-            <TouchableOpacity
-              style={styles.addGroupPrimary}
-              onPress={() => setAddGroupView("create")}
-            >
-              <Text style={styles.addGroupPrimaryText}>Créer un groupe</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.addGroupSecondary}
-              onPress={() => setAddGroupView("join")}
-            >
-              <Text style={styles.addGroupSecondaryText}>Rejoindre avec un code</Text>
-            </TouchableOpacity>
-          </>
-        )}
-
-        {addGroupView === "create" && (
-          <>
-            <Text style={styles.addGroupTitle}>Nouveau groupe</Text>
-            <TextInput
-              style={styles.sheetInput}
-              placeholder="Nom du groupe"
-              placeholderTextColor={colors.textTertiary}
-              value={newGroupName}
-              onChangeText={setNewGroupName}
-              maxLength={9}
-              autoFocus
-              returnKeyType="done"
-              onSubmitEditing={handleCreateGroup}
-            />
-            <TouchableOpacity
-              style={[styles.addGroupPrimary, (!newGroupName.trim() || addGroupLoading) && { opacity: 0.45 }]}
-              onPress={handleCreateGroup}
-              disabled={!newGroupName.trim() || addGroupLoading}
-            >
-              <Text style={styles.addGroupPrimaryText}>{addGroupLoading ? "Création..." : "Créer"}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => { setAddGroupView(null); setNewGroupName(""); }} style={styles.sheetCancelText}>
-              <Text style={styles.sheetCancelText}>Retour</Text>
-            </TouchableOpacity>
-          </>
-        )}
-
-        {addGroupView === "join" && (
-          <>
-            <Text style={styles.addGroupTitle}>Rejoindre un cercle</Text>
-            <TextInput
-              style={[styles.sheetInput, styles.sheetCodeInput]}
-              placeholder="CODE-1234"
-              placeholderTextColor={colors.textTertiary}
-              autoCapitalize="characters"
-              value={joinCode}
-              onChangeText={setJoinCode}
-              autoFocus
-              returnKeyType="done"
-              onSubmitEditing={handleJoinGroup}
-            />
-            <TouchableOpacity
-              style={[styles.addGroupPrimary, (!joinCode.trim() || addGroupLoading) && { opacity: 0.45 }]}
-              onPress={handleJoinGroup}
-              disabled={!joinCode.trim() || addGroupLoading}
-            >
-              <Text style={styles.addGroupPrimaryText}>{addGroupLoading ? "..." : "Rejoindre"}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => { setAddGroupView(null); setJoinCode(""); }} style={styles.sheetCancelWrap}>
-              <Text style={styles.sheetCancelText}>Retour</Text>
-            </TouchableOpacity>
-          </>
-        )}
-      </BottomSheet>
+      {/* ── AJOUTER UN GROUPE (flow créer / rejoindre / félicitations / invite) ── */}
+      <AddGroupFlow
+        visible={showAddGroupModal}
+        userId={user?.id ?? ""}
+        onClose={() => setShowAddGroupModal(false)}
+        onGroupsChanged={async () => { await fetchAllData({ force: true }); }}
+        onEnterGroup={(id) => { setActiveGroupId(id); setEnterGroupId(id); }}
+      />
 
       <MotivationalNotificationsModal
         visible={showNotifOnboarding}

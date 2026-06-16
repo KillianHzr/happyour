@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import {
   Animated, PanResponder, StyleSheet, Modal,
   Pressable, View, Easing, KeyboardAvoidingView, Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { radii, spacing, blur, blurIntensity, type ThemeColors } from "../lib/theme";
-import { useThemedStyles, useTheme } from "../lib/theme-context";
+import { radii, spacing, blur, blurIntensity, buildColors, type ThemeColors } from "../lib/theme";
+import { useThemedStyles } from "../lib/theme-context";
 import BlurView from "./atoms/BlurView";
 
 
@@ -18,7 +18,8 @@ type Props = {
 export default function BottomSheet({ visible, onClose, children }: Props) {
   const insets = useSafeAreaInsets();
   const styles = useThemedStyles(makeStyles);
-  const { colors } = useTheme();
+  // Backdrop forcé en mode sombre (blur dark + background/default/default-opacity dark)
+  const darkColors = useMemo(() => buildColors("Dark"), []);
   const [mounted, setMounted] = useState(false);
   const overlayAnim = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(600)).current;
@@ -120,7 +121,7 @@ export default function BottomSheet({ visible, onClose, children }: Props) {
             tint="dark"
             style={StyleSheet.absoluteFill}
           />
-          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.opacityLight }]} />
+          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: darkColors.opacityLight }]} />
           <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
         </Animated.View>
 

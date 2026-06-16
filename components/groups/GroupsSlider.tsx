@@ -14,8 +14,8 @@ import { NameTag } from "../atoms/NameTag";
 import Shape, { type ShapeName } from "../Shape";
 import Icon from "../Icon";
 
-// Hauteur occupée par les dots (marginTop + paddingVertical*2 + dot) — identique au slider des défis
-const DOTS_AREA_HEIGHT = 16 + spacing.sm * 2 + 6; // 38
+// Hauteur de la zone pagination : marginTop + paddingVertical*2 + dot + (gap + compteur ~16)
+const DOTS_AREA_HEIGHT = 16 + spacing.sm * 2 + 6 + spacing.xxs + 16; // ~56
 
 export type GroupCard = {
   id: string;
@@ -247,10 +247,13 @@ export default function GroupsSlider({ cards, revealDate, onSelect, showActiveBo
             )}
 
             {needsLoop && (
-              <View style={sliderStyles.dotsContainer}>
-                {cards.map((_, idx) => (
-                  <View key={idx} style={[sliderStyles.dot, idx === activeIndex && sliderStyles.dotActive]} />
-                ))}
+              <View style={sliderStyles.paginationWrap}>
+                <View style={sliderStyles.dotsRow}>
+                  {cards.map((_, idx) => (
+                    <View key={idx} style={[sliderStyles.dot, idx === activeIndex && sliderStyles.dotActive]} />
+                  ))}
+                </View>
+                <Text style={sliderStyles.pageCounter}>{`${activeIndex + 1}/${count}`}</Text>
               </View>
             )}
           </>
@@ -316,13 +319,15 @@ const makeSliderStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.text,
     lineHeight: undefined,
   },
-  dotsContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
+  paginationWrap: {
     alignItems: "center",
-    padding: spacing.sm,
-    gap: spacing.xs2,
+    paddingVertical: spacing.sm,
     marginTop: 16,
+  },
+  dotsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs2,
   },
   dot: {
     width: 6,
@@ -331,6 +336,11 @@ const makeSliderStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.iconTertiary,
   },
   dotActive: {
-    backgroundColor: colors.icon,
+    backgroundColor: colors.iconBrandTertiary, // icon/brand/tertiary
+  },
+  pageCounter: {
+    ...textStyles.bodyExtraSmallStrong,
+    color: colors.textTertiary, // text/default/tertiary
+    marginTop: spacing.xxs, // collé sous la pagination
   },
 });

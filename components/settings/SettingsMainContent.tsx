@@ -13,6 +13,7 @@ import { spacing, radii, textStyles, typography, type ThemeColors } from "../../
 import Icon, { type IconName } from "../Icon";
 import ConfirmModal from "../ConfirmModal";
 import BottomSheet from "../BottomSheet";
+import { NamePill } from "../atoms/NamePill";
 import ProfileSettingsPage from "./ProfileSettingsPage";
 import NotificationsSettingsPage from "./NotificationsSettingsPage";
 import ThemeSettingsPage from "./ThemeSettingsPage";
@@ -38,21 +39,6 @@ function EmptyPage() {
 }
 
 // ─── Username pill (same as ProfilePage GroupNamePill) ────────────────────────
-
-function UsernamePill({ name, colors }: { name: string; colors: any }) {
-  return (
-    <View style={{ transform: [{ rotate: "2deg" }] }}>
-      <View style={{ height: 40, paddingHorizontal: spacing.xs2, backgroundColor: colors.brand, justifyContent: "center", overflow: "hidden" }}>
-        <Text
-          style={{ fontFamily: textStyles.subtitleStrong.fontFamily, fontSize: typography.size.subtitle, textTransform: "uppercase", color: colors.textInverse, includeFontPadding: false } as any}
-          numberOfLines={1}
-        >
-          {name}
-        </Text>
-      </View>
-    </View>
-  );
-}
 
 // ─── Main content ─────────────────────────────────────────────────────────────
 
@@ -224,7 +210,7 @@ export default function SettingsMainContent({ username, avatarUrl, onUsernameUpd
         visible={showDeleteStep1}
         onClose={() => setShowDeleteStep1(false)}
         title="Supprimer le compte"
-        element={<UsernamePill name={username} colors={colors} />}
+        element={<NamePill name={username} />}
         confirmLabel="Oui, supprimer"
         cancelLabel="Non, garder"
         confirmVariant="danger"
