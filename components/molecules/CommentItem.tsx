@@ -1,5 +1,12 @@
 import React from "react";
 import { View, Text, StyleSheet, Pressable, GestureResponderEvent } from "react-native";
+import Reanimated, { Keyframe } from "react-native-reanimated";
+
+const commentEntering = new Keyframe({
+  0:   { opacity: 0, scale: 1 },
+  55:  { opacity: 1, scale: 1.2 },
+  100: { opacity: 1, scale: 1 },
+}).duration(750);
 import { UserAvatar } from "../atoms/Avatar";
 import { radii as themeRadii, spacing as themeSpacing, typography, type ThemeColors } from "../../lib/theme";
 import { useThemedStyles, useTheme } from "../../lib/theme-context";
@@ -19,8 +26,8 @@ export interface Comment {
 interface CommentItemProps {
   item: Comment;
   isMyComment: boolean;
-  /** Fired after 800 ms hold — only for the current user's own comments */
   onLongPressDelete: (id: string, pageY: number) => void;
+  animateIn?: boolean;
   /**
    * Known group members — used to highlight the *full* username of a mention,
    * including usernames that contain spaces (the plain `@word` regex would stop
@@ -100,7 +107,7 @@ function parseMentionContent(
   return parts.length > 0 ? parts : [{ text: content, isMention: false }];
 }
 
-export const CommentItem = ({ item, isMyComment, onLongPressDelete, groupMembers = [] }: CommentItemProps) => {
+export const CommentItem = React.memo(({ item, isMyComment, onLongPressDelete, groupMembers = [], animateIn = false }: CommentItemProps) => {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
 
@@ -110,8 +117,7 @@ export const CommentItem = ({ item, isMyComment, onLongPressDelete, groupMembers
   );
 
   return (
-    // Pressable handles long-press natively on both iOS and Android — avoids
-    // gesture-handler conflicts with the parent FlatList's scroll recognizer.
+    <Reanimated.View entering={animateIn ? commentEntering : undefined}>
     <Pressable
       onLongPress={(e: GestureResponderEvent) => {
         if (isMyComment) {
@@ -160,14 +166,15 @@ export const CommentItem = ({ item, isMyComment, onLongPressDelete, groupMembers
         </View>
       </View>
     </Pressable>
+    </Reanimated.View>
   );
-};
+});
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     commentRow: {
       flexDirection: "row",
-      alignItems: "center",
+      alignItems: "flex-start",
       marginBottom: themeSpacing.xl,
       gap: themeSpacing.sm,
     },
@@ -176,11 +183,12 @@ const makeStyles = (colors: ThemeColors) =>
       height: 32,
       borderRadius: themeRadii.sm,
       overflow: "hidden",
+      flexShrink: 0,
     },
     commentContent: {
       flex: 1,
       flexDirection: "row",
-      alignItems: "center",
+      alignItems: "flex-start",
     },
     textContainer: {
       flex: 1,

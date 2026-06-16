@@ -22,6 +22,7 @@ import Reanimated, {
   runOnJS,
   useSharedValue,
   useAnimatedStyle,
+  useAnimatedScrollHandler,
   withTiming,
   withSpring,
   useDerivedValue,
@@ -226,10 +227,15 @@ function CommentModalContent({
     }
     onModeChange?.(mode);
   }, [mode]);
+  const myCurrentSticker = reactions.find((r) => r.user_id === user?.id)?.sticker_id ?? "";
+
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [content, setContent] = useState("");
+  const [newestCommentId, setNewestCommentId] = useState<string | null>(null);
+  const [content, setContent] = useState(() =>
+    initialMode === "sticker" ? myCurrentSticker : ""
+  );
   const [userComment, setUserComment] = useState<Comment | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [fetchedGroupMembers, setFetchedGroupMembers] = useState<GroupMember[]>(groupMembers);
@@ -255,6 +261,8 @@ function CommentModalContent({
 
   const hasKeyboard = keyboardVisible;
   const isOwner = user?.id === photoOwnerId;
+  // True when the input is pre-filled and unchanged — show trash instead of checkmark.
+  const isStickerDeleteMode = mode === "sticker" && !!myCurrentSticker && content === myCurrentSticker;
   // Collapsed (keyboard-up) target height: sticker mode gets its own value so it can
   // be tuned independently of the comment-mode keyboard height.
   const collapsedH = mode === "sticker" ? SHEET_STICKER : SHEET_KB;
@@ -637,6 +645,7 @@ function CommentModalContent({
 
       if (error) throw error;
       setComments((prev) => [...prev, data as any]);
+      setNewestCommentId((data as any).id);
       setUserComment(data as any);
       setContent("");
       Keyboard.dismiss();
@@ -647,6 +656,21 @@ function CommentModalContent({
       setSubmitting(false);
     }
   };
+
+  const handleStickerDelete = useCallback(() => {
+    if (!user) return;
+    supabase
+      .from("reactions")
+      .delete()
+      .eq("photo_id", photoId)
+      .eq("user_id", user.id)
+      .then(({ error }) => { if (error) console.error("Error deleting reaction:", error); });
+    setContent("");
+    if (onStickerDeleted) onStickerDeleted();
+    else showToast("Réaction supprimée");
+    if (gracefulCloseTimer.current) clearTimeout(gracefulCloseTimer.current);
+    gracefulCloseTimer.current = setTimeout(() => gracefulClose(), STICKER_DELETE_MS);
+  }, [user, photoId, onStickerDeleted]);
 
   const handleDeleteComment = async (commentId: string) => {
     if (!user) return;
@@ -690,7 +714,7 @@ function CommentModalContent({
   const toggleMode = () => {
     setMode((prev) => {
       if (prev === "comment") {
-        setContent(content.replace(emojiRegex, "").slice(0, 8).toUpperCase());
+        setContent(myCurrentSticker);
         return "sticker";
       }
       return "comment";
@@ -705,14 +729,15 @@ function CommentModalContent({
     }
   };
 
-  const renderComment = ({ item }: { item: Comment }) => (
+  const renderComment = useCallback(({ item }: { item: Comment }) => (
     <CommentItem
       item={item}
       isMyComment={item.user_id === user?.id}
       onLongPressDelete={handleLongPressDelete}
       groupMembers={fetchedGroupMembers}
+      animateIn={item.id === newestCommentId}
     />
-  );
+  ), [user?.id, handleLongPressDelete, fetchedGroupMembers, newestCommentId]);
 
   if (inline) {
     return (
@@ -736,6 +761,8 @@ function CommentModalContent({
             groupMembers={fetchedGroupMembers}
             embedded={embedded}
             closingRef={intentionalCloseRef}
+            isStickerDeleteMode={isStickerDeleteMode}
+            onStickerDelete={handleStickerDelete}
           />
 
           {toastMessage !== null && (
@@ -801,6 +828,8 @@ function CommentModalContent({
               groupMembers={fetchedGroupMembers}
               embedded={embedded}
               closingRef={intentionalCloseRef}
+              isStickerDeleteMode={isStickerDeleteMode}
+              onStickerDelete={handleStickerDelete}
             />
           </Reanimated.View>
         </ForceTheme>
@@ -842,6 +871,8 @@ function CommentModalBody({
   groupMembers,
   embedded,
   closingRef,
+  isStickerDeleteMode,
+  onStickerDelete,
 }: any) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -865,19 +896,36 @@ function CommentModalBody({
   );
 
   // ── Custom scrollbar ──────────────────────────────────────────────────────────
-  // RN's native scroll indicator can't be styled (width/radius), so we track the
-  // FlatList's scroll offset + sizes and drive our own 4px pill thumb on the right.
-  const [scrollViewHeight, setScrollViewHeight] = useState(0);
-  const [contentHeight, setContentHeight] = useState(0);
-  const scrollY = useRef(new Animated.Value(0)).current;
+  // All three values are Reanimated shared values so the thumb position is computed
+  // entirely on the UI thread — no JS-thread re-render lag, no jump when the
+  // viewport height changes as the keyboard opens/closes.
+  const scrollY = useSharedValue(0);
+  const viewportHeightSV = useSharedValue(0);
+  const contentHeightSV = useSharedValue(0);
 
-  const onScroll = useMemo(
-    () =>
-      Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
-        useNativeDriver: true,
-      }),
-    [scrollY]
-  );
+  const onScroll = useAnimatedScrollHandler((e) => {
+    scrollY.value = e.contentOffset.y;
+  });
+
+  // ── Scroll-to-bottom ─────────────────────────────────────────────────────────
+  // With `inverted`, offset 0 IS the visual bottom (newest comment). So
+  // scrollToOffset({offset:0}) is always cheap — no content-height calculation.
+  // • Initial load: fire once in onContentSizeChange after content appears.
+  // • New comment posted: useEffect detects length increase and animates down.
+  const flatListRef = useRef<any>(null);
+  const didInitialScroll = useRef(false);
+
+  // Stable reversed array — only recomputed when comments change, NOT on every
+  // keystroke. FlatList sees the same reference while the user is typing.
+  const reversedComments = useMemo(() => [...comments].reverse(), [comments]);
+
+  const prevCommentsLen = useRef(comments.length);
+  useEffect(() => {
+    if (comments.length > prevCommentsLen.current) {
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    }
+    prevCommentsLen.current = comments.length;
+  }, [comments.length]);
 
   const handleInputFocus = useCallback(() => {
     if (blurTimer.current) clearTimeout(blurTimer.current);
@@ -907,20 +955,30 @@ function CommentModalBody({
               <ActivityIndicator size="large" color={colors.text} />
             </View>
           ) : (
-            <View style={{ flex: 1 }}>
-              <Animated.FlatList
-                data={comments}
+            <View style={{ flex: 1, overflow: "hidden" }}>
+              <Reanimated.FlatList
+                ref={flatListRef}
+                data={reversedComments}
+                inverted
                 keyExtractor={(item) => item.id}
                 renderItem={renderComment}
-                contentContainerStyle={styles.listContent}
+                contentContainerStyle={[styles.listContent, { flexGrow: 1, justifyContent: "flex-end", paddingBottom: 0 }]}
+                initialNumToRender={50}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="always"
-                keyboardDismissMode="on-drag"
+                keyboardDismissMode="none"
                 style={{ flex: 1 }}
                 scrollEventThrottle={16}
                 onScroll={onScroll}
-                onLayout={(e) => setScrollViewHeight(e.nativeEvent.layout.height)}
-                onContentSizeChange={(_w, h) => setContentHeight(h)}
+                onLayout={(e) => { viewportHeightSV.value = e.nativeEvent.layout.height; }}
+                onContentSizeChange={(_w, h) => {
+                  contentHeightSV.value = h;
+                  // On first load jump instantly to offset 0 = visual bottom (newest).
+                  if (!didInitialScroll.current && h > 0) {
+                    didInitialScroll.current = true;
+                    flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+                  }
+                }}
                 ListEmptyComponent={
                   <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                     <View style={styles.emptyContainer}>
@@ -931,8 +989,8 @@ function CommentModalBody({
               />
               <CommentScrollbar
                 scrollY={scrollY}
-                viewportHeight={scrollViewHeight}
-                contentHeight={contentHeight}
+                viewportHeightSV={viewportHeightSV}
+                contentHeightSV={contentHeightSV}
               />
             </View>
           ))}
@@ -941,7 +999,7 @@ function CommentModalBody({
       <View style={{ paddingBottom }}>
         {mode === "sticker" && (
           <View style={styles.stickerPreviewContainer}>
-            <TextSticker text={content.trim().toUpperCase() || "STICKER"} fontSize={36} />
+            <TextSticker text={content.trim().toUpperCase() || " "} fontSize={36} />
           </View>
         )}
         {mode !== "sticker" && (
@@ -965,6 +1023,8 @@ function CommentModalBody({
           onFocus={handleInputFocus}
           onBlur={handleInputBlur}
           closingRef={closingRef}
+          stickerDeleteMode={isStickerDeleteMode}
+          onStickerDelete={onStickerDelete}
         />
       </View>
     </>
@@ -978,34 +1038,37 @@ function CommentModalBody({
 const SCROLLBAR_MIN_THUMB = 24;
 function CommentScrollbar({
   scrollY,
-  viewportHeight,
-  contentHeight,
+  viewportHeightSV,
+  contentHeightSV,
 }: {
-  scrollY: Animated.Value;
-  viewportHeight: number;
-  contentHeight: number;
+  scrollY: SharedValue<number>;
+  viewportHeightSV: SharedValue<number>;
+  contentHeightSV: SharedValue<number>;
 }) {
   const styles = useThemedStyles(makeStyles);
 
-  // Nothing to scroll → no scrollbar.
-  if (contentHeight <= viewportHeight || viewportHeight === 0) return null;
-
-  const ratio = viewportHeight / contentHeight;
-  const thumbHeight = Math.max(viewportHeight * ratio, SCROLLBAR_MIN_THUMB);
-  const scrollableDistance = contentHeight - viewportHeight;
-  const thumbTravel = viewportHeight - thumbHeight;
-
-  const translateY = scrollY.interpolate({
-    inputRange: [0, scrollableDistance],
-    outputRange: [0, thumbTravel],
-    extrapolate: "clamp",
+  // All maths run on the UI thread via useAnimatedStyle — no JS re-render when
+  // viewport or content height changes (keyboard open/close), no interpolation
+  // parameter jumps, and the thumb tracks scrolling frame-by-frame.
+  const thumbStyle = useAnimatedStyle(() => {
+    const vh = viewportHeightSV.value;
+    const ch = contentHeightSV.value;
+    if (ch <= vh || vh === 0) return { opacity: 0, height: SCROLLBAR_MIN_THUMB };
+    const thumbHeight = Math.max(vh * (vh / ch), SCROLLBAR_MIN_THUMB);
+    const scrollableDistance = ch - vh;
+    const thumbTravel = vh - thumbHeight;
+    // Inverted list: offset 0 = visual bottom → thumb at bottom of track.
+    const progress = scrollableDistance > 0 ? scrollY.value / scrollableDistance : 0;
+    return {
+      opacity: 1,
+      height: thumbHeight,
+      transform: [{ translateY: thumbTravel * (1 - progress) }],
+    };
   });
 
   return (
     <View style={styles.scrollbarTrack} pointerEvents="none">
-      <Animated.View
-        style={[styles.scrollbarThumb, { height: thumbHeight, transform: [{ translateY }] }]}
-      />
+      <Reanimated.View style={[styles.scrollbarThumb, thumbStyle]} />
     </View>
   );
 }

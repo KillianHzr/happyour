@@ -26,6 +26,8 @@ import {
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import { Image } from "expo-image";
 
+const profileCache: Record<string, { username: string; avatar_url: string | null }> = {};
+
 export interface GroupMember {
   user_id: string;
   username: string;
@@ -48,6 +50,9 @@ interface CommentInputProps {
   onMentionSearch?: (keyword: string | null) => void;
   /** Ref from CommentModal set to true when the sheet is intentionally closing — suppresses sticker-mode re-focus. */
   closingRef?: React.MutableRefObject<boolean>;
+  /** True when the user's existing sticker is pre-filled and unmodified — shows trash instead of checkmark. */
+  stickerDeleteMode?: boolean;
+  onStickerDelete?: () => void;
 }
 
 export const CommentInput = ({
@@ -64,6 +69,8 @@ export const CommentInput = ({
   onStickerToggle,
   onMentionSearch,
   closingRef,
+  stickerDeleteMode = false,
+  onStickerDelete,
 }: CommentInputProps) => {
   const { user } = useAuth();
   const { colors } = useTheme();
@@ -76,7 +83,7 @@ export const CommentInput = ({
   const [profile, setProfile] = useState<{
     username: string;
     avatar_url: string | null;
-  } | null>(null);
+  } | null>(() => (user?.id ? profileCache[user.id] ?? null : null));
   const inputRef = useRef<TextInput>(null);
 
   // Auto-focus when switching to sticker mode
@@ -91,6 +98,10 @@ export const CommentInput = ({
 
   useEffect(() => {
     if (!user) return;
+    if (profileCache[user.id]) {
+      setProfile(profileCache[user.id]);
+      return;
+    }
     let active = true;
     supabase
       .from("profiles")
@@ -98,7 +109,10 @@ export const CommentInput = ({
       .eq("id", user.id)
       .single()
       .then(({ data }) => {
-        if (active && data) setProfile(data);
+        if (active && data) {
+          profileCache[user.id] = data;
+          setProfile(data);
+        }
       });
     return () => {
       active = false;
@@ -177,12 +191,16 @@ export const CommentInput = ({
             }
           }}
         />
-        {(content.trim().length > 0 || isStickerMode) && (
+        {stickerDeleteMode ? (
           <TouchableOpacity
-            style={[
-              styles.sendBtn,
-              !content.trim() && !isStickerMode && styles.sendBtnDisabled,
-            ]}
+            style={[styles.sendBtn, styles.sendBtnDelete]}
+            onPressIn={onStickerDelete}
+          >
+            <Icon name="trash" size={16} color={colors.iconDangerTertiary} />
+          </TouchableOpacity>
+        ) : content.trim().length > 0 ? (
+          <TouchableOpacity
+            style={[styles.sendBtn, isDisabled && styles.sendBtnDisabled]}
             // Submit on touch-DOWN, not release. When the comment sheet is
             // embedded inside another modal (challenge responses), the keyboard
             // is owned by the parent modal's window; the first tap on this button
@@ -202,7 +220,7 @@ export const CommentInput = ({
               <Icon name="check" size={16} color={colors.iconBrandOnBrand} />
             )}
           </TouchableOpacity>
-        )}
+        ) : null}
       </View>
       {!isStickerMode && (
         <TouchableOpacity
@@ -329,6 +347,9 @@ const makeStyles = (colors: ThemeColors) =>
     },
     sendBtnDisabled: {
       opacity: 0.5,
+    },
+    sendBtnDelete: {
+      backgroundColor: colors.bgDangerTertiary,
     },
     placeholderBtn: {
       width: themeSpacing.xl3,

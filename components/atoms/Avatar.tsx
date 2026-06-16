@@ -15,14 +15,19 @@ interface UserAvatarProps {
 export const UserAvatar = ({ avatar_url, username, size = 28, borderRadius }: UserAvatarProps) => {
   const { colors } = useTheme();
   const r = borderRadius ?? (size / 2);
-  if (avatar_url) {
-    return <Image source={{ uri: avatar_url }} style={{ width: size, height: size, borderRadius: r }} />;
-  }
   return (
-    <View style={{ width: size, height: size, borderRadius: r, backgroundColor: colors.text, justifyContent: "center", alignItems: "center" }}>
+    <View style={{ width: size, height: size, borderRadius: r, backgroundColor: colors.text, justifyContent: "center", alignItems: "center", overflow: "hidden" }}>
       <Text style={{ color: colors.bg, fontFamily: typography.family.bold, fontSize: Math.round(size * 0.42) }}>
         {username[0]?.toUpperCase() ?? "?"}
       </Text>
+      {avatar_url ? (
+        <Image
+          source={{ uri: avatar_url }}
+          style={{ position: "absolute", width: size, height: size }}
+          cachePolicy="memory-disk"
+          transition={150}
+        />
+      ) : null}
     </View>
   );
 };
