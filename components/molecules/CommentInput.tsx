@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Text,
   Pressable,
+  Animated,
 } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import Icon from "../Icon";
@@ -45,6 +46,8 @@ interface CommentInputProps {
   onStickerToggle?: () => void;
   /** Called whenever the @ mention search keyword changes (null = no active mention) */
   onMentionSearch?: (keyword: string | null) => void;
+  /** Ref from CommentModal set to true when the sheet is intentionally closing — suppresses sticker-mode re-focus. */
+  closingRef?: React.MutableRefObject<boolean>;
 }
 
 export const CommentInput = ({
@@ -60,12 +63,16 @@ export const CommentInput = ({
   isStickerMode = false,
   onStickerToggle,
   onMentionSearch,
+  closingRef,
 }: CommentInputProps) => {
   const { user } = useAuth();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const isDisabled = (!isStickerMode && !content.trim()) || submitting;
 
+  const borderOpacity = useRef(new Animated.Value(0)).current;
+  const isStickerModeRef = useRef(isStickerMode);
+  useEffect(() => { isStickerModeRef.current = isStickerMode; }, [isStickerMode]);
   const [profile, setProfile] = useState<{
     username: string;
     avatar_url: string | null;
@@ -129,6 +136,10 @@ export const CommentInput = ({
 
   return (
     <View style={styles.inputArea}>
+      <Animated.View
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFill, styles.focusBorder, { opacity: borderOpacity }]}
+      />
       <UserAvatar
         avatar_url={profile?.avatar_url}
         username={profile?.username || "Moi"}
@@ -147,8 +158,24 @@ export const CommentInput = ({
           multiline={maxLength === undefined}
           textAlignVertical="center"
           autoCapitalize={autoCapitalize || "sentences"}
-          onFocus={onFocus}
-          onBlur={onBlur}
+          blurOnSubmit={!isStickerMode}
+          onFocus={() => {
+            Animated.timing(borderOpacity, { toValue: 1, duration: 150, useNativeDriver: true }).start();
+            onFocus?.();
+          }}
+          onBlur={() => {
+            Animated.timing(borderOpacity, { toValue: 0, duration: 150, useNativeDriver: true }).start();
+            onBlur?.();
+            // Re-focus immediately so Android back / iOS return can't escape the sticker input.
+            // Skip when the sheet is intentionally closing so we don't fight the exit animation.
+            if (isStickerModeRef.current && !closingRef?.current) {
+              setTimeout(() => {
+                if (isStickerModeRef.current && !closingRef?.current) {
+                  inputRef.current?.focus();
+                }
+              }, 50);
+            }
+          }}
         />
         {(content.trim().length > 0 || isStickerMode) && (
           <TouchableOpacity
@@ -260,9 +287,13 @@ const makeStyles = (colors: ThemeColors) =>
       flexDirection: "row",
       alignItems: "flex-end",
       paddingHorizontal: themeSpacing.lg,
-      paddingTop: themeSpacing.sm,
-      paddingBottom: themeSpacing.sm,
-      gap: themeSpacing.sm,
+      paddingTop: themeSpacing.lg,
+      paddingBottom: themeSpacing.lg,
+      gap: themeSpacing.md,
+    },
+    focusBorder: {
+      borderTopWidth: stroke.sm,
+      borderTopColor: colors.borderSecondary,
     },
     inputContainer: {
       flex: 1,

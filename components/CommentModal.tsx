@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   Platform,
   ActivityIndicator,
   Modal,
@@ -202,6 +201,9 @@ function CommentModalContent({
   // Set to true just before an intentional Keyboard.dismiss() that should NOT
   // trigger the "switch to comment mode" logic in the keyboard-hide listener.
   const intentionalCloseRef = useRef(false);
+  // True when gracefulClose has already kicked off all exit animations directly,
+  // so the useEffect([visible]) close path skips re-starting them.
+  const isGracefulClosingRef = useRef(false);
 
   useEffect(() => {
     const prevMode = prevModeRef.current;
@@ -433,6 +435,7 @@ function CommentModalContent({
 
     if (visible) {
       intentionalCloseRef.current = false;
+      isGracefulClosingRef.current = false;
       dragY.value = 0;
       // Defensive: the keyboard is never up at open time, but kbSV (owned by the
       // parent) may be stale from a prior Android teardown — clear it before the
@@ -448,7 +451,10 @@ function CommentModalContent({
       }).start();
       fetchComments();
       markAsSeen();
-    } else {
+    } else if (!isGracefulClosingRef.current) {
+      // Normal close (tap backdrop, drag to dismiss): animate everything now.
+      // gracefulClose() skips this block — it starts all animations synchronously
+      // to avoid the React-render-cycle gap that causes a two-part exit.
       if (IS_IOS) Keyboard.dismiss();
       Animated.timing(overlayOpacity, {
         toValue: 0,
@@ -475,11 +481,24 @@ function CommentModalContent({
   const gracefulCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const gracefulClose = useCallback(() => {
     intentionalCloseRef.current = true;
+    isGracefulClosingRef.current = true;
     closingSV.value = 1;
     dragY.value = withTiming(0, SHEET_TIMING);
+    // Start all exit animations synchronously — no React render cycle gap between
+    // Keyboard.dismiss() and the sheet slide-out, so the two move as one.
+    sheetProgress.value = withTiming(0, SHEET_TIMING, (fin) => {
+      "worklet";
+      if (fin) runOnJS(finishClose)();
+    });
+    Animated.timing(overlayOpacity, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+      easing: Easing.in(Easing.quad),
+    }).start();
     Keyboard.dismiss();
     handleClose();
-  }, []);
+  }, [finishClose]);
   useEffect(() => () => {
     if (gracefulCloseTimer.current) clearTimeout(gracefulCloseTimer.current);
     if (toastHideTimer.current) clearTimeout(toastHideTimer.current);
@@ -716,6 +735,7 @@ function CommentModalContent({
             onStickerToggle={toggleMode}
             groupMembers={fetchedGroupMembers}
             embedded={embedded}
+            closingRef={intentionalCloseRef}
           />
 
           {toastMessage !== null && (
@@ -780,6 +800,7 @@ function CommentModalContent({
               onStickerToggle={toggleMode}
               groupMembers={fetchedGroupMembers}
               embedded={embedded}
+              closingRef={intentionalCloseRef}
             />
           </Reanimated.View>
         </ForceTheme>
@@ -820,13 +841,14 @@ function CommentModalBody({
   onStickerToggle,
   groupMembers,
   embedded,
+  closingRef,
 }: any) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   // Sticker mode always opens the keyboard (autofocus) and the sheet rides above it,
   // so keep a fixed 8px — flipping insets.bottom → 8 at keyboard-settle caused a
   // visible bottom-padding jump at the end of the open animation.
-  const paddingBottom = mode === "sticker" ? 8 : hasKeyboard ? 8 : Math.max(insets.bottom, 20);
+  const paddingBottom = mode === "sticker" ? 8 : hasKeyboard ? 8 : themeRadii.lg;
   const [mentionKeyword, setMentionKeyword] = useState<string | null>(null);
   // Cleared when the input blurs so the popup never lingers without focus.
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -840,6 +862,21 @@ function CommentModalBody({
       setMentionKeyword(null);
     },
     [content, setContent]
+  );
+
+  // ── Custom scrollbar ──────────────────────────────────────────────────────────
+  // RN's native scroll indicator can't be styled (width/radius), so we track the
+  // FlatList's scroll offset + sizes and drive our own 4px pill thumb on the right.
+  const [scrollViewHeight, setScrollViewHeight] = useState(0);
+  const [contentHeight, setContentHeight] = useState(0);
+  const scrollY = useRef(new Animated.Value(0)).current;
+
+  const onScroll = useMemo(
+    () =>
+      Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+        useNativeDriver: true,
+      }),
+    [scrollY]
   );
 
   const handleInputFocus = useCallback(() => {
@@ -859,7 +896,7 @@ function CommentModalBody({
         <BlurView intensity={80} tint="light" style={StyleSheet.absoluteFill} />
       </View>
 
-      <View style={mode === "sticker" ? { flex: 0 } : { flex: 1 }}>
+      <View style={{ flex: 1 }}>
         <View style={styles.dragArea} {...panResponder.panHandlers}>
           <View style={styles.dragHandle} />
         </View>
@@ -870,23 +907,34 @@ function CommentModalBody({
               <ActivityIndicator size="large" color={colors.text} />
             </View>
           ) : (
-            <FlatList
-              data={comments}
-              keyExtractor={(item) => item.id}
-              renderItem={renderComment}
-              contentContainerStyle={styles.listContent}
-              showsVerticalScrollIndicator={true}
-              keyboardShouldPersistTaps="always"
-              keyboardDismissMode="on-drag"
-              style={{ flex: 1 }}
-              ListEmptyComponent={
-                <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                  <View style={styles.emptyContainer}>
-                    <Text style={styles.emptyText}>Aucun commentaire pour le moment.</Text>
-                  </View>
-                </TouchableWithoutFeedback>
-              }
-            />
+            <View style={{ flex: 1 }}>
+              <Animated.FlatList
+                data={comments}
+                keyExtractor={(item) => item.id}
+                renderItem={renderComment}
+                contentContainerStyle={styles.listContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="always"
+                keyboardDismissMode="on-drag"
+                style={{ flex: 1 }}
+                scrollEventThrottle={16}
+                onScroll={onScroll}
+                onLayout={(e) => setScrollViewHeight(e.nativeEvent.layout.height)}
+                onContentSizeChange={(_w, h) => setContentHeight(h)}
+                ListEmptyComponent={
+                  <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+                    <View style={styles.emptyContainer}>
+                      <Text style={styles.emptyText}>Aucun commentaire pour le moment.</Text>
+                    </View>
+                  </TouchableWithoutFeedback>
+                }
+              />
+              <CommentScrollbar
+                scrollY={scrollY}
+                viewportHeight={scrollViewHeight}
+                contentHeight={contentHeight}
+              />
+            </View>
           ))}
       </View>
 
@@ -916,9 +964,49 @@ function CommentModalBody({
           onMentionSearch={setMentionKeyword}
           onFocus={handleInputFocus}
           onBlur={handleInputBlur}
+          closingRef={closingRef}
         />
       </View>
     </>
+  );
+}
+
+// ── Custom scrollbar ──────────────────────────────────────────────────────────
+// A 4px pill thumb pinned to the right edge. Hidden when content fits. The thumb
+// height is proportional to the visible/content ratio; its offset is driven by the
+// list's scrollY (native driver) so it tracks scrolling frame-by-frame.
+const SCROLLBAR_MIN_THUMB = 24;
+function CommentScrollbar({
+  scrollY,
+  viewportHeight,
+  contentHeight,
+}: {
+  scrollY: Animated.Value;
+  viewportHeight: number;
+  contentHeight: number;
+}) {
+  const styles = useThemedStyles(makeStyles);
+
+  // Nothing to scroll → no scrollbar.
+  if (contentHeight <= viewportHeight || viewportHeight === 0) return null;
+
+  const ratio = viewportHeight / contentHeight;
+  const thumbHeight = Math.max(viewportHeight * ratio, SCROLLBAR_MIN_THUMB);
+  const scrollableDistance = contentHeight - viewportHeight;
+  const thumbTravel = viewportHeight - thumbHeight;
+
+  const translateY = scrollY.interpolate({
+    inputRange: [0, scrollableDistance],
+    outputRange: [0, thumbTravel],
+    extrapolate: "clamp",
+  });
+
+  return (
+    <View style={styles.scrollbarTrack} pointerEvents="none">
+      <Animated.View
+        style={[styles.scrollbarThumb, { height: thumbHeight, transform: [{ translateY }] }]}
+      />
+    </View>
   );
 }
 
@@ -952,13 +1040,13 @@ const makeStyles = (colors: ThemeColors) =>
     },
     dragArea: {
       width: "100%",
+      height: themeSpacing.xxl,
       alignItems: "center",
-      paddingTop: 12,
-      paddingBottom: 8,
+      justifyContent: "center",
       zIndex: 10,
     },
     dragHandle: {
-      width: 38,
+      width: 48,
       height: 4,
       backgroundColor: colors.borderSecondary,
       borderRadius: themeRadii.xs,
@@ -968,16 +1056,29 @@ const makeStyles = (colors: ThemeColors) =>
       justifyContent: "center",
       alignItems: "center",
     },
+    scrollbarTrack: {
+      position: "absolute",
+      top: 0,
+      bottom: 0,
+      right: 6,
+      width: 4,
+    },
+    scrollbarThumb: {
+      width: 4,
+      borderRadius: themeRadii.full,
+      backgroundColor: colors.borderSecondary,
+    },
     listContent: {
-      padding: themeSpacing.xl,
+      paddingHorizontal: themeSpacing.xl,
+      paddingTop: 0,
       paddingBottom: themeSpacing.xl4,
     },
     stickerPreviewContainer: {
       width: "100%",
       alignItems: "center",
       justifyContent: "center",
-      paddingTop: 20,
-      paddingBottom: 16,
+      paddingTop: themeSpacing.sm,
+      paddingBottom: themeSpacing.sm,
       backgroundColor: "transparent",
       overflow: "visible",
     },
