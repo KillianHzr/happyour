@@ -183,9 +183,6 @@ const PhotoFeedContent = forwardRef(({
     scrollY.value = event.contentOffset.y;
   });
   const [visibleIndex, setVisibleIndex] = useState(0);
-  const [countdownText, setCountdownText] = useState("");
-  const [revealTimeLeft, setRevealTimeLeft] = useState("");
-  const [revealMsLeft, setRevealMsLeft] = useState(Infinity);
   const flatListRef = useRef<FlatList>(null);
   const [videoCache, setVideoCache] = useState<Record<string, string>>({});
   
@@ -387,37 +384,6 @@ const PhotoFeedContent = forwardRef(({
     });
     return () => { cancelled = true; };
   }, [photos]);
-
-  useEffect(() => {
-    const tick = () => {
-      const distance = nextUnlockDate.getTime() - Date.now();
-      if (distance < 0) { setCountdownText("00:00:00"); return; }
-      const d = Math.floor(distance / 86400000);
-      const h = Math.floor((distance % 86400000) / 3600000);
-      const m = Math.floor((distance % 3600000) / 60000);
-      const s = Math.floor((distance % 60000) / 1000);
-      setCountdownText(`${d > 0 ? d + "j " : ""}${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
-    };
-    tick();
-    const timer = setInterval(tick, 1000);
-    return () => clearInterval(timer);
-  }, [nextUnlockDate]);
-
-  useEffect(() => {
-    if (!revealEndDate) return;
-    const tick = () => {
-      const ms = revealEndDate.getTime() - Date.now();
-      if (ms <= 0) { setRevealTimeLeft("Expiré"); setRevealMsLeft(0); return; }
-      setRevealMsLeft(ms);
-      const h = Math.floor(ms / 3600000);
-      const m = Math.floor((ms % 3600000) / 60000);
-      const s = Math.floor((ms % 60000) / 1000);
-      setRevealTimeLeft(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
-    };
-    tick();
-    const timer = setInterval(tick, 1000);
-    return () => clearInterval(timer);
-  }, [revealEndDate]);
 
   const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     if (viewableItems.length > 0 && viewableItems[0].index != null) {

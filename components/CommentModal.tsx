@@ -160,7 +160,9 @@ export default function CommentModal(props: CommentModalProps) {
       {/* A native Modal is a separate window; keyboard-controller events only fire
           inside a KeyboardProvider mounted in that window. (embedded/inline render
           in the main window and rely on the root provider.) */}
-      <KeyboardProvider>{content}</KeyboardProvider>
+      <KeyboardProvider>
+        {content}
+        </KeyboardProvider>
     </Modal>
   );
 }
@@ -987,11 +989,13 @@ function CommentModalBody({
                   </TouchableWithoutFeedback>
                 }
               />
-              <CommentScrollbar
-                scrollY={scrollY}
-                viewportHeightSV={viewportHeightSV}
-                contentHeightSV={contentHeightSV}
-              />
+              {reversedComments.length > 0 && (
+                <CommentScrollbar
+                  scrollY={scrollY}
+                  viewportHeightSV={viewportHeightSV}
+                  contentHeightSV={contentHeightSV}
+                />
+              )}
             </View>
           ))}
       </View>
@@ -1148,6 +1152,9 @@ const makeStyles = (colors: ThemeColors) =>
     emptyContainer: {
       alignItems: "center",
       marginTop: themeSpacing.xl4,
+      // The list is `inverted` (scaleY: -1), which flips ListEmptyComponent upside down —
+      // counter-flip it back so the text reads normally.
+      transform: [{ scaleY: -1 }],
     },
     emptyText: {
       fontFamily: typography.family.medium,

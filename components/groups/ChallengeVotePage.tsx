@@ -1,5 +1,14 @@
-import React, { useState, useEffect, useRef } from "react";
-import { View, Text, StyleSheet, Dimensions, Platform, TouchableOpacity, ScrollView, Animated, Share, KeyboardAvoidingView, LayoutAnimation } from "react-native";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Dimensions,
+  TouchableOpacity,
+  Animated as RNAnimated,
+  Easing as RNEasing,
+  Share
+} from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -9,27 +18,36 @@ import { getChallengePrompt, type ChallengeWithData, type ChallengeResponse } fr
 import Svg, { Path } from "react-native-svg";
 import { r2Storage } from "../../lib/r2";
 import ChallengeAudioPlayer from "./ChallengeAudioPlayer";
-import { radii, typography, shadows, spacing, textStyles, stroke, type ThemeColors } from "../../lib/theme";
+import { radii, typography, spacing, textStyles, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import { supabase } from "../../lib/supabase";
 import CommentModal from "../CommentModal";
 import { RightSlideModal } from "../atoms/RightSlideModal";
 import { type Reaction } from "../../lib/feed-types";
 
+// Reanimated and Reactions
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  useDerivedValue,
+  withTiming,
+  type SharedValue,
+} from "react-native-reanimated";
+import { ReactionStickers, type ReactionDisplay } from "../molecules/ReactionStickers";
+import { StickerToast } from "../atoms/StickerToast";
+import { SHEET_BASE } from "../../lib/comment-sheet";
+import Carousel, { Pagination, ICarouselInstance } from "react-native-reanimated-carousel";
+
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
-const IS_IOS = Platform.OS === "ios";
 const CAROUSEL_HEIGHT = 500;
+const PREVIEW_GAP = 0; // Gap (px) between the bottom of the card preview and the top of the comments sheet
+const PREVIEW_TOP_GAP = 30; // Gap (px) between the bottom of the question text and the top of the card preview
+const HEADER_SHIFT = 52; // How many pixels the header translates upward when comments are open
 
-// Géométrie du carousel — peek des cartes voisines (repris du ChallengesSlider de disclose)
-const CARD_GAP = spacing.xl;
-const CARD_WIDTH = (SCREEN_WIDTH - 2 * CARD_GAP) / 1.2;
-const SIDE_MARGIN = (SCREEN_WIDTH - CARD_WIDTH) / 2;
-const SNAP_INTERVAL = CARD_WIDTH + CARD_GAP;
-
-function getSecondUrl(r: ChallengeResponse): string | null {
-  if (!r.second_image_path || r.second_image_path === "text_mode") return null;
-  return r2Storage.getPublicUrl(r.second_image_path);
-}
+// function getSecondUrl(r: ChallengeResponse): string | null {
+//   if (!r.second_image_path || r.second_image_path === "text_mode") return null;
+//   return r2Storage.getPublicUrl(r.second_image_path);
+// }
 
 function mediaType(path: string | null): "text" | "audio" | "drawing" | "photo" {
   if (!path || path === "text_mode") return "text";
@@ -38,20 +56,13 @@ function mediaType(path: string | null): "text" | "audio" | "drawing" | "photo" 
   return "photo";
 }
 
-// Modal media renderer — respects exact same ratios as PhotoFeed.
-// L'arrondi est porté directement par le média (expo-image clippe nativement, y compris
-// sur Android pour les cartes voisines partiellement hors-cadre) plutôt que de dépendre
-// de l'`overflow: hidden` du parent (qui laisse des coins noirs sur Android).
-// La carte n'a plus de bordure qui rogne le contenu → le média remplit tout le conteneur
-// et adopte donc le rayon plein de la carte.
-const MEDIA_RADIUS = radii.xl;
-
+// Modal media renderer — respects exact same ratios as PhotoFeed
 function ModalMedia({ imagePath, url, note }: { imagePath: string | null; url: string | null; note: string | null }) {
   const { colors } = useTheme();
   const type = mediaType(imagePath);
   if (type === "text") {
     return (
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", padding: 28, borderRadius: MEDIA_RADIUS }]}>
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", padding: 28 }]}>
         <Text style={{ color: colors.text, fontFamily: typography.family.semibold, fontSize: typography.size.xl, textAlign: "center", lineHeight: 28 }}>
           {note ?? ""}
         </Text>
@@ -64,7 +75,7 @@ function ModalMedia({ imagePath, url, note }: { imagePath: string | null; url: s
   }
   if (type === "drawing") {
     return (
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", borderRadius: MEDIA_RADIUS }]}>
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.bg, justifyContent: "center", alignItems: "center" }]}>
         <Image
           source={{ uri: url ?? "" }}
           style={{ width: "100%", aspectRatio: 3 / 4 }}
@@ -76,140 +87,95 @@ function ModalMedia({ imagePath, url, note }: { imagePath: string | null; url: s
   return (
     <Image
       source={{ uri: url ?? "" }}
-      style={[StyleSheet.absoluteFillObject, { borderRadius: MEDIA_RADIUS }]}
+      style={StyleSheet.absoluteFill}
       contentFit="cover"
       contentPosition={{ top: 0, left: "50%" }}
     />
   );
 }
 
-function StepperDot({ isActive, activeColor, inactiveColor, style }: { isActive: boolean, activeColor: string, inactiveColor: string, style: any }) {
-  const animValue = useRef(new Animated.Value(isActive ? 1 : 0)).current;
 
-  useEffect(() => {
-    Animated.timing(animValue, {
-      toValue: isActive ? 1 : 0,
-      duration: 100,
-      useNativeDriver: false,
-    }).start();
-  }, [isActive]);
 
-  const backgroundColor = animValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: [inactiveColor, activeColor],
-  });
-
-  return <Animated.View style={[style, { backgroundColor }]} />;
-}
-
-// Carte de réponse mémoïsée. Module-level + React.memo → seules les cartes dont une prop
-// change réellement se re-rendent : un changement d'index actif ne touche que 2 cartes.
-// `swapped` est volontairement passé à false pour les cartes inactives : basculer la 2ème
-// capture ne re-rend ainsi que la carte active.
-const ResponseCard = React.memo(function ResponseCard({
+// Slide component utilizing Reanimated for smooth per-card animations.
+// Memoized so reaction/keyboard/toast state changes on the parent don't re-render
+// (and re-mount the expo-image of) every slide in the carousel.
+const ChallengeResponseSlide = React.memo(function ChallengeResponseSlide({
   item,
-  isActive,
+  index,
+  activeIndex,
+  progress,
   swapped,
-  width,
-  height,
-  marginRight,
-  showDetails,
-  styles,
-  opacity = 1,
+  cvStyles,
 }: {
   item: ChallengeResponse;
-  isActive: boolean;
+  index: number;
+  activeIndex: number;
+  progress: SharedValue<number>;
   swapped: boolean;
-  width: number;
-  height: number;
-  marginRight: number;
-  showDetails: boolean;
-  styles: any;
-  opacity?: number;
+  cvStyles: any;
 }) {
+  const animatedStyle = useAnimatedStyle(() => {
+    const opacity = index === activeIndex ? 1 : 1 - progress.value;
+    return {
+      opacity,
+    };
+  });
+
+  const gradientStyle = useAnimatedStyle(() => {
+    return {
+      opacity: 1 - progress.value,
+    };
+  });
+
   const slideImagePath = swapped ? (item.second_image_path ?? item.image_path) : item.image_path;
   const slideUrl = swapped ? (getSecondUrl(item) ?? item.url) : item.url;
   const slideNote = swapped ? (item.second_note ?? null) : item.note;
   const isTextOnly = mediaType(slideImagePath) === "text";
   const isDrawing = mediaType(slideImagePath) === "drawing";
-  return (
-    <View 
-      style={{ 
-        width: CARD_WIDTH, 
-        height: CAROUSEL_HEIGHT, 
-        marginRight,
-        opacity,
-        justifyContent: "center",
-        alignItems: "center",
-      }}
-      pointerEvents={opacity === 0 ? "none" : "auto"}
-    >
-      <View 
-        style={[
-          styles.slideCard, 
-          { 
-            width, 
-            height,
-          }
-        ]}
-      >
-        <View style={styles.slideMediaWrapper}>
-          <ModalMedia imagePath={slideImagePath} url={slideUrl} note={slideNote} />
-        </View>
 
-        <View 
-          style={[
-            StyleSheet.absoluteFillObject, 
-            { opacity: showDetails && !isTextOnly && !isDrawing ? 1 : 0 }
-          ]} 
-          pointerEvents="none"
-        >
+  return (
+    <Reanimated.View style={[
+      cvStyles.slideCard,
+      animatedStyle,
+    ]}>
+      <View style={cvStyles.slideMediaWrapper}>
+        <ModalMedia imagePath={slideImagePath} url={slideUrl} note={slideNote} />
+      </View>
+
+      {!isTextOnly && !isDrawing && (
+        <Reanimated.View style={[StyleSheet.absoluteFillObject, gradientStyle]} pointerEvents="none">
           <LinearGradient
             colors={["transparent", "rgba(0,0,0,0.85)"]}
             style={StyleSheet.absoluteFill}
             pointerEvents="none"
           />
-        </View>
+        </Reanimated.View>
+      )}
 
-        <View 
-          style={[
-            styles.cardDetailsContainer, 
-            { opacity: showDetails ? 1 : 0 }
-          ]} 
-          pointerEvents={showDetails ? "box-none" : "none"}
-        >
-          <View style={styles.authorInfoRow} pointerEvents="box-none">
-            {item.avatar_url ? (
-              <Image source={{ uri: item.avatar_url }} style={styles.authorAvatar} contentFit="cover" />
-            ) : (
-              <View style={[styles.authorAvatar, styles.authorAvatarFallback]}>
-                <Text style={styles.authorAvatarLetter}>{(item.username || "?")[0].toUpperCase()}</Text>
-              </View>
-            )}
-            <View style={styles.authorTextSection} pointerEvents="none">
-              <Text style={[styles.authorName, !isDrawing && { color: "#FFFFFF" }]}>{item.username}</Text>
-              {!isTextOnly && (
-                <Text style={[styles.authorNote, !isDrawing && { color: "rgba(255, 255, 255, 0.7)" }]} numberOfLines={2}>
-                  {slideNote || "Sans description"}
-                </Text>
-              )}
+      <Reanimated.View style={[cvStyles.cardDetailsContainer, gradientStyle]} pointerEvents="box-none">
+        <View style={cvStyles.authorInfoRow} pointerEvents="box-none">
+          {item.avatar_url ? (
+            <Image source={{ uri: item.avatar_url }} style={cvStyles.authorAvatar} contentFit="cover" />
+          ) : (
+            <View style={[cvStyles.authorAvatar, cvStyles.authorAvatarFallback]}>
+              <Text style={cvStyles.authorAvatarLetter}>{(item.username || "?")[0].toUpperCase()}</Text>
             </View>
+          )}
+          <View style={cvStyles.authorTextSection} pointerEvents="none">
+            <Text style={[
+              cvStyles.authorName,
+              !isDrawing && { color: "#FFFFFF" }
+            ]}>{item.username}</Text>
+            {!isTextOnly && (
+              <Text style={[
+                cvStyles.authorNote,
+                !isDrawing && { color: "rgba(255, 255, 255, 0.7)" }
+              ]} numberOfLines={2}>{slideNote || "Sans description"}</Text>
+            )}
           </View>
         </View>
-
-        {/* Bordure active EN DERNIER → au-dessus du média, du gradient et des détails,
-            pour qu'aucun calque (notamment le gradient) ne l'assombrisse. Overlay absolu :
-            ne décale pas le contenu (pas de cadre noir, pas de clignotement au swipe). */}
-        <View 
-          pointerEvents="none" 
-          style={[
-            StyleSheet.absoluteFillObject, 
-            styles.cardActiveBorder, 
-            { opacity: isActive && showDetails ? 1 : 0 }
-          ]} 
-        />
-      </View>
-    </View>
+      </Reanimated.View>
+    </Reanimated.View>
   );
 });
 
@@ -237,7 +203,6 @@ export default function ChallengeVotePage({
   const cvStyles = useThemedStyles(makeStyles);
   
   const [activeIndex, setActiveIndex] = useState(0);
-  const scrollRef = useRef<ScrollView>(null);
   const [swapped, setSwapped] = useState(false);
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [commentModalMode, setCommentModalMode] = useState<"comment" | "sticker">("comment");
@@ -249,7 +214,6 @@ export default function ChallengeVotePage({
   }, [commentModalVisible, onCommentModalChange]);
 
   const responsesCount = challenge.responses.length;
-  const count = responsesCount;
   const isTarget = challenge.target_user_id === currentUserId;
   const myVote = challenge.votes.find((v) => v.voter_id === currentUserId);
   const canVote = !isTarget;
@@ -299,51 +263,220 @@ export default function ChallengeVotePage({
       .subscribe();
 
     return () => {
-      channel.unsubscribe();
+      // removeChannel (not just unsubscribe) so the channel is also dropped from the
+      // Supabase client's registry — otherwise channels accumulate if this re-runs.
+      supabase.removeChannel(channel);
     };
   }, [challenge.responses, members]);
 
-  // Reset des indices + retour au début à l'ouverture du modal
+  // Reset indices on modal close/open
   useEffect(() => {
-    if (!showResponsesModal) return;
-    setActiveIndex(0);
-    setSwapped(false);
-    const t = setTimeout(() => {
-      scrollRef.current?.scrollTo({ x: 0, animated: false });
-    }, 30);
-    return () => clearTimeout(t);
+    if (showResponsesModal) {
+      setActiveIndex(0);
+      setSwapped(false);
+    }
   }, [showResponsesModal]);
 
-  const updateActiveFromOffset = (x: number) => {
-    if (commentModalVisible) return;
-    if (count === 0 || SNAP_INTERVAL === 0) return;
-    const idx = Math.max(0, Math.min(count - 1, Math.round(x / SNAP_INTERVAL)));
-    if (idx !== activeIndex) {
-      setActiveIndex(idx);
-      setSwapped(false); // Reset swap state for new slide
-    }
+  const carouselRef = useRef<ICarouselInstance>(null);
+  const carouselProgress = useSharedValue<number>(0);
+
+  const onPressPagination = (index: number) => {
+    carouselRef.current?.scrollTo({
+      count: index - carouselProgress.value,
+      animated: true,
+    });
   };
-  const handleScroll = (event: any) => updateActiveFromOffset(event.nativeEvent.contentOffset.x);
-  const handleMomentumScrollEnd = (event: any) => updateActiveFromOffset(event.nativeEvent.contentOffset.x);
 
   const activeResponse = challenge.responses[activeIndex];
   const hasSecond = activeResponse ? !!(activeResponse.second_image_path) : false;
 
-  const [carouselLayoutHeight, setCarouselLayoutHeight] = useState(CAROUSEL_HEIGHT);
-  const handleCarouselLayout = (e: any) => {
-    const h = e.nativeEvent.layout.height;
-    if (h > 0) {
-      setCarouselLayoutHeight(h);
+  // Reanimated states for responsiveness (exact same structure as PhotoFeed)
+  const kb = useSharedValue(0);
+  const progress = useSharedValue(0);
+  const sheetSV = useSharedValue(SHEET_BASE);
+  const isStickerModeSV = useSharedValue(0);
+  const headerHeightSV = useSharedValue(150);
+
+  const [activeModalMode, setActiveModalMode] = useState<"comment" | "sticker">("comment");
+  // True while the keyboard is up — reaction stickers hide so they don't clutter while typing.
+  const [keyboardActive, setKeyboardActive] = useState(false);
+
+  // Optimistic/reaction states for stickers (exact same structure as PhotoFeed)
+  const [poppedReaction, setPoppedReaction] = useState<Reaction | null>(null);
+  const [removingReactionUserId, setRemovingReactionUserId] = useState<string | null>(null);
+  const [reactionToast, setReactionToast] = useState<string | null>(null);
+  const reactionToastAnim = useRef(new RNAnimated.Value(0)).current;
+  const reactionToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showReactionToast = useCallback((message: string) => {
+    if (reactionToastTimer.current) clearTimeout(reactionToastTimer.current);
+    setReactionToast(message);
+    reactionToastAnim.setValue(0);
+    RNAnimated.spring(reactionToastAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 10 }).start();
+    reactionToastTimer.current = setTimeout(() => {
+      RNAnimated.timing(reactionToastAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+        easing: RNEasing.in(RNEasing.quad),
+      }).start(({ finished }) => {
+        if (finished) setReactionToast(null);
+      });
+    }, 2200);
+  }, [reactionToastAnim]);
+
+  // On close: hide the stickers (no lingering) and reset the delete state.
+  useEffect(() => {
+    if (commentModalVisible) return;
+    setPoppedReaction(null);
+    setRemovingReactionUserId(null);
+  }, [commentModalVisible]);
+
+  const handleStickerPosted = useCallback((text: string) => {
+    const me = members.find((m: any) => m.user_id === currentUserId);
+    setPoppedReaction({
+      id: "optimistic-sticker",
+      user_id: currentUserId ?? "",
+      username: me?.username ?? "Anonyme",
+      avatar_url: me?.avatar_url ?? null,
+      sticker_id: text,
+    } as Reaction);
+    showReactionToast("Réaction Ajouté");
+  }, [members, currentUserId, showReactionToast]);
+
+  const handleStickerDeleted = useCallback(() => {
+    if (currentUserId) setRemovingReactionUserId(currentUserId);
+    showReactionToast("Réaction supprimé");
+  }, [currentUserId, showReactionToast]);
+
+  useEffect(() => () => { if (reactionToastTimer.current) clearTimeout(reactionToastTimer.current); }, []);
+
+  // Sync mode changes and visibility changes to shared values
+  useEffect(() => {
+    isStickerModeSV.value = withTiming(activeModalMode === "sticker" ? 1 : 0, { duration: 260 });
+  }, [activeModalMode]);
+
+  useEffect(() => {
+    progress.value = withTiming(commentModalVisible ? 1 : 0, { duration: 250 });
+  }, [commentModalVisible]);
+
+  // Reaction stickers over the open comments modal
+  const activeReactionDisplay = useMemo<ReactionDisplay | null>(() => {
+    if (!activeResponse || !commentModalVisible) return null;
+    const base = reactionsMap[activeResponse.id] || [];
+    if (poppedReaction) {
+      const deduped = base.filter((r) => r.user_id !== poppedReaction.user_id);
+      return { reactions: [...deduped, poppedReaction], popId: poppedReaction.id };
     }
-  };
+    if (base.length > 0) return { reactions: base };
+    return null;
+  }, [activeResponse, poppedReaction, commentModalVisible, reactionsMap]);
 
-  const shrunkenHeight = Math.min(250, SCREEN_HEIGHT * 0.3);
-  const cardHeight = commentModalVisible 
-    ? shrunkenHeight 
-    : Math.min(CAROUSEL_HEIGHT, carouselLayoutHeight - 40);
-  const cardWidth = cardHeight * (CARD_WIDTH / CAROUSEL_HEIGHT);
+  const stickersHidden = activeModalMode === "comment" && keyboardActive;
 
+  // Responsive derived formulas
+  const layoutCenter = useDerivedValue(() => {
+    // The layout of the carousel flex container (which has flex: 1 and the footer below it)
+    // is constant in height (SCREEN_HEIGHT - headerHeightSV.value - 100).
+    // The center of this space relative to the screen top is:
+    return headerHeightSV.value + (SCREEN_HEIGHT - headerHeightSV.value - 100) / 2;
+  });
 
+  const targetTop = useDerivedValue(() => {
+    const closedTop = layoutCenter.value - CAROUSEL_HEIGHT / 2;
+    const openTop = headerHeightSV.value - HEADER_SHIFT + PREVIEW_TOP_GAP; // visual top with top padding gap
+    return (1 - progress.value) * closedTop + progress.value * openTop;
+  });
+
+  const scale = useDerivedValue(() => {
+    const liveDrawer = kb.value + sheetSV.value;
+    const drawerTopX = SHEET_BASE + isStickerModeSV.value * (liveDrawer - SHEET_BASE);
+    const availableX = SCREEN_HEIGHT - drawerTopX - targetTop.value - PREVIEW_GAP;
+    const fitX = Math.max(0.05, Math.min(1, availableX / CAROUSEL_HEIGHT));
+    return 1 + (fitX - 1) * progress.value;
+  });
+
+  const animatedHeight = useDerivedValue(() => {
+    const liveDrawer = kb.value + sheetSV.value;
+    const availableY = SCREEN_HEIGHT - liveDrawer - PREVIEW_GAP - targetTop.value;
+    const fullScaledH = CAROUSEL_HEIGHT * scale.value;
+    const cropOpen =
+      (1 - isStickerModeSV.value) * Math.min(1, availableY / Math.max(fullScaledH, 1)) +
+      isStickerModeSV.value * 1;
+    const cropRatio = 1 + (cropOpen - 1) * progress.value;
+    return CAROUSEL_HEIGHT * cropRatio;
+  });
+
+  const translateY = useDerivedValue(() => {
+    return targetTop.value - layoutCenter.value + (animatedHeight.value * scale.value) / 2;
+  });
+
+  // Reanimated style objects
+  // This wrapper is the view that gets cropped/scaled, so it must ALSO be the one that
+  // carries the border radius (radii.md, via carouselWrapper) — that's how the bottom
+  // stays rounded when the height shrinks in the comment-input state (same trick PhotoFeed
+  // uses). When open it hugs the card (340) so the radius frames the card; when browsing
+  // it's full-width and the radius sits off-screen (the slideCard rounds the cards then).
+  // Uniform `scale` (one entry) so the corners can't distort.
+  const animatedContentStyle = useAnimatedStyle(() => {
+    return {
+      height: animatedHeight.value,
+      width: commentModalVisible ? 340 : SCREEN_WIDTH,
+      transform: [
+        { translateY: translateY.value },
+        { scale: scale.value },
+      ],
+      overflow: "hidden",
+    };
+  });
+
+  const animatedHeaderStyle = useAnimatedStyle(() => {
+    const ty = -HEADER_SHIFT * progress.value;
+    return {
+      transform: [{ translateY: ty }],
+    };
+  });
+
+  const animatedModalHeaderStyle = useAnimatedStyle(() => {
+    return {
+      opacity: 1 - progress.value,
+    };
+  });
+
+  const animatedStepperStyle = useAnimatedStyle(() => {
+    return {
+      opacity: 1 - progress.value,
+    };
+  });
+
+  const animatedModalFooterStyle = useAnimatedStyle(() => {
+    return {
+      opacity: 1 - progress.value,
+    };
+  });
+
+  const animatedStickerOverlayStyle = useAnimatedStyle(() => {
+    const targetTY = targetTop.value - layoutCenter.value + (CAROUSEL_HEIGHT * scale.value) / 2;
+    return {
+      transform: [
+        { translateY: targetTY },
+        { scale: scale.value }
+      ]
+    };
+  });
+
+  const renderResponseSlide = useCallback(({ item, index }: { item: ChallengeResponse, index: number }) => {
+    return (
+      <ChallengeResponseSlide
+        item={item}
+        index={index}
+        activeIndex={activeIndex}
+        progress={progress}
+        swapped={swapped}
+        cvStyles={cvStyles}
+      />
+    );
+  }, [activeIndex, progress, swapped, cvStyles]);
 
   return (
     <View style={cvStyles.container}>
@@ -383,108 +516,134 @@ export default function ChallengeVotePage({
         visible={showResponsesModal}
         transparent
         onRequestClose={() => {
+          // The embedded CommentModal has no native Modal of its own, so Android back
+          // lands here — close the comment sheet first if it's open.
           if (commentModalVisible) setCommentModalVisible(false);
           else onCloseResponsesModal?.();
         }}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={cvStyles.modalOverlay}
-        >
-          <View style={cvStyles.modalHeaderContainer}>
-            <View style={[cvStyles.modalHeader, { paddingTop: Math.max(insets.top, 16) }]}>
-              <View style={cvStyles.headerLeft}>
-                <TouchableOpacity onPress={onCloseResponsesModal} activeOpacity={0.7} style={cvStyles.backBtn}>
-                  <Svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={colors.text} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <Path d="M15 19l-7-7 7-7" />
-                  </Svg>
-                </TouchableOpacity>
-                <Text style={cvStyles.headerTitle}>Défi</Text>
-              </View>
-              {hasSecond && (
-                <TouchableOpacity style={cvStyles.swapBtn} onPress={() => setSwapped(v => !v)} activeOpacity={0.7}>
-                  <Svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={colors.text} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <Path d="M7 16V4m0 0L3 8m4-4l4 4" /><Path d="M17 8v12m0 0l4-4m-4 4l-4-4" />
-                  </Svg>
-                  <Text style={cvStyles.swapBtnText}>{swapped ? "1ère cap." : "2ème cap."}</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            <Text style={cvStyles.modalQuestionText}>
-              Si{" "}
-              <Text style={cvStyles.orangeText}>{challenge.target_username}</Text>
-              {" était un"}{"aeiouyAEIOUY".includes(challenge.theme.label?.[0] ?? "") ? "" : "·e"}{" "}
-              <Text style={cvStyles.orangeText}>{challenge.theme.label}</Text>
-              {", ça serait..."}
-            </Text>
+        <View style={cvStyles.modalOverlay}>
+          {/* Top Bar / Header */}
+          <View
+            style={{ paddingTop: Math.max(insets.top, 16), zIndex: 10 }}
+            onLayout={(e) => {
+              headerHeightSV.value = e.nativeEvent.layout.height;
+            }}
+          >
+            <Reanimated.View style={animatedHeaderStyle}>
+              <Reanimated.View style={[cvStyles.modalHeader, { paddingTop: 0 }, animatedModalHeaderStyle]}>
+                <View style={cvStyles.headerLeft}>
+                  <TouchableOpacity onPress={onCloseResponsesModal} activeOpacity={0.7} style={cvStyles.backBtn}>
+                    <Svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={colors.text} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <Path d="M15 19l-7-7 7-7" />
+                    </Svg>
+                  </TouchableOpacity>
+                  <Text style={cvStyles.headerTitle}>Défi</Text>
+                </View>
+
+                {hasSecond && (
+                  <TouchableOpacity style={cvStyles.swapBtn} onPress={() => setSwapped(v => !v)} activeOpacity={0.7}>
+                    <Svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={colors.text} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <Path d="M7 16V4m0 0L3 8m4-4l4 4" /><Path d="M17 8v12m0 0l4-4m-4 4l-4-4" />
+                    </Svg>
+                    <Text style={cvStyles.swapBtnText}>{swapped ? "1ère cap." : "2ème cap."}</Text>
+                  </TouchableOpacity>
+                )}
+              </Reanimated.View>
+
+              <Text style={cvStyles.modalQuestionText}>
+                Si{" "}
+                <Text style={cvStyles.orangeText}>{challenge.target_username}</Text>
+                {" était un"}{"aeiouyAEIOUY".includes(challenge.theme.label?.[0] ?? "") ? "" : "·e"}{" "}
+                <Text style={cvStyles.orangeText}>{challenge.theme.label}</Text>
+                {", ça serait..."}
+              </Text>
+            </Reanimated.View>
           </View>
 
+          {/* Horizontally Scrollable Carousel */}
           {responsesCount > 0 ? (
-            <View 
-              style={cvStyles.carouselFlexContainer}
-              onLayout={handleCarouselLayout}
-            >
-              <ScrollView
-                ref={scrollRef}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                snapToInterval={SNAP_INTERVAL}
-                decelerationRate="fast"
-                contentContainerStyle={{ 
-                  paddingHorizontal: SIDE_MARGIN, 
-                  alignItems: "center" 
-                }}
-                onScroll={handleScroll}
-                onMomentumScrollEnd={handleMomentumScrollEnd}
-                scrollEventThrottle={16}
-                bounces={false}
-                overScrollMode="never"
-                removeClippedSubviews={false}
-                keyboardShouldPersistTaps="always"
-                style={{ width: SCREEN_WIDTH }}
-                scrollEnabled={!commentModalVisible}
-              >
-                {challenge.responses.map((r, idx) => {
-                  const isActive = idx === activeIndex;
-                  return (
-                    <ResponseCard
-                      key={r.id}
-                      item={r}
-                      isActive={isActive}
-                      swapped={isActive ? swapped : false}
-                      width={commentModalVisible ? (isActive ? cardWidth : CARD_WIDTH) : CARD_WIDTH}
-                      height={commentModalVisible ? (isActive ? cardHeight : CAROUSEL_HEIGHT) : CAROUSEL_HEIGHT}
-                      marginRight={CARD_GAP}
-                      showDetails={!commentModalVisible}
-                      styles={cvStyles}
-                      opacity={commentModalVisible ? (isActive ? 1 : 0) : 1}
-                    />
-                  );
-                })}
-              </ScrollView>
-
-              <View 
+            <View style={cvStyles.carouselFlexContainer}>
+              <Reanimated.View
                 style={[
-                  cvStyles.stepperContainer, 
-                  { 
-                    opacity: commentModalVisible ? 0 : 1,
-                    height: commentModalVisible ? 0 : "auto",
-                    marginTop: commentModalVisible ? 0 : 24,
-                    paddingVertical: commentModalVisible ? 0 : spacing.sm,
-                  }
+                  cvStyles.carouselWrapper,
+                  animatedContentStyle,
                 ]}
-                pointerEvents={commentModalVisible ? "none" : "auto"}
               >
-                {responsesCount > 1 && challenge.responses.map((_, index) => (
-                  <StepperDot
-                    key={index}
-                    isActive={activeIndex === index}
-                    inactiveColor={colors.iconTertiary}
-                    activeColor={colors.icon}
-                    style={cvStyles.stepperDot}
+                <Reanimated.View
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                  }}
+                >
+                  <Carousel
+                    ref={carouselRef}
+                    width={356}
+                    height={CAROUSEL_HEIGHT}
+                    style={{
+                      width: 356,
+                      height: "100%",
+                      alignSelf: "center",
+                      overflow: "visible",
+                    }}
+                    loop={false}
+                    enabled={!commentModalVisible}
+                    data={challenge.responses}
+                    renderItem={renderResponseSlide}
+                    onSnapToItem={(index) => {
+                      setActiveIndex(index);
+                      setSwapped(false);
+                    }}
+                    onProgressChange={carouselProgress}
                   />
-                ))}
-              </View>
+                </Reanimated.View>
+              </Reanimated.View>
+
+              {/* Reaction stickers overlay */}
+              {activeReactionDisplay && (
+                <Reanimated.View
+                  pointerEvents="none"
+                  style={[cvStyles.stickerOverlay, animatedStickerOverlayStyle]}
+                >
+                  <ReactionStickers
+                    reactions={activeReactionDisplay.reactions}
+                    previewScale={scale}
+                    removingUserId={removingReactionUserId}
+                    hidden={stickersHidden}
+                  />
+                </Reanimated.View>
+              )}
+
+              {/* Stepper Dot Page Indicators */}
+              {responsesCount > 1 && (
+                <Reanimated.View
+                  style={animatedStepperStyle}
+                  pointerEvents={commentModalVisible ? "none" : "auto"}
+                >
+                  <Pagination.Basic
+                    progress={carouselProgress}
+                    data={challenge.responses}
+                    dotStyle={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: 6,
+                      backgroundColor: colors.iconTertiary,
+                    }}
+                    activeDotStyle={{
+                      backgroundColor: colors.icon,
+                    }}
+                    containerStyle={{
+                      gap: spacing.xs2,
+                      borderRadius: radii.full,
+                      paddingVertical: spacing.sm,
+                      paddingHorizontal: spacing.md,
+                      backgroundColor: colors.opacityLight,
+                      marginTop: 24,
+                    }}
+                    onPress={onPressPagination}
+                  />
+                </Reanimated.View>
+              )}
             </View>
           ) : (
             <View style={cvStyles.emptyContainer}>
@@ -492,31 +651,17 @@ export default function ChallengeVotePage({
             </View>
           )}
 
-          {commentActiveResponse && commentModalVisible && (
-            <CommentModal
-              inline
-              visible={commentModalVisible}
-              onClose={() => {
-                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                setCommentModalVisible(false);
-              }}
-              photoId={commentActiveResponse.id}
-              photoOwnerId={commentActiveResponse.user_id}
-              groupId={challenge.group_id}
-              reactions={reactionsMap[commentActiveResponse.id] || []}
-              initialMode={commentModalMode}
-              style={cvStyles.commentsFlexContainer}
-            />
-          )}
-
-          {activeResponse && !commentModalVisible && (
-            <View style={cvStyles.modalFooter}>
+          {/* Bottom Control Bar */}
+          {activeResponse && (
+            <Reanimated.View
+              style={[cvStyles.modalFooter, animatedModalFooterStyle]}
+              pointerEvents={commentModalVisible ? "none" : "auto"}
+            >
               <TouchableOpacity 
                 style={cvStyles.modalReactionsBtn} 
                 onPress={() => {
                   setCommentActiveResponse(activeResponse);
                   setCommentModalMode("comment");
-                  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
                   setCommentModalVisible(true);
                 }}
                 activeOpacity={0.85}
@@ -535,6 +680,9 @@ export default function ChallengeVotePage({
                       Share.share({ url, message: url });
                       return;
                     }
+                    // Download to cache before sharing, with a custom shared name
+                    // (the share sheet shows the file's basename). Keep the source
+                    // extension so the OS still detects the media type.
                     const ext = url.split('?')[0].split('.').pop()?.toLowerCase();
                     const safeExt = ext && ext.length <= 5 ? ext : 'jpg';
                     const filename = `Disclose - You've never been this close!.${safeExt}`;
@@ -551,10 +699,42 @@ export default function ChallengeVotePage({
                   <Path d="M2.75 20V12C2.75 11.3096 3.30964 10.75 4 10.75C4.69036 10.75 5.25 11.3096 5.25 12V20C5.25 20.1989 5.32907 20.3896 5.46973 20.5303C5.61038 20.6709 5.80109 20.75 6 20.75H18C18.1989 20.75 18.3896 20.6709 18.5303 20.5303C18.6709 20.3896 18.75 20.1989 18.75 20V12C18.75 11.3096 19.3096 10.75 20 10.75C20.6904 10.75 21.25 11.3096 21.25 12V20C21.25 20.862 20.9073 21.6884 20.2979 22.2979C19.6884 22.9073 18.862 23.25 18 23.25H6C5.13805 23.25 4.31164 22.9073 3.70215 22.2979C3.09266 21.6884 2.75 20.862 2.75 20ZM10.75 15V5.01758L8.88379 6.88379C8.39563 7.37194 7.60437 7.37194 7.11621 6.88379C6.62806 6.39563 6.62806 5.60437 7.11621 5.11621L11.1162 1.11621L11.2109 1.03027C11.7019 0.629789 12.4261 0.658549 12.8838 1.11621L16.8838 5.11621C17.3719 5.60437 17.3719 6.39563 16.8838 6.88379C16.3956 7.37194 15.6044 7.37194 15.1162 6.88379L13.25 5.01758V15C13.25 15.6904 12.6904 16.25 12 16.25C11.3096 16.25 10.75 15.6904 10.75 15Z" fill="#FF561A"/>
                 </Svg>
               </TouchableOpacity>
-            </View>
+            </Reanimated.View>
           )}
-        </KeyboardAvoidingView>
+
+          {/* ── Comment / Reactions Modal for Active Slide ── */}
+          {/* Mount on commentActiveResponse (mirrors PhotoFeed's activePhotoId) and
+              drive open/close via the `visible` prop only. Keeping it mounted while
+              closing lets CommentModal play its own slide-out, sticker pop and toast
+              animations — instead of being torn down instantly — matching the reveal. */}
+          {commentActiveResponse && (
+            <CommentModal
+              embedded
+              visible={commentModalVisible}
+              onClose={() => {
+                setCommentModalVisible(false);
+              }}
+              keyboardHeightShared={kb}
+              sheetHeightShared={sheetSV}
+              onKeyboardActiveChange={setKeyboardActive}
+              onModeChange={(m) => setActiveModalMode(m)}
+              onStickerPosted={handleStickerPosted}
+              onStickerDeleted={handleStickerDeleted}
+              photoId={commentActiveResponse.id}
+              photoOwnerId={commentActiveResponse.user_id}
+              groupId={challenge.group_id}
+              reactions={reactionsMap[commentActiveResponse.id] || []}
+              initialMode={commentModalMode}
+              groupMembers={members}
+            />
+          )}
+        </View>
       </RightSlideModal>
+
+      {/* Reaction add/delete toast, on the main screen */}
+      {reactionToast !== null && (
+        <StickerToast message={reactionToast} animValue={reactionToastAnim} topInset={insets.top} />
+      )}
     </View>
   );
 }
@@ -659,7 +839,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.text,
     textAlign: "center",
     paddingTop: 12,
-    paddingBottom: 24,
+    paddingBottom: 0,
     paddingHorizontal: 16,
   },
   orangeText: {
@@ -683,22 +863,27 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   // Carousel & Slides Styles
   carouselFlexContainer: {
     flex: 1,
-    flexShrink: 1,
     justifyContent: "center",
     alignItems: "center",
   },
+  carouselWrapper: {
+    width: SCREEN_WIDTH,
+    height: 500,
+    backgroundColor: "transparent",
+    // Radius lives on this (the cropped/scaled view) so the bottom stays rounded when the
+    // height shrinks. Matches slideCard.borderRadius so the two are concentric/consistent.
+    borderRadius: radii.md,
+  },
   slideCard: {
-    borderRadius: radii.xl,
+    width: 340,
+    height: 500,
     overflow: "hidden",
     position: "relative",
     backgroundColor: "#000000",
-  },
-  // Bordure active en overlay absolu → ne rogne pas le média (pas de cadre noir), pas de
-  // changement de layout au swipe (donc pas de clignotement).
-  cardActiveBorder: {
-    borderWidth: stroke.md,
-    borderColor: colors.borderBrandTertiary,
-    borderRadius: radii.xl,
+    marginHorizontal: spacing.lg / 2,
+    borderRadius: radii.md,
+    // borderWidth: stroke.md,
+    // borderColor: colors.borderBrandTertiary,
   },
   slideMediaWrapper: {
     width: "100%",
@@ -815,11 +1000,12 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: typography.family.medium,
     fontSize: typography.size.sm,
   },
-  modalHeaderContainer: {
-    flexShrink: 0,
-  },
-  commentsFlexContainer: {
-    flex: 1.2,
-    flexShrink: 1,
+  stickerOverlay: {
+    position: "absolute",
+    width: 340,
+    height: CAROUSEL_HEIGHT,
+    overflow: "visible",
+    backgroundColor: "transparent",
+    zIndex: 15,
   },
 });
