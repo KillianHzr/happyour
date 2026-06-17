@@ -18,7 +18,9 @@ import { getChallengePrompt, type ChallengeWithData, type ChallengeResponse } fr
 import Svg, { Path } from "react-native-svg";
 import { r2Storage } from "../../lib/r2";
 import ChallengeAudioPlayer from "./ChallengeAudioPlayer";
-import { radii, typography, spacing, textStyles, type ThemeColors } from "../../lib/theme";
+import { AudioCaptionPlayer } from "../molecules/AudioCaptionPlayer";
+import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import { radii, typography, spacing, textStyles, buildColors, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import { supabase } from "../../lib/supabase";
 import CommentModal from "../CommentModal";
@@ -43,6 +45,12 @@ const CAROUSEL_HEIGHT = 500;
 const PREVIEW_GAP = 0; // Gap (px) between the bottom of the card preview and the top of the comments sheet
 const PREVIEW_TOP_GAP = 30; // Gap (px) between the bottom of the question text and the top of the card preview
 const HEADER_SHIFT = 52; // How many pixels the header translates upward when comments are open
+
+// Drawing responses always render on a light (white) canvas, so their details (author name,
+// description, audio player) must stay dark regardless of the active app theme — unlike the
+// reveal, which relies on a dark scrim. These are fixed, theme-independent token values.
+const DRAWING_DETAIL_COLOR = buildColors("Light").textNeutral; // #303030 · --sds-color-text-neutral-default
+const DRAWING_WAVE_COLOR = buildColors("Dark").bg;             // #1E1E1E · --sds-color-background-default-default (black)
 
 // function getSecondUrl(r: ChallengeResponse): string | null {
 //   if (!r.second_image_path || r.second_image_path === "text_mode") return null;
@@ -75,10 +83,10 @@ function ModalMedia({ imagePath, url, note }: { imagePath: string | null; url: s
   }
   if (type === "drawing") {
     return (
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.bg, justifyContent: "center", alignItems: "center" }]}>
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.bg }]}>
         <Image
           source={{ uri: url ?? "" }}
-          style={{ width: "100%", aspectRatio: 3 / 4 }}
+          style={StyleSheet.absoluteFill}
           contentFit="fill"
         />
       </View>
@@ -132,6 +140,17 @@ const ChallengeResponseSlide = React.memo(function ChallengeResponseSlide({
   const slideNote = swapped ? (item.second_note ?? null) : item.note;
   const isTextOnly = mediaType(slideImagePath) === "text";
   const isDrawing = mediaType(slideImagePath) === "drawing";
+  const hasAudioNote = !swapped && !!item.audio_note_path && !!item.audio_note_url;
+
+  const audioPlayer = useAudioPlayer(item.audio_note_url ?? "");
+  const audioStatus = useAudioPlayerStatus(audioPlayer);
+
+  // Pause the note when this slide isn't the active one (carousel keeps slides mounted).
+  useEffect(() => {
+    if (index !== activeIndex) {
+      try { audioPlayer.pause(); } catch (_) {}
+    }
+  }, [index, activeIndex]);
 
   return (
     <Reanimated.View style={[
@@ -161,15 +180,23 @@ const ChallengeResponseSlide = React.memo(function ChallengeResponseSlide({
               <Text style={cvStyles.authorAvatarLetter}>{(item.username || "?")[0].toUpperCase()}</Text>
             </View>
           )}
-          <View style={cvStyles.authorTextSection} pointerEvents="none">
+          <View style={cvStyles.authorTextSection} pointerEvents={hasAudioNote ? "box-none" : "none"}>
             <Text style={[
               cvStyles.authorName,
-              !isDrawing && { color: "#FFFFFF" }
+              isDrawing ? { color: DRAWING_DETAIL_COLOR } : { color: "#FFFFFF" }
             ]}>{item.username}</Text>
-            {!isTextOnly && (
+            {hasAudioNote ? (
+              <AudioCaptionPlayer
+                player={audioPlayer}
+                status={audioStatus}
+                waveform={item.waveform ?? undefined}
+                iconColor={isDrawing ? DRAWING_DETAIL_COLOR : undefined}
+                waveColor={isDrawing ? DRAWING_WAVE_COLOR : undefined}
+              />
+            ) : !isTextOnly && (
               <Text style={[
                 cvStyles.authorNote,
-                !isDrawing && { color: "rgba(255, 255, 255, 0.7)" }
+                isDrawing ? { color: DRAWING_DETAIL_COLOR } : { color: "rgba(255, 255, 255, 0.7)" }
               ]} numberOfLines={2}>{slideNote || "Sans description"}</Text>
             )}
           </View>
@@ -183,6 +210,8 @@ export default function ChallengeVotePage({
   challenge,
   period,
   currentUserId,
+  currentUserAvatarUrl,
+  currentUsername,
   onVote,
   members = [],
   showResponsesModal = false,
@@ -192,6 +221,8 @@ export default function ChallengeVotePage({
   challenge: ChallengeWithData;
   period: 1 | 2;
   currentUserId?: string;
+  currentUserAvatarUrl?: string | null;
+  currentUsername?: string;
   onVote: (challengeId: string, responseId: string) => void;
   members?: any[];
   showResponsesModal?: boolean;
@@ -292,6 +323,7 @@ export default function ChallengeVotePage({
 
   // Reanimated states for responsiveness (exact same structure as PhotoFeed)
   const kb = useSharedValue(0);
+  const keyboardActiveSV = useSharedValue(0); // set in CommentModal's onStart (UI thread)
   const progress = useSharedValue(0);
   const sheetSV = useSharedValue(SHEET_BASE);
   const isStickerModeSV = useSharedValue(0);
@@ -326,10 +358,13 @@ export default function ChallengeVotePage({
   }, [reactionToastAnim]);
 
   // On close: hide the stickers (no lingering) and reset the delete state.
+  // Also clear the keyboard-active flag — an intentional close (sticker submit)
+  // leaves it at 1, which would wrongly hide stickers on the next open.
   useEffect(() => {
     if (commentModalVisible) return;
     setPoppedReaction(null);
     setRemovingReactionUserId(null);
+    keyboardActiveSV.value = 0;
   }, [commentModalVisible]);
 
   const handleStickerPosted = useCallback((text: string) => {
@@ -337,12 +372,12 @@ export default function ChallengeVotePage({
     setPoppedReaction({
       id: "optimistic-sticker",
       user_id: currentUserId ?? "",
-      username: me?.username ?? "Anonyme",
-      avatar_url: me?.avatar_url ?? null,
+      username: currentUsername ?? me?.username ?? "Anonyme",
+      avatar_url: currentUserAvatarUrl ?? me?.avatar_url ?? null,
       sticker_id: text,
     } as Reaction);
     showReactionToast("Réaction Ajouté");
-  }, [members, currentUserId, showReactionToast]);
+  }, [members, currentUserId, currentUsername, currentUserAvatarUrl, showReactionToast]);
 
   const handleStickerDeleted = useCallback(() => {
     if (currentUserId) setRemovingReactionUserId(currentUserId);
@@ -373,6 +408,12 @@ export default function ChallengeVotePage({
   }, [activeResponse, poppedReaction, commentModalVisible, reactionsMap]);
 
   const stickersHidden = activeModalMode === "comment" && keyboardActive;
+  // 1 when the keyboard is up in comment mode, 0 otherwise. keyboardActiveSV is
+  // set once in CommentModal's onStart worklet, so this flips on the UI thread the
+  // instant the keyboard starts — FloatingSticker reacts without a JS round-trip.
+  const stickersHiddenSV = useDerivedValue<number>(() =>
+    keyboardActiveSV.value > 0 && isStickerModeSV.value < 0.5 ? 1 : 0
+  );
 
   // Responsive derived formulas
   const layoutCenter = useDerivedValue(() => {
@@ -610,6 +651,7 @@ export default function ChallengeVotePage({
                     previewScale={scale}
                     removingUserId={removingReactionUserId}
                     hidden={stickersHidden}
+                    hiddenSV={stickersHiddenSV}
                   />
                 </Reanimated.View>
               )}
@@ -715,6 +757,7 @@ export default function ChallengeVotePage({
                 setCommentModalVisible(false);
               }}
               keyboardHeightShared={kb}
+              keyboardActiveShared={keyboardActiveSV}
               sheetHeightShared={sheetSV}
               onKeyboardActiveChange={setKeyboardActive}
               onModeChange={(m) => setActiveModalMode(m)}

@@ -1393,6 +1393,7 @@ export default function MainPagerScreen() {
             ref={photoFeedRef}
             photos={photos}
             currentUserId={user?.id}
+            members={members}
             nextUnlockDate={nextRevealDate}
             revealEndDate={activeRevealEndDate}
             crownWinnerId={crownWinnerId}

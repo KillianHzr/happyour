@@ -1,9 +1,8 @@
 import React, { useRef, useEffect } from "react";
 import { View, StyleSheet, TouchableOpacity, PanResponder, Text } from "react-native";
 import { Svg, Path } from "react-native-svg";
-import BlurView from "../atoms/BlurView";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
-import { colors, radii, typography, blur } from "../../lib/theme";
+import { colors, radii, typography } from "../../lib/theme";
 import Icon from "../Icon";
 import { Waveform } from "../atoms/Waveform";
 
@@ -14,9 +13,13 @@ interface AudioCaptionPlayerProps {
   showVocalLabel?: boolean;
   onScrollLock?: (locked: boolean) => void;
   waveform?: number[];
+  /** Play/pause icon color. Defaults to white (designed to sit over a dark scrim). */
+  iconColor?: string;
+  /** Waveform bar color (played = full opacity, unplayed = faded). Defaults to bgNeutral. */
+  waveColor?: string;
 }
 
-export const AudioCaptionPlayer = ({ player, status, onRemove, showVocalLabel, onScrollLock, waveform }: AudioCaptionPlayerProps) => {
+export const AudioCaptionPlayer = ({ player, status, onRemove, showVocalLabel, onScrollLock, waveform, iconColor = colors.white, waveColor = colors.bgNeutral }: AudioCaptionPlayerProps) => {
   const waveWidthRef = useRef(1);
   const waveOriginXRef = useRef(0);
   const isDraggingRef = useRef(false);
@@ -74,13 +77,12 @@ export const AudioCaptionPlayer = ({ player, status, onRemove, showVocalLabel, o
   return (
     <View style={styles.container}>
       <TouchableOpacity onPress={togglePlay} style={styles.playBtn}>
-        <BlurView intensity={blur.md} tint="dark" style={StyleSheet.absoluteFillObject} />
         {status.playing ? (
-          <Svg width="18" height="18" viewBox="0 0 24 24" fill={colors.white}>
+          <Svg width="18" height="18" viewBox="0 0 24 24" fill={iconColor}>
             <Path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
           </Svg>
         ) : (
-          <Icon name="play" size={18} color={colors.white} />
+          <Icon name="play" size={18} color={iconColor} />
         )}
       </TouchableOpacity>
       
@@ -94,7 +96,7 @@ export const AudioCaptionPlayer = ({ player, status, onRemove, showVocalLabel, o
         <Waveform
           data={waveform ?? []}
           progress={progress}
-          color={colors.bgNeutral}
+          color={waveColor}
           heightScale={80 / 3}
           barWidth={2}
           minHeight={2}
@@ -122,10 +124,8 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: radii.sm, // var(--sds-size-radius-200) -> 8
-    backgroundColor: colors.opacityLight, // var(--background-default-default-opacity)
     justifyContent: "center",
     alignItems: "center",
-    overflow: "hidden", // blur/glass effect approximation
   },
   waveHitArea: {
     flex: 1,

@@ -70,6 +70,9 @@ interface CommentModalProps {
   sheetHeightShared?: SharedValue<number>;
   /** Notifies the parent when the keyboard opens/closes so it can hide the stickers. */
   onKeyboardActiveChange?: (active: boolean) => void;
+  /** Shared value set immediately in the onStart worklet (no JS bridge) so the parent
+   *  can drive sticker hide animations without a JS-round-trip delay. */
+  keyboardActiveShared?: SharedValue<number>;
   /** Reports the rendered sheet height so the parent can keep the post preview aligned. */
   onSheetHeightChange?: (height: number) => void;
   /** Reports whenever the user switches between comment/sticker mode. */
@@ -176,6 +179,7 @@ function CommentModalContent({
   keyboardHeightShared,
   sheetHeightShared,
   onKeyboardActiveChange,
+  keyboardActiveShared,
   onSheetHeightChange,
   onModeChange,
   onStickerPosted,
@@ -364,8 +368,11 @@ function CommentModalContent({
     (active: boolean) => {
       if (!active && intentionalCloseRef.current) return;
       setKeyboardVisible(active);
+      // Mirror the keyboard-down to the shared value here (not in the worklet) so it
+      // respects the intentional-close guard above — stickers stay hidden through close.
+      if (!active && keyboardActiveShared) keyboardActiveShared.value = 0;
     },
-    []
+    [keyboardActiveShared]
   );
   const applyKeyboardHeight = useCallback(
     (height: number) => {
@@ -382,6 +389,10 @@ function CommentModalContent({
         "worklet";
         if (e.height > 0) {
           targetKbHeight.value = e.height;
+          // Flag keyboard active on the UI thread the instant it starts rising, so
+          // the parent shrinks its stickers with no JS round-trip. The 0 (show) reset
+          // runs in setKbVisible so it respects the intentional-close guard.
+          if (keyboardActiveShared) keyboardActiveShared.value = 1;
         }
         runOnJS(setKbVisible)(e.height > 0);
       },
@@ -395,7 +406,7 @@ function CommentModalContent({
         runOnJS(applyKeyboardHeight)(e.height);
       },
     },
-    [applyKeyboardHeight, setKbVisible]
+    [applyKeyboardHeight, setKbVisible, keyboardActiveShared]
   );
 
   // ── markAsSeen ────────────────────────────────────────────────────────────────

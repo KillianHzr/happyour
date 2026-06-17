@@ -7,7 +7,6 @@ import { useVideoPlayer, VideoView } from "expo-video";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 
 import { PhotoImage } from "../atoms/PhotoImage";
-import { DownloadButton } from "../atoms/DownloadButton";
 import { SecondCaptureThumbnail } from "../molecules/SecondCaptureThumbnail";
 import { AuthorInfo } from "../molecules/AuthorInfo";
 import { ReactionsRow } from "../molecules/ReactionsRow";
@@ -202,11 +201,6 @@ export const PhotoMoment = ({
                 <Text style={styles.groupTagText}>{moment.groupName}</Text>
               </Reanimated.View>
             )}
-            {!isTextOnly && !isEffectiveAudio && (
-              <Reanimated.View style={[styles.downloadBtnContainer, animatedUiStyle]}>
-                <DownloadButton url={effectiveUrl} filename={moment.id} />
-              </Reanimated.View>
-            )}
             <Reanimated.View style={[styles.momentOverlay, animatedUiStyle]} pointerEvents="box-none">
               <LinearGradient
                 colors={["transparent", scrimColor]}
@@ -362,11 +356,5 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: typography.family.bold,
     fontSize: typography.size.xxs,
     lineHeight: typography.size.xxs,
-  },
-  downloadBtnContainer: {
-    position: "absolute",
-    top: spacing.md + 2,
-    right: spacing.md + 2,
-    zIndex: 10,
   },
 });

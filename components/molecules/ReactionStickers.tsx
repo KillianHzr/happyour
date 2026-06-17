@@ -1,7 +1,7 @@
 import { useMemo, useEffect } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Image } from "expo-image";
-import Reanimated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, type SharedValue } from "react-native-reanimated";
+import Reanimated, { useSharedValue, useAnimatedStyle, useAnimatedReaction, withSpring, withTiming, type SharedValue } from "react-native-reanimated";
 import { TextSticker } from "../atoms/TextSticker";
 import { radii, typography, type ThemeColors } from "../../lib/theme";
 import { useThemedStyles } from "../../lib/theme-context";
@@ -33,26 +33,51 @@ const isEmoji = (str: string) => {
   return false;
 };
 
-function FloatingSticker({ side, topPct, rotation, text, avatarUrl, username, previewScale, removing, hidden }: {
-  side: "left" | "right"; topPct: number; rotation: number; text: string; avatarUrl: string | null; username: string; previewScale?: SharedValue<number>; removing?: boolean; hidden?: boolean;
+function FloatingSticker({ side, topPct, rotation, text, avatarUrl, username, previewScale, removing, hidden, hiddenSV }: {
+  side: "left" | "right"; topPct: number; rotation: number; text: string; avatarUrl: string | null; username: string; previewScale?: SharedValue<number>; removing?: boolean; hidden?: boolean; hiddenSV?: SharedValue<number>;
 }) {
   const styles = useThemedStyles(makeStyles);
   // Scale drives every transition: pop in on mount / when un-hidden (spring), shrink to
   // 0 when hidden (e.g. typing a comment) or being deleted. Runs on mount too, so the
   // initial appearance pops in.
   const popScale = useSharedValue(0);
+
+  // Shared animation curves so the reveal (JS `hidden`) and challenge (`hiddenSV`)
+  // pages animate identically.
+  const popIn = () => {
+    "worklet";
+    popScale.value = withSpring(1, { damping: 9, stiffness: 190, mass: 0.6 });
+  };
+  const popOut = () => {
+    "worklet";
+    popScale.value = withTiming(0, { duration: 110 });
+  };
+
   useEffect(() => {
     if (removing) {
       popScale.value = withTiming(0, { duration: 350 });
       return;
     }
-    popScale.value = hidden
-      ? withTiming(0, { duration: 220 })
-      : withSpring(1, { damping: 9, stiffness: 190, mass: 0.6 });
+    // When hiddenSV is provided (challenge page) the keyboard hide/show is driven
+    // on the UI thread by the reaction below — here we only pop in on mount / un-hide.
+    if (!hiddenSV) {
+      hidden ? popOut() : popIn();
+    } else if (!hidden) {
+      popIn();
+    }
   }, [hidden, removing]);
-  // The overlay scales with the preview; counter-scale by 1/previewScale so the sticker
-  // keeps a fixed on-screen size (avatar 24×24, text at heading/size-base) regardless of
-  // how small the preview gets.
+
+  // Challenge page: hide/show on the UI thread the instant the keyboard starts
+  // (driven by onStart, no JS round-trip), using the same curves as the reveal.
+  useAnimatedReaction(
+    () => hiddenSV?.value ?? 0,
+    (curr, prev) => {
+      if (prev === null || curr === prev || removing) return;
+      curr > 0.5 ? popOut() : popIn();
+    },
+    [removing]
+  );
+
   const animatedStyle = useAnimatedStyle(() => {
     const inv = previewScale && previewScale.value > 0 ? 1 / previewScale.value : 1;
     return { transform: [{ rotate: `${rotation}deg` }, { scale: popScale.value * inv }] };
@@ -78,7 +103,7 @@ function FloatingSticker({ side, topPct, rotation, text, avatarUrl, username, pr
  * alternate left/right, hugging each horizontal edge, stacked and centered vertically.
  * They keep a fixed size via the `previewScale` counter-scale (see FloatingSticker).
  */
-export function ReactionStickers({ reactions, previewScale, removingUserId, hidden }: { reactions: Reaction[]; previewScale?: SharedValue<number>; removingUserId?: string | null; hidden?: boolean }) {
+export function ReactionStickers({ reactions, previewScale, removingUserId, hidden, hiddenSV }: { reactions: Reaction[]; previewScale?: SharedValue<number>; removingUserId?: string | null; hidden?: boolean; hiddenSV?: SharedValue<number> }) {
   const text = useMemo(() => reactions.filter((r) => !isEmoji(r.sticker_id)), [reactions]);
   if (text.length === 0) return null;
   const leftCount = Math.ceil(text.length / 2);
@@ -103,6 +128,7 @@ export function ReactionStickers({ reactions, previewScale, removingUserId, hidd
             previewScale={previewScale}
             removing={!!removingUserId && r.user_id === removingUserId}
             hidden={hidden}
+            hiddenSV={hiddenSV}
           />
         );
       })}

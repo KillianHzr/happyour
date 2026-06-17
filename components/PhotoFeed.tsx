@@ -497,6 +497,8 @@ const PhotoFeedContent = forwardRef(({
           challenge={item.challenge}
           period={item.period}
           currentUserId={currentUserId}
+          currentUserAvatarUrl={currentUserAvatarUrl}
+          currentUsername={currentUsername}
           onVote={onVoteChallenge ?? (() => {})}
           members={members}
           showResponsesModal={index === visibleIndex && activeChallengeResponsesVisible}
