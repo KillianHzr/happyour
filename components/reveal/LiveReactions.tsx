@@ -11,9 +11,11 @@ import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
 import Accelerometer from "expo-sensors/build/Accelerometer";
-import Svg, { Path } from "react-native-svg";
-import { radii, typography, type ThemeColors } from "../../lib/theme";
-import { useThemedStyles } from "../../lib/theme-context";
+import Svg, { Circle, Path } from "react-native-svg";
+import { radii, spacing, typography, textStyles, stroke, type ThemeColors, type ThemeShadows } from "../../lib/theme";
+import { useTheme, useThemedStyles } from "../../lib/theme-context";
+import { UserAvatar } from "../atoms/Avatar";
+import Icon from "../Icon";
 
 // ─── shake detection tunables ─────────────────────────────────────────────────
 // Strategy: count X-axis direction reversals (left→right or right→left).
@@ -111,8 +113,17 @@ function WavingHand({
 
 // ─── BigWave — centred overlay shown on the waving user's own screen ──────────
 
-function BigWave({ trigger }: { trigger: number }) {
+function BigWave({
+  trigger,
+  participants,
+  currentUserId,
+}: {
+  trigger: number;
+  participants: Map<string, Participant>;
+  currentUserId: string;
+}) {
   const styles = useThemedStyles(makeStyles);
+  const { colors } = useTheme();
   const scale   = useRef(new Animated.Value(0.6)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
@@ -121,7 +132,7 @@ function BigWave({ trigger }: { trigger: number }) {
     scale.setValue(0.6);
     opacity.setValue(0);
 
-    // Fade in → hold for the full swing → fade out together with hand
+    // Fade in → hold for the full swing → fade out together
     Animated.sequence([
       Animated.parallel([
         Animated.spring(scale,   { toValue: 1, useNativeDriver: true, tension: 90, friction: 7 }),
@@ -132,6 +143,10 @@ function BigWave({ trigger }: { trigger: number }) {
     ]).start();
   }, [trigger]);
 
+  const targetParticipants = Array.from(participants.values()).filter(p => p.userId !== currentUserId);
+  const visibleTargets = targetParticipants.slice(0, 3);
+  const remainingTargetsCount = targetParticipants.length - 3;
+
   return (
     <Animated.View
       pointerEvents="none"
@@ -141,10 +156,25 @@ function BigWave({ trigger }: { trigger: number }) {
         { opacity, transform: [{ scale }] },
       ]}
     >
-      <View style={styles.bigWaveCard}>
-        <WavingHand size={100} trigger={trigger} ownOpacity={false} />
-        <Text style={styles.bigWaveLabel}>Coucou !</Text>
-      </View>
+      <Icon name="smiley" size={96} color={colors.icon} />
+      
+      {targetParticipants.length > 0 && (
+        <View style={styles.wavedToContainer}>
+          <Text style={styles.wavedToText}>Tu salues</Text>
+          <View style={styles.wavedAvatarsRow}>
+            {visibleTargets.map((p, index) => (
+              <View key={p.userId} style={[styles.wavedAvatarWrapper, index > 0 && { marginLeft: spacing.negSm }]}>
+                <UserAvatar avatar_url={p.avatarUrl} username={p.username} size={32} borderRadius={radii.sm} />
+              </View>
+            ))}
+            {remainingTargetsCount > 0 && (
+              <View style={[styles.wavedAvatarWrapper, styles.wavedAvatarMore, { marginLeft: spacing.negSm }]}>
+                <Text style={styles.wavedAvatarMoreText}>+{remainingTargetsCount}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      )}
     </Animated.View>
   );
 }
@@ -164,6 +194,7 @@ type Props = {
   currentUsername: string;
   currentAvatarUrl: string | null;
   isVisible: boolean;
+  onParticipantsChange?: (participants: any[]) => void;
 };
 
 // ─── LiveReactions ────────────────────────────────────────────────────────────
@@ -174,6 +205,7 @@ export default function LiveReactions({
   currentUsername,
   currentAvatarUrl,
   isVisible,
+  onParticipantsChange,
 }: Props) {
   const insets = useSafeAreaInsets();
   const styles = useThemedStyles(makeStyles);
@@ -188,7 +220,16 @@ export default function LiveReactions({
   const reversalsRef      = useRef<number[]>([]); // timestamps of X-axis direction reversals
   const lastXDirectionRef = useRef<0 | 1 | -1>(0); // last committed X direction
 
-  const sync = () => setParticipants(new Map(pRef.current));
+  const sync = () => {
+    setParticipants(new Map(pRef.current));
+    onParticipantsChange?.(
+      Array.from(pRef.current.values()).map(p => ({
+        userId: p.userId,
+        username: p.username,
+        avatarUrl: p.avatarUrl,
+      }))
+    );
+  };
 
   const makeParticipant = (
     userId: string,
@@ -342,46 +383,21 @@ export default function LiveReactions({
   }, [isVisible, sendWave]);
 
   // ── render ─────────────────────────────────────────────────────────────────
-  const list = Array.from(participants.values());
-  if (list.length === 0) return null;
-
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-
-      {/* Avatar column — top right */}
-      <View style={[styles.avatarsCol, { top: insets.top + 8 }]}>
-        {list.map((p) => (
-          <Animated.View
-            key={p.userId}
-            style={{ transform: [{ scale: p.avatarScale }] }}
-          >
-            <View style={styles.avatarRow}>
-              {/* Small waving hand to the left of the avatar */}
-              <WavingHand size={26} trigger={waveTriggers.get(p.userId) ?? 0} />
-              {p.avatarUrl ? (
-                <Image source={{ uri: p.avatarUrl }} style={styles.avatar} contentFit="cover" />
-              ) : (
-                <View style={[styles.avatar, styles.avatarFallback]}>
-                  <Text style={styles.avatarInitial}>
-                    {p.username[0]?.toUpperCase() ?? "?"}
-                  </Text>
-                </View>
-              )}
-            </View>
-          </Animated.View>
-        ))}
-      </View>
-
       {/* Big centred wave — shown on the waving user's own screen */}
-      <BigWave trigger={myWaveTrigger} />
-
+      <BigWave
+        trigger={myWaveTrigger}
+        participants={participants}
+        currentUserId={currentUserId}
+      />
     </View>
   );
 }
 
 // ─── styles ───────────────────────────────────────────────────────────────────
 
-const makeStyles = (colors: ThemeColors) => StyleSheet.create({
+const makeStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.create({
   avatarsCol: {
     position: "absolute",
     right: 14,
@@ -414,20 +430,45 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  bigWaveCard: {
+  wavedToContainer: {
+    marginTop: spacing.xl, // size-space-600 away (24px)
+    flexDirection: "row",
     alignItems: "center",
-    gap: 10,
     backgroundColor: colors.opacityLight,
-    borderRadius: radii.xl,
-    paddingHorizontal: 32,
-    paddingVertical: 24,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
+    paddingHorizontal: spacing.md, // side padding space/300 (12px)
+    paddingVertical: spacing.sm, // y padding space/200 (8px)
+    borderRadius: radii.sm,
   },
-  bigWaveLabel: {
+  wavedToText: {
+    ...textStyles.singleLineBodyBase,
     color: colors.text,
-    fontSize: typography.size.xxl,
+  },
+  wavedAvatarsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginLeft: spacing.sm, // to its right with size-space-200 (8px)
+    height: 32,
+  },
+  wavedAvatarWrapper: {
+    width: 32,
+    height: 32,
+    borderWidth: stroke.sm,
+    borderColor: colors.bg,
+    borderRadius: radii.sm,
+    backgroundColor: colors.bg,
+    ...shadows.shadow200,
+  },
+  wavedAvatarMore: {
+    width: 32,
+    height: 32,
+    borderRadius: radii.sm,
+    backgroundColor: colors.card,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  wavedAvatarMoreText: {
+    color: colors.textSecondary,
     fontFamily: typography.family.bold,
-    letterSpacing: 0.5,
+    fontSize: 10,
   },
 });

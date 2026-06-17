@@ -2,8 +2,7 @@ import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { CrownedAvatar } from "../atoms/Avatar";
 import { ExpandableNote } from "../atoms/ExpandableNote";
-import { CommentIcon } from "../atoms/CommentIcon";
-import { PlusIcon } from "../atoms/PlusIcon";
+
 import { spacing, radii, typography, type ThemeColors } from "../../lib/theme";
 import { useThemedStyles } from "../../lib/theme-context";
 
@@ -52,36 +51,30 @@ export const AuthorInfo = ({
   const hasAudio = !!(audioPlayer && audioStatus);
 
   return (
-    <View style={[styles.authorInfo, hasAudio && { alignItems: "center" }]}>
-      <CrownedAvatar avatar_url={avatar_url} username={username} size={36} isCrown={isCrown} />
-      <View style={{ flex: 1, gap: 4 }}>
+    <View style={styles.authorInfo}>
+      <CrownedAvatar 
+        avatar_url={avatar_url} 
+        username={username} 
+        size={48} 
+        borderRadius={radii.md} 
+        isCrown={isCrown} 
+      />
+      <View style={styles.textSection}>
         {!hasAudio && (
           <View style={styles.usernameLine}>
             <Text style={styles.username}>{username}</Text>
-            <Text style={styles.momentTime}>{formatTime(created_at)}</Text>
           </View>
         )}
         {hasAudio ? (
           <View style={{ gap: 2 }}>
             <View style={[styles.usernameLine, { marginBottom: 2 }]}>
               <Text style={styles.username}>{username}</Text>
-              <Text style={styles.momentTime}>{formatTime(created_at)}</Text>
             </View>
             <AudioCaptionPlayer player={audioPlayer!} status={audioStatus!} onScrollLock={onScrollLock} waveform={captionWaveform} />
           </View>
         ) : (
-          note && <ExpandableNote text={note} maxLines={2} />
+          note !== null && <ExpandableNote text={note || "Sans description"} maxLines={2} />
         )}
-      </View>
-      <View style={styles.actionsColumn}>
-        {!isOwn && (
-          <TouchableOpacity style={styles.reactBtnInline} onPress={onOpenPicker}>
-            <PlusIcon />
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity style={styles.reactBtnInline} onPress={onOpenComments}>
-          <CommentIcon hasBadge={hasNewComments} />
-        </TouchableOpacity>
       </View>
     </View>
   );
@@ -90,8 +83,12 @@ export const AuthorInfo = ({
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   authorInfo: {
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "flex-start",
     gap: spacing.md
+  },
+  textSection: {
+    flex: 1,
+    gap: 4,
   },
   usernameLine: {
     flexDirection: "row",
@@ -101,7 +98,8 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   username: {
     color: colors.text,
     fontFamily: typography.family.bold,
-    fontSize: typography.size.md,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * 1.4,
   },
   momentTime: {
     color: colors.textMuted,

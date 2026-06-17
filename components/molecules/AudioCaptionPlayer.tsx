@@ -1,10 +1,10 @@
 import React, { useRef, useEffect } from "react";
 import { View, StyleSheet, TouchableOpacity, PanResponder, Text } from "react-native";
 import { Svg, Path } from "react-native-svg";
-import BlurView from "../atoms/BlurView";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
-import { colors, radii, typography, blur } from "../../lib/theme";
+import { colors, radii, typography } from "../../lib/theme";
 import Icon from "../Icon";
+import { Waveform } from "../atoms/Waveform";
 
 interface AudioCaptionPlayerProps {
   player: ReturnType<typeof useAudioPlayer>;
@@ -13,26 +13,13 @@ interface AudioCaptionPlayerProps {
   showVocalLabel?: boolean;
   onScrollLock?: (locked: boolean) => void;
   waveform?: number[];
+  /** Play/pause icon color. Defaults to white (designed to sit over a dark scrim). */
+  iconColor?: string;
+  /** Waveform bar color (played = full opacity, unplayed = faded). Defaults to bgNeutral. */
+  waveColor?: string;
 }
 
-const WAVE_BARS = [10, 14, 22, 30, 38, 34, 26, 20, 14, 18, 28, 36, 44, 40, 32, 24, 16, 12, 20, 30, 38, 42, 34, 26, 18, 14, 22, 32, 40, 36, 28, 20, 14, 10, 18, 28, 36, 40, 32, 24, 18, 14, 20, 28, 36, 32, 24, 18, 12, 8];
-
-function compressWaveform(data: number[], maxBars: number): number[] {
-  if (!data || data.length === 0) return [];
-  if (data.length <= maxBars) return data;
-  const result: number[] = [];
-  const chunkSize = data.length / maxBars;
-  for (let i = 0; i < maxBars; i++) {
-    const start = Math.floor(i * chunkSize);
-    const end = Math.floor((i + 1) * chunkSize);
-    const slice = data.slice(start, end);
-    const max = slice.reduce((m, val) => Math.max(m, val), 0);
-    result.push(max);
-  }
-  return result;
-}
-
-export const AudioCaptionPlayer = ({ player, status, onRemove, showVocalLabel, onScrollLock, waveform }: AudioCaptionPlayerProps) => {
+export const AudioCaptionPlayer = ({ player, status, onRemove, showVocalLabel, onScrollLock, waveform, iconColor = colors.white, waveColor = colors.bgNeutral }: AudioCaptionPlayerProps) => {
   const waveWidthRef = useRef(1);
   const waveOriginXRef = useRef(0);
   const isDraggingRef = useRef(false);
@@ -87,21 +74,15 @@ export const AudioCaptionPlayer = ({ player, status, onRemove, showVocalLabel, o
 
   const progress = (status.duration ?? 0) > 0 ? (status.currentTime ?? 0) / status.duration : 0;
 
-  // Use provided waveform or fallback to hardcoded
-  const bars = waveform && waveform.length > 0 
-    ? compressWaveform(waveform, 40).map(v => v * 80) 
-    : WAVE_BARS;
-
   return (
     <View style={styles.container}>
       <TouchableOpacity onPress={togglePlay} style={styles.playBtn}>
-        <BlurView intensity={blur.md} tint="dark" style={StyleSheet.absoluteFillObject} />
         {status.playing ? (
-          <Svg width="18" height="18" viewBox="0 0 24 24" fill={colors.white}>
+          <Svg width="18" height="18" viewBox="0 0 24 24" fill={iconColor}>
             <Path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
           </Svg>
         ) : (
-          <Icon name="play" size={18} color={colors.white} />
+          <Icon name="play" size={18} color={iconColor} />
         )}
       </TouchableOpacity>
       
@@ -112,20 +93,14 @@ export const AudioCaptionPlayer = ({ player, status, onRemove, showVocalLabel, o
         }}
         {...seekPan.panHandlers}
       >
-        <View style={styles.waveContainer} pointerEvents="none">
-          {bars.map((h, i) => (
-            <View
-              key={i}
-              style={[
-                styles.waveBar,
-                {
-                  height: Math.max(2, h/3),
-                  opacity: progress > i / bars.length ? 1 : 0.25,
-                },
-              ]}
-            />
-          ))}
-        </View>
+        <Waveform
+          data={waveform ?? []}
+          progress={progress}
+          color={waveColor}
+          heightScale={80 / 3}
+          barWidth={2}
+          minHeight={2}
+        />
       </View>
 
       {onRemove && (
@@ -149,28 +124,14 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: radii.sm, // var(--sds-size-radius-200) -> 8
-    backgroundColor: colors.opacityLight, // var(--background-default-default-opacity)
     justifyContent: "center",
     alignItems: "center",
-    overflow: "hidden", // blur/glass effect approximation
   },
   waveHitArea: {
     flex: 1,
     height: "100%",
     justifyContent: "center",
     paddingVertical: 10,
-  },
-  waveContainer: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 1.5,
-  },
-  waveBar: {
-    width: 2,
-    backgroundColor: colors.bgNeutral, // var(--sds-color-background-neutral-default)
-    borderRadius: 4,
   },
   trashBtn: {
     padding: 6,

@@ -2,7 +2,10 @@ import React, { useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Animated } from "react-native";
 import { Svg, Path } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { spacing, typography, type ThemeColors } from "../../lib/theme";
+import { Image } from "expo-image";
+import BlurView from "../atoms/BlurView";
+import { TextSticker } from "../atoms/TextSticker";
+import { spacing, typography, radii, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
 
 const NAVBAR_HEIGHT = 100;
@@ -12,13 +15,17 @@ interface RevealIntroPageProps {
   isVisible: boolean;
   customTitle?: string;
   customSubtitle?: string;
+  firstPhotoUrl?: string;
+  momentsCount?: number;
 }
 
 export const RevealIntroPage = ({
   groupName,
   isVisible,
   customTitle,
-  customSubtitle
+  customSubtitle,
+  firstPhotoUrl,
+  momentsCount = 0
 }: RevealIntroPageProps) => {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -55,33 +62,51 @@ export const RevealIntroPage = ({
 
   return (
     <View style={styles.fullscreenPage}>
-      <Animated.View style={{ alignItems: "center", opacity, transform: [{ scale }] }}>
-        {!customTitle && <Text style={styles.revealIntroEyebrow}>cette semaine</Text>}
-        <Text style={styles.revealIntroTitle}>{customTitle ?? "Le Reveal"}</Text>
-        {customSubtitle
-          ? <Text style={styles.revealIntroGroup}>{customSubtitle}</Text>
-          : groupName ? <Text style={styles.revealIntroGroup}>{groupName}</Text> : null}
+      {firstPhotoUrl ? (
+        <View style={StyleSheet.absoluteFill}>
+          <Image
+            source={{ uri: firstPhotoUrl }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+          />
+          <BlurView intensity={75} tint="dark" style={StyleSheet.absoluteFill} />
+        </View>
+      ) : null}
+
+      <Animated.View style={[styles.middleContainer, { opacity, transform: [{ scale }] }]}>
+        <View style={styles.stickerWrapper}>
+          <TextSticker 
+            text="Noyaux" 
+            fontSize={typography.size.titleSm} 
+            padY={spacing.md} 
+          />
+        </View>
+
+        <View style={styles.titlesContainer}>
+          <Text style={styles.mainTitle}>{customTitle ?? "REVEAL"}</Text>
+          <Text style={styles.subtitle}>{customSubtitle ?? "de la semaine"}</Text>
+        </View>
+
+        {momentsCount > 0 ? (
+          <View style={styles.momentsBadge}>
+            <Text style={styles.momentsBadgeText}>
+              {momentsCount} {momentsCount > 1 ? "moments" : "moment"}
+            </Text>
+          </View>
+        ) : null}
       </Animated.View>
+
       <Animated.View
         style={[
           styles.revealIntroHint,
           {
-            bottom: Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 24) / 2),
+            bottom: insets.bottom,
             opacity: hintOpacity,
             transform: [{ translateY: hintY }]
           }
         ]}
       >
-        <Svg width={24} height={24} viewBox="0 0 24 24">
-          <Path
-            d="M12 5v14M5 12l7 7 7-7"
-            stroke={colors.textMuted}
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </Svg>
-        <Text style={styles.revealIntroHintText}>Scroll</Text>
+        <Text style={styles.revealIntroHintText}>Swipe vers le bas</Text>
       </Animated.View>
     </View>
   );
@@ -96,39 +121,55 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: "center",
     backgroundColor: colors.bg
   },
-  revealIntroEyebrow: {
-    fontFamily: typography.family.regular,
-    fontSize: typography.size.sm,
-    color: colors.textMuted,
-    letterSpacing: 4,
-    textTransform: "uppercase",
-    marginBottom: spacing.md
+  middleContainer: {
+    alignItems: "center",
+    gap: spacing.xl,
+    zIndex: 10,
   },
-  revealIntroTitle: {
+  titlesContainer: {
+    alignItems: "center",
+    gap: spacing.negSm, // var space neg-200 (-8px)
+  },
+  stickerWrapper: {
+    transform: [{ rotate: "-2deg" }],
+  },
+  mainTitle: {
     fontFamily: typography.family.bold,
-    fontSize: typography.size.title,
+    fontSize: typography.size.hero,
+    lineHeight: typography.size.hero * 1.20,
     color: colors.text,
-    letterSpacing: -1.5,
-    lineHeight: 62,
-    textAlign: "center"
+    textAlign: "center",
+    textTransform: "uppercase",
+    letterSpacing: -2,
   },
-  revealIntroGroup: {
-    fontFamily: typography.family.regular,
-    fontSize: typography.size.xl,
-    color: colors.textMuted,
-    marginTop: spacing.md,
-    textAlign: "center"
+  subtitle: {
+    fontFamily: typography.family.semibold,
+    fontSize: typography.size.xxl,
+    lineHeight: typography.size.xxl * 1.20,
+    color: colors.text,
+    textAlign: "center",
+  },
+  momentsBadge: {
+    borderRadius: radii.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.opacityLight,
+  },
+  momentsBadgeText: {
+    fontFamily: typography.family.semibold,
+    fontSize: typography.size.sm,
+    color: colors.text,
+    textAlign: "center",
   },
   revealIntroHint: {
     position: "absolute",
     alignItems: "center",
-    gap: spacing.xs + 2
+    zIndex: 10,
   },
   revealIntroHintText: {
-    fontFamily: typography.family.regular,
-    fontSize: typography.size.xs - 1,
-    color: colors.textMuted,
-    letterSpacing: 2,
-    textTransform: "uppercase"
+    fontFamily: typography.family.semibold, // body/font-weight-strong SemiBold
+    fontSize: typography.size.md, // body/size-medium (16px)
+    lineHeight: typography.size.md * 1.0, // line height 100%
+    color: colors.textSecondary,
   },
 });

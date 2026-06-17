@@ -6,6 +6,13 @@ import { r2Storage } from "./r2";
 
 type UploadStatus = "uploading" | "success" | "error";
 
+let VideoThumbnails: any = null;
+try {
+  VideoThumbnails = require("expo-video-thumbnails");
+} catch (e) {
+  console.warn("expo-video-thumbnails is not available natively:", e);
+}
+
 interface UploadState {
   id: string;
   progress: number;
@@ -72,10 +79,20 @@ async function uploadFilesToR2(
   secondFile: SecondFile | undefined,
   captionAudioFile?: { fileName: string; fileUri: string; contentType: string } | null,
   mirrorPrimary?: boolean
-): Promise<{ finalPath: string; secondPath: string | null; captionAudioPath: string | null }> {
+): Promise<{
+  finalPath: string;
+  secondPath: string | null;
+  captionAudioPath: string | null;
+  videoThumbnailPath: string | null;
+  secondVideoThumbnailPath: string | null;
+}> {
   let finalPath = "text_mode";
+  let videoThumbnailPath: string | null = null;
+  let secondVideoThumbnailPath: string | null = null;
+
   if (fileName && fileUri && contentType) {
     const isImage = contentType.includes("image") || fileName.endsWith(".jpg") || fileName.endsWith(".jpeg");
+    const isVideo = contentType.includes("video") || fileName.endsWith(".mp4");
 
     let uploadUri = fileUri;
 
@@ -89,6 +106,21 @@ async function uploadFilesToR2(
 
     // Tout (image/vidéo/audio) part en streaming natif — plus de base64 bloquant.
     await streamUpload(fileName, uploadUri, contentType);
+
+    // Vignette pour les vidéos (1er slot) — générée puis uploadée elle aussi en streaming natif.
+    if (isVideo && VideoThumbnails) {
+      try {
+        const { uri: thumbUri } = await VideoThumbnails.getThumbnailAsync(uploadUri, {
+          time: 0,
+        });
+        const thumbResult = await manipulateAsync(thumbUri, [], { compress: 0.7, format: SaveFormat.JPEG });
+        const thumbFileName = fileName.substring(0, fileName.lastIndexOf('.')) + "_thumb.jpg";
+        await streamUpload(thumbFileName, thumbResult.uri, "image/jpeg");
+        videoThumbnailPath = thumbFileName;
+      } catch (e) {
+        console.error("Failed to generate video thumbnail:", e);
+      }
+    }
     finalPath = fileName;
   }
 
@@ -99,6 +131,7 @@ async function uploadFilesToR2(
     } else if (secondFile.fileName && secondFile.fileUri && secondFile.contentType) {
       const sf = secondFile as { fileName: string; fileUri: string; contentType: string };
       const isSecondImage = sf.contentType.includes("image") || sf.fileName.endsWith(".jpg") || sf.fileName.endsWith(".jpeg");
+      const isSecondVideo = sf.contentType.includes("video") || sf.fileName.endsWith(".mp4");
 
       let secondUploadUri = sf.fileUri;
 
@@ -108,6 +141,21 @@ async function uploadFilesToR2(
       }
 
       await streamUpload(sf.fileName, secondUploadUri, sf.contentType);
+
+      // Vignette pour les vidéos (2e slot) — uploadée elle aussi en streaming natif.
+      if (isSecondVideo && VideoThumbnails) {
+        try {
+          const { uri: thumbUri } = await VideoThumbnails.getThumbnailAsync(secondUploadUri, {
+            time: 0,
+          });
+          const thumbResult = await manipulateAsync(thumbUri, [], { compress: 0.7, format: SaveFormat.JPEG });
+          const thumbFileName = sf.fileName.substring(0, sf.fileName.lastIndexOf('.')) + "_thumb.jpg";
+          await streamUpload(thumbFileName, thumbResult.uri, "image/jpeg");
+          secondVideoThumbnailPath = thumbFileName;
+        } catch (e) {
+          console.error("Failed to generate second video thumbnail:", e);
+        }
+      }
       secondPath = sf.fileName;
     }
   }
@@ -122,7 +170,7 @@ async function uploadFilesToR2(
     captionAudioPath = captionAudioFile.fileName;
   }
 
-  return { finalPath, secondPath, captionAudioPath };
+  return { finalPath, secondPath, captionAudioPath, videoThumbnailPath, secondVideoThumbnailPath };
 }
 
 export function UploadProvider({ children }: { children: React.ReactNode }) {
@@ -145,13 +193,15 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
 
     (async () => {
       try {
-        const { finalPath, secondPath, captionAudioPath } = await uploadFilesToR2(fileName, fileUri, contentType, secondFile, captionAudioFile, mirrorPrimary);
+        const { finalPath, secondPath, captionAudioPath, videoThumbnailPath, secondVideoThumbnailPath } = await uploadFilesToR2(fileName, fileUri, contentType, secondFile, captionAudioFile, mirrorPrimary);
         
         const { error } = await supabase.from("photos").insert([{
           ...dbData,
           image_path: finalPath,
           second_image_path: secondPath,
           audio_note_path: captionAudioPath,
+          video_thumbnail_path: videoThumbnailPath,
+          second_video_thumbnail_path: secondVideoThumbnailPath,
           waveform: waveform || null,
           caption_waveform: captionWaveform || null
         }]);
@@ -181,23 +231,21 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
 
     (async () => {
       try {
-        const { finalPath, secondPath } = await uploadFilesToR2(fileName, fileUri, contentType, secondFile);
+        const { finalPath, secondPath, videoThumbnailPath, secondVideoThumbnailPath } = await uploadFilesToR2(fileName, fileUri, contentType, secondFile);
         
-        const { data: insertedData, error } = await supabase.from("photos").insert([{
-          ...dbData,
+        const { error } = await supabase.from("challenge_responses").insert([{
+          challenge_id: challengeId,
+          user_id: dbData.user_id,
           image_path: finalPath,
           second_image_path: secondPath,
-        }]).select();
+          note: dbData.note,
+          video_thumbnail_path: videoThumbnailPath,
+          second_video_thumbnail_path: secondVideoThumbnailPath,
+          is_target_response: isTarget || false,
+          waveform: waveform || null,
+        }]);
 
         if (error) throw error;
-
-        if (insertedData && insertedData[0]) {
-           await supabase.from("challenge_entries").insert([{
-             challenge_id: challengeId,
-             photo_id: insertedData[0].id,
-             is_target: isTarget || false
-           }]);
-        }
 
         setUploads(prev => prev.map(u => u.id === id ? { ...u, status: "success", progress: 100 } : u));
       } catch (error) {

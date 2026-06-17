@@ -5,6 +5,7 @@ import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_7
 import { useAssets } from "expo-asset";
 import { View, StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import * as Updates from "expo-updates";
 import { AuthProvider } from "../lib/auth-context";
 import { ThemeProvider, useTheme } from "../lib/theme-context";
@@ -52,25 +53,27 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <AuthProvider>
-        <ThemeProvider>
-          <UploadProvider>
-            <ToastProvider>
-              <View style={{ flex: 1 }}>
-                <ThemedStatusBar />
-                {!splashDone && (
-                  <SplashScreen ready={appReady} onFinish={() => setSplashDone(true)} />
-                )}
-                {appReady && (
-                  <View style={splashDone ? styles.visible : styles.hidden}>
-                    <Slot />
-                  </View>
-                )}
-              </View>
-            </ToastProvider>
-          </UploadProvider>
-        </ThemeProvider>
-      </AuthProvider>
+      <KeyboardProvider>
+        <AuthProvider>
+          <ThemeProvider>
+            <UploadProvider>
+              <ToastProvider>
+                <View style={{ flex: 1 }}>
+                  <ThemedStatusBar />
+                  {!splashDone && (
+                    <SplashScreen ready={appReady} onFinish={() => setSplashDone(true)} />
+                  )}
+                  {appReady && (
+                    <View style={splashDone ? styles.visible : styles.hidden}>
+                      <Slot />
+                    </View>
+                  )}
+                </View>
+              </ToastProvider>
+            </UploadProvider>
+          </ThemeProvider>
+        </AuthProvider>
+      </KeyboardProvider>
     </GestureHandlerRootView>
   );
 }

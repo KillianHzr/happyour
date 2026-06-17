@@ -25,9 +25,24 @@ interface AudioMomentProps {
   onOpenComments?: (photoId: string, ownerId: string) => void;
   isVisible?: boolean;
   onScrollLock?: (locked: boolean) => void;
+  isShrunken?: boolean;
+  postCountText?: string;
 }
 
 const NAVBAR_HEIGHT = 100;
+
+const getDayText = (dateStr: string) => {
+  const d = new Date(dateStr);
+  const day = d.toLocaleDateString("fr-FR", { weekday: "long" });
+  return day.charAt(0).toUpperCase() + day.slice(1);
+};
+
+const getTimeText = (dateStr: string) => {
+  const d = new Date(dateStr);
+  const hours = String(d.getHours()).padStart(2, "0");
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+};
 
 export const AudioMoment = ({
   moment,
@@ -36,7 +51,9 @@ export const AudioMoment = ({
   onOpenPicker,
   onOpenComments,
   isVisible,
-  onScrollLock
+  onScrollLock,
+  isShrunken = false,
+  postCountText,
 }: AudioMomentProps) => {
   const insets = useSafeAreaInsets();
   const { mode } = useTheme();
@@ -48,8 +65,14 @@ export const AudioMoment = ({
   const uiOpacity = useSharedValue(1);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Fade the in-preview UI in/out when entering/exiting comments instead of toggling.
+  const shrinkProgress = useSharedValue(isShrunken ? 1 : 0);
+  useEffect(() => {
+    shrinkProgress.value = withTiming(isShrunken ? 1 : 0, { duration: 250 });
+  }, [isShrunken]);
+
   const animatedUiStyle = useAnimatedStyle(() => ({
-    opacity: uiOpacity.value,
+    opacity: uiOpacity.value * (1 - shrinkProgress.value),
   }));
 
   const hasSecond = !!moment.second_image_path;
@@ -132,11 +155,23 @@ export const AudioMoment = ({
   const showAudioPlayerInOverlay = (isPrimaryAudio || isAudioCaption) && !swapped;
 
   const overlayNote = swapped && hasSecond ? moment.second_note : moment.note;
-  const paddingTopBottom = Math.round((Math.max(insets.top, 12) + 24 + NAVBAR_HEIGHT + 12) / 2);
+  const paddingTop = insets.top;
+  const paddingBottom = 0;
+
+  const animatedWrapperStyle = useAnimatedStyle(() => {
+    const radius = withTiming(isShrunken ? radii.xxl : radii.xl, { duration: 250 });
+    const bottomRadius = withTiming(isShrunken ? radii.xxl : 0, { duration: 250 });
+    return {
+      borderTopLeftRadius: radius,
+      borderTopRightRadius: radius,
+      borderBottomLeftRadius: bottomRadius,
+      borderBottomRightRadius: bottomRadius,
+    };
+  });
 
   return (
-    <View style={[styles.fullscreenPage, { paddingTop: paddingTopBottom, paddingBottom: paddingTopBottom }]}>
-      <View style={styles.momentWrapper}>
+    <View style={[styles.fullscreenPage, { paddingTop, paddingBottom }]}>
+      <Reanimated.View style={[styles.momentWrapper, animatedWrapperStyle]}>
         <Pressable
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
@@ -160,28 +195,34 @@ export const AudioMoment = ({
                 style={StyleSheet.absoluteFill}
                 pointerEvents="none"
               />
-              <AuthorInfo
-                avatar_url={moment.avatar_url}
-                username={moment.username}
-                created_at={moment.created_at}
-                note={overlayNote}
-                audioPlayer={showAudioPlayerInOverlay ? player : undefined}
-                audioStatus={showAudioPlayerInOverlay ? status : undefined}
-                onScrollLock={showAudioPlayerInOverlay ? onScrollLock : undefined}
-                captionWaveform={moment.caption_waveform || undefined}
-                isCrown={crownWinnerId === moment.user_id}
-                isOwn={isOwn}
-                hasNewComments={moment.hasNewComments}
-                onOpenComments={() => onOpenComments?.(moment.id, moment.user_id)}
-                onOpenPicker={() => onOpenPicker?.(moment.id)}
-              />
-              <ReactionsRow
-                reactions={moment.reactions}
-                currentUserId={currentUserId}
-                photoId={moment.id}
-                crownWinnerId={crownWinnerId}
-                onOpenPicker={onOpenPicker}
-              />
+              <View style={styles.detailsContainer} pointerEvents="box-none">
+                <View style={styles.topInfoRow} pointerEvents="none">
+                  <View style={styles.topLeftInfo}>
+                    <Text style={styles.dayText}>{getDayText(moment.created_at)}</Text>
+                    <Text style={styles.timeText}>{getTimeText(moment.created_at)}</Text>
+                  </View>
+                  {postCountText ? (
+                    <View style={styles.postCountBadge}>
+                      <Text style={styles.postCountText}>{postCountText}</Text>
+                    </View>
+                  ) : null}
+                </View>
+                <AuthorInfo
+                  avatar_url={moment.avatar_url}
+                  username={moment.username}
+                  created_at={moment.created_at}
+                  note={overlayNote}
+                  audioPlayer={showAudioPlayerInOverlay ? player : undefined}
+                  audioStatus={showAudioPlayerInOverlay ? status : undefined}
+                  onScrollLock={showAudioPlayerInOverlay ? onScrollLock : undefined}
+                  captionWaveform={moment.caption_waveform || undefined}
+                  isCrown={false}
+                  isOwn={isOwn}
+                  hasNewComments={moment.hasNewComments}
+                  onOpenComments={() => onOpenComments?.(moment.id, moment.user_id)}
+                  onOpenPicker={() => onOpenPicker?.(moment.id)}
+                />
+              </View>
             </Reanimated.View>
             {hasSecond && (
               <Reanimated.View style={[StyleSheet.absoluteFill, animatedUiStyle]} pointerEvents="box-none">
@@ -194,7 +235,7 @@ export const AudioMoment = ({
             )}
           </View>
         </Pressable>
-      </View>
+      </Reanimated.View>
     </View>
   );
 };
@@ -206,12 +247,15 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: colors.bg,
-    paddingHorizontal: spacing.md
+    paddingHorizontal: 0
   },
   momentWrapper: {
     flex: 1,
     width: '100%',
-    borderRadius: radii.xl,
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
     overflow: "hidden",
     backgroundColor: "transparent"
   },
@@ -259,7 +303,49 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     padding: spacing.xl,
     paddingBottom: spacing.xxl,
     paddingTop: 80,
-    gap: spacing.md
+  },
+  detailsContainer: {
+    width: "100%",
+    gap: 9,
+  },
+  topInfoRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
+  },
+  topLeftInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  dayText: {
+    color: colors.text,
+    fontFamily: typography.family.semibold,
+    fontSize: typography.size.md,
+    lineHeight: typography.size.md * 1.4,
+  },
+  timeText: {
+    color: colors.textSecondary,
+    fontFamily: typography.family.regular,
+    fontSize: typography.size.sm,
+    lineHeight: typography.size.sm * 1.4,
+  },
+  postCountBadge: {
+    backgroundColor: colors.opacityLight,
+    borderRadius: radii.md,
+    paddingTop: spacing.xs,
+    paddingRight: spacing.sm,
+    paddingBottom: spacing.xs,
+    paddingLeft: spacing.sm,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  postCountText: {
+    color: colors.text,
+    fontFamily: typography.family.bold,
+    fontSize: typography.size.xxs,
+    lineHeight: typography.size.xxs,
   },
   downloadBtnContainer: {
     position: "absolute",

@@ -1,8 +1,11 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { View, Text, StyleSheet, Dimensions, Animated, TouchableOpacity, Alert, TextInput, AppState, Modal, KeyboardAvoidingView, Platform, Pressable } from "react-native";
+import { Image } from "expo-image";
+import { View, Text, StyleSheet, ScrollView, Dimensions, Animated, TouchableOpacity, Alert, TextInput, AppState, Modal, KeyboardAvoidingView, Platform, Pressable } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import BlurView from "../../../components/atoms/BlurView";
+import { SvgCutout } from "../../../components/atoms/SvgCutout";
+import { RightSlideModal } from "../../../components/atoms/RightSlideModal";
 import { supabase } from "../../../lib/supabase";
 import { r2Storage } from "../../../lib/r2";
 import { useAuth } from "../../../lib/auth-context";
@@ -16,7 +19,7 @@ import Svg, { Path } from "react-native-svg";
 
 import PhotoFeed, { type PhotoEntry, type Reaction } from "../../../components/PhotoFeed";
 import { TextSticker } from "../../../components/atoms/TextSticker";
-import { fetchChallengeData, getChallengeWeekStart, type ChallengeWithData } from "../../../lib/challenges";
+import { fetchChallengeData, getChallengeWeekStart, getChallengePrompt, type ChallengeWithData } from "../../../lib/challenges";
 import Loader from "../../../components/Loader";
 import { ProfileIcon, VaultIcon, MomentIcon, FlowerIcon } from "../../../components/icons";
 import { CloseIcon } from "../../../components/groups/GroupIcons";
@@ -32,12 +35,14 @@ import CustomChallengeCreatePage from "../../../components/groups/CustomChalleng
 import CustomChallengeQueuePage from "../../../components/groups/CustomChallengeQueuePage";
 import BottomSheet from "../../../components/BottomSheet";
 import LiveReactions from "../../../components/reveal/LiveReactions";
+import { RevealHeader, type Participant } from "../../../components/organisms/RevealHeader";
 import MotivationalNotificationsModal from "../../../components/MotivationalNotificationsModal";
 import { scheduleImmediateLocalNotification, scheduleFirstMomentReminder, notifyReaction } from "../../../lib/notifications";
 import { radii, spacing, typography, textStyles, buildColors, type ThemeColors } from "../../../lib/theme";
+import { StatusBar } from "expo-status-bar";
 import Icon from "../../../components/Icon";
 import Shape, { type ShapeName } from "../../../components/Shape";
-import { useTheme, useThemedStyles, ForceThemeMode } from "../../../lib/theme-context";
+import { useTheme, useThemedStyles, ForceThemeMode, ForceTheme } from "../../../lib/theme-context";
 
 const captureToastShape = (mode: string): ShapeName => {
   if (mode === "VIDEO") return "video";
@@ -76,6 +81,7 @@ type GroupData = {
   members: any[];
   photoCount: number;
   photos: PhotoEntry[];
+  comments: any[];
   crownWinnerId: string | null;
   crownDurationMs: number;
   allDurations: Record<string, number>;
@@ -100,6 +106,18 @@ function getWeekBounds(revealDayOfWeek = 0, revealHour = 20) {
   return { monday, revealDate, prevRevealDate };
 }
 
+function formatRelativeTime(dateInput: Date | string): string {
+  const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
+  const diffMs = Date.now() - date.getTime();
+  if (diffMs < 60000) return "1m";
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 60) return `${diffMins}min`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}j`;
+}
+
 export default function MainPagerScreen() {
   const { id, onboarding } = useLocalSearchParams<{ id: string; onboarding?: string }>();
   const { user } = useAuth();
@@ -114,6 +132,7 @@ export default function MainPagerScreen() {
   const pagerTouchRef = useRef<{ x: number; y: number; decided: boolean } | null>(null);
   // Désactive complètement le swipe du pager quand on est sur la vue de sélection de groupe
   const [groupsPagerLocked, setGroupsPagerLocked] = useState(false);
+  const photoFeedRef = useRef<any>(null);
 
   // Multi-group
   const [allGroups, setAllGroups] = useState<GroupInfo[]>([]);
@@ -148,6 +167,11 @@ export default function MainPagerScreen() {
 
   // Modals
   const [showReveal, setShowReveal] = useState(false);
+  const [hideRevealHeader, setHideRevealHeader] = useState(false);
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+  const [connectedParticipants, setConnectedParticipants] = useState<Participant[]>([]);
+  const [revealTimeLeft, setRevealTimeLeft] = useState("");
+  const [revealMsLeft, setRevealMsLeft] = useState(Infinity);
   const [showGroupSettings, setShowGroupSettings] = useState(false);
   const [showAddGroupModal, setShowAddGroupModal] = useState(false);
   // Quand le flow d'ajout se termine : ouvrir la vue du nouveau groupe dans GroupsPage
@@ -220,6 +244,92 @@ export default function MainPagerScreen() {
   const crownDurationMs = activeData?.crownDurationMs ?? 0;
   const isAdmin = activeData?.isAdmin ?? false;
   const challenges = activeData?.challenges ?? null;
+
+  const activitiesList = useMemo(() => {
+    if (!activeData || !user) return [];
+
+    const list: Array<{
+      id: string;
+      username: string;
+      avatarUrl: string | null;
+      photoUrl: string;
+      photoId: string;
+      created_at: string;
+      context: string;
+    }> = [];
+
+    const myPhotos = photos.filter((p) => p.user_id === user.id);
+    const myPhotoIds = new Set(myPhotos.map((p) => p.id));
+
+    // Current user's username — mentions are stored as "@<username>" using the
+    // exact group_members profile username, so we match against the same source.
+    const myUsername =
+      members.find((m) => m.user_id === user.id)?.username || username || "";
+    const mentionNeedle = myUsername ? `@${myUsername.toLowerCase()}` : null;
+    const mentionsMe = (content: string | null | undefined) =>
+      !!mentionNeedle && (content || "").toLowerCase().includes(mentionNeedle);
+
+    // 1. Reactions on my photos
+    for (const photo of myPhotos) {
+      for (const rx of photo.reactions) {
+        if (rx.user_id !== user.id) {
+          list.push({
+            id: `reaction-${rx.id}`,
+            username: rx.username,
+            avatarUrl: rx.avatar_url,
+            photoUrl: photo.video_thumbnail_url ?? photo.url,
+            photoId: photo.id,
+            created_at: rx.created_at || photo.created_at,
+            context: "A réagit avec un stickers à ton moment",
+          });
+        }
+      }
+    }
+
+    // 2. Comments on my photos (a comment that also tags me is handled below)
+    for (const comment of activeData.comments || []) {
+      if (myPhotoIds.has(comment.photo_id) && comment.user_id !== user.id && !mentionsMe(comment.content)) {
+        const photoObj = myPhotos.find((p) => p.id === comment.photo_id);
+        list.push({
+          id: `comment-${comment.id}`,
+          username: comment.profiles?.username ?? "Anonyme",
+          avatarUrl: comment.profiles?.avatar_url ?? null,
+          photoUrl: photoObj?.video_thumbnail_url ?? photoObj?.url ?? "",
+          photoId: comment.photo_id,
+          created_at: comment.created_at,
+          context: "A commenté ton moment",
+        });
+      }
+    }
+
+    // 3. Comments that tag me — on any post, not just mine
+    for (const comment of activeData.comments || []) {
+      if (comment.user_id !== user.id && mentionsMe(comment.content)) {
+        const photoObj = photos.find((p) => p.id === comment.photo_id);
+        list.push({
+          id: `mention-${comment.id}`,
+          username: comment.profiles?.username ?? "Anonyme",
+          avatarUrl: comment.profiles?.avatar_url ?? null,
+          photoUrl: photoObj?.video_thumbnail_url ?? photoObj?.url ?? "",
+          photoId: comment.photo_id,
+          created_at: comment.created_at,
+          context: "T'as tagué en commentaire",
+        });
+      }
+    }
+    return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }, [activeData, photos, user, members, username]);
+
+  const handleActivityClick = useCallback((item: any) => {
+    setShowNotificationsModal(false);
+    setTimeout(() => {
+      if (photoFeedRef.current) {
+        photoFeedRef.current.scrollToPhoto(item.photoId, true);
+      } else {
+        console.warn("photoFeedRef.current is not initialized");
+      }
+    }, 400);
+  }, []);
 
   const { revealDate, prevRevealDate } = getWeekBounds(revealConfig.day, revealConfig.hour);
   const revealEndDate = new Date(revealDate.getTime() + 24 * 60 * 60 * 1000);
@@ -302,7 +412,7 @@ export default function MainPagerScreen() {
           const [membersRes, photosRes] = await Promise.all([
             supabase.from("group_members").select("user_id, role, profiles:user_id(username, avatar_url)").eq("group_id", g.id),
             supabase.from("photos")
-              .select("id, image_path, second_image_path, audio_note_path, waveform, caption_waveform, created_at, note, user_id, profiles:user_id(username, avatar_url)")
+              .select("id, image_path, second_image_path, audio_note_path, waveform, caption_waveform, created_at, note, user_id, video_thumbnail_path, second_video_thumbnail_path, profiles:user_id(username, avatar_url)")
               .eq("group_id", g.id)
               .gte("created_at", photoStart.toISOString())
               .lt("created_at", photoEnd.toISOString())
@@ -314,10 +424,7 @@ export default function MainPagerScreen() {
           }));
           const me = (membersRes.data ?? []).find((m: any) => m.user_id === user.id);
           const isAdminForGroup = me?.role === "admin" ?? false;
-          const photoCount = photosRes.data?.length ?? 0;
 
-          const photoIds = (photosRes.data ?? []).map((p: any) => p.id);
-          
           const challengeWeekStart = getChallengeWeekStart(prevRevealDate);
           let challenges = await fetchChallengeData(g.id, challengeWeekStart, membersData);
           // DEV: if prev week has no challenges, load current week so simulate-reveal shows data
@@ -327,6 +434,58 @@ export default function MainPagerScreen() {
               challenges = await fetchChallengeData(g.id, currentWeekStart, membersData);
             }
           }
+
+          // Log active group challenges to help developers add artificial responses
+          if (__DEV__ && g.id === activeGroupId) {
+            console.log("\n======================================================================");
+            console.log(`[DEV] 🎯 CURRENT REVEAL CHALLENGES FOR ACTIVE GROUP: "${g.name}" (${g.id})`);
+            console.log(`[DEV] Week Start: ${challengeWeekStart}`);
+            console.log("----------------------------------------------------------------------");
+            console.log("[DEV] GROUP MEMBERS (for user_id options):");
+            membersData.forEach(m => {
+              console.log(`  - ${m.username}: "${m.user_id}"`);
+            });
+            console.log("----------------------------------------------------------------------");
+            
+            const logPeriod = (periodNum: 1 | 2, challenge: any) => {
+              console.log(`[DEV] Period ${periodNum} Challenge:`);
+              if (challenge) {
+                console.log(`  • ID (challenge_id): "${challenge.id}"`);
+                console.log(`  • Theme: "${challenge.theme?.label}" (Capture Type: ${challenge.theme?.capture_type})`);
+                console.log(`  • Target User: ${challenge.target_username} (${challenge.target_user_id})`);
+                console.log(`  • Prompt: "${getChallengePrompt(challenge.target_username, challenge.theme?.label)}"`);
+                console.log(`  • Existing Responses Count: ${challenge.responses?.length ?? 0}`);
+                
+                console.log("  👉 SQL Template to insert standard response:");
+                console.log(`     INSERT INTO challenge_responses (challenge_id, user_id, image_path, is_target_response, note)`);
+                console.log(`     VALUES ('${challenge.id}', '<USER_ID_FROM_MEMBERS>', 'text_mode', false, 'Mock response from standard user');\n`);
+                
+                console.log("  👉 SQL Template to insert TARGET response:");
+                console.log(`     INSERT INTO challenge_responses (challenge_id, user_id, image_path, is_target_response, note)`);
+                console.log(`     VALUES ('${challenge.id}', '${challenge.target_user_id}', 'text_mode', true, 'Mock response from target user');\n`);
+              } else {
+                console.log("  • None / Not generated yet.");
+              }
+            };
+            
+            logPeriod(1, challenges.period1);
+            logPeriod(2, challenges.period2);
+            console.log("======================================================================\n");
+          }
+
+          const challengeResponseIds = new Set<string>();
+          if (challenges.period1) {
+            challenges.period1.responses.forEach(r => challengeResponseIds.add(r.id));
+          }
+          if (challenges.period2) {
+            challenges.period2.responses.forEach(r => challengeResponseIds.add(r.id));
+          }
+
+          // Filter out challenge responses so they don't show up in the main feed
+          const filteredPhotosData = (photosRes.data ?? []).filter((p: any) => !challengeResponseIds.has(p.id));
+
+          const photoCount = filteredPhotosData.length;
+          const photoIds = filteredPhotosData.map((p: any) => p.id);
 
           // Check if current user responded to any challenge this week (unlocks reveal)
           const currentChallengeWeekStart = getChallengeWeekStart();
@@ -349,18 +508,32 @@ export default function MainPagerScreen() {
           }
 
           if (photoIds.length > 0) {
-  ;
-            const [reactionsRes, viewsRes, latestCommentsRes] = await Promise.all([
-              supabase.from("reactions").select("id, photo_id, user_id, emoji").in("photo_id", photoIds),
+            const [reactionsRes, viewsRes, commentsRes] = await Promise.all([
+              supabase.from("reactions").select("id, photo_id, user_id, emoji, created_at").in("photo_id", photoIds),
               supabase.from("comment_views").select("photo_id, last_viewed_at").eq("user_id", user.id).in("photo_id", photoIds),
-              supabase.from("comments").select("photo_id, created_at").in("photo_id", photoIds).order("created_at", { ascending: false })
+              supabase.from("comments")
+                .select("id, photo_id, user_id, content, created_at, profiles:user_id(username, avatar_url)")
+                .in("photo_id", photoIds)
+                .order("created_at", { ascending: false })
             ]);
 
+            console.log("[DB FETCH] Fetching reactions for photoIds:", photoIds);
+            console.log("[DB FETCH] Reactions query result count:", reactionsRes.data?.length, "Error:", reactionsRes.error);
+            if (reactionsRes.data) {
+              reactionsRes.data.forEach((r: any) => {
+                console.log(`[DB FETCH] Reaction Row - ID: ${r.id}, PhotoID: ${r.photo_id}, UserID: ${r.user_id}, Emoji: ${r.emoji}, CreatedAt: ${r.created_at}`);
+              });
+            }
+
             const viewsMap = Object.fromEntries((viewsRes.data ?? []).map((v: any) => [v.photo_id, v.last_viewed_at]));
-            const latestCommentsMap: Record<string, string> = {};
-            for (const c of latestCommentsRes.data ?? []) {
-              if (!latestCommentsMap[c.photo_id]) {
-                latestCommentsMap[c.photo_id] = c.created_at;
+            // Count, per photo, comments from *others* added since the user last
+            // opened that post's comments. Own comments never count as "unseen".
+            const newCommentsCountMap: Record<string, number> = {};
+            for (const c of commentsRes.data ?? []) {
+              if (c.user_id === user.id) continue;
+              const lastViewedAt = viewsMap[c.photo_id];
+              if (!lastViewedAt || new Date(c.created_at) > new Date(lastViewedAt)) {
+                newCommentsCountMap[c.photo_id] = (newCommentsCountMap[c.photo_id] || 0) + 1;
               }
             }
 
@@ -374,15 +547,18 @@ export default function MainPagerScreen() {
                 username: member?.username ?? "Anonyme",
                 avatar_url: member?.avatar_url ?? null,
                 sticker_id: r.emoji,
-              });
+                created_at: r.created_at,
+              } as any);
             }
 
-            const groupPhotos = photosRes.data!.map((p: any) => {
+            const groupPhotos = filteredPhotosData.map((p: any) => {
               const r2Url = p.image_path === "text_mode" ? "" : r2Storage.getPublicUrl(p.image_path);
               const url = mediaCache.getLocalUri(p.image_path) ?? r2Url;
-              const lastViewedAt = viewsMap[p.id];
-              const latestCommentAt = latestCommentsMap[p.id];
-              const hasNewComments = latestCommentAt && (!lastViewedAt || new Date(latestCommentAt) > new Date(lastViewedAt));
+              const newCommentsCount = newCommentsCountMap[p.id] ?? 0;
+              const hasNewComments = newCommentsCount > 0;
+
+              const videoThumbnailUrl = p.video_thumbnail_path ? (mediaCache.getLocalUri(p.video_thumbnail_path) ?? r2Storage.getPublicUrl(p.video_thumbnail_path)) : null;
+              const secondVideoThumbnailUrl = p.second_video_thumbnail_path ? (mediaCache.getLocalUri(p.second_video_thumbnail_path) ?? r2Storage.getPublicUrl(p.second_video_thumbnail_path)) : null;
 
               return {
                 id: p.id,
@@ -401,6 +577,11 @@ export default function MainPagerScreen() {
                 user_id: p.user_id,
                 reactions: reactionsByPhoto[p.id] ?? [],
                 hasNewComments: !!hasNewComments,
+                newCommentsCount,
+                video_thumbnail_path: p.video_thumbnail_path ?? null,
+                second_video_thumbnail_path: p.second_video_thumbnail_path ?? null,
+                video_thumbnail_url: videoThumbnailUrl,
+                second_video_thumbnail_url: secondVideoThumbnailUrl,
               };
             });
 
@@ -411,6 +592,7 @@ export default function MainPagerScreen() {
               members: membersData,
               photoCount,
               photos: groupPhotos,
+              comments: commentsRes.data || [],
               crownWinnerId: crown?.winnerId ?? null,
               crownDurationMs: crown?.durationMs ?? 0,
               allDurations: crown?.allDurations ?? {},
@@ -426,6 +608,7 @@ export default function MainPagerScreen() {
             members: membersData,
             photoCount: 0,
             photos: [],
+            comments: [],
             crownWinnerId: null,
             crownDurationMs: 0,
             allDurations: {},
@@ -524,6 +707,23 @@ export default function MainPagerScreen() {
   }, [user, activeGroupId]);
 
   useEffect(() => { fetchAllData(); }, [fetchAllData]);
+
+  const activeRevealEndTime = activeRevealEndDate.getTime();
+
+  useEffect(() => {
+    const tick = () => {
+      const ms = activeRevealEndTime - Date.now();
+      if (ms <= 0) { setRevealTimeLeft("Expiré"); setRevealMsLeft(0); return; }
+      setRevealMsLeft(ms);
+      const h = Math.floor(ms / 3600000);
+      const m = Math.floor((ms % 3600000) / 60000);
+      const s = Math.floor((ms % 60000) / 1000);
+      setRevealTimeLeft(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [activeRevealEndTime]);
 
   useEffect(() => {
     const hasJustFinished = activeUploads.some((u) => u.status === "success");
@@ -703,25 +903,27 @@ export default function MainPagerScreen() {
 
   // Real-time reactions
   useEffect(() => {
-    if (!user) return;
+    if (!user || !activeGroupId) return;
     const channel = supabase
       .channel(`rt-reactions-${activeGroupId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "reactions" }, (payload) => {
+        console.log("[Reactions RT] Postgres change received:", payload.eventType, payload.new || payload.old);
         if (payload.eventType === "DELETE") {
           const old = payload.old as any;
-          if (!old?.photo_id) return;
           setGroupData((prev) => {
             const next = { ...prev };
+            let updated = false;
             for (const gid in next) {
               const g = next[gid];
-              const pIdx = g.photos.findIndex((p) => p.id === old.photo_id);
+              const pIdx = g.photos.findIndex((p) => p.reactions.some((r) => r.id === old.id));
               if (pIdx === -1) continue;
               const newPhotos = [...g.photos];
               newPhotos[pIdx] = { ...newPhotos[pIdx], reactions: newPhotos[pIdx].reactions.filter((r) => r.id !== old.id) };
               next[gid] = { ...g, photos: newPhotos };
-              return next;
+              updated = true;
+              break;
             }
-            return prev;
+            return updated ? next : prev;
           });
         } else {
           const nr = payload.new as any;
@@ -752,7 +954,9 @@ export default function MainPagerScreen() {
           });
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`[Reactions RT] Subscribed status: ${status} for group: ${activeGroupId}`);
+      });
     return () => { supabase.removeChannel(channel); };
   }, [user, activeGroupId]);
 
@@ -992,7 +1196,7 @@ export default function MainPagerScreen() {
       const pIdx = g.photos.findIndex(p => p.id === photoId);
       if (pIdx !== -1 && g.photos[pIdx].hasNewComments) {
         const newPhotos = [...g.photos];
-        newPhotos[pIdx] = { ...newPhotos[pIdx], hasNewComments: false };
+        newPhotos[pIdx] = { ...newPhotos[pIdx], hasNewComments: false, newCommentsCount: 0 };
         next[activeGroupId] = { ...g, photos: newPhotos };
         return next;
       }
@@ -1005,16 +1209,19 @@ export default function MainPagerScreen() {
       const photoIds = currentPhotos.map(p => p.id);
       if (photoIds.length === 0) return;
 
-      const [viewsRes, latestCommentsRes] = await Promise.all([
+      const [viewsRes, commentsRes] = await Promise.all([
         supabase.from("comment_views").select("photo_id, last_viewed_at").eq("user_id", user.id).in("photo_id", photoIds),
-        supabase.from("comments").select("photo_id, created_at").in("photo_id", photoIds).order("created_at", { ascending: false })
+        supabase.from("comments").select("photo_id, user_id, created_at").in("photo_id", photoIds).order("created_at", { ascending: false })
       ]);
 
       const viewsMap = Object.fromEntries((viewsRes.data ?? []).map((v: any) => [v.photo_id, v.last_viewed_at]));
-      const latestCommentsMap: Record<string, string> = {};
-      for (const c of latestCommentsRes.data ?? []) {
-        if (!latestCommentsMap[c.photo_id]) {
-          latestCommentsMap[c.photo_id] = c.created_at;
+      // Count unseen comments from others, mirroring fetchAllData.
+      const countMap: Record<string, number> = {};
+      for (const c of commentsRes.data ?? []) {
+        if (c.user_id === user.id) continue;
+        const lastViewedAt = viewsMap[c.photo_id];
+        if (!lastViewedAt || new Date(c.created_at) > new Date(lastViewedAt)) {
+          countMap[c.photo_id] = (countMap[c.photo_id] || 0) + 1;
         }
       }
 
@@ -1026,10 +1233,8 @@ export default function MainPagerScreen() {
           [activeGroupId]: {
             ...g,
             photos: g.photos.map(p => {
-              const lastViewedAt = viewsMap[p.id];
-              const latestCommentAt = latestCommentsMap[p.id];
-              const hasNew = latestCommentAt && (!lastViewedAt || new Date(latestCommentAt) > new Date(lastViewedAt));
-              return { ...p, hasNewComments: !!hasNew };
+              const count = countMap[p.id] ?? 0;
+              return { ...p, hasNewComments: count > 0, newCommentsCount: count };
             })
           }
         };
@@ -1237,30 +1442,41 @@ export default function MainPagerScreen() {
 
       {/* ── REVEAL OVERLAY ── */}
       {showReveal && (
-        <View style={[StyleSheet.absoluteFill, styles.revealOverlay]}>
-          <TouchableOpacity
-            style={[styles.revealBackBtn, { top: insets.top + 12 }]}
-            onPress={() => setShowReveal(false)}
-          >
-            <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <Path d="M19 12H5M12 5l-7 7 7 7" stroke={colors.text} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
-          </TouchableOpacity>
+        <ForceTheme mode="Dark">
+          <View style={[StyleSheet.absoluteFill, styles.revealOverlay]}>
+          {!hideRevealHeader && (
+            <RevealHeader
+              onClose={() => setShowReveal(false)}
+              countdownText={revealTimeLeft}
+              revealMsLeft={revealMsLeft}
+              participants={connectedParticipants}
+              onNotificationPress={() => setShowNotificationsModal(true)}
+            />
+          )}
           <PhotoFeed
+            ref={photoFeedRef}
             photos={photos}
             currentUserId={user?.id}
+            members={members}
             nextUnlockDate={nextRevealDate}
             revealEndDate={activeRevealEndDate}
             crownWinnerId={crownWinnerId}
             crownDurationMs={crownDurationMs}
             crownAllDurations={activeData?.allDurations ?? {}}
             groupName={groupName}
+            currentUserAvatarUrl={avatarUrl ?? null}
+            currentUsername={username}
             onScrollLock={lockScrollDirect}
             onOpenPicker={setActiveReactionPhotoId}
             onOpenComments={handleCommentSeen}
             challengePeriod1={challenges?.period1 ?? null}
             challengePeriod2={challenges?.period2 ?? null}
             onVoteChallenge={handleVoteChallenge}
+            onBackToCapture={() => {
+              setShowReveal(false);
+              jumpTo(1);
+            }}
+            onCommentModalChange={setHideRevealHeader}
           />
           {user?.id && username && (
             <LiveReactions
@@ -1269,6 +1485,7 @@ export default function MainPagerScreen() {
               currentUsername={username}
               currentAvatarUrl={avatarUrl ?? null}
               isVisible={true}
+              onParticipantsChange={setConnectedParticipants}
             />
           )}
 
@@ -1317,6 +1534,20 @@ export default function MainPagerScreen() {
               </Animated.View>
             </Pressable>
           )}
+
+          {/* Notifications Modal */}
+          <RightSlideModal
+            visible={showNotificationsModal}
+            onRequestClose={() => setShowNotificationsModal(false)}
+          >
+            <ForceTheme mode="Dark">
+              <NotificationsModalContent
+                onClose={() => setShowNotificationsModal(false)}
+                activitiesList={activitiesList}
+                handleActivityClick={handleActivityClick}
+              />
+            </ForceTheme>
+          </RightSlideModal>
 
           {/* Custom Text Input Modal */}
           <Modal visible={showCustomTextInput} transparent animationType="fade" onRequestClose={() => setShowCustomTextInput(false)}>
@@ -1412,9 +1643,10 @@ export default function MainPagerScreen() {
                     })()}
                   </View>
                </View>
-            </KeyboardAvoidingView>
-          </Modal>
-        </View>
+             </KeyboardAvoidingView>
+           </Modal>
+          </View>
+        </ForceTheme>
       )}
 
       {/* ── GROUP SETTINGS MODAL ── */}
@@ -1611,4 +1843,200 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   historyRow: { flexDirection: "row", gap: 8, justifyContent: "center", flexWrap: "wrap" },
   historyChip: { backgroundColor: colors.accentMuted, borderRadius: radii.lg, paddingHorizontal: 14, paddingVertical: 7 },
   historyChipText: { color: colors.text, fontFamily: typography.family.bold, fontSize: typography.size.xs },
+
+  // Notifications View
+  notifContainer: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
+  notifHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    gap: spacing.sm, // gap-200 (8px)
+  },
+  notifBackButton: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.md, // radius/300 (12px)
+    backgroundColor: colors.opacityLight, // background/default/default-opacity
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  notifTitle: {
+    ...textStyles.subtitleStrong,
+    color: colors.textNeutral,
+  },
+  notifContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  notifListContent: {
+    flexGrow: 1,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+  },
+  activitiesList: {
+    flexDirection: "column",
+    gap: spacing.lg, // space/400 (16px)
+    width: "100%",
+  },
+  activityItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
+  },
+  activityAvatarWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: radii.md, // radius/300 (12px)
+    backgroundColor: colors.accentMuted,
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
+  },
+  activityAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: radii.md,
+  },
+  activityAvatarFallbackText: {
+    color: colors.textNeutral,
+    fontFamily: typography.family.bold,
+    fontSize: 18,
+  },
+  activityDetails: {
+    flex: 1,
+    flexDirection: "column",
+    marginLeft: spacing.md, // size-space-300 (12px)
+  },
+  activityMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 2,
+  },
+  activityUsername: {
+    ...textStyles.bodySmallStrong,
+    color: colors.textNeutral,
+    maxWidth: "70%",
+  },
+  activityTimeDot: {
+    marginHorizontal: 6,
+    color: colors.textNeutralTertiary,
+    fontSize: 10,
+  },
+  activityTime: {
+    ...textStyles.bodySmall,
+    color: colors.textNeutralTertiary,
+  },
+  activityContext: {
+    ...textStyles.bodyBase,
+    color: colors.textNeutral,
+  },
+  activityCutoutWrap: {
+    marginLeft: spacing.xl, // space-600 (24px)
+  },
+  notifEmptyState: {
+    alignItems: "center",
+    gap: 12,
+  },
+  notifEmptyEmoji: {
+    fontSize: 48,
+    marginBottom: 8,
+  },
+  notifEmptyTitle: {
+    fontFamily: typography.family.bold,
+    fontSize: typography.size.md,
+    color: colors.textNeutral,
+    textAlign: "center",
+  },
+  notifEmptySub: {
+    fontFamily: typography.family.regular,
+    fontSize: typography.size.sm,
+    color: colors.textNeutral,
+    textAlign: "center",
+    lineHeight: 20,
+  },
 });
+
+interface NotificationsModalContentProps {
+  onClose: () => void;
+  activitiesList: any[];
+  handleActivityClick: (item: any) => void;
+}
+
+function NotificationsModalContent({
+  onClose,
+  activitiesList,
+  handleActivityClick,
+}: NotificationsModalContentProps) {
+  const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = useThemedStyles(makeStyles);
+
+  return (
+    <View style={styles.notifContainer}>
+      <StatusBar style="light" />
+      {/* Header */}
+      <View style={[styles.notifHeader, { paddingTop: insets.top + 16 }]}>
+        <TouchableOpacity style={styles.notifBackButton} onPress={onClose} activeOpacity={0.7}>
+          <Svg width="7" height="12" viewBox="0 0 7 12" fill="none">
+            <Path
+              d="M5.29289 0.292893C5.68342 -0.0976311 6.31643 -0.0976311 6.70696 0.292893C7.09748 0.683417 7.09748 1.31643 6.70696 1.70696L2.41399 5.99992L6.70696 10.2929C7.09748 10.6834 7.09748 11.3164 6.70696 11.707C6.31643 12.0975 5.68342 12.0975 5.29289 11.707L0.292893 6.70696C-0.0976311 6.31643 -0.0976311 5.68342 0.292893 5.29289L5.29289 0.292893Z"
+              fill={colors.textNeutral}
+            />
+          </Svg>
+        </TouchableOpacity>
+        <Text style={styles.notifTitle}>Activités</Text>
+      </View>
+
+      {/* Content */}
+      <ScrollView contentContainerStyle={activitiesList.length > 0 ? styles.notifListContent : styles.notifContent} showsVerticalScrollIndicator={false}>
+        {activitiesList.length > 0 ? (
+          <View style={styles.activitiesList}>
+            {activitiesList.map((item) => (
+              <TouchableOpacity key={item.id} style={styles.activityItem} onPress={() => handleActivityClick(item)} activeOpacity={0.7}>
+                {/* Profile pic (rounded square of 48px and radius/300) */}
+                <View style={styles.activityAvatarWrap}>
+                  {item.avatarUrl ? (
+                    <Image source={{ uri: item.avatarUrl }} style={styles.activityAvatar} />
+                  ) : (
+                    <Text style={styles.activityAvatarFallbackText}>
+                      {item.username[0]?.toUpperCase() ?? "?"}
+                    </Text>
+                  )}
+                </View>
+
+                {/* Details */}
+                <View style={styles.activityDetails}>
+                  <View style={styles.activityMetaRow}>
+                    <Text style={styles.activityUsername} numberOfLines={1}>{item.username}</Text>
+                    <Text style={styles.activityTimeDot}>•</Text>
+                    <Text style={styles.activityTime}>{formatRelativeTime(item.created_at)}</Text>
+                  </View>
+                  <Text style={styles.activityContext}>{item.context}</Text>
+                </View>
+
+                {/* Photo Cutout on the right */}
+                {item.photoUrl ? (
+                  <View style={styles.activityCutoutWrap}>
+                    <SvgCutout uri={item.photoUrl} size={56} />
+                  </View>
+                ) : null}
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.notifEmptyState}>
+            <Text style={styles.notifEmptyEmoji}>🔔</Text>
+            <Text style={styles.notifEmptyTitle}>Aucune activité</Text>
+            <Text style={styles.notifEmptySub}>Vous serez notifié quand vos amis réagiront ou commenteront vos moments.</Text>
+          </View>
+        )}
+      </ScrollView>
+    </View>
+  );
+}

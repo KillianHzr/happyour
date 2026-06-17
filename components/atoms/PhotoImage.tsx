@@ -1,8 +1,6 @@
 import React, { useState, useRef } from "react";
 import { View, StyleSheet, ActivityIndicator } from "react-native";
 import { Image } from "expo-image";
-import { radii } from "../../lib/theme";
-import { useTheme } from "../../lib/theme-context";
 
 
 interface PhotoImageProps {
@@ -11,8 +9,7 @@ interface PhotoImageProps {
   isDrawing?: boolean;
 }
 
-export const PhotoImage = ({ url, fallback_url, isDrawing }: PhotoImageProps) => {
-  const { colors } = useTheme();
+export const PhotoImage = ({ url, fallback_url }: PhotoImageProps) => {
   const [useFallback, setUseFallback] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const prevUrlRef = useRef(url);
@@ -25,25 +22,7 @@ export const PhotoImage = ({ url, fallback_url, isDrawing }: PhotoImageProps) =>
 
   const src = useFallback && fallback_url ? fallback_url : url;
 
-  if (isDrawing) {
-    return (
-      <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center" }]}>
-        {!loaded && (
-          <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center" }]} pointerEvents="none">
-            <ActivityIndicator size="large" color={colors.textSecondary} />
-          </View>
-        )}
-        <Image
-          source={{ uri: src }}
-          style={{ width: "100%", aspectRatio: 3 / 4, borderRadius: radii.xl }}
-          contentFit="fill"
-          onLoad={() => setLoaded(true)}
-          onError={() => { if (fallback_url) setUseFallback(true); }}
-        />
-      </View>
-    );
-  }
-
+  // Drawings render exactly like photos (fill the container, cover) — no special-casing.
   return (
     <View style={StyleSheet.absoluteFill}>
       {!loaded && (

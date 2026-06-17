@@ -33,6 +33,8 @@ export type ChallengeResponse = {
   second_note: string | null;
   is_target_response: boolean;
   waveform?: number[] | null;
+  audio_note_path?: string | null;
+  audio_note_url?: string | null;
   created_at: string;
   url: string;
   username: string;
@@ -339,6 +341,9 @@ export async function fetchChallengeData(
         return {
           ...r,
           url: r.image_path === "text_mode" ? "" : r2Storage.getPublicUrl(r.image_path),
+          audio_note_url: r.audio_note_path ? r2Storage.getPublicUrl(r.audio_note_path) : null,
+          video_thumbnail_url: r.video_thumbnail_path ? r2Storage.getPublicUrl(r.video_thumbnail_path) : null,
+          second_video_thumbnail_url: r.second_video_thumbnail_path ? r2Storage.getPublicUrl(r.second_video_thumbnail_path) : null,
           username: m?.username ?? "Anonyme",
           avatar_url: m?.avatar_url ?? null,
         };

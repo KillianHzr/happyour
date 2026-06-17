@@ -1,27 +1,61 @@
-import { useState } from "react";
-import { View, Text, StyleSheet, Dimensions, TouchableOpacity, Modal } from "react-native";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Dimensions,
+  TouchableOpacity,
+  Animated as RNAnimated,
+  Easing as RNEasing,
+  Share
+} from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 import { getChallengePrompt, type ChallengeWithData, type ChallengeResponse } from "../../lib/challenges";
 import Svg, { Path } from "react-native-svg";
 import { r2Storage } from "../../lib/r2";
 import ChallengeAudioPlayer from "./ChallengeAudioPlayer";
-import { radii, typography, type ThemeColors } from "../../lib/theme";
+import { AudioCaptionPlayer } from "../molecules/AudioCaptionPlayer";
+import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import { radii, typography, spacing, textStyles, buildColors, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
+import { supabase } from "../../lib/supabase";
+import CommentModal from "../CommentModal";
+import { RightSlideModal } from "../atoms/RightSlideModal";
+import { type Reaction } from "../../lib/feed-types";
+
+// Reanimated and Reactions
+import Reanimated, {
+  useSharedValue,
+  useAnimatedStyle,
+  useDerivedValue,
+  withTiming,
+  type SharedValue,
+} from "react-native-reanimated";
+import { ReactionStickers, type ReactionDisplay } from "../molecules/ReactionStickers";
+import { StickerToast } from "../atoms/StickerToast";
+import { SHEET_BASE } from "../../lib/comment-sheet";
+import Carousel, { Pagination, ICarouselInstance } from "react-native-reanimated-carousel";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const CAROUSEL_HEIGHT = 500;
+const PREVIEW_GAP = 0; // Gap (px) between the bottom of the card preview and the top of the comments sheet
+const PREVIEW_TOP_GAP = 30; // Gap (px) between the bottom of the question text and the top of the card preview
+const HEADER_SHIFT = 52; // How many pixels the header translates upward when comments are open
 
-const COLS = 3;
-const GRID_GAP = 8;
-const CARD_SIZE = (SCREEN_WIDTH - 40 - GRID_GAP * (COLS - 1)) / COLS;
+// Drawing responses always render on a light (white) canvas, so their details (author name,
+// description, audio player) must stay dark regardless of the active app theme — unlike the
+// reveal, which relies on a dark scrim. These are fixed, theme-independent token values.
+const DRAWING_DETAIL_COLOR = buildColors("Light").textNeutral; // #303030 · --sds-color-text-neutral-default
+const DRAWING_WAVE_COLOR = buildColors("Dark").bg;             // #1E1E1E · --sds-color-background-default-default (black)
 
-// Audio waveform bars for thumbnails
-const MINI_WAVE = [6, 10, 8, 14, 10, 12, 7];
-
-function getSecondUrl(r: ChallengeResponse): string | null {
-  if (!r.second_image_path || r.second_image_path === "text_mode") return null;
-  return r2Storage.getPublicUrl(r.second_image_path);
-}
+// function getSecondUrl(r: ChallengeResponse): string | null {
+//   if (!r.second_image_path || r.second_image_path === "text_mode") return null;
+//   return r2Storage.getPublicUrl(r.second_image_path);
+// }
 
 function mediaType(path: string | null): "text" | "audio" | "drawing" | "photo" {
   if (!path || path === "text_mode") return "text";
@@ -30,46 +64,13 @@ function mediaType(path: string | null): "text" | "audio" | "drawing" | "photo" 
   return "photo";
 }
 
-// Inline thumbnail renderer for grid cards
-function ResponseThumb({ r }: { r: ChallengeResponse }) {
-  const { colors } = useTheme();
-  const type = mediaType(r.image_path);
-  if (type === "text") {
-    return (
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.card, justifyContent: "center", alignItems: "center", padding: 6 }]}>
-        <Text style={{ color: colors.text, fontSize: typography.size.xs, fontFamily: typography.family.semibold, textAlign: "center" }} numberOfLines={4}>
-          {r.note}
-        </Text>
-      </View>
-    );
-  }
-  if (type === "audio") {
-    return (
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", gap: 5 }]}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
-          {MINI_WAVE.map((h, i) => (
-            <View key={i} style={{ width: 2.5, height: h, borderRadius: radii.xs, backgroundColor: colors.textSecondary }} />
-          ))}
-        </View>
-        <View style={{ width: 22, height: 22, borderRadius: radii.md, backgroundColor: colors.accentMuted, justifyContent: "center", alignItems: "center" }}>
-          <Svg width="9" height="9" viewBox="0 0 24 24" fill={colors.text}>
-            <Path d="M8 5v14l11-7z" />
-          </Svg>
-        </View>
-      </View>
-    );
-  }
-  // drawing or photo — both render as image with cover (thumbnail context)
-  return <Image source={{ uri: r.url }} style={StyleSheet.absoluteFillObject} contentFit="cover" />;
-}
-
 // Modal media renderer — respects exact same ratios as PhotoFeed
 function ModalMedia({ imagePath, url, note }: { imagePath: string | null; url: string | null; note: string | null }) {
   const { colors } = useTheme();
   const type = mediaType(imagePath);
   if (type === "text") {
     return (
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", padding: 28 }]}>
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", padding: 28 }]}>
         <Text style={{ color: colors.text, fontFamily: typography.family.semibold, fontSize: typography.size.xl, textAlign: "center", lineHeight: 28 }}>
           {note ?? ""}
         </Text>
@@ -82,207 +83,701 @@ function ModalMedia({ imagePath, url, note }: { imagePath: string | null; url: s
   }
   if (type === "drawing") {
     return (
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.bg, justifyContent: "center", alignItems: "center" }]}>
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.bg }]}>
         <Image
           source={{ uri: url ?? "" }}
-          style={{ width: "100%", aspectRatio: 3 / 4 }}
+          style={StyleSheet.absoluteFill}
           contentFit="fill"
         />
       </View>
     );
   }
-  // Regular photo — cover + top-aligned, same as PhotoFeed
   return (
     <Image
       source={{ uri: url ?? "" }}
-      style={StyleSheet.absoluteFillObject}
+      style={StyleSheet.absoluteFill}
       contentFit="cover"
       contentPosition={{ top: 0, left: "50%" }}
     />
   );
 }
 
+
+
+// Slide component utilizing Reanimated for smooth per-card animations.
+// Memoized so reaction/keyboard/toast state changes on the parent don't re-render
+// (and re-mount the expo-image of) every slide in the carousel.
+const ChallengeResponseSlide = React.memo(function ChallengeResponseSlide({
+  item,
+  index,
+  activeIndex,
+  progress,
+  swapped,
+  cvStyles,
+}: {
+  item: ChallengeResponse;
+  index: number;
+  activeIndex: number;
+  progress: SharedValue<number>;
+  swapped: boolean;
+  cvStyles: any;
+}) {
+  const animatedStyle = useAnimatedStyle(() => {
+    const opacity = index === activeIndex ? 1 : 1 - progress.value;
+    return {
+      opacity,
+    };
+  });
+
+  const gradientStyle = useAnimatedStyle(() => {
+    return {
+      opacity: 1 - progress.value,
+    };
+  });
+
+  const slideImagePath = swapped ? (item.second_image_path ?? item.image_path) : item.image_path;
+  const slideUrl = swapped ? (getSecondUrl(item) ?? item.url) : item.url;
+  const slideNote = swapped ? (item.second_note ?? null) : item.note;
+  const isTextOnly = mediaType(slideImagePath) === "text";
+  const isDrawing = mediaType(slideImagePath) === "drawing";
+  const hasAudioNote = !swapped && !!item.audio_note_path && !!item.audio_note_url;
+
+  const audioPlayer = useAudioPlayer(item.audio_note_url ?? "");
+  const audioStatus = useAudioPlayerStatus(audioPlayer);
+
+  // Pause the note when this slide isn't the active one (carousel keeps slides mounted).
+  useEffect(() => {
+    if (index !== activeIndex) {
+      try { audioPlayer.pause(); } catch (_) {}
+    }
+  }, [index, activeIndex]);
+
+  return (
+    <Reanimated.View style={[
+      cvStyles.slideCard,
+      animatedStyle,
+    ]}>
+      <View style={cvStyles.slideMediaWrapper}>
+        <ModalMedia imagePath={slideImagePath} url={slideUrl} note={slideNote} />
+      </View>
+
+      {!isTextOnly && !isDrawing && (
+        <Reanimated.View style={[StyleSheet.absoluteFillObject, gradientStyle]} pointerEvents="none">
+          <LinearGradient
+            colors={["transparent", "rgba(0,0,0,0.85)"]}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
+        </Reanimated.View>
+      )}
+
+      <Reanimated.View style={[cvStyles.cardDetailsContainer, gradientStyle]} pointerEvents="box-none">
+        <View style={cvStyles.authorInfoRow} pointerEvents="box-none">
+          {item.avatar_url ? (
+            <Image source={{ uri: item.avatar_url }} style={cvStyles.authorAvatar} contentFit="cover" />
+          ) : (
+            <View style={[cvStyles.authorAvatar, cvStyles.authorAvatarFallback]}>
+              <Text style={cvStyles.authorAvatarLetter}>{(item.username || "?")[0].toUpperCase()}</Text>
+            </View>
+          )}
+          <View style={cvStyles.authorTextSection} pointerEvents={hasAudioNote ? "box-none" : "none"}>
+            <Text style={[
+              cvStyles.authorName,
+              isDrawing ? { color: DRAWING_DETAIL_COLOR } : { color: "#FFFFFF" }
+            ]}>{item.username}</Text>
+            {hasAudioNote ? (
+              <AudioCaptionPlayer
+                player={audioPlayer}
+                status={audioStatus}
+                waveform={item.waveform ?? undefined}
+                iconColor={isDrawing ? DRAWING_DETAIL_COLOR : undefined}
+                waveColor={isDrawing ? DRAWING_WAVE_COLOR : undefined}
+              />
+            ) : !isTextOnly && (
+              <Text style={[
+                cvStyles.authorNote,
+                isDrawing ? { color: DRAWING_DETAIL_COLOR } : { color: "rgba(255, 255, 255, 0.7)" }
+              ]} numberOfLines={2}>{slideNote || "Sans description"}</Text>
+            )}
+          </View>
+        </View>
+      </Reanimated.View>
+    </Reanimated.View>
+  );
+});
+
 export default function ChallengeVotePage({
   challenge,
   period,
   currentUserId,
+  currentUserAvatarUrl,
+  currentUsername,
   onVote,
+  members = [],
+  showResponsesModal = false,
+  onCloseResponsesModal,
+  onCommentModalChange,
 }: {
   challenge: ChallengeWithData;
   period: 1 | 2;
   currentUserId?: string;
+  currentUserAvatarUrl?: string | null;
+  currentUsername?: string;
   onVote: (challengeId: string, responseId: string) => void;
+  members?: any[];
+  showResponsesModal?: boolean;
+  onCloseResponsesModal?: () => void;
+  onCommentModalChange?: (visible: boolean) => void;
 }) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const cvStyles = useThemedStyles(makeStyles);
-  const [selected, setSelected] = useState<ChallengeResponse | null>(null);
+  
+  const [activeIndex, setActiveIndex] = useState(0);
   const [swapped, setSwapped] = useState(false);
+  const [commentModalVisible, setCommentModalVisible] = useState(false);
+  const [commentModalMode, setCommentModalMode] = useState<"comment" | "sticker">("comment");
+  const [commentActiveResponse, setCommentActiveResponse] = useState<ChallengeResponse | null>(null);
+  const [reactionsMap, setReactionsMap] = useState<Record<string, Reaction[]>>({});
 
+  useEffect(() => {
+    onCommentModalChange?.(commentModalVisible);
+  }, [commentModalVisible, onCommentModalChange]);
+
+  const responsesCount = challenge.responses.length;
   const isTarget = challenge.target_user_id === currentUserId;
   const myVote = challenge.votes.find((v) => v.voter_id === currentUserId);
-  const nonTargetResponses = challenge.responses.filter((r) => !r.is_target_response);
-  const targetResponse = challenge.responses.find((r) => r.is_target_response);
   const canVote = !isTarget;
-  const periodLabel = period === 1 ? "LUNDI → MERCREDI" : "JEUDI → DIMANCHE";
   const prompt = isTarget
     ? "Tu étais la cible !"
     : getChallengePrompt(challenge.target_username, challenge.theme.label);
 
-  const openResponse = (r: ChallengeResponse) => {
-    setSelected(r);
-    setSwapped(false);
+  const fetchReactions = async () => {
+    if (challenge.responses.length === 0) return;
+    const responseIds = challenge.responses.map(r => r.id);
+    try {
+      const { data } = await supabase
+        .from("reactions")
+        .select("id, photo_id, user_id, emoji, created_at")
+        .in("photo_id", responseIds);
+
+      if (data) {
+        const map: Record<string, Reaction[]> = {};
+        data.forEach((r: any) => {
+          if (!map[r.photo_id]) map[r.photo_id] = [];
+          const member = members.find(m => m.user_id === r.user_id);
+          map[r.photo_id].push({
+            id: r.id,
+            user_id: r.user_id,
+            username: member?.username ?? "Anonyme",
+            avatar_url: member?.avatar_url ?? null,
+            sticker_id: r.emoji,
+            created_at: r.created_at
+          } as any);
+        });
+        setReactionsMap(map);
+      }
+    } catch (err) {
+      console.error("Error fetching challenge reactions:", err);
+    }
   };
 
-  const handleVote = (responseId: string) => {
-    onVote(challenge.id, responseId);
-    setSelected(null);
+  // Fetch reactions and subscribe to changes in real-time
+  useEffect(() => {
+    fetchReactions();
+
+    const channel = supabase
+      .channel(`challenge-reactions-${challenge.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "reactions" }, () => {
+        fetchReactions();
+      })
+      .subscribe();
+
+    return () => {
+      // removeChannel (not just unsubscribe) so the channel is also dropped from the
+      // Supabase client's registry — otherwise channels accumulate if this re-runs.
+      supabase.removeChannel(channel);
+    };
+  }, [challenge.responses, members]);
+
+  // Reset indices on modal close/open
+  useEffect(() => {
+    if (showResponsesModal) {
+      setActiveIndex(0);
+      setSwapped(false);
+    }
+  }, [showResponsesModal]);
+
+  const carouselRef = useRef<ICarouselInstance>(null);
+  const carouselProgress = useSharedValue<number>(0);
+
+  const onPressPagination = (index: number) => {
+    carouselRef.current?.scrollTo({
+      count: index - carouselProgress.value,
+      animated: true,
+    });
   };
 
-  // Derive modal display from swap state
-  const modalImagePath = selected
-    ? swapped ? (selected.second_image_path ?? selected.image_path) : selected.image_path
-    : null;
-  const modalUrl = selected
-    ? swapped ? (getSecondUrl(selected) ?? selected.url) : selected.url
-    : null;
-  const modalNote = selected
-    ? swapped ? (selected.second_note ?? null) : selected.note
-    : null;
-  const hasSecond = selected ? !!(selected.second_image_path) : false;
-  const modalType = mediaType(modalImagePath);
+  const activeResponse = challenge.responses[activeIndex];
+  const hasSecond = activeResponse ? !!(activeResponse.second_image_path) : false;
+
+  // Reanimated states for responsiveness (exact same structure as PhotoFeed)
+  const kb = useSharedValue(0);
+  const keyboardActiveSV = useSharedValue(0); // set in CommentModal's onStart (UI thread)
+  const progress = useSharedValue(0);
+  const sheetSV = useSharedValue(SHEET_BASE);
+  const isStickerModeSV = useSharedValue(0);
+  const headerHeightSV = useSharedValue(150);
+
+  const [activeModalMode, setActiveModalMode] = useState<"comment" | "sticker">("comment");
+  // True while the keyboard is up — reaction stickers hide so they don't clutter while typing.
+  const [keyboardActive, setKeyboardActive] = useState(false);
+
+  // Optimistic/reaction states for stickers (exact same structure as PhotoFeed)
+  const [poppedReaction, setPoppedReaction] = useState<Reaction | null>(null);
+  const [removingReactionUserId, setRemovingReactionUserId] = useState<string | null>(null);
+  const [reactionToast, setReactionToast] = useState<string | null>(null);
+  const reactionToastAnim = useRef(new RNAnimated.Value(0)).current;
+  const reactionToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showReactionToast = useCallback((message: string) => {
+    if (reactionToastTimer.current) clearTimeout(reactionToastTimer.current);
+    setReactionToast(message);
+    reactionToastAnim.setValue(0);
+    RNAnimated.spring(reactionToastAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 10 }).start();
+    reactionToastTimer.current = setTimeout(() => {
+      RNAnimated.timing(reactionToastAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+        easing: RNEasing.in(RNEasing.quad),
+      }).start(({ finished }) => {
+        if (finished) setReactionToast(null);
+      });
+    }, 2200);
+  }, [reactionToastAnim]);
+
+  // On close: hide the stickers (no lingering) and reset the delete state.
+  // Also clear the keyboard-active flag — an intentional close (sticker submit)
+  // leaves it at 1, which would wrongly hide stickers on the next open.
+  useEffect(() => {
+    if (commentModalVisible) return;
+    setPoppedReaction(null);
+    setRemovingReactionUserId(null);
+    keyboardActiveSV.value = 0;
+  }, [commentModalVisible]);
+
+  const handleStickerPosted = useCallback((text: string) => {
+    const me = members.find((m: any) => m.user_id === currentUserId);
+    setPoppedReaction({
+      id: "optimistic-sticker",
+      user_id: currentUserId ?? "",
+      username: currentUsername ?? me?.username ?? "Anonyme",
+      avatar_url: currentUserAvatarUrl ?? me?.avatar_url ?? null,
+      sticker_id: text,
+    } as Reaction);
+    showReactionToast("Réaction Ajouté");
+  }, [members, currentUserId, currentUsername, currentUserAvatarUrl, showReactionToast]);
+
+  const handleStickerDeleted = useCallback(() => {
+    if (currentUserId) setRemovingReactionUserId(currentUserId);
+    showReactionToast("Réaction supprimé");
+  }, [currentUserId, showReactionToast]);
+
+  useEffect(() => () => { if (reactionToastTimer.current) clearTimeout(reactionToastTimer.current); }, []);
+
+  // Sync mode changes and visibility changes to shared values
+  useEffect(() => {
+    isStickerModeSV.value = withTiming(activeModalMode === "sticker" ? 1 : 0, { duration: 260 });
+  }, [activeModalMode]);
+
+  useEffect(() => {
+    progress.value = withTiming(commentModalVisible ? 1 : 0, { duration: 250 });
+  }, [commentModalVisible]);
+
+  // Reaction stickers over the open comments modal
+  const activeReactionDisplay = useMemo<ReactionDisplay | null>(() => {
+    if (!activeResponse || !commentModalVisible) return null;
+    const base = reactionsMap[activeResponse.id] || [];
+    if (poppedReaction) {
+      const deduped = base.filter((r) => r.user_id !== poppedReaction.user_id);
+      return { reactions: [...deduped, poppedReaction], popId: poppedReaction.id };
+    }
+    if (base.length > 0) return { reactions: base };
+    return null;
+  }, [activeResponse, poppedReaction, commentModalVisible, reactionsMap]);
+
+  const stickersHidden = activeModalMode === "comment" && keyboardActive;
+  // 1 when the keyboard is up in comment mode, 0 otherwise. keyboardActiveSV is
+  // set once in CommentModal's onStart worklet, so this flips on the UI thread the
+  // instant the keyboard starts — FloatingSticker reacts without a JS round-trip.
+  const stickersHiddenSV = useDerivedValue<number>(() =>
+    keyboardActiveSV.value > 0 && isStickerModeSV.value < 0.5 ? 1 : 0
+  );
+
+  // Responsive derived formulas
+  const layoutCenter = useDerivedValue(() => {
+    // The layout of the carousel flex container (which has flex: 1 and the footer below it)
+    // is constant in height (SCREEN_HEIGHT - headerHeightSV.value - 100).
+    // The center of this space relative to the screen top is:
+    return headerHeightSV.value + (SCREEN_HEIGHT - headerHeightSV.value - 100) / 2;
+  });
+
+  const targetTop = useDerivedValue(() => {
+    const closedTop = layoutCenter.value - CAROUSEL_HEIGHT / 2;
+    const openTop = headerHeightSV.value - HEADER_SHIFT + PREVIEW_TOP_GAP; // visual top with top padding gap
+    return (1 - progress.value) * closedTop + progress.value * openTop;
+  });
+
+  const scale = useDerivedValue(() => {
+    const liveDrawer = kb.value + sheetSV.value;
+    const drawerTopX = SHEET_BASE + isStickerModeSV.value * (liveDrawer - SHEET_BASE);
+    const availableX = SCREEN_HEIGHT - drawerTopX - targetTop.value - PREVIEW_GAP;
+    const fitX = Math.max(0.05, Math.min(1, availableX / CAROUSEL_HEIGHT));
+    return 1 + (fitX - 1) * progress.value;
+  });
+
+  const animatedHeight = useDerivedValue(() => {
+    const liveDrawer = kb.value + sheetSV.value;
+    const availableY = SCREEN_HEIGHT - liveDrawer - PREVIEW_GAP - targetTop.value;
+    const fullScaledH = CAROUSEL_HEIGHT * scale.value;
+    const cropOpen =
+      (1 - isStickerModeSV.value) * Math.min(1, availableY / Math.max(fullScaledH, 1)) +
+      isStickerModeSV.value * 1;
+    const cropRatio = 1 + (cropOpen - 1) * progress.value;
+    return CAROUSEL_HEIGHT * cropRatio;
+  });
+
+  const translateY = useDerivedValue(() => {
+    return targetTop.value - layoutCenter.value + (animatedHeight.value * scale.value) / 2;
+  });
+
+  // Reanimated style objects
+  // This wrapper is the view that gets cropped/scaled, so it must ALSO be the one that
+  // carries the border radius (radii.md, via carouselWrapper) — that's how the bottom
+  // stays rounded when the height shrinks in the comment-input state (same trick PhotoFeed
+  // uses). When open it hugs the card (340) so the radius frames the card; when browsing
+  // it's full-width and the radius sits off-screen (the slideCard rounds the cards then).
+  // Uniform `scale` (one entry) so the corners can't distort.
+  const animatedContentStyle = useAnimatedStyle(() => {
+    return {
+      height: animatedHeight.value,
+      width: commentModalVisible ? 340 : SCREEN_WIDTH,
+      transform: [
+        { translateY: translateY.value },
+        { scale: scale.value },
+      ],
+      overflow: "hidden",
+    };
+  });
+
+  const animatedHeaderStyle = useAnimatedStyle(() => {
+    const ty = -HEADER_SHIFT * progress.value;
+    return {
+      transform: [{ translateY: ty }],
+    };
+  });
+
+  const animatedModalHeaderStyle = useAnimatedStyle(() => {
+    return {
+      opacity: 1 - progress.value,
+    };
+  });
+
+  const animatedStepperStyle = useAnimatedStyle(() => {
+    return {
+      opacity: 1 - progress.value,
+    };
+  });
+
+  const animatedModalFooterStyle = useAnimatedStyle(() => {
+    return {
+      opacity: 1 - progress.value,
+    };
+  });
+
+  const animatedStickerOverlayStyle = useAnimatedStyle(() => {
+    const targetTY = targetTop.value - layoutCenter.value + (CAROUSEL_HEIGHT * scale.value) / 2;
+    return {
+      transform: [
+        { translateY: targetTY },
+        { scale: scale.value }
+      ]
+    };
+  });
+
+  const renderResponseSlide = useCallback(({ item, index }: { item: ChallengeResponse, index: number }) => {
+    return (
+      <ChallengeResponseSlide
+        item={item}
+        index={index}
+        activeIndex={activeIndex}
+        progress={progress}
+        swapped={swapped}
+        cvStyles={cvStyles}
+      />
+    );
+  }, [activeIndex, progress, swapped, cvStyles]);
 
   return (
-    <View style={[cvStyles.container, { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 16 }]}>
-      {/* Header */}
-      <View style={cvStyles.header}>
-        <View style={cvStyles.defiPill}>
-          <Text style={cvStyles.defiPillText}>DÉFI {period}</Text>
-        </View>
-        <Text style={cvStyles.periodLabel}>{periodLabel}</Text>
+    <View style={cvStyles.container}>
+      {/* ── PART 1: Main Challenge Intro Screen ── */}
+      <View style={cvStyles.titleRow}>
+        <Text style={cvStyles.titleText}>Défi</Text>
+        <Svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+          <Path d="M32 13.8502C32 9.7264 28.7574 6.33436 24.746 5.89225C24.2131 5.83127 23.7564 5.48063 23.5509 4.98516C22.3406 2.0581 19.3492 0 16 0C12.6508 0 9.65937 2.0581 8.4491 4.98516C8.24358 5.48063 7.79448 5.83889 7.25404 5.89225C3.24263 6.34198 0 9.7264 0 13.8502C0 16.0303 0.875357 18.0045 2.28354 19.4528C2.7098 19.8873 2.83159 20.5123 2.61085 21.0764C2.24548 22.014 2.04757 23.0278 2.0628 24.095C2.12369 28.4474 5.8078 32.0453 10.1541 31.9996C12.0266 31.9767 13.7393 31.3135 15.0866 30.2159C15.6118 29.789 16.373 29.789 16.8906 30.2159C18.2379 31.3135 19.9505 31.9843 21.823 31.9996C26.1694 32.0453 29.8535 28.4474 29.9144 24.095C29.9296 23.0278 29.7317 22.0064 29.3663 21.0764C29.1456 20.5123 29.275 19.8797 29.6936 19.4528C31.1094 18.0121 31.9772 16.0379 31.9772 13.8502H32Z" fill={colors.icon} />
+          <Path d="M23.8554 5.84651C23.8782 5.84651 23.9087 5.84651 23.8554 5.84651V5.84651Z" fill={colors.icon} />
+        </Svg>
       </View>
 
-      {/* Prompt */}
-      <Text style={cvStyles.prompt} numberOfLines={3}>{prompt}</Text>
-      {challenge.proposed_by_username && (
-        <View style={cvStyles.proposerChip}>
-          <Text style={cvStyles.proposerChipText}>✦ Proposé par {challenge.proposed_by_username}</Text>
+      <View style={cvStyles.spacer300} />
+
+      <Text style={cvStyles.promptText}>{prompt}</Text>
+
+      <View style={cvStyles.spacer1200} />
+
+      {challenge.target_avatar_url ? (
+        <Image source={{ uri: challenge.target_avatar_url }} style={cvStyles.targetAvatarLarge} contentFit="cover" />
+      ) : (
+        <View style={[cvStyles.targetAvatarLarge, cvStyles.avatarLargeFallback]}>
+          <Text style={cvStyles.avatarLargeLetter}>{(challenge.target_username || "?")[0]?.toUpperCase()}</Text>
         </View>
       )}
 
-      {/* Target row */}
-      <View style={cvStyles.targetRow}>
-        {challenge.target_avatar_url ? (
-          <Image source={{ uri: challenge.target_avatar_url }} style={cvStyles.targetAvatar} contentFit="cover" />
-        ) : (
-          <View style={[cvStyles.targetAvatar, cvStyles.avatarFallback]}>
-            <Text style={cvStyles.avatarLetter}>{challenge.target_username[0]?.toUpperCase()}</Text>
-          </View>
-        )}
-        <View style={{ flex: 1 }}>
-          <Text style={cvStyles.targetLabel}>La cible</Text>
-          <Text style={cvStyles.targetName}>{challenge.target_username}</Text>
-        </View>
-        {targetResponse && targetResponse.image_path !== "text_mode" && (
-          <TouchableOpacity style={cvStyles.targetThumb} onPress={() => openResponse(targetResponse)} activeOpacity={0.8}>
-            <ResponseThumb r={targetResponse} />
-          </TouchableOpacity>
-        )}
-      </View>
+      <View style={cvStyles.spacer400} />
 
-      {/* Responses grid */}
-      <Text style={cvStyles.responsesLabel}>
-        {nonTargetResponses.length === 0 ? "Aucune proposition" : "Les propositions"}
-      </Text>
-      {nonTargetResponses.length > 0 && (
-        <View style={cvStyles.responseGrid}>
-          {nonTargetResponses.map((r) => {
-            const isVoted = myVote?.response_id === r.id;
-            return (
-              <TouchableOpacity
-                key={r.id}
-                style={[cvStyles.responseCard, isVoted && cvStyles.responseCardVoted]}
-                onPress={() => openResponse(r)}
-                activeOpacity={0.8}
-              >
-                <View style={cvStyles.responseThumb}>
-                  <ResponseThumb r={r} />
-                  {isVoted && (
-                    <View style={cvStyles.votedBadge}>
-                      <Text style={cvStyles.votedBadgeText}>✓</Text>
-                    </View>
-                  )}
-                  {r.second_image_path && (
-                    <View style={cvStyles.dualCaptureDot} />
-                  )}
+      <View style={cvStyles.repliesBadge}>
+        <Text style={cvStyles.repliesBadgeText}>
+          {responsesCount} {responsesCount > 1 ? "réponses" : "réponse"}
+        </Text>
+      </View>
+      
+      {/* ── PART 2: Horizontally Scrollable Full-Screen Responses Modal ── */}
+      <RightSlideModal
+        visible={showResponsesModal}
+        transparent
+        onRequestClose={() => {
+          // The embedded CommentModal has no native Modal of its own, so Android back
+          // lands here — close the comment sheet first if it's open.
+          if (commentModalVisible) setCommentModalVisible(false);
+          else onCloseResponsesModal?.();
+        }}
+      >
+        <View style={cvStyles.modalOverlay}>
+          {/* Top Bar / Header */}
+          <View
+            style={{ paddingTop: Math.max(insets.top, 16), zIndex: 10 }}
+            onLayout={(e) => {
+              headerHeightSV.value = e.nativeEvent.layout.height;
+            }}
+          >
+            <Reanimated.View style={animatedHeaderStyle}>
+              <Reanimated.View style={[cvStyles.modalHeader, { paddingTop: 0 }, animatedModalHeaderStyle]}>
+                <View style={cvStyles.headerLeft}>
+                  <TouchableOpacity onPress={onCloseResponsesModal} activeOpacity={0.7} style={cvStyles.backBtn}>
+                    <Svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={colors.text} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <Path d="M15 19l-7-7 7-7" />
+                    </Svg>
+                  </TouchableOpacity>
+                  <Text style={cvStyles.headerTitle}>Défi</Text>
                 </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      )}
 
-      {/* Footer hint */}
-      <Text style={cvStyles.hint}>
-        {isTarget
-          ? "Tu étais la cible, tu ne peux pas voter"
-          : myVote
-          ? "Vote enregistré 👍"
-          : "Appuie sur une proposition pour voter"}
-      </Text>
-
-      {/* Response detail modal */}
-      <Modal visible={!!selected} transparent animationType="fade" onRequestClose={() => setSelected(null)}>
-        {selected && (
-          <View style={cvStyles.modalOverlay}>
-            <View style={[cvStyles.modalContainer, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 }]}>
-              {/* Top bar */}
-              <View style={cvStyles.modalTopBar}>
-                <TouchableOpacity style={cvStyles.modalCloseBtn} onPress={() => setSelected(null)} activeOpacity={0.7}>
-                  <Svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                    <Path d="M18 6L6 18M6 6l12 12" stroke={colors.text} strokeWidth="2.5" strokeLinecap="round" />
-                  </Svg>
-                </TouchableOpacity>
                 {hasSecond && (
                   <TouchableOpacity style={cvStyles.swapBtn} onPress={() => setSwapped(v => !v)} activeOpacity={0.7}>
-                    <Svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={colors.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <Svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={colors.text} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <Path d="M7 16V4m0 0L3 8m4-4l4 4" /><Path d="M17 8v12m0 0l4-4m-4 4l-4-4" />
                     </Svg>
-                    <Text style={cvStyles.swapBtnText}>{swapped ? "Voir 1ère capture" : "Voir 2ème capture"}</Text>
+                    <Text style={cvStyles.swapBtnText}>{swapped ? "1ère cap." : "2ème cap."}</Text>
                   </TouchableOpacity>
                 )}
-              </View>
+              </Reanimated.View>
 
-              {/* Media — full height */}
-              <View style={cvStyles.modalMedia}>
-                <ModalMedia imagePath={modalImagePath} url={modalUrl} note={modalNote} />
-              </View>
+              <Text style={cvStyles.modalQuestionText}>
+                Si{" "}
+                <Text style={cvStyles.orangeText}>{challenge.target_username}</Text>
+                {" était un"}{"aeiouyAEIOUY".includes(challenge.theme.label?.[0] ?? "") ? "" : "·e"}{" "}
+                <Text style={cvStyles.orangeText}>{challenge.theme.label}</Text>
+                {", ça serait..."}
+              </Text>
+            </Reanimated.View>
+          </View>
 
-              {/* Caption — only for image/drawing/audio (not when text_mode already shows the text) */}
-              {modalType !== "text" && modalNote ? (
-                <View style={cvStyles.noteBox}>
-                  <Text style={cvStyles.noteText}>{modalNote}</Text>
-                </View>
-              ) : null}
+          {/* Horizontally Scrollable Carousel */}
+          {responsesCount > 0 ? (
+            <View style={cvStyles.carouselFlexContainer}>
+              <Reanimated.View
+                style={[
+                  cvStyles.carouselWrapper,
+                  animatedContentStyle,
+                ]}
+              >
+                <Reanimated.View
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                  }}
+                >
+                  <Carousel
+                    ref={carouselRef}
+                    width={356}
+                    height={CAROUSEL_HEIGHT}
+                    style={{
+                      width: 356,
+                      height: "100%",
+                      alignSelf: "center",
+                      overflow: "visible",
+                    }}
+                    loop={false}
+                    enabled={!commentModalVisible}
+                    data={challenge.responses}
+                    renderItem={renderResponseSlide}
+                    onSnapToItem={(index) => {
+                      setActiveIndex(index);
+                      setSwapped(false);
+                    }}
+                    onProgressChange={carouselProgress}
+                  />
+                </Reanimated.View>
+              </Reanimated.View>
 
-              {/* Vote button */}
-              {canVote && (
-                myVote?.response_id === selected.id ? (
-                  <View style={cvStyles.voteBtnVoted}>
-                    <Text style={cvStyles.voteBtnVotedText}>✓ Tu as voté pour cette réponse</Text>
-                  </View>
-                ) : (
-                  <TouchableOpacity style={cvStyles.voteBtn} onPress={() => handleVote(selected.id)} activeOpacity={0.85}>
-                    <Text style={cvStyles.voteBtnText}>
-                      {myVote ? "Changer mon vote pour cette réponse" : "Voter pour cette réponse"}
-                    </Text>
-                  </TouchableOpacity>
-                )
+              {/* Reaction stickers overlay */}
+              {activeReactionDisplay && (
+                <Reanimated.View
+                  pointerEvents="none"
+                  style={[cvStyles.stickerOverlay, animatedStickerOverlayStyle]}
+                >
+                  <ReactionStickers
+                    reactions={activeReactionDisplay.reactions}
+                    previewScale={scale}
+                    removingUserId={removingReactionUserId}
+                    hidden={stickersHidden}
+                    hiddenSV={stickersHiddenSV}
+                  />
+                </Reanimated.View>
+              )}
+
+              {/* Stepper Dot Page Indicators */}
+              {responsesCount > 1 && (
+                <Reanimated.View
+                  style={animatedStepperStyle}
+                  pointerEvents={commentModalVisible ? "none" : "auto"}
+                >
+                  <Pagination.Basic
+                    progress={carouselProgress}
+                    data={challenge.responses}
+                    dotStyle={{
+                      width: 12,
+                      height: 12,
+                      borderRadius: 6,
+                      backgroundColor: colors.iconTertiary,
+                    }}
+                    activeDotStyle={{
+                      backgroundColor: colors.icon,
+                    }}
+                    containerStyle={{
+                      gap: spacing.xs2,
+                      borderRadius: radii.full,
+                      paddingVertical: spacing.sm,
+                      paddingHorizontal: spacing.md,
+                      backgroundColor: colors.opacityLight,
+                      marginTop: 24,
+                    }}
+                    onPress={onPressPagination}
+                  />
+                </Reanimated.View>
               )}
             </View>
-          </View>
-        )}
-      </Modal>
+          ) : (
+            <View style={cvStyles.emptyContainer}>
+              <Text style={cvStyles.emptyText}>Aucune réponse à afficher.</Text>
+            </View>
+          )}
+
+          {/* Bottom Control Bar */}
+          {activeResponse && (
+            <Reanimated.View
+              style={[cvStyles.modalFooter, animatedModalFooterStyle]}
+              pointerEvents={commentModalVisible ? "none" : "auto"}
+            >
+              <TouchableOpacity 
+                style={cvStyles.modalReactionsBtn} 
+                onPress={() => {
+                  setCommentActiveResponse(activeResponse);
+                  setCommentModalMode("comment");
+                  setCommentModalVisible(true);
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={cvStyles.modalReactionsBtnText}>Réactions</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={cvStyles.placeholderBtn} 
+                activeOpacity={0.7}
+                onPress={async () => {
+                  const url = swapped ? (getSecondUrl(activeResponse) ?? activeResponse.url) : activeResponse.url;
+                  if (!url) return;
+                  try {
+                    const isAvailable = await Sharing.isAvailableAsync();
+                    if (!isAvailable) {
+                      Share.share({ url, message: url });
+                      return;
+                    }
+                    // Download to cache before sharing, with a custom shared name
+                    // (the share sheet shows the file's basename). Keep the source
+                    // extension so the OS still detects the media type.
+                    const ext = url.split('?')[0].split('.').pop()?.toLowerCase();
+                    const safeExt = ext && ext.length <= 5 ? ext : 'jpg';
+                    const filename = `Disclose - You've never been this close!.${safeExt}`;
+                    const localUri = FileSystem.cacheDirectory + filename;
+                    const { uri } = await FileSystem.downloadAsync(url, localUri);
+                    await Sharing.shareAsync(uri);
+                  } catch (e) {
+                    console.error("Share error:", e);
+                    Share.share({ url, message: url });
+                  }
+                }}
+              >
+                <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <Path d="M2.75 20V12C2.75 11.3096 3.30964 10.75 4 10.75C4.69036 10.75 5.25 11.3096 5.25 12V20C5.25 20.1989 5.32907 20.3896 5.46973 20.5303C5.61038 20.6709 5.80109 20.75 6 20.75H18C18.1989 20.75 18.3896 20.6709 18.5303 20.5303C18.6709 20.3896 18.75 20.1989 18.75 20V12C18.75 11.3096 19.3096 10.75 20 10.75C20.6904 10.75 21.25 11.3096 21.25 12V20C21.25 20.862 20.9073 21.6884 20.2979 22.2979C19.6884 22.9073 18.862 23.25 18 23.25H6C5.13805 23.25 4.31164 22.9073 3.70215 22.2979C3.09266 21.6884 2.75 20.862 2.75 20ZM10.75 15V5.01758L8.88379 6.88379C8.39563 7.37194 7.60437 7.37194 7.11621 6.88379C6.62806 6.39563 6.62806 5.60437 7.11621 5.11621L11.1162 1.11621L11.2109 1.03027C11.7019 0.629789 12.4261 0.658549 12.8838 1.11621L16.8838 5.11621C17.3719 5.60437 17.3719 6.39563 16.8838 6.88379C16.3956 7.37194 15.6044 7.37194 15.1162 6.88379L13.25 5.01758V15C13.25 15.6904 12.6904 16.25 12 16.25C11.3096 16.25 10.75 15.6904 10.75 15Z" fill="#FF561A"/>
+                </Svg>
+              </TouchableOpacity>
+            </Reanimated.View>
+          )}
+
+          {/* ── Comment / Reactions Modal for Active Slide ── */}
+          {/* Mount on commentActiveResponse (mirrors PhotoFeed's activePhotoId) and
+              drive open/close via the `visible` prop only. Keeping it mounted while
+              closing lets CommentModal play its own slide-out, sticker pop and toast
+              animations — instead of being torn down instantly — matching the reveal. */}
+          {commentActiveResponse && (
+            <CommentModal
+              embedded
+              visible={commentModalVisible}
+              onClose={() => {
+                setCommentModalVisible(false);
+              }}
+              keyboardHeightShared={kb}
+              keyboardActiveShared={keyboardActiveSV}
+              sheetHeightShared={sheetSV}
+              onKeyboardActiveChange={setKeyboardActive}
+              onModeChange={(m) => setActiveModalMode(m)}
+              onStickerPosted={handleStickerPosted}
+              onStickerDeleted={handleStickerDeleted}
+              photoId={commentActiveResponse.id}
+              photoOwnerId={commentActiveResponse.user_id}
+              groupId={challenge.group_id}
+              reactions={reactionsMap[commentActiveResponse.id] || []}
+              initialMode={commentModalMode}
+              groupMembers={members}
+            />
+          )}
+        </View>
+      </RightSlideModal>
+
+      {/* Reaction add/delete toast, on the main screen */}
+      {reactionToast !== null && (
+        <StickerToast message={reactionToast} animValue={reactionToastAnim} topInset={insets.top} />
+      )}
     </View>
   );
 }
@@ -290,239 +785,270 @@ export default function ChallengeVotePage({
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   container: {
     width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
+    height: "100%",
     backgroundColor: colors.bg,
-    paddingHorizontal: 20,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 12,
-  },
-  defiPill: {
-    backgroundColor: colors.accentMuted,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: radii.lg,
-  },
-  defiPillText: {
-    color: colors.text,
-    fontFamily: typography.family.bold,
-    fontSize: typography.size.xs,
-    letterSpacing: 0.8,
-  },
-  proposerChip: {
-    alignSelf: "flex-start",
-    backgroundColor: "rgba(255,200,80,0.12)",
-    borderRadius: radii.md,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: "rgba(255,200,80,0.25)",
-  },
-  proposerChipText: {
-    color: "rgba(255,200,80,0.85)",
-    fontFamily: typography.family.semibold,
-    fontSize: typography.size.xs,
-  },
-  periodLabel: {
-    color: colors.textTertiary,
-    fontFamily: typography.family.regular,
-    fontSize: typography.size.xs,
-    letterSpacing: 0.5,
-  },
-  prompt: {
-    color: colors.text,
-    fontFamily: typography.family.bold,
-    fontSize: typography.size.lg,
-    lineHeight: 24,
-    marginBottom: 14,
-  },
-  targetRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    backgroundColor: colors.card,
-    borderRadius: radii.lg,
-    padding: 12,
-    marginBottom: 18,
-  },
-  targetAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.lg,
-  },
-  avatarFallback: {
-    backgroundColor: colors.accentMuted,
+    paddingHorizontal: 68,
+    paddingTop: 140,
+    paddingBottom: 108,
     justifyContent: "center",
     alignItems: "center",
   },
-  avatarLetter: {
-    color: colors.text,
-    fontFamily: typography.family.bold,
-    fontSize: typography.size.sm,
-  },
-  targetLabel: {
-    color: colors.textTertiary,
-    fontFamily: typography.family.regular,
-    fontSize: typography.size.xs,
-    letterSpacing: 0.5,
-  },
-  targetName: {
-    color: colors.text,
-    fontFamily: typography.family.semibold,
-    fontSize: typography.size.sm,
-  },
-  targetThumb: {
-    width: 48,
-    height: 48,
-    borderRadius: radii.sm,
-    overflow: "hidden",
-    backgroundColor: colors.card,
-  },
-  responsesLabel: {
-    color: colors.textTertiary,
-    fontFamily: typography.family.semibold,
-    fontSize: typography.size.xs,
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-    marginBottom: 10,
-  },
-  responseGrid: {
+  titleRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: GRID_GAP,
-  },
-  responseCard: {
-    width: CARD_SIZE,
-    borderRadius: radii.md,
-    overflow: "hidden",
-    backgroundColor: colors.card,
-    borderWidth: 2,
-    borderColor: "transparent",
-  },
-  responseCardVoted: {
-    borderColor: "#34C759",
-  },
-  responseThumb: {
-    width: CARD_SIZE - 4,
-    height: CARD_SIZE - 4,
-    backgroundColor: colors.card,
-  },
-  votedBadge: {
-    position: "absolute",
-    top: 6,
-    right: 6,
-    width: 22,
-    height: 22,
-    borderRadius: radii.md,
-    backgroundColor: "rgba(52,199,89,0.85)",
-    justifyContent: "center",
     alignItems: "center",
+    gap: spacing.sm,
   },
-  votedBadgeText: {
-    color: "#FFFFFF",
-    fontFamily: typography.family.bold,
-    fontSize: typography.size.xs,
+  titleText: {
+    ...textStyles.titlePage,
+    color: colors.text,
   },
-  dualCaptureDot: {
-    position: "absolute",
-    bottom: 6,
-    right: 6,
-    width: 8,
-    height: 8,
-    borderRadius: radii.xs,
-    backgroundColor: colors.textSecondary,
-  },
-  hint: {
-    color: colors.textTertiary,
-    fontFamily: typography.family.regular,
-    fontSize: typography.size.xs,
+  promptText: {
+    fontFamily: typography.family.semibold,
+    fontSize: typography.size.xxl,
+    lineHeight: typography.size.xxl * 1.2,
     textAlign: "center",
-    marginTop: 14,
+    color: colors.text,
   },
-  // Modal
+  targetAvatarLarge: {
+    width: 160,
+    height: 240,
+    borderRadius: radii.md,
+  },
+  avatarLargeFallback: {
+    width: 160,
+    height: 240,
+    borderRadius: radii.md,
+    backgroundColor: colors.accentMuted,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarLargeLetter: {
+    color: colors.text,
+    fontFamily: typography.family.bold,
+    fontSize: 48,
+  },
+  repliesBadge: {
+    backgroundColor: colors.opacityLight,
+    borderRadius: radii.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    alignSelf: "center",
+  },
+  repliesBadgeText: {
+    ...textStyles.singleLineBodyBaseStrong,
+    color: colors.text,
+  },
+  spacer300: {
+    height: spacing.md,
+  },
+  spacer1200: {
+    height: spacing.xl3,
+  },
+  spacer400: {
+    height: spacing.lg,
+  },
+
+  // Modal Layout Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: colors.bg,
   },
-  modalContainer: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  modalTopBar: {
+  modalHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    marginBottom: 14,
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 0,
+    zIndex: 10,
   },
-  modalCloseBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.lg,
-    backgroundColor: colors.accentMuted,
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  backBtn: {
+    padding: 4,
     justifyContent: "center",
     alignItems: "center",
+  },
+  headerTitle: {
+    ...textStyles.subtitleStrong,
+    fontSize: 32,
+    color: colors.text,
+  },
+  modalQuestionText: {
+    ...textStyles.subheading,
+    color: colors.text,
+    textAlign: "center",
+    paddingTop: 12,
+    paddingBottom: 0,
+    paddingHorizontal: 16,
+  },
+  orangeText: {
+    color: colors.brand,
   },
   swapBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: colors.accentMuted,
+    backgroundColor: "rgba(255,255,255,0.08)",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: radii.lg,
   },
   swapBtnText: {
-    color: colors.secondary,
+    color: colors.text,
     fontFamily: typography.family.semibold,
-    fontSize: typography.size.xs,
+    fontSize: typography.size.xxs,
   },
-  modalMedia: {
+
+  // Carousel & Slides Styles
+  carouselFlexContainer: {
     flex: 1,
-    borderRadius: radii.lg,
-    overflow: "hidden",
-    backgroundColor: colors.bg,
-    marginBottom: 12,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  noteBox: {
-    backgroundColor: colors.card,
+  carouselWrapper: {
+    width: SCREEN_WIDTH,
+    height: 500,
+    backgroundColor: "transparent",
+    // Radius lives on this (the cropped/scaled view) so the bottom stays rounded when the
+    // height shrinks. Matches slideCard.borderRadius so the two are concentric/consistent.
     borderRadius: radii.md,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 12,
   },
-  noteText: {
-    color: colors.secondary,
+  slideCard: {
+    width: 340,
+    height: 500,
+    overflow: "hidden",
+    position: "relative",
+    backgroundColor: "#000000",
+    marginHorizontal: spacing.lg / 2,
+    borderRadius: radii.md,
+    // borderWidth: stroke.md,
+    // borderColor: colors.borderBrandTertiary,
+  },
+  slideMediaWrapper: {
+    width: "100%",
+    height: "100%",
+    position: "absolute",
+  },
+  cardDetailsContainer: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 16,
+  },
+  authorInfoRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  authorAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: radii.md,
+  },
+  authorAvatarFallback: {
+    width: 48,
+    height: 48,
+    borderRadius: radii.md,
+    backgroundColor: colors.accentMuted,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  authorAvatarLetter: {
+    color: "#FFFFFF",
+    fontFamily: typography.family.bold,
+    fontSize: 18,
+  },
+  authorTextSection: {
+    flex: 1,
+    gap: 2,
+  },
+  authorName: {
+    color: colors.textNeutral,
+    fontFamily: typography.family.bold,
+    fontSize: 14,
+  },
+  authorNote: {
+    color: colors.textNeutral,
     fontFamily: typography.family.regular,
-    fontSize: typography.size.sm,
-    textAlign: "center",
-    lineHeight: 20,
+    fontSize: 12,
+    lineHeight: 16,
   },
-  voteBtn: {
-    backgroundColor: colors.text,
+  stepperContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    alignSelf: "center",
+    gap: spacing.xs2,
+    marginTop: 24,
+    borderRadius: radii.full,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.opacityLight,
+  },
+  stepperDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: colors.iconTertiary,
+  },
+  stepperDotActive: {
+    backgroundColor: colors.icon,
+  },
+
+  // Bottom Footer Styles
+  modalFooter: {
+    height: 100,
+    backgroundColor: colors.bg,
+    flexDirection: "row",
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    gap: spacing.md,
+    alignItems: "flex-start",
+    zIndex: 10,
+  },
+  modalReactionsBtn: {
+    flex: 1,
+    height: 52,
+    backgroundColor: colors.brand,
     borderRadius: radii.lg,
-    paddingVertical: 15,
+    justifyContent: "center",
     alignItems: "center",
   },
-  voteBtnText: {
-    color: colors.bg,
-    fontFamily: typography.family.bold,
-    fontSize: typography.size.sm,
-  },
-  voteBtnVoted: {
-    backgroundColor: "rgba(52,199,89,0.15)",
+  placeholderBtn: {
+    width: 52,
+    height: 52,
     borderRadius: radii.lg,
-    paddingVertical: 15,
+    backgroundColor: colors.card,
+    justifyContent: "center",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(52,199,89,0.4)",
   },
-  voteBtnVotedText: {
-    color: "#34C759",
+  modalReactionsBtnText: {
     fontFamily: typography.family.bold,
+    fontSize: typography.size.md,
+    color: colors.textBrandOnBrandSecondary,
+  },
+
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  emptyText: {
+    color: colors.textSecondary || colors.textMuted,
+    fontFamily: typography.family.medium,
     fontSize: typography.size.sm,
+  },
+  stickerOverlay: {
+    position: "absolute",
+    width: 340,
+    height: CAROUSEL_HEIGHT,
+    overflow: "visible",
+    backgroundColor: "transparent",
+    zIndex: 15,
   },
 });

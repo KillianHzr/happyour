@@ -159,6 +159,12 @@ export function ForceThemeMode({ mode, children }: { mode: ThemeMode; children: 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
+/**
+ * Alias de compatibilité : certaines parties du code (reveal, commentaires, stickers)
+ * importent `ForceTheme`. Même comportement que `ForceThemeMode`.
+ */
+export const ForceTheme = ForceThemeMode;
+
 /** Hook principal : couleurs/ombres/styles réactifs au mode + préférence. */
 export function useTheme(): ThemeContextValue {
   const ctx = useContext(ThemeContext);
