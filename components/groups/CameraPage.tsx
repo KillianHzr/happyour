@@ -26,6 +26,7 @@ import Icon, { type IconName } from "../Icon";
 import { AudioCaptionPlayer } from "../molecules/AudioCaptionPlayer";
 import LottieView from "lottie-react-native";
 import BlurView from "../atoms/BlurView";
+import { Waveform } from "../atoms/Waveform";
 import { BlurView as NativeBlurView } from "@sbaiahmed1/react-native-blur";
 
 const NAVBAR_HEIGHT = 100;
@@ -100,21 +101,6 @@ class CameraErrorBoundary extends Component<{ children: React.ReactNode }, { has
     if (this.state.hasError) return null;
     return this.props.children;
   }
-}
-
-function compressWaveform(data: number[], maxBars: number): number[] {
-  if (!data || data.length === 0) return [];
-  if (data.length <= maxBars) return data;
-  const result: number[] = [];
-  const chunkSize = data.length / maxBars;
-  for (let i = 0; i < maxBars; i++) {
-    const start = Math.floor(i * chunkSize);
-    const end = Math.floor((i + 1) * chunkSize);
-    const slice = data.slice(start, end);
-    const max = slice.reduce((m, val) => Math.max(m, val), 0);
-    result.push(max);
-  }
-  return result;
 }
 
 function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, onHideMenu, onCaptureSent }: Props) {
@@ -816,8 +802,12 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       }
 
       await AudioModule.setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-      await audioRecorder.prepareToRecordAsync(RecordingPresets.LOW_QUALITY);
-      
+      // isMeteringEnabled must be re-specified here — passing a preset to
+      // prepareToRecordAsync overrides the recorder's constructor options, and the presets
+      // don't include metering, so without this the live waveform (recorderState.metering)
+      // is never produced.
+      await audioRecorder.prepareToRecordAsync({ ...RecordingPresets.LOW_QUALITY, isMeteringEnabled: true });
+
       // Delay to ensure native activity/audio state is ready on Android
       if (Platform.OS === "android") await new Promise(resolve => setTimeout(resolve, 150));
       
@@ -884,7 +874,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       }
 
       await AudioModule.setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-      await audioRecorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
+      // isMeteringEnabled must be re-specified here (see startAudioRecording) — the preset
+      // would otherwise disable metering and the caption waveform would never be captured.
+      await audioRecorder.prepareToRecordAsync({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true });
 
       // Delay for Android activity sync
       if (Platform.OS === "android") await new Promise(resolve => setTimeout(resolve, 150));
@@ -1511,11 +1503,14 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
             )}
             {previewSlot.mode === "AUDIO" && (
               <View style={{ flex: 1, backgroundColor: "#0A0A0A", justifyContent: "center", alignItems: "center" }}>
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 3.5, marginHorizontal: 20 }} pointerEvents="none">
-                  {(previewSlot.waveform && previewSlot.waveform.length > 0 ? compressWaveform(previewSlot.waveform, 40).map(v => v * 80) : [10,14,22,30,38,34,26,20,14,18,28,36,44,40,32,24,16,12,20,30]).map((h, i, arr) => (
-                    <View key={i} style={{ width: 3.5, height: h, borderRadius: radii.xs, backgroundColor: colors.text, opacity: audioPreviewStatus.currentTime > 0 && audioPreviewStatus.duration > 0 && (audioPreviewStatus.currentTime / audioPreviewStatus.duration) > i / arr.length ? 0.9 : 0.25 }} />
-                  ))}
-                </View>
+                <Waveform
+                  data={previewSlot.waveform ?? []}
+                  progress={audioPreviewStatus.duration > 0 ? (audioPreviewStatus.currentTime ?? 0) / audioPreviewStatus.duration : 0}
+                  color={colors.text}
+                  heightScale={80}
+                  activeOpacity={0.9}
+                  style={{ alignSelf: "stretch", marginHorizontal: 20 }}
+                />
                 <View style={styles.audioPreviewPlayer}>
                   <TouchableOpacity style={styles.audioPreviewPlayBtn} onPress={() => {
                     if (audioPreviewStatus.playing) { audioPreviewPlayer.pause(); }

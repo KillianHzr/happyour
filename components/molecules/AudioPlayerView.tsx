@@ -4,6 +4,7 @@ import { Svg, Path } from "react-native-svg";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { spacing, radii, typography, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
+import { Waveform } from "../atoms/Waveform";
 
 interface AudioPlayerViewProps {
   player: ReturnType<typeof useAudioPlayer>;
@@ -12,28 +13,11 @@ interface AudioPlayerViewProps {
   waveform?: number[];
 }
 
-const FALLBACK_WAVE_HEIGHTS = [18, 32, 48, 36, 60, 80, 52, 68, 42, 62, 88, 72, 50, 38, 68, 82, 58, 44, 28, 52, 72, 56, 78, 46, 36, 62, 50, 66, 42, 28];
-
 function fmtAudio(s: number) {
   if (!isFinite(s) || isNaN(s)) return "0:00";
   const m = Math.floor(s / 60);
   const sec = Math.floor(s % 60);
   return `${m}:${sec.toString().padStart(2, "0")}`;
-}
-
-function compressWaveform(data: number[], maxBars: number): number[] {
-  if (!data || data.length === 0) return [];
-  if (data.length <= maxBars) return data;
-  const result: number[] = [];
-  const chunkSize = data.length / maxBars;
-  for (let i = 0; i < maxBars; i++) {
-    const start = Math.floor(i * chunkSize);
-    const end = Math.floor((i + 1) * chunkSize);
-    const slice = data.slice(start, end);
-    const max = slice.reduce((m, val) => Math.max(m, val), 0);
-    result.push(max);
-  }
-  return result;
 }
 
 export const AudioPlayerView = ({ player, status, onScrollLock, waveform }: AudioPlayerViewProps) => {
@@ -116,18 +100,15 @@ export const AudioPlayerView = ({ player, status, onScrollLock, waveform }: Audi
     })
   ).current;
 
-  // Use provided waveform or fallback to hardcoded
-  const bars = waveform && waveform.length > 0 
-    ? compressWaveform(waveform, 40).map(v => v * 80) 
-    : FALLBACK_WAVE_HEIGHTS;
-
   return (
     <View style={styles.container}>
-      <View style={styles.audioWaveContainer} pointerEvents="none">
-        {bars.map((h, i) => (
-          <View key={i} style={[styles.audioWaveBar, { height: Math.max(3.5, h), opacity: progress > i / bars.length ? 1 : 0.25 }]} />
-        ))}
-      </View>
+      <Waveform
+        data={waveform ?? []}
+        progress={progress}
+        color={colors.text}
+        heightScale={80}
+        style={{ alignSelf: "stretch" }}
+      />
       <View style={styles.audioPlayerRow}>
         <TouchableOpacity onPress={togglePlay} style={styles.audioPlayBtn}>
           <Svg width="26" height="26" viewBox="0 0 24 24" fill={colors.text}>
@@ -162,17 +143,6 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: "center",
     gap: spacing.xl,
     paddingHorizontal: spacing.lg
-  },
-  audioWaveContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 3.5
-  },
-  audioWaveBar: {
-    width: 3.5,
-    borderRadius: radii.xs,
-    backgroundColor: colors.text
   },
   audioPlayerRow: {
     flexDirection: "row",
