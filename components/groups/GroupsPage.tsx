@@ -9,6 +9,22 @@ import Icon from "../Icon";
 import EdgeSwipeBack from "../EdgeSwipeBack";
 import { type ShapeName } from "../Shape";
 import GroupsSlider, { type GroupCard } from "./GroupsSlider";
+import GroupRoom from "./GroupRoom";
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Mappe un type de capture de défi vers la shape correspondante. */
+function captureTypeToShape(t?: string | null): ShapeName | null {
+  switch (t) {
+    case "PHOTO": return "photo";
+    case "VIDEO": return "video";
+    case "TEXTE": return "texte";
+    case "AUDIO": return "audio";
+    case "DESSIN": return "dessin";
+    default: return null;
+  }
+}
 
 // Espace réservé en bas pour la barre d'onglets flottante du pager
 const TABBAR_SPACE = 110;
@@ -18,9 +34,12 @@ type GroupInfo = { id: string; name: string; invite_code?: string };
 
 // Données déjà chargées par [id].tsx (pas de fetch ici → cards instantanées)
 type GroupDataLike = {
-  photos: { image_path: string; created_at: string; url: string }[]; // triées croissant
+  photos: { image_path: string; created_at: string; url: string; user_id?: string }[]; // triées croissant
   photoCount: number; // moments depuis le dernier reveal (cycle courant)
-  members: { avatar_url?: string | null; role?: string }[];
+  members: { avatar_url?: string | null; role?: string; user_id?: string; username?: string }[];
+  crownWinnerId?: string | null;
+  challenges?: { period1: any | null; period2: any | null } | null;
+  currentUserRespondedToChallenge?: boolean;
 };
 
 type Props = {
@@ -28,10 +47,13 @@ type Props = {
   groupData: Record<string, GroupDataLike>;
   revealConfig: { day: number; hour: number };
   isActive: boolean;
+  userId: string;
   enterGroupId?: string | null;        // ouvrir directement la vue de ce groupe (après ajout)
   onEnteredGroup?: () => void;         // consommé → réinitialise enterGroupId côté parent
   onSelectGroup: (groupId: string) => void;
   onAddGroup: () => void;
+  onGoToCapture: () => void;           // ouvrir la vue capture
+  onOpenReveal: () => void;            // déverrouiller / ouvrir le reveal
   onScrollLock?: (locked: boolean) => void;
 };
 
@@ -70,7 +92,7 @@ function computeNextRevealDate(revealDayOfWeek: number, revealHour: number): Dat
   return reveal;
 }
 
-export default function GroupsPage({ allGroups, groupData, revealConfig, isActive, enterGroupId, onEnteredGroup, onSelectGroup, onAddGroup, onScrollLock }: Props) {
+export default function GroupsPage({ allGroups, groupData, revealConfig, isActive, userId, enterGroupId, onEnteredGroup, onSelectGroup, onAddGroup, onGoToCapture, onOpenReveal, onScrollLock }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -106,6 +128,24 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
         }
       }
 
+      // Couronne : surnom + avatar du porteur
+      let crownUsername: string | null = null;
+      let crownAvatarUrl: string | null = null;
+      if (gd?.crownWinnerId) {
+        const winner = gd.members?.find((m) => m.user_id === gd.crownWinnerId);
+        crownUsername = winner?.username ?? null;
+        crownAvatarUrl = winner?.avatar_url ?? null;
+      }
+
+      // Défi en cours : surnom cible + shape du type de média
+      const ch = gd?.challenges?.period1 ?? gd?.challenges?.period2 ?? null;
+      const challengeLabel = ch?.target_username ?? null;
+      const challengeShape = captureTypeToShape(ch?.theme?.capture_type);
+
+      // L'utilisateur a-t-il posté cette semaine dans ce groupe ?
+      const postedThisWeek =
+        (photos.some((p) => p.user_id === userId)) || (gd?.currentUserRespondedToChallenge ?? false);
+
       return {
         id: g.id,
         name: g.name,
@@ -114,6 +154,11 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
         bgUrl,
         lastMomentAt: lastMoment ? new Date(lastMoment.created_at).getTime() : 0,
         loaded: true,
+        crownUsername,
+        crownAvatarUrl,
+        challengeLabel,
+        challengeShape,
+        postedThisWeek,
       };
     });
     // Ordre (groupe au moment le plus récent en premier) figé sur la base → pas de saut au refresh
@@ -161,6 +206,10 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
 
   const singleGroup = cards.length === 1;
   const selectionShown = !singleGroup && !viewingGroupId;
+
+  // Reveal disponible : on est dans les 24h qui suivent le dernier reveal.
+  const lastReveal = revealDate.getTime() - WEEK_MS;
+  const unlocked = Date.now() - lastReveal < DAY_MS;
 
   // Bloque totalement le swipe du pager tant qu'on affiche la sélection de groupe
   useEffect(() => {
@@ -210,16 +259,23 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
     onEnteredGroup?.();
   }, [enterGroupId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Un seul groupe : on entre directement, sans transition ─────────────────
+  // ── Un seul groupe : on entre directement dans la single, sans flèche retour ──
   if (singleGroup) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        <View style={styles.header}>
-          <View style={styles.headerRow}>
-            <Text style={styles.title}>{cards[0]?.name ?? ""}</Text>
-          </View>
-        </View>
-      </View>
+      <GroupRoom
+        card={cards[0]}
+        revealDate={revealDate}
+        unlocked={unlocked}
+        showBack={false}
+        showAddButton
+        topInset={insets.top}
+        onBack={() => {}}
+        onAddGroup={onAddGroup}
+        onSettings={() => {}}
+        onArchive={() => {}}
+        onCapture={onGoToCapture}
+        onUnlock={onOpenReveal}
+      />
     );
   }
 
@@ -242,24 +298,30 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
       </View>
 
       <View style={{ flex: 1, marginTop: spacing.xl, paddingBottom: TABBAR_SPACE }}>
-        <GroupsSlider cards={cards} revealDate={revealDate} onSelect={openGroup} showActiveBorder={!viewingGroupId} />
+        <GroupsSlider cards={cards} revealDate={revealDate} onSelect={openGroup} showActiveBorder={!viewingGroupId} unlocked={unlocked} />
       </View>
 
-      {/* Page groupe (provisoire) — slide à l'entrée + retour par glissement depuis le bord gauche */}
-      {groupViewMounted && (
+      {/* Single du groupe — slide à l'entrée + retour par glissement depuis le bord gauche */}
+      {groupViewMounted && openedGroup && (
         <Animated.View style={[StyleSheet.absoluteFillObject, { transform: [{ translateX: slideAnim }] }]}>
           <EdgeSwipeBack
-            style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.bg, paddingTop: insets.top }]}
+            style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.bg }]}
             onBack={() => { setViewingGroupId(null); setGroupViewMounted(false); }}
           >
-            <View style={styles.header}>
-              <View style={styles.headerRow}>
-                <TouchableOpacity style={styles.iconBtn} onPress={closeGroup} activeOpacity={0.7}>
-                  <Icon name="chevron-left" size={20} color={colors.icon} />
-                </TouchableOpacity>
-                <Text style={styles.title}>{openedGroup?.name ?? ""}</Text>
-              </View>
-            </View>
+            <GroupRoom
+              card={openedGroup}
+              revealDate={revealDate}
+              unlocked={unlocked}
+              showBack
+              showAddButton={false}
+              topInset={insets.top}
+              onBack={closeGroup}
+              onAddGroup={onAddGroup}
+              onSettings={() => {}}
+              onArchive={() => {}}
+              onCapture={onGoToCapture}
+              onUnlock={onOpenReveal}
+            />
           </EdgeSwipeBack>
         </Animated.View>
       )}

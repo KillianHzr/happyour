@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Animated } from "react-native";
-import { spacing, radii, stroke, textStyles, typography, type ThemeColors } from "../../lib/theme";
-import { useTheme, useThemedStyles } from "../../lib/theme-context";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Animated, useColorScheme } from "react-native";
+import { spacing, radii, stroke, textStyles, typography, type ThemeColors, type ThemeMode } from "../../lib/theme";
+import { ForceThemeMode, useTheme, useThemedStyles } from "../../lib/theme-context";
 import BottomSheet from "../BottomSheet";
 import Icon from "../Icon";
 
@@ -18,19 +18,46 @@ type Props = {
   onConfirm: () => void;
 };
 
-export default function GroupPickerSheet({ visible, onClose, groups, selectedIds, onToggle, onConfirm }: Props) {
+export default function GroupPickerSheet(props: Props) {
+  // La capture force le mode dark, mais cette modal doit suivre la préférence
+  // réelle de l'utilisateur. ForceThemeMode conserve `preference` du parent.
+  const { preference } = useTheme();
+  const systemScheme = useColorScheme();
+  const userMode: ThemeMode =
+    preference === "system"
+      ? systemScheme === "light"
+        ? "Light"
+        : "Dark"
+      : preference === "light"
+      ? "Light"
+      : "Dark";
+
+  return (
+    <ForceThemeMode mode={userMode}>
+      <GroupPickerSheetInner {...props} />
+    </ForceThemeMode>
+  );
+}
+
+function GroupPickerSheetInner({ visible, onClose, groups, selectedIds, onToggle, onConfirm }: Props) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
 
   const [search, setSearch] = useState("");
   const [focused, setFocused] = useState(false);
+  const inputRef = useRef<TextInput>(null);
 
   // Scroll custom : géométrie pour la barre de droite
   const scrollY = useRef(new Animated.Value(0)).current;
   const [containerH, setContainerH] = useState(0);
   const [contentH, setContentH] = useState(0);
 
-  useEffect(() => { if (visible) setSearch(""); }, [visible]);
+  useEffect(() => {
+    if (visible) setSearch("");
+  }, [visible]);
+
+  // Barre de recherche affichée seulement au-delà de 5 groupes.
+  const showSearch = groups.length > 5;
 
   const filtered = search.trim()
     ? groups.filter((g) => g.name.toLowerCase().includes(search.trim().toLowerCase()))
@@ -49,26 +76,29 @@ export default function GroupPickerSheet({ visible, onClose, groups, selectedIds
   return (
     <BottomSheet visible={visible} onClose={onClose}>
       <View style={styles.content}>
-        {/* Barre de recherche (style des inputs des paramètres) */}
-        <View style={[styles.input, { borderColor: focused ? colors.borderBrandSecondary : colors.cardBorder, backgroundColor: colors.bg }]}>
-          <TextInput
-            style={styles.inputText}
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Rechercher"
-            placeholderTextColor={colors.textSecondary}
-            returnKeyType="search"
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-          />
-          <TouchableOpacity
-            onPress={() => search.length > 0 && setSearch("")}
-            disabled={search.length === 0}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Icon name={search.length > 0 ? "x" : "search"} size={20} color={colors.iconNeutral} />
-          </TouchableOpacity>
-        </View>
+        {/* Barre de recherche (style des inputs des paramètres) — seulement >5 groupes */}
+        {showSearch && (
+          <View style={[styles.input, { borderColor: focused ? colors.borderBrandSecondary : colors.cardBorder, backgroundColor: colors.bg }]}>
+            <TextInput
+              ref={inputRef}
+              style={styles.inputText}
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Rechercher"
+              placeholderTextColor={colors.textSecondary}
+              returnKeyType="search"
+              onFocus={() => setFocused(true)}
+              onBlur={() => setFocused(false)}
+            />
+            <TouchableOpacity
+              onPress={() => search.length > 0 && setSearch("")}
+              disabled={search.length === 0}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Icon name={search.length > 0 ? "x" : "search"} size={20} color={colors.iconNeutral} />
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Liste de groupes scrollable + scrollbar custom */}
         <View style={styles.listWrap} onLayout={(e) => setContainerH(e.nativeEvent.layout.height)}>

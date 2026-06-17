@@ -1110,13 +1110,16 @@ export default function MainPagerScreen() {
       groupData={groupData}
       revealConfig={revealConfig}
       isActive={activePage === 0}
+      userId={user?.id ?? ""}
       enterGroupId={enterGroupId}
       onEnteredGroup={() => setEnterGroupId(null)}
       onSelectGroup={handleSwitchGroup}
       onAddGroup={() => setShowAddGroupModal(true)}
+      onGoToCapture={() => jumpTo(1)}
+      onOpenReveal={() => { if (currentUserPostedThisWeek) setShowReveal(true); }}
       onScrollLock={setGroupsPagerLocked}
     />
-  ), [allGroups, groupData, revealConfig, activePage === 0, enterGroupId, handleSwitchGroup]);
+  ), [allGroups, groupData, revealConfig, activePage === 0, user?.id, enterGroupId, handleSwitchGroup, currentUserPostedThisWeek]);
 
   const memoizedCameraPage = useMemo(() => (
     <ForceThemeMode mode="Dark">

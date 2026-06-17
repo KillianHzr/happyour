@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState } from "react";
 import * as FileSystem from "expo-file-system/legacy";
-import { decode } from "base64-arraybuffer";
-import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
+import { manipulateAsync, FlipType, SaveFormat } from "expo-image-manipulator";
 import { supabase } from "./supabase";
 import { r2Storage } from "./r2";
 
@@ -36,7 +35,8 @@ interface UploadContextType {
     secondFile?: SecondFile,
     captionAudioFile?: CaptionAudioFile,
     waveform?: number[],
-    captionWaveform?: number[]
+    captionWaveform?: number[],
+    mirrorPrimary?: boolean
   ) => void;
   startChallengeUpload: (
     challengeId: string,
@@ -53,40 +53,42 @@ interface UploadContextType {
 
 const UploadContext = createContext<UploadContextType | null>(null);
 
+/** Upload streaming natif (presigned PUT) — aucune lecture base64 sur le thread JS, donc pas de freeze. */
+async function streamUpload(fileName: string, fileUri: string, contentType: string) {
+  const presignedUrl = await r2Storage.getPresignedUploadUrl(fileName, contentType);
+  const res = await FileSystem.uploadAsync(presignedUrl, fileUri, {
+    httpMethod: "PUT",
+    headers: { "Content-Type": contentType },
+  });
+  if (res.status < 200 || res.status >= 300) {
+    throw new Error(`Upload échoué: HTTP ${res.status}`);
+  }
+}
+
 async function uploadFilesToR2(
   fileName: string | null,
   fileUri: string | null,
   contentType: string | null,
   secondFile: SecondFile | undefined,
-  captionAudioFile?: { fileName: string; fileUri: string; contentType: string } | null
+  captionAudioFile?: { fileName: string; fileUri: string; contentType: string } | null,
+  mirrorPrimary?: boolean
 ): Promise<{ finalPath: string; secondPath: string | null; captionAudioPath: string | null }> {
   let finalPath = "text_mode";
   if (fileName && fileUri && contentType) {
-    const isVideo = contentType.includes("video") || fileName.endsWith(".mp4");
-    const isAudio = contentType.includes("audio") || fileName.endsWith(".m4a");
     const isImage = contentType.includes("image") || fileName.endsWith(".jpg") || fileName.endsWith(".jpeg");
 
     let uploadUri = fileUri;
 
-    // Compression différée pour les images (Photos et Dessins)
+    // Compression (+ miroir caméra avant) différée à l'ENVOI pour les images (hors dessins).
+    // manipulateAsync est natif/async → ne bloque pas le thread JS.
     if (isImage && !fileName.includes("_draw")) {
-       const result = await manipulateAsync(fileUri, [], { compress: 0.8, format: SaveFormat.JPEG });
-       uploadUri = result.uri;
+      const ops = mirrorPrimary ? [{ flip: FlipType.Horizontal }] : [];
+      const result = await manipulateAsync(fileUri, ops, { compress: 0.8, format: SaveFormat.JPEG });
+      uploadUri = result.uri;
     }
 
-    if (isVideo || isAudio) {
-      const presignedUrl = await r2Storage.getPresignedUploadUrl(fileName, contentType);
-      const uploadResult = await FileSystem.uploadAsync(presignedUrl, uploadUri, {
-        httpMethod: "PUT",
-        headers: { "Content-Type": contentType },
-      });
-      if (uploadResult.status < 200 || uploadResult.status >= 300) {
-        throw new Error(`Upload échoué: HTTP ${uploadResult.status}`);
-      }
-    } else {
-      const base64 = await FileSystem.readAsStringAsync(uploadUri, { encoding: FileSystem.EncodingType.Base64 });
-      await r2Storage.upload(fileName, decode(base64), contentType);
-    }
+    // Tout (image/vidéo/audio) part en streaming natif — plus de base64 bloquant.
+    await streamUpload(fileName, uploadUri, contentType);
     finalPath = fileName;
   }
 
@@ -96,8 +98,6 @@ async function uploadFilesToR2(
       secondPath = "text_mode";
     } else if (secondFile.fileName && secondFile.fileUri && secondFile.contentType) {
       const sf = secondFile as { fileName: string; fileUri: string; contentType: string };
-      const isSecondVideo = sf.contentType.includes("video") || sf.fileName.endsWith(".mp4");
-      const isSecondAudio = sf.contentType.includes("audio") || sf.fileName.endsWith(".m4a");
       const isSecondImage = sf.contentType.includes("image") || sf.fileName.endsWith(".jpg") || sf.fileName.endsWith(".jpeg");
 
       let secondUploadUri = sf.fileUri;
@@ -107,16 +107,7 @@ async function uploadFilesToR2(
         secondUploadUri = result2.uri;
       }
 
-      if (isSecondVideo || isSecondAudio) {
-        const presignedUrl = await r2Storage.getPresignedUploadUrl(sf.fileName, sf.contentType);
-        await FileSystem.uploadAsync(presignedUrl, secondUploadUri, {
-          httpMethod: "PUT",
-          headers: { "Content-Type": sf.contentType },
-        });
-      } else {
-        const base64 = await FileSystem.readAsStringAsync(secondUploadUri, { encoding: FileSystem.EncodingType.Base64 });
-        await r2Storage.upload(sf.fileName, decode(base64), sf.contentType);
-      }
+      await streamUpload(sf.fileName, secondUploadUri, sf.contentType);
       secondPath = sf.fileName;
     }
   }
@@ -145,7 +136,8 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
     secondFile?: SecondFile,
     captionAudioFile?: CaptionAudioFile,
     waveform?: number[],
-    captionWaveform?: number[]
+    captionWaveform?: number[],
+    mirrorPrimary?: boolean
   ) => {
     const id = Date.now().toString();
     const uploadType = contentType?.startsWith("video") ? "video" : contentType?.startsWith("audio") ? "audio" : !fileName ? "texte" : fileName.includes("_draw") ? "dessin" : "photo";
@@ -153,7 +145,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
 
     (async () => {
       try {
-        const { finalPath, secondPath, captionAudioPath } = await uploadFilesToR2(fileName, fileUri, contentType, secondFile, captionAudioFile);
+        const { finalPath, secondPath, captionAudioPath } = await uploadFilesToR2(fileName, fileUri, contentType, secondFile, captionAudioFile, mirrorPrimary);
         
         const { error } = await supabase.from("photos").insert([{
           ...dbData,

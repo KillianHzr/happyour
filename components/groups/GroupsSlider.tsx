@@ -25,6 +25,12 @@ export type GroupCard = {
   bgUrl: string | null;      // dernière photo postée, sinon avatar du chef
   lastMomentAt: number;      // pour l'ordre d'affichage
   loaded: boolean;           // données (count/shape/bg) chargées
+  // ── Champs utilisés par la single (GroupRoom) ──
+  crownUsername?: string | null;    // surnom du porteur de couronne
+  crownAvatarUrl?: string | null;   // avatar du porteur de couronne
+  challengeLabel?: string | null;   // surnom cible du défi en cours
+  challengeShape?: ShapeName | null;// shape du type de média du défi
+  postedThisWeek?: boolean;         // l'utilisateur a posté cette semaine dans ce groupe
 };
 
 type Props = {
@@ -32,6 +38,7 @@ type Props = {
   revealDate: Date;
   onSelect: (groupId: string) => void;
   showActiveBorder?: boolean; // masqué quand une page groupe est ouverte
+  unlocked?: boolean;         // reveal disponible → countdown 0j + cadenas ouvert
 };
 
 /** Formate un délai en ms → "Xj HH:MM:SS" (le "0j" est masqué s'il reste moins d'un jour). */
@@ -63,13 +70,14 @@ const RevealCountdown = memo(function RevealCountdown({ revealDate, textStyle }:
  * en mode sombre, donc `useTheme()` ici renvoie toujours les couleurs dark.
  */
 const SliderCard = memo(function SliderCard({
-  card, width, height, marginRight, revealDate, onSelect,
+  card, width, height, marginRight, revealDate, unlocked, onSelect,
 }: {
   card: GroupCard;
   width: number;
   height: number;
   marginRight: number;
   revealDate: Date;
+  unlocked: boolean;
   onSelect: (groupId: string) => void;
 }) {
   const { colors } = useTheme();
@@ -127,17 +135,26 @@ const SliderCard = memo(function SliderCard({
           )}
         </View>
 
-        {/* Countdown + cadenas */}
-        <View style={s.countdown}>
-          <RevealCountdown revealDate={revealDate} textStyle={s.countdownText} />
-          <Icon name="lock" size={24} color={colors.icon} />
+        {/* Countdown + cadenas (ou état "reveal disponible") */}
+        <View style={s.countdownWrap}>
+          {unlocked && (
+            <Text style={s.unlockHint}>Ouvre ton groupe pour le déverrouiller</Text>
+          )}
+          <View style={[s.countdown, unlocked && { borderColor: colors.borderBrandTertiary }]}>
+            {unlocked ? (
+              <Text style={s.countdownText}>0j 00:00:00</Text>
+            ) : (
+              <RevealCountdown revealDate={revealDate} textStyle={s.countdownText} />
+            )}
+            <Icon name={unlocked ? "unlock" : "lock"} size={24} color={unlocked ? colors.iconBrandTertiary : colors.icon} />
+          </View>
         </View>
       </View>
     </TouchableOpacity>
   );
 });
 
-export default function GroupsSlider({ cards, revealDate, onSelect, showActiveBorder = true }: Props) {
+export default function GroupsSlider({ cards, revealDate, onSelect, showActiveBorder = true, unlocked = false }: Props) {
   const sliderStyles = useThemedStyles(makeSliderStyles);
   const { width: screenWidth } = useWindowDimensions();
 
@@ -223,6 +240,7 @@ export default function GroupsSlider({ cards, revealDate, onSelect, showActiveBo
                   height={cardHeight}
                   marginRight={gap}
                   revealDate={revealDate}
+                  unlocked={unlocked}
                   onSelect={onSelect}
                 />
               ))}
@@ -299,6 +317,16 @@ const makeSliderStyles = (colors: ThemeColors) => StyleSheet.create({
   momentLabel: {
     ...textStyles.bodyStrong,
     color: colors.text,
+  },
+  countdownWrap: {
+    alignSelf: "stretch",
+    alignItems: "center",
+    gap: spacing.sm, // 8px entre le hint et le countdown
+  },
+  unlockHint: {
+    ...textStyles.bodySmall,
+    color: colors.textSecondary,
+    lineHeight: undefined,
   },
   countdown: {
     height: 80,

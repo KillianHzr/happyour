@@ -49,7 +49,14 @@ public class SeamlessRecorderView: ExpoView {
   public override func willMove(toWindow newWindow: UIWindow?) {
     super.willMove(toWindow: newWindow)
     if newWindow == nil {
-      sessionQueue.async { [weak self] in self?.session.stopRunning() }
+      // IMPORTANT : retenir la session FORTEMENT ici. Avec `[weak self]`, si la vue
+      // était libérée avant l'exécution du bloc (ce qui arrive au démontage RN, p.ex.
+      // capture → preview), `self` valait nil → `stopRunning()` n'était jamais appelé,
+      // et l'AVCaptureSession se libérait EN COURS D'EXÉCUTION sur le main thread →
+      // gros freeze de plusieurs secondes. En retenant la session, on garantit qu'elle
+      // est arrêtée en arrière-plan AVANT sa libération.
+      let session = self.session
+      sessionQueue.async { if session.isRunning { session.stopRunning() } }
     }
   }
 

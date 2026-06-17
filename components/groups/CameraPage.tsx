@@ -6,7 +6,6 @@ import {
 import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { type CameraType, type FlashMode, useCameraPermissions } from "expo-camera";
-import { manipulateAsync, FlipType, SaveFormat } from "expo-image-manipulator";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import Svg, { Path } from "react-native-svg";
@@ -23,6 +22,7 @@ import { radii, spacing, stroke, blur, typography, textStyles, glassBlurIntensit
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import Shape, { type ShapeName } from "../Shape";
 import GroupPickerSheet from "./GroupPickerSheet";
+import SendAnimation, { type SendAnimationType } from "./SendAnimation";
 import Icon, { type IconName } from "../Icon";
 import { AudioCaptionPlayer } from "../molecules/AudioCaptionPlayer";
 import LottieView from "lottie-react-native";
@@ -74,6 +74,7 @@ type SlotData = {
   note: string;
   captionAudioUri?: string | null;
   captionWaveform?: number[];
+  mirror?: boolean; // photo caméra avant : miroir appliqué à l'envoi, preview en transform
 };
 
 type GroupInfo = { id: string; name: string };
@@ -147,31 +148,17 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   }, [isActive]);
 
   const [showGroupPicker, setShowGroupPicker] = useState(false);
-  const pickerOpacity = useRef(new Animated.Value(0)).current;
+  // Le BottomSheet (GroupPickerSheet) gère sa propre animation de fermeture.
+  const closeGroupPicker = () => setShowGroupPicker(false);
 
-  useEffect(() => {
-    if (showGroupPicker && Platform.OS === "android") {
-      pickerOpacity.setValue(0);
-      Animated.timing(pickerOpacity, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [showGroupPicker]);
-
-  // Logic pour fermer avec animation si besoin (optionnel ici car fade out par défaut sur le parent si on changeait showGroupPicker différemment)
-  const closeGroupPicker = () => {
-    if (Platform.OS === "android") {
-      Animated.timing(pickerOpacity, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }).start(() => setShowGroupPicker(false));
-    } else {
-      setShowGroupPicker(false);
-    }
-  };
+  // Animation Lottie d'envoi (masque vert) — null = pas d'envoi en cours.
+  const [sendAnimType, setSendAnimType] = useState<SendAnimationType | null>(null);
+  // Boîte de la frame de preview (mesurée) pour caler le masque dessus.
+  const [sendFrame, setSendFrame] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
+  const previewFrameRef = useRef<View>(null);
+  const rootViewRef = useRef<View>(null);
+  // Action de fin (toast + reset) déclenchée à la fin du Lottie.
+  const finishSendRef = useRef<(() => void) | null>(null);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
   const [showChallengesInline, setShowChallengesInline] = useState(false);
   const [activeChallenge, setActiveChallenge] = useState<ActiveChallenge | null>(null);
@@ -592,7 +579,13 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     }
     return s;
   })() : [];
-  const videoPreviewPlayer = useVideoPlayer(previewSlot?.mode === "VIDEO" ? (previewSlot.uri ?? null) : null, p => { p.loop = true; p.play(); });
+  const videoPreviewPlayer = useVideoPlayer(previewSlot?.mode === "VIDEO" ? (previewSlot.uri ?? null) : null, p => {
+    // mixWithOthers : évite que le player attende/réquisitionne la session audio
+    // (la session caméra est encore en train de se fermer juste après l'arrêt vidéo).
+    p.audioMixingMode = "mixWithOthers";
+    p.loop = true;
+    p.play();
+  });
 
   const audioWaveAnims = useRef(
     [350, 500, 280, 420, 320, 480, 360].map((duration, i) => ({
@@ -804,8 +797,11 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     setIsVideoProcessing(true);
     setRecordingSeconds(0);
     recordingSecondsRef.current = 0;
+    const _t0 = Date.now();
     console.log("[CAM] stopVideoRecording");
     seamlessRecorderRef.current?.stopRecording().then(uri => {
+      // Mesure : si ce delta est ~10s, le lag est NATIF (finishWriting). Sinon il est ailleurs.
+      console.log(`[CAM] native stopRecording resolved in ${Date.now() - _t0}ms`);
       if (uri) {
         console.log("[CAM] video saved:", uri.slice(-30));
         saveToSlot({ mode: "VIDEO", uri, audioUri: null, textContent: "", note: "" });
@@ -1103,12 +1099,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     try {
       const uri = await seamlessRecorderRef.current?.capturePhoto();
       if (uri) {
-        let finalUri = uri;
-        if (facing === "front") {
-          const result = await manipulateAsync(uri, [{ flip: FlipType.Horizontal }], { compress: 1, format: SaveFormat.JPEG });
-          finalUri = result.uri;
-        }
-        saveToSlot({ mode: "PHOTO", uri: finalUri, audioUri: null, textContent: "", note: "" });
+        // Pas de flip ici (bloquant) : on garde l'uri brute, on affiche la preview en
+        // miroir via transform, et le flip réel est fait à l'envoi (async, non bloquant).
+        saveToSlot({ mode: "PHOTO", uri, audioUri: null, textContent: "", note: "", mirror: facing === "front" });
       }
     } catch (e: any) {
       console.error("Capture error:", e);
@@ -1237,7 +1230,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     };
   }, [isActive]);
 
-  const confirmUpload = (groupIds: string[]) => {
+  const confirmUpload = (groupIds: string[], fromModal = false) => {
     if (!slot1 || groupIds.length === 0) return;
     setShowGroupPicker(false);
     const ts = Date.now();
@@ -1289,21 +1282,67 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
           slot1.waveform
         );
       } else {
-        startUpload(fileName, fileUri, contentType, dbData, undefined, captionAudioFile ?? undefined, slot1.waveform, slot1.captionWaveform);
+        startUpload(fileName, fileUri, contentType, dbData, undefined, captionAudioFile ?? undefined, slot1.waveform, slot1.captionWaveform, slot1.mirror);
       }
     });
 
     const firstName = allGroups.find(g => g.id === groupIds[0])?.name ?? groupIds[0];
     const groupName = groupIds.length === 1 ? firstName : `${groupIds.length} groupes`;
-    onCaptureSent?.({ mode: slot1.mode, groupName });
-    resetAll();
+    const mode = slot1.mode;
+
+    // La capture part en upload (fire & forget) ci-dessus ; on joue d'abord le Lottie
+    // d'envoi, puis seulement à la fin on quitte la vue (toast + reset).
+    finishSendRef.current = () => {
+      finishSendRef.current = null;
+      setSendAnimType(null);
+      setSendFrame(null);
+      onCaptureSent?.({ mode, groupName });
+      resetAll();
+    };
+    const animType: SendAnimationType =
+      mode === "DESSIN" ? "draw" : mode === "VIDEO" ? "video" : "photo";
+
+    // L'animation doit TOUJOURS se déclencher, indépendamment de la mesure (sinon,
+    // pour la vidéo, measureLayout pouvait ne jamais rappeler → pas d'anim).
+    const startAnim = () => {
+      // Frame déterministe (layout au repos, cas standard) posée tout de suite.
+      const defaultFrame = {
+        top: Math.max(0, winHeight - (winWidth * 16) / 9 - NAVBAR_HEIGHT),
+        left: 0,
+        width: winWidth,
+        height: (winWidth * 16) / 9,
+      };
+      setSendFrame(defaultFrame);
+      setSendAnimType(animType);
+      // Affinage best-effort (marges exactes + mode défi) — n'impacte plus le déclenchement.
+      const node = previewFrameRef.current;
+      const rel = rootViewRef.current;
+      if (node && rel) {
+        requestAnimationFrame(() => {
+          try {
+            node.measureLayout(
+              rel as any,
+              (x, y, w, h) => { if (w > 0 && h > 0) setSendFrame({ top: y, left: x, width: w, height: h }); },
+              () => {}
+            );
+          } catch {}
+        });
+      }
+    };
+
+    if (fromModal) {
+      // Laisser la modal de sélection se fermer avant de lancer l'animation.
+      setTimeout(startAnim, 280);
+    } else {
+      startAnim();
+    }
   };
 
   // ── Slot thumbnail renderer ──
 
   const renderSlotThumbnail = (slot: SlotData) => {
     if (slot.mode === "PHOTO" || slot.mode === "DESSIN") {
-      return <Image source={{ uri: slot.uri ?? "" }} style={StyleSheet.absoluteFillObject as any} contentFit="cover" />;
+      return <Image source={{ uri: slot.uri ?? "" }} style={[StyleSheet.absoluteFillObject as any, slot.mirror && { transform: [{ scaleX: -1 }] }]} contentFit="cover" />;
     }
     if (slot.mode === "VIDEO" && slot.uri) {
       return <VideoSlotThumbnail uri={slot.uri} borderRadius={16} />;
@@ -1330,7 +1369,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
 
   return (
     <>
-      <View style={{ flex: 1 }}>
+      <View ref={rootViewRef} style={{ flex: 1 }}>
       {/* ── Camera / capture views ── */}
       {isCapturing && (
         cameraMode === "TEXTE" ? (
@@ -1629,16 +1668,22 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                   <View style={{ width: 80, height: 80 }}>
                     <ReanimatedLottieView
                       source={require("../../assets/animations/photo - video.json")}
+                      autoPlay={false}
+                      loop={false}
                       animatedProps={propsPhotoVideo}
                       style={[StyleSheet.absoluteFillObject, stylePhotoVideo]}
                     />
                     <ReanimatedLottieView
                       source={require("../../assets/animations/photo - draw.json")}
+                      autoPlay={false}
+                      loop={false}
                       animatedProps={propsPhotoDraw}
                       style={[StyleSheet.absoluteFillObject, stylePhotoDraw]}
                     />
                     <ReanimatedLottieView
                       source={require("../../assets/animations/video - draw.json")}
+                      autoPlay={false}
+                      loop={false}
                       animatedProps={propsVideoDraw}
                       style={[StyleSheet.absoluteFillObject, styleVideoDraw]}
                     />
@@ -1695,7 +1740,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
           )}
 
           {/* Frame média — largeur animée, ratio 9:16 via aspectRatio, centrée */}
-          <Animated.View style={[
+          <Animated.View ref={previewFrameRef} style={[
             styles.previewMediaFrame,
             activeChallenge !== null && { aspectRatio: 4 / 6, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl },
             {
@@ -1763,7 +1808,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               </View>
             )}
             {previewSlot.mode === "PHOTO" && (
-              <Image source={{ uri: previewSlot.uri ?? "" }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+              <Image source={{ uri: previewSlot.uri ?? "" }} style={[{ width: "100%", height: "100%" }, previewSlot.mirror && { transform: [{ scaleX: -1 }] }]} contentFit="cover" />
             )}
 
 
@@ -1942,6 +1987,48 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
           </View>
         </View>
 
+        {/* ── Animation d'envoi (masque vert Lottie par-dessus la preview) ── */}
+        {sendAnimType !== null && slot1 && (
+          <SendAnimation
+            type={sendAnimType}
+            backgroundColor={colors.bg}
+            frame={sendFrame}
+            onFinish={() => finishSendRef.current?.()}
+            footer={
+              <View style={styles.previewSendArea} pointerEvents="none">
+                <PrimaryButton label={activeChallenge !== null ? "Participer" : "Partager"} onPress={() => {}} />
+              </View>
+            }
+          >
+            <View style={StyleSheet.absoluteFillObject}>
+              {slot1.mode === "TEXTE" ? (
+                <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#0A0A0A", justifyContent: "center", alignItems: "center", padding: 32 }]}>
+                  <Text style={{ color: "#FFFFFF", fontFamily: typography.family.bold, textAlign: "center", fontSize: 28 }} numberOfLines={8}>{slot1.textContent}</Text>
+                </View>
+              ) : slot1.mode === "VIDEO" && slot1.uri ? (
+                <VideoSlotThumbnail uri={slot1.uri} />
+              ) : (slot1.mode === "PHOTO" || slot1.mode === "DESSIN") && slot1.uri ? (
+                <Image source={{ uri: slot1.uri }} style={[StyleSheet.absoluteFillObject, slot1.mirror && { transform: [{ scaleX: -1 }] }]} contentFit={slot1.mode === "DESSIN" ? "fill" : "cover"} />
+              ) : (
+                <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "#0A0A0A" }]} />
+              )}
+              {/* La barre de légende reste visible DANS le masque (note ou placeholder) */}
+              {slot1.mode !== "TEXTE" && (
+                <View style={styles.sendCaptionWrap} pointerEvents="none">
+                  <View style={styles.sendCaptionBar}>
+                    <Text
+                      style={slot1.note?.trim() ? styles.sendCaptionText : styles.sendCaptionPlaceholder}
+                      numberOfLines={3}
+                    >
+                      {slot1.note?.trim() ? slot1.note : "Ajouter une description"}
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
+          </SendAnimation>
+        )}
+
       </View>{/* /bgViewRef */}
 
       {/* ── Challenges Modal (legacy, kept for backward compat) ── */}
@@ -1978,7 +2065,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         groups={allGroups}
         selectedIds={selectedGroupIds}
         onToggle={toggleGroup}
-        onConfirm={() => { confirmUpload(selectedGroupIds); closeGroupPicker(); }}
+        onConfirm={() => confirmUpload(selectedGroupIds, true)}
       />
 
     </>
@@ -2456,6 +2543,11 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   captionTextArea: { flex: 1, justifyContent: "center" },
   captionPlaceholder: { ...textStyles.bodyBase, color: colors.textSecondary, lineHeight: undefined },
   captionNoteText: { ...textStyles.bodyBase, color: colors.text, lineHeight: undefined },
+  // Légende affichée dans le masque de l'animation d'envoi
+  sendCaptionWrap: { position: "absolute", left: spacing.lg, right: spacing.lg, bottom: 16 },
+  sendCaptionBar: { borderRadius: radii.md, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, minHeight: 48, justifyContent: "center", backgroundColor: "rgba(20,20,20,0.55)" },
+  sendCaptionText: { ...textStyles.bodyBase, color: "#FFFFFF", lineHeight: undefined },
+  sendCaptionPlaceholder: { ...textStyles.bodyBase, color: colors.textSecondary, lineHeight: undefined },
   captionMicBtn: { width: 32, height: 32, borderRadius: radii.sm, overflow: "hidden", justifyContent: "center", alignItems: "center" },
   noteEditorContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: 40 },
   largeNoteInput: { width: "100%", color: colors.text, fontSize: typography.size.xxl, fontFamily: typography.family.bold, textAlign: "center", marginBottom: 40 },
