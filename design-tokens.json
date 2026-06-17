@@ -1937,6 +1937,27 @@
         "Light": "{Primitives/color/white/1000}",
         "Dark": "{Primitives/color/black/1000}"
       }
+    },
+    "text/default/default-fix": {
+      "type": "COLOR",
+      "values": {
+        "Light": "{Primitives/color/white/1000}",
+        "Dark": "{Primitives/color/white/1000}"
+      }
+    },
+    "icon/default/default-fix": {
+      "type": "COLOR",
+      "values": {
+        "Light": "{Primitives/color/white/1000}",
+        "Dark": "{Primitives/color/white/1000}"
+      }
+    },
+    "background/default/default-fix": {
+      "type": "COLOR",
+      "values": {
+        "Light": "{Primitives/color/white/1000}",
+        "Dark": "{Primitives/color/white/1000}"
+      }
     }
   },
   "-> Size": {
