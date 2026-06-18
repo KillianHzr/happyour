@@ -51,6 +51,7 @@ type Props = {
   onDebugShowCurrentChallenges?: () => void;
   onDebugOpenCreateCustom?: () => void;
   onDebugOpenQueueCustom?: () => void;
+  onDebugGroupNamePress?: () => void;
   onGoToCamera?: () => void;
 };
 
@@ -130,7 +131,7 @@ export default function VaultPage({
   unlocked, currentUserPostedThisWeek, onOpenReveal, onOpenSettings, onLeaveGroup, onRemoveMember,
   groupId, vaultChallenges, onRefresh, refreshing, onSimulateReveal, onDebugNotifReveal, onDebugNotifPhoto, onDebugNotifInvite,
   onDebugResetChallenges, onDebugResetMyResponse, onDebugShowCurrentChallenges,
-  onDebugOpenCreateCustom, onDebugOpenQueueCustom, onGoToCamera,
+  onDebugOpenCreateCustom, onDebugOpenQueueCustom, onDebugGroupNamePress, onGoToCamera,
 }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -303,7 +304,13 @@ export default function VaultPage({
       >
         {/* Group header */}
         <View style={styles.groupHeader}>
-          <Text style={styles.groupTitle} numberOfLines={1}>{groupName || "Groupe"}</Text>
+          {onDebugGroupNamePress ? (
+            <TouchableOpacity onPress={onDebugGroupNamePress} activeOpacity={0.6} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={styles.groupTitle} numberOfLines={1}>{groupName || "Groupe"}</Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={styles.groupTitle} numberOfLines={1}>{groupName || "Groupe"}</Text>
+          )}
           {isAdmin ? (
             <TouchableOpacity style={styles.iconBtn} onPress={onOpenSettings}>
               <GearIcon />

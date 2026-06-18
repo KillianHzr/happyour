@@ -1,5 +1,5 @@
-import React from "react";
-import { View, Text, StyleSheet, Pressable, GestureResponderEvent } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { View, Text, StyleSheet, Pressable, Animated } from "react-native";
 import Reanimated, { Keyframe } from "react-native-reanimated";
 
 const commentEntering = new Keyframe({
@@ -23,10 +23,19 @@ export interface Comment {
   };
 }
 
+export interface CommentRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 interface CommentItemProps {
   item: Comment;
   isMyComment: boolean;
-  onLongPressDelete: (id: string, pageY: number) => void;
+  onLongPressDelete: (id: string, rect: CommentRect) => void;
+  /** True quand ce commentaire est celui dont le tooltip "Supprimer" est ouvert. */
+  isActive?: boolean;
   animateIn?: boolean;
   /**
    * Known group members — used to highlight the *full* username of a mention,
@@ -107,9 +116,20 @@ function parseMentionContent(
   return parts.length > 0 ? parts : [{ text: content, isMention: false }];
 }
 
-export const CommentItem = React.memo(({ item, isMyComment, onLongPressDelete, groupMembers = [], animateIn = false }: CommentItemProps) => {
+export const CommentItem = React.memo(({ item, isMyComment, onLongPressDelete, groupMembers = [], isActive = false, animateIn = false }: CommentItemProps) => {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
+  const rowRef = useRef<View>(null);
+
+  // Highlight derrière le commentaire pendant le maintien (apparition/disparition fluide).
+  const highlightOpacity = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(highlightOpacity, {
+      toValue: isActive ? 1 : 0,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  }, [isActive]);
 
   const contentParts = parseMentionContent(
     item.content,
@@ -119,14 +139,22 @@ export const CommentItem = React.memo(({ item, isMyComment, onLongPressDelete, g
   return (
     <Reanimated.View entering={animateIn ? commentEntering : undefined}>
     <Pressable
-      onLongPress={(e: GestureResponderEvent) => {
+      ref={rowRef}
+      onLongPress={() => {
         if (isMyComment) {
-          onLongPressDelete(item.id, e.nativeEvent.pageY);
+          rowRef.current?.measureInWindow((x, y, width, height) => {
+            onLongPressDelete(item.id, { x, y, width, height });
+          });
         }
       }}
       delayLongPress={800}
       style={styles.commentRow}
     >
+      {/* Fond background/default/secondary derrière le commentaire visé (retour du maintien) */}
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.highlight, { opacity: highlightOpacity }]}
+      />
       <View style={styles.avatarContainer}>
         <UserAvatar
           avatar_url={item.profiles.avatar_url}
@@ -177,6 +205,15 @@ const makeStyles = (colors: ThemeColors) =>
       alignItems: "flex-start",
       marginBottom: themeSpacing.xl,
       gap: themeSpacing.sm,
+    },
+    highlight: {
+      position: "absolute",
+      top: -themeSpacing.sm,
+      bottom: -themeSpacing.sm,
+      left: -themeSpacing.sm,
+      right: -themeSpacing.sm,
+      borderRadius: themeRadii.md,
+      backgroundColor: colors.card, // background/default/secondary
     },
     avatarContainer: {
       width: 32,

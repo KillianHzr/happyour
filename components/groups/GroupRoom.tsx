@@ -32,36 +32,57 @@ const RevealCountdown = memo(function RevealCountdown({ revealDate, textStyle }:
   return <Text style={textStyle}>{formatCountdown(revealDate.getTime() - now)}</Text>;
 });
 
-/** Slider de déverrouillage : le nob s'agrandit en largeur quand on le tire vers la droite. */
+/** Slider de déverrouillage : le nob s'agrandit en largeur sous le doigt quand on le tire
+ *  vers la droite, et déverrouille dès qu'il remplit le bouton — sans relâcher le doigt. */
 function UnlockSlider({ onUnlock }: { onUnlock: () => void }) {
   const s = useThemedStyles(makeStyles);
   const { colors } = useTheme();
-  const [trackW, setTrackW] = useState(0);
   const NOB_MIN = 66;
   const PAD = spacing.sm; // 8
   const widthAnim = useRef(new Animated.Value(NOB_MIN)).current;
-  const maxWidth = Math.max(NOB_MIN, trackW - PAD * 2);
+  // maxWidth lue depuis une ref pour que le PanResponder (créé une seule fois)
+  // utilise la largeur réelle mesurée au layout, et pas la valeur initiale (0).
+  const maxWidthRef = useRef(NOB_MIN);
+  const firedRef = useRef(false);
 
   const pan = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 4,
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 2,
+      onPanResponderGrant: () => { firedRef.current = false; },
       onPanResponderMove: (_e, g) => {
-        const w = Math.min(maxWidth, Math.max(NOB_MIN, NOB_MIN + g.dx));
+        if (firedRef.current) return;
+        const maxW = maxWidthRef.current;
+        const w = Math.min(maxW, Math.max(NOB_MIN, NOB_MIN + g.dx));
+        // Déverrouille dès que le nob remplit la piste, sans attendre le relâchement.
+        // On garde le nob plein, puis on le réinitialise après que le reveal ait
+        // recouvert l'écran (≈ durée de son anim d'ouverture), pour ne pas voir le
+        // retour à 0 avant que le reveal s'affiche.
+        if (w >= maxW - 2) {
+          firedRef.current = true;
+          widthAnim.setValue(maxW);
+          onUnlock();
+          setTimeout(() => widthAnim.setValue(NOB_MIN), 500);
+          return;
+        }
         widthAnim.setValue(w);
       },
-      onPanResponderRelease: (_e, g) => {
-        const w = Math.min(maxWidth, Math.max(NOB_MIN, NOB_MIN + g.dx));
-        if (w >= maxWidth - 8) {
-          Animated.timing(widthAnim, { toValue: maxWidth, duration: 120, useNativeDriver: false }).start(() => onUnlock());
-        } else {
-          Animated.spring(widthAnim, { toValue: NOB_MIN, useNativeDriver: false }).start();
-        }
+      onPanResponderRelease: () => {
+        if (firedRef.current) return; // reset géré par le timeout après l'ouverture du reveal
+        Animated.spring(widthAnim, { toValue: NOB_MIN, useNativeDriver: false }).start();
+      },
+      onPanResponderTerminate: () => {
+        if (firedRef.current) return;
+        Animated.spring(widthAnim, { toValue: NOB_MIN, useNativeDriver: false }).start();
       },
     })
   ).current;
 
   return (
-    <View style={s.unlockTrack} onLayout={(e) => setTrackW(e.nativeEvent.layout.width)}>
+    <View
+      style={s.unlockTrack}
+      onLayout={(e) => { maxWidthRef.current = Math.max(NOB_MIN, e.nativeEvent.layout.width - PAD * 2); }}
+    >
       {/* Texte derrière (le nob passe par-dessus quand il s'agrandit) */}
       <View style={s.unlockTextWrap} pointerEvents="none">
         <Text style={s.unlockText}>Déverrouiller</Text>
@@ -85,12 +106,13 @@ type Props = {
   onArchive: () => void;
   onCapture: () => void;
   onUnlock: () => void;
+  onDebugNamePress?: () => void;
 };
 
 export default function GroupRoom(props: Props) {
   const { colors } = useTheme();
   const headerStyles = useThemedStyles(makeHeaderStyles);
-  const { card, showBack, showAddButton, topInset, onBack, onAddGroup, onSettings, onArchive } = props;
+  const { card, showBack, showAddButton, topInset, onBack, onAddGroup, onSettings, onArchive, onDebugNamePress } = props;
 
   return (
     <View style={[headerStyles.container, { paddingTop: topInset }]}>
@@ -102,7 +124,13 @@ export default function GroupRoom(props: Props) {
               <Icon name="chevron-left" size={20} color={colors.icon} />
             </TouchableOpacity>
           )}
-          <Text style={headerStyles.title} numberOfLines={1} ellipsizeMode="tail">{card.name}</Text>
+          {onDebugNamePress ? (
+            <TouchableOpacity style={{ flexShrink: 1 }} onPress={onDebugNamePress} activeOpacity={0.6} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Text style={headerStyles.title} numberOfLines={1} ellipsizeMode="tail">{card.name}</Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={headerStyles.title} numberOfLines={1} ellipsizeMode="tail">{card.name}</Text>
+          )}
           <View style={headerStyles.headerActions}>
             <TouchableOpacity style={headerStyles.addBtn} onPress={onArchive} activeOpacity={0.8}>
               <Icon name="archive" size={20} color={colors.iconNeutral} />
@@ -181,7 +209,7 @@ function RoomCard({ card, revealDate, unlocked, onCapture, onUnlock }: Props) {
               </View>
               <View style={s.queenKingTexts}>
                 <Text style={s.queenKingName}>{card.crownUsername ?? "—"}</Text>
-                <Text style={s.queenKingLabel}>Légende</Text>
+                <Text style={s.queenKingLabel}>Couronne</Text>
               </View>
             </View>
           </View>
@@ -210,6 +238,9 @@ function RoomCard({ card, revealDate, unlocked, onCapture, onUnlock }: Props) {
         <View style={s.bottomBlock}>
           {!postedThisWeek && !unlocked && (
             <Text style={s.captureFirstText}>Capture un moment d'abord</Text>
+          )}
+          {unlocked && (
+            <Text style={s.captureFirstText}>Fin du suspens, accèdes à ton Reveal !</Text>
           )}
           {unlocked ? (
             <UnlockSlider onUnlock={onUnlock} />
@@ -256,7 +287,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: "row", padding: spacing.sm, justifyContent: "center", alignItems: "center",
     gap: spacing.sm, borderRadius: radii.sm, overflow: "hidden",
   },
-  challengeText: { ...textStyles.bodyBase, color: colors.text, lineHeight: undefined },
+  challengeText: { ...textStyles.singleLineBodyBaseStrong, color: colors.text },
   tagQueenKing: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: spacing.sm },
   avatar: {
     width: 48, height: 48, alignItems: "center", borderRadius: radii.md,
@@ -264,9 +295,10 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   avatarImg: { width: "100%", height: "100%", borderRadius: radii.md },
   crownWrap: { position: "absolute", left: -9.5, top: -13 },
-  queenKingTexts: { flexDirection: "column", justifyContent: "center", alignItems: "flex-start", gap: spacing.negXs },
-  queenKingName: { ...textStyles.heading, color: colors.textSecondary, lineHeight: undefined },
-  queenKingLabel: { ...textStyles.bodySmall, color: colors.textSecondary, lineHeight: undefined },
+  queenKingTexts: { flexDirection: "column", justifyContent: "center", alignItems: "flex-start" },
+  queenKingName: { ...textStyles.heading, color: colors.text, lineHeight: undefined },
+  // gap: space/neg-100 entre le user et le label — via marginTop négatif car RN clampe le gap négatif à 0.
+  queenKingLabel: { ...textStyles.bodySmall, color: colors.text, lineHeight: undefined, marginTop: spacing.negXs },
   // ── data block ──
   dataBlock: { flexDirection: "column", justifyContent: "center", alignItems: "center", gap: spacing.lg },
   dataTextRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },

@@ -8,50 +8,43 @@ import {
   Dimensions,
   Pressable,
 } from "react-native";
-import { typography, radii as themeRadii, shadows, spacing, stroke, textStyles, type ThemeColors } from "../../lib/theme";
+import { radii as themeRadii, shadows, spacing, stroke, textStyles, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles, ForceTheme } from "../../lib/theme-context";
 import Svg, { Path } from "react-native-svg";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-const POPUP_WIDTH = 160;
-const POPUP_HEIGHT = 40;
-// How many px above the finger the popup card appears
-const POPUP_OFFSET_ABOVE = 60;
+/** Rect écran (window) du commentaire visé, mesuré au long-press. */
+export interface CommentRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
 interface DeleteCommentPopupProps {
-  /** Absolute screen Y of the long-press touch */
-  anchorY: number;
-  /**
-   * Absolute screen Y where the comment sheet starts.
-   * The dark scrim is confined to [sheetTopY → bottom of screen]
-   * so it only darkens the comment panel, not the photo behind it.
-   */
-  sheetTopY: number;
+  /** Rect écran du commentaire ciblé — le tooltip s'affiche juste en dessous. */
+  rect: CommentRect;
   onConfirm: () => void;
   onDismiss: () => void;
 }
 
+// Espace entre le bas du commentaire et le tooltip.
+const GAP_BELOW = 8;
+
 const DeleteCommentPopupInner = ({
-  anchorY,
-  sheetTopY,
+  rect,
   onConfirm,
   onDismiss,
 }: DeleteCommentPopupProps) => {
   const { colors } = useTheme();
   const themedStyles = useThemedStyles(makeStyles);
 
-  const scrimOpacity = useRef(new Animated.Value(0)).current;
   const popupScale = useRef(new Animated.Value(0.85)).current;
   const popupOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(scrimOpacity, {
-        toValue: 0.2,
-        duration: 180,
-        useNativeDriver: true,
-      }),
       Animated.spring(popupScale, {
         toValue: 1,
         tension: 180,
@@ -66,10 +59,9 @@ const DeleteCommentPopupInner = ({
     ]).start();
   }, []);
 
-  // Popup sits above the finger, but never above the top of the sheet
-  const rawPopupTop = anchorY - POPUP_OFFSET_ABOVE - POPUP_HEIGHT;
-  const popupTop = Math.max(sheetTopY + 16, rawPopupTop);
-  const popupLeft = (SCREEN_WIDTH - POPUP_WIDTH) / 2;
+  // Tooltip affiché juste sous le commentaire ciblé, aligné sur son bord gauche.
+  const popupTop = rect.y + rect.height + GAP_BELOW;
+  const popupLeft = Math.max(spacing.lg, rect.x);
 
   const handleConfirm = () => {
     onConfirm();
@@ -77,34 +69,18 @@ const DeleteCommentPopupInner = ({
   };
 
   return (
-    // ─── Layer order (bottom → top) ───────────────────────────────────────────
-    // 1. Full-screen Pressable  → catches any outside tap to dismiss
-    // 2. Scrim                  → dark fill confined to comment sheet area only
-    // 3. Popup card             → the actual "Supprimer" button
-    // ─────────────────────────────────────────────────────────────────────────
+    // 1. Pressable plein écran → capte un tap à l'extérieur pour fermer
+    // 2. Tooltip "Supprimer"
     <View style={[StyleSheet.absoluteFill, themedStyles.root]} pointerEvents="box-none">
-      {/* 1. Dismiss catcher — behind everything else in this overlay */}
       <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} />
 
-      {/* 2. Scrim — confined to comment section, no touch events */}
-      <Animated.View
-        style={[
-          themedStyles.scrim,
-          {
-            top: sheetTopY,
-            opacity: scrimOpacity,
-          },
-        ]}
-        pointerEvents="none"
-      />
-
-      {/* 3. Popup card */}
       <Animated.View
         style={[
           themedStyles.popup,
           {
             top: popupTop,
             left: popupLeft,
+            maxWidth: SCREEN_WIDTH - popupLeft - spacing.lg,
             opacity: popupOpacity,
             transform: [{ scale: popupScale }],
           },
@@ -138,32 +114,28 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   root: {
     zIndex: 20,
   },
-  scrim: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "#0C0C0D",
-  },
+  // Parent : padding space/200 space/400, colonne, gap space/200, radius/300
   popup: {
     position: "absolute",
-    width: POPUP_WIDTH,
-    height: POPUP_HEIGHT,
-    borderRadius: themeRadii.lg,
+    paddingVertical: spacing.sm,      // space/200 = 8
+    paddingHorizontal: spacing.lg,    // space/400 = 16
+    flexDirection: "column",
+    justifyContent: "center",
+    alignItems: "flex-start",
+    gap: spacing.sm,                  // space/200 = 8
+    borderRadius: themeRadii.md,      // radius/300 = 12
     backgroundColor: colors.opacityLight,
     borderWidth: stroke.sm,
     borderColor: colors.cardBorder,
-    overflow: "hidden",
     ...shadows.md,
   },
+  // Inner : padding space/200, row centré, gap space/200
   deleteButton: {
-    flex: 1,
     flexDirection: "row",
-    alignItems: "center",
+    padding: spacing.sm,             // space/200 = 8
     justifyContent: "center",
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    gap: spacing.sm,
+    alignItems: "center",
+    gap: spacing.sm,                 // space/200 = 8
   },
   deleteLabel: {
     ...textStyles.singleLineBodyBaseStrong,

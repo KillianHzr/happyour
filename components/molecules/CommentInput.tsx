@@ -25,6 +25,7 @@ import {
 } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import { Image } from "expo-image";
+import BlurView from "../atoms/BlurView";
 
 const profileCache: Record<string, { username: string; avatar_url: string | null }> = {};
 
@@ -165,7 +166,7 @@ export const CommentInput = ({
           ref={inputRef}
           style={styles.input}
           placeholder={placeholder || "Ajouter un commentaire"}
-          placeholderTextColor={colors.textTertiary}
+          placeholderTextColor={colors.textSecondary}
           value={content}
           onChangeText={handleTextChange}
           maxLength={maxLength !== undefined ? maxLength : 500}
@@ -270,6 +271,8 @@ export const MentionSuggestionsPopup = ({
 
   return (
     <View style={styles.popup}>
+      {/* Fond glass : uniquement le flou */}
+      <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
       {filtered.map((member) => (
         <Pressable
           key={member.user_id}
@@ -309,9 +312,10 @@ const makeStyles = (colors: ThemeColors) =>
       paddingBottom: themeSpacing.lg,
       gap: themeSpacing.md,
     },
+    // Border top visible uniquement au focus (animée) : 1px (stroke/025), border/default/default
     focusBorder: {
       borderTopWidth: stroke.sm,
-      borderTopColor: colors.borderSecondary,
+      borderTopColor: colors.cardBorder,
     },
     inputContainer: {
       flex: 1,
@@ -362,18 +366,18 @@ const makeStyles = (colors: ThemeColors) =>
 const makeSuggestionStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     popup: {
-      // Floats absolutely above the comment list, anchored 8px above the input
-      // row and matching the text-field width (input row padding + avatar + gap
-      // on each side). left/right keep it flush with the rounded text input.
+      // Flotte au-dessus de la liste de commentaires. Aligné à gauche sur le champ
+      // de texte (padding + avatar + gap), et étendu à droite jusqu'à 16px du bord
+      // de l'écran. Son bas est positionné 8px au-dessus du champ de saisie (donc un
+      // peu en dessous de la border top de la zone d'input : marginBottom négatif).
       position: "absolute",
       bottom: "100%",
       left: themeSpacing.lg + themeSpacing.xl3 + themeSpacing.sm,
-      right: themeSpacing.lg + themeSpacing.xl3 + themeSpacing.sm,
-      marginBottom: 8,
-      backgroundColor: colors.card,
+      right: themeSpacing.lg, // 16px du bord droit de l'écran
+      marginBottom: -(themeSpacing.lg - 8), // descend le bas du popup à 8px au-dessus du champ
       borderRadius: themeRadii.lg,
-      borderWidth: stroke.sm,
-      borderColor: colors.borderSecondary,
+      borderWidth: stroke.sm, // stroke/025
+      borderColor: colors.cardBorder, // border/default/default
       overflow: "hidden",
       // Keep the popup above the comment list so comments don't bleed through it.
       zIndex: 50,

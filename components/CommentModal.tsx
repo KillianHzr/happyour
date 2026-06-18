@@ -32,7 +32,7 @@ import BlurView from "./atoms/BlurView";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth-context";
-import { CommentItem, Comment } from "./molecules/CommentItem";
+import { CommentItem, Comment, CommentRect } from "./molecules/CommentItem";
 import { DeleteCommentPopup } from "./atoms/DeleteCommentPopup";
 import { CommentInput, MentionSuggestionsPopup, GroupMember } from "./molecules/CommentInput";
 import { TextSticker } from "./atoms/TextSticker";
@@ -247,8 +247,7 @@ function CommentModalContent({
   const [fetchedGroupMembers, setFetchedGroupMembers] = useState<GroupMember[]>(groupMembers);
   const [deletePopup, setDeletePopup] = useState<{
     commentId: string;
-    anchorY: number;
-    sheetTopY: number;
+    rect: CommentRect;
   } | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   // True while the keyboard is up; set at keyboard-start so the sheet shrinks and
@@ -704,21 +703,10 @@ function CommentModalContent({
   };
 
   const handleLongPressDelete = useCallback(
-    (commentId: string, anchorY: number) => {
-      if (modalContainerRef.current) {
-        modalContainerRef.current.measureInWindow((_x: number, y: number) => {
-          setDeletePopup({ commentId, anchorY, sheetTopY: y });
-        });
-      } else {
-        setDeletePopup({
-          commentId,
-          anchorY,
-          // The sheet bottom sits at the keyboard top; its top is sheetH above that.
-          sheetTopY: SCREEN_HEIGHT - sheetH - (hasKeyboard ? keyboardHeight : 0),
-        });
-      }
+    (commentId: string, rect: CommentRect) => {
+      setDeletePopup({ commentId, rect });
     },
-    [sheetH, hasKeyboard, keyboardHeight]
+    []
   );
 
   // ── Content helpers ───────────────────────────────────────────────────────────
@@ -747,10 +735,11 @@ function CommentModalContent({
       item={item}
       isMyComment={item.user_id === user?.id}
       onLongPressDelete={handleLongPressDelete}
+      isActive={item.id === deletePopup?.commentId}
       groupMembers={fetchedGroupMembers}
       animateIn={item.id === newestCommentId}
     />
-  ), [user?.id, handleLongPressDelete, fetchedGroupMembers, newestCommentId]);
+  ), [user?.id, handleLongPressDelete, fetchedGroupMembers, newestCommentId, deletePopup?.commentId]);
 
   if (inline) {
     return (
@@ -784,8 +773,7 @@ function CommentModalContent({
 
           {deletePopup && (
             <DeleteCommentPopup
-              anchorY={deletePopup.anchorY}
-              sheetTopY={deletePopup.sheetTopY}
+              rect={deletePopup.rect}
               onConfirm={() => handleDeleteComment(deletePopup.commentId)}
               onDismiss={() => setDeletePopup(null)}
             />
@@ -855,8 +843,7 @@ function CommentModalContent({
       {/* Delete popup — rendered last so it paints above stickers and the sheet */}
       {deletePopup && (
         <DeleteCommentPopup
-          anchorY={deletePopup.anchorY}
-          sheetTopY={deletePopup.sheetTopY}
+          rect={deletePopup.rect}
           onConfirm={() => handleDeleteComment(deletePopup.commentId)}
           onDismiss={() => setDeletePopup(null)}
         />

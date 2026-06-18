@@ -55,6 +55,8 @@ type Props = {
   onGoToCapture: () => void;           // ouvrir la vue capture
   onOpenReveal: () => void;            // déverrouiller / ouvrir le reveal
   onScrollLock?: (locked: boolean) => void;
+  onDebugNamePress?: () => void;       // DEV : clic sur le nom du groupe → menu debug
+  debugUnlocked?: boolean;             // DEV : force l'état déverrouillé du reveal
 };
 
 /** Mappe un image_path vers la shape du moment correspondant. */
@@ -92,7 +94,7 @@ function computeNextRevealDate(revealDayOfWeek: number, revealHour: number): Dat
   return reveal;
 }
 
-export default function GroupsPage({ allGroups, groupData, revealConfig, isActive, userId, enterGroupId, onEnteredGroup, onSelectGroup, onAddGroup, onGoToCapture, onOpenReveal, onScrollLock }: Props) {
+export default function GroupsPage({ allGroups, groupData, revealConfig, isActive, userId, enterGroupId, onEnteredGroup, onSelectGroup, onAddGroup, onGoToCapture, onOpenReveal, onScrollLock, onDebugNamePress, debugUnlocked }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -208,8 +210,9 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
   const selectionShown = !singleGroup && !viewingGroupId;
 
   // Reveal disponible : on est dans les 24h qui suivent le dernier reveal.
+  // En DEV, le menu debug (clic sur le nom du groupe) peut forcer l'état déverrouillé.
   const lastReveal = revealDate.getTime() - WEEK_MS;
-  const unlocked = Date.now() - lastReveal < DAY_MS;
+  const unlocked = (Date.now() - lastReveal < DAY_MS) || (__DEV__ && !!debugUnlocked);
 
   // Bloque totalement le swipe du pager tant qu'on affiche la sélection de groupe
   useEffect(() => {
@@ -275,6 +278,7 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
         onArchive={() => {}}
         onCapture={onGoToCapture}
         onUnlock={onOpenReveal}
+        onDebugNamePress={onDebugNamePress}
       />
     );
   }
@@ -321,6 +325,7 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
               onArchive={() => {}}
               onCapture={onGoToCapture}
               onUnlock={onOpenReveal}
+              onDebugNamePress={onDebugNamePress}
             />
           </EdgeSwipeBack>
         </Animated.View>

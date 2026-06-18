@@ -142,7 +142,7 @@ const SliderCard = memo(function SliderCard({
           )}
           <View style={[s.countdown, unlocked && { borderColor: colors.borderBrandTertiary }]}>
             {unlocked ? (
-              <Text style={s.countdownText}>0j 00:00:00</Text>
+              <Text style={s.countdownText}>Disponible</Text>
             ) : (
               <RevealCountdown revealDate={revealDate} textStyle={s.countdownText} />
             )}

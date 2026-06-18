@@ -229,6 +229,7 @@ export default function MainPagerScreen() {
 
   // DEV
   const [debugUnlocked, setDebugUnlocked] = useState(false);
+  const [showDebugMenu, setShowDebugMenu] = useState(false);
   const [debugVaultChallenges, setDebugVaultChallenges] = useState<{ period1: ChallengeWithData | null; period2: ChallengeWithData | null } | null>(null);
   const [showCustomChallengeCreate, setShowCustomChallengeCreate] = useState(false);
   const [showCustomChallengeQueue, setShowCustomChallengeQueue] = useState(false);
@@ -1302,6 +1303,7 @@ export default function MainPagerScreen() {
       } : undefined}
       onDebugOpenCreateCustom={__DEV__ ? () => setShowCustomChallengeCreate(true) : undefined}
       onDebugOpenQueueCustom={__DEV__ ? () => setShowCustomChallengeQueue(true) : undefined}
+      onDebugGroupNamePress={__DEV__ ? () => setShowDebugMenu(true) : undefined}
       onGoToCamera={() => jumpTo(1)}
     />
   ), [
@@ -1323,8 +1325,10 @@ export default function MainPagerScreen() {
       onGoToCapture={() => jumpTo(1)}
       onOpenReveal={() => { if (currentUserPostedThisWeek) setShowReveal(true); }}
       onScrollLock={setGroupsPagerLocked}
+      onDebugNamePress={__DEV__ ? () => setShowDebugMenu(true) : undefined}
+      debugUnlocked={__DEV__ ? debugUnlocked : undefined}
     />
-  ), [allGroups, groupData, revealConfig, activePage === 0, user?.id, enterGroupId, handleSwitchGroup, currentUserPostedThisWeek]);
+  ), [allGroups, groupData, revealConfig, activePage === 0, user?.id, enterGroupId, handleSwitchGroup, currentUserPostedThisWeek, debugUnlocked]);
 
   const memoizedCameraPage = useMemo(() => (
     <ForceThemeMode mode="Dark">
@@ -1683,6 +1687,33 @@ export default function MainPagerScreen() {
         </TouchableOpacity>
       </BottomSheet>
 
+      {/* ── DEBUG MENU (DEV uniquement) — ouvert au clic sur le nom du groupe ── */}
+      {__DEV__ && (
+        <BottomSheet visible={showDebugMenu} onClose={() => setShowDebugMenu(false)}>
+          <Text style={styles.debugTitle}>🛠️ Debug (DEV)</Text>
+          <Text style={styles.debugBody}>
+            Accès local uniquement, sur ton app. Déverrouille le reveal pour afficher l'UI reveal disponible.
+          </Text>
+          <TouchableOpacity
+            style={styles.debugBtn}
+            activeOpacity={0.85}
+            onPress={() => { setDebugUnlocked(true); setShowDebugMenu(false); setShowReveal(true); }}
+          >
+            <Text style={styles.debugBtnText}>Déverrouiller & ouvrir le reveal</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.debugBtnSecondary}
+            activeOpacity={0.85}
+            onPress={() => { setDebugUnlocked(true); setShowDebugMenu(false); }}
+          >
+            <Text style={styles.debugBtnSecondaryText}>Déverrouiller seulement</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setShowDebugMenu(false)} style={styles.leaveCancelWrap}>
+            <Text style={styles.leaveCancelText}>Fermer</Text>
+          </TouchableOpacity>
+        </BottomSheet>
+      )}
+
       {/* ── AJOUTER UN GROUPE (flow créer / rejoindre / félicitations / invite) ── */}
       <AddGroupFlow
         visible={showAddGroupModal}
@@ -1765,6 +1796,14 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   leaveConfirmText: { color: "#FFFFFF", fontSize: typography.size.md, fontFamily: typography.family.bold },
   leaveCancelWrap: { alignItems: "center", paddingVertical: 8 },
   leaveCancelText: { color: colors.textTertiary, fontSize: typography.size.sm, fontFamily: typography.family.semibold },
+
+  // Debug menu (DEV)
+  debugTitle: { fontSize: typography.size.xl, fontFamily: typography.family.bold, color: colors.text, marginBottom: 12 },
+  debugBody: { fontSize: typography.size.sm, fontFamily: typography.family.regular, color: colors.secondary, marginBottom: 28, lineHeight: 22 },
+  debugBtn: { backgroundColor: colors.brand, borderRadius: radii.lg, paddingVertical: 15, alignItems: "center", marginBottom: 10 },
+  debugBtnText: { color: "#FFFFFF", fontSize: typography.size.md, fontFamily: typography.family.bold },
+  debugBtnSecondary: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.borderSecondary, borderRadius: radii.lg, paddingVertical: 14, alignItems: "center", marginBottom: 10 },
+  debugBtnSecondaryText: { color: colors.text, fontSize: typography.size.md, fontFamily: typography.family.semibold },
 
   // Add group
   addGroupTitle: { fontSize: typography.size.xl, fontFamily: typography.family.bold, color: colors.text, marginBottom: 8 },
