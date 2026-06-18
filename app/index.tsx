@@ -8,7 +8,7 @@ import { type ThemeColors } from "../lib/theme";
 import { useThemedStyles } from "../lib/theme-context";
 
 export default function Index() {
-  const { session, loading: authLoading } = useAuth();
+  const { session, loading: authLoading, profileComplete } = useAuth();
   const styles = useThemedStyles(makeStyles);
   const [checkingGroup, setCheckingGroup] = useState(true);
   const [targetGroupId, setTargetGroupId] = useState<string | null>(null);
@@ -44,7 +44,7 @@ export default function Index() {
     }
   }, [session, authLoading]);
 
-  if (authLoading || checkingGroup) {
+  if (authLoading || checkingGroup || profileComplete === null) {
     return (
       <View style={styles.container}>
         <Loader size={40} />
@@ -53,7 +53,11 @@ export default function Index() {
   }
 
   if (!session) {
-    return <Redirect href="/(auth)/login" />;
+    return <Redirect href="/(auth)/intro" />;
+  }
+
+  if (profileComplete === false) {
+    return <Redirect href="/(onboarding)/intro" />;
   }
 
   // Si on a trouvé un groupe, on y va direct
