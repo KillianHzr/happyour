@@ -176,7 +176,7 @@ export default function AddGroupFlow({ visible, userId, onClose, onGroupsChanged
               <Text style={styles.title}>Créer un groupe</Text>
             </View>
             <View style={styles.inputField}>
-              <Text style={styles.fieldLabel}>Si ton groupe était un mot ce serait...</Text>
+              <Text style={styles.fieldLabel}>Si tu devais nommer ton groupe, ce serait...</Text>
               <View style={[styles.input, { borderColor: focused ? colors.borderBrandSecondary : colors.cardBorder, backgroundColor: colors.bg }]}>
                 <TextInput
                   style={styles.inputText}

@@ -54,6 +54,7 @@ type Props = {
   onAddGroup: () => void;
   onGoToCapture: () => void;           // ouvrir la vue capture
   onOpenReveal: () => void;            // déverrouiller / ouvrir le reveal
+  onOpenSettings?: () => void;         // ouvrir les réglages du groupe courant
   onScrollLock?: (locked: boolean) => void;
   onDebugNamePress?: () => void;       // DEV : clic sur le nom du groupe → menu debug
   debugUnlocked?: boolean;             // DEV : force l'état déverrouillé du reveal
@@ -94,7 +95,7 @@ function computeNextRevealDate(revealDayOfWeek: number, revealHour: number): Dat
   return reveal;
 }
 
-export default function GroupsPage({ allGroups, groupData, revealConfig, isActive, userId, enterGroupId, onEnteredGroup, onSelectGroup, onAddGroup, onGoToCapture, onOpenReveal, onScrollLock, onDebugNamePress, debugUnlocked }: Props) {
+export default function GroupsPage({ allGroups, groupData, revealConfig, isActive, userId, enterGroupId, onEnteredGroup, onSelectGroup, onAddGroup, onGoToCapture, onOpenReveal, onOpenSettings, onScrollLock, onDebugNamePress, debugUnlocked }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -274,7 +275,7 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
         topInset={insets.top}
         onBack={() => {}}
         onAddGroup={onAddGroup}
-        onSettings={() => {}}
+        onSettings={() => onOpenSettings?.()}
         onArchive={() => {}}
         onCapture={onGoToCapture}
         onUnlock={onOpenReveal}
@@ -321,7 +322,7 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
               topInset={insets.top}
               onBack={closeGroup}
               onAddGroup={onAddGroup}
-              onSettings={() => {}}
+              onSettings={() => onOpenSettings?.()}
               onArchive={() => {}}
               onCapture={onGoToCapture}
               onUnlock={onOpenReveal}

@@ -70,6 +70,14 @@ type Props = {
   onStreakUpdate: (days: number) => void;
   isActive?: boolean;
   refreshKey?: number;
+  /**
+   * "self" (défaut) : profil de l'utilisateur connecté, avec header (pseudo + burger
+   * réglages) et sélecteur de groupe dans le coffre.
+   * "member" : profil d'un membre affiché depuis les réglages d'un groupe. Le header et
+   * le sélecteur de groupe sont masqués (le pseudo est porté par le header de la pile de
+   * réglages, et les données sont déjà restreintes au groupe courant).
+   */
+  variant?: "self" | "member";
 };
 
 // ─── SVG Icons ───────────────────────────────────────────────────────────────
@@ -94,7 +102,9 @@ function GroupNamePill({ name, bg, fg }: { name: string; bg: string; fg: string 
 export default function ProfilePage({
   userId, username, avatarUrl, email, groupName, allGroups, revealConfig,
   onAvatarUpdate, onUsernameUpdate, onEmailUpdate, onStreakUpdate, isActive = false, refreshKey,
+  variant = "self",
 }: Props) {
+  const isMember = variant === "member";
   const insets = useSafeAreaInsets();
   const { showToast } = useToast();
   const { colors } = useTheme();
@@ -325,22 +335,24 @@ export default function ProfilePage({
           />
         }
       >
-        {/* ── Top header ── */}
-        <View style={[styles.topHeaderWrap, { paddingTop: insets.top, marginTop: 16 }]}>
-          <View style={styles.topHeaderRow}>
-            <View style={styles.topHeaderLeft}>
-              <GroupNamePill name={username} bg={colors.brand} fg={colors.textInverse} />
-            </View>
-            <View style={styles.topHeaderRight}>
-              <TouchableOpacity style={styles.moreBtn} activeOpacity={0.75} onPress={() => setShowSettings(true)}>
-                <Icon name="menu" size={20} color={colors.iconNeutral} />
-              </TouchableOpacity>
+        {/* ── Top header (masqué en mode membre : le pseudo est dans le header des réglages) ── */}
+        {!isMember && (
+          <View style={[styles.topHeaderWrap, { paddingTop: insets.top, marginTop: 16 }]}>
+            <View style={styles.topHeaderRow}>
+              <View style={styles.topHeaderLeft}>
+                <GroupNamePill name={username} bg={colors.brand} fg={colors.textInverse} />
+              </View>
+              <View style={styles.topHeaderRight}>
+                <TouchableOpacity style={styles.moreBtn} activeOpacity={0.75} onPress={() => setShowSettings(true)}>
+                  <Icon name="menu" size={20} color={colors.iconNeutral} />
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
+        )}
 
         {/* ── NEW: content ── */}
-        <View style={styles.newContent}>
+        <View style={[styles.newContent, isMember && { marginTop: spacing.xxl }]}>
           {/* profil */}
           <View style={styles.newProfilCard}>
             {/* top-info */}
@@ -398,7 +410,8 @@ export default function ProfilePage({
           {/* container-coffre */}
           {sortedCoffreGroups.length > 0 && (
             <View style={styles.containerCoffre}>
-              {/* title */}
+              {/* title (masqué en mode membre : pas de sélecteur de groupe, données déjà restreintes) */}
+              {!isMember && (
               <View style={styles.coffreTitle}>
                 <Text style={styles.cofreTitleText} numberOfLines={1}>
                   {(sortedCoffreGroups[coffreGroupIndex]?.name ?? "").toUpperCase()}
@@ -427,6 +440,7 @@ export default function ProfilePage({
                   </View>
                 )}
               </View>
+              )}
 
               {/* bento */}
               <View style={styles.cofreBento}>
@@ -454,8 +468,8 @@ export default function ProfilePage({
                     <Text style={styles.cofreBentoLabel}>Stickers</Text>
                   </View>
                 </View>
-                {/* last moment row — only shown if current week and reveal not started */}
-                {canDeleteLastMoment && (
+                {/* last moment row — only shown if current week and reveal not started (jamais en mode membre) */}
+                {canDeleteLastMoment && !isMember && (
                   <View style={styles.cofreBentoLastItem}>
                     <View style={styles.cofreBentoLastInfo}>
                       <Text style={styles.cofreBentoLastTitle}>Dernier moment partagé</Text>
@@ -529,11 +543,13 @@ export default function ProfilePage({
         </View>
       </BottomSheet>
 
-      <SettingsSheet
-        visible={showSettings}
-        onClose={() => setShowSettings(false)}
-        initialPage={settingsInitialPage}
-      />
+      {!isMember && (
+        <SettingsSheet
+          visible={showSettings}
+          onClose={() => setShowSettings(false)}
+          initialPage={settingsInitialPage}
+        />
+      )}
 
     </>
   );

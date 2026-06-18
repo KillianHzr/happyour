@@ -329,6 +329,7 @@ export const buildColors = (mode: ThemeMode) => ({
 
   // ── Texte par défaut ──────────────────────────────────────────────────────
   text:                resolveToken("-> Color/text/default/default",         mode),  // #FFFFFF
+  textFix:             resolveToken("-> Color/text/default/default-fix",     mode),  // couleur fixe (indépendante du mode)
   textInverse:         resolveToken("-> Color/text/default/default-inverse", mode),  // Dark: #0C0C0D / Light: #FFFFFF
   textSecondary:       resolveToken("-> Color/text/default/secondary",       mode),  // rgba(255,255,255,0.5)
   textTertiary:        resolveToken("-> Color/text/default/tertiary",        mode),  // rgba(255,255,255,0.4)
@@ -422,6 +423,7 @@ export const buildColors = (mode: ThemeMode) => ({
 
   // ── Icônes par défaut ─────────────────────────────────────────────────────
   icon:          resolveToken("-> Color/icon/default/default",         mode),
+  iconFix:       resolveToken("-> Color/icon/default/default-fix",     mode),  // couleur fixe (indépendante du mode)
   iconSecondary: resolveToken("-> Color/icon/default/secondary",       mode),
   iconTertiary:  resolveToken("-> Color/icon/default/tertiary",        mode),
   iconInverse:   resolveToken("-> Color/icon/default/default-inverse", mode),
@@ -497,6 +499,7 @@ export const spacing = {
   lg:    resolveToken("-> Size/space/400",  "Value") as number,   // 16
   xl:    resolveToken("-> Size/space/600",  "Value") as number,   // 24
   xxl:   resolveToken("-> Size/space/800",  "Value") as number,   // 32
+  xl2:   resolveToken("-> Size/space/1000", "Value") as number,   // 40
   xl3:   resolveToken("-> Size/space/1200", "Value") as number,   // 48
   xl4:   resolveToken("-> Size/space/1600", "Value") as number,   // 64
   xl6:   resolveToken("-> Size/space/2400", "Value") as number,   // 96

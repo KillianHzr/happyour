@@ -9,6 +9,8 @@ type Props = {
   title: string;
   subtitle?: string;
   element?: React.ReactNode;
+  /** Élément optionnel affiché au-dessus du titre (ex: avatar 80x80, 12px au-dessus). */
+  avatar?: React.ReactNode;
   confirmLabel: string;
   cancelLabel?: string;
   confirmVariant?: "danger" | "brand";
@@ -17,7 +19,7 @@ type Props = {
 };
 
 export default function ConfirmModal({
-  visible, onClose, title, subtitle, element,
+  visible, onClose, title, subtitle, element, avatar,
   confirmLabel, cancelLabel = "Annuler", confirmVariant = "danger",
   onConfirm, loading,
 }: Props) {
@@ -27,8 +29,11 @@ export default function ConfirmModal({
   return (
     <BottomSheet visible={visible} onClose={() => !loading && onClose()}>
       <View style={styles.content}>
-        {/* textBlock + optional element — gap space/300 between them */}
+        {/* avatar optionnel + textBlock + optional element — gap space/300 between them */}
         <View style={styles.bodyBlock}>
+          {avatar != null && (
+            <View style={styles.avatarWrap}>{avatar}</View>
+          )}
           <View style={styles.textBlock}>
             <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
             {subtitle && (
@@ -86,6 +91,10 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     flexDirection: "column",
     alignItems: "stretch",
     gap: spacing.md,              // space/300 = 12px entre textBlock et element
+  },
+  avatarWrap: {
+    alignItems: "center",
+    alignSelf: "stretch",
   },
   textBlock: {
     flexDirection: "column",

@@ -30,7 +30,9 @@ import VaultPage from "../../../components/groups/VaultPage";
 import GroupsPage from "../../../components/groups/GroupsPage";
 import PagerTabBar from "../../../components/groups/PagerTabBar";
 import AddGroupFlow from "../../../components/groups/AddGroupFlow";
-import GroupSettingsModal from "../../../components/groups/GroupSettingsModal";
+import SettingsSheet from "../../../components/SettingsSheet";
+import GroupSettingsContent from "../../../components/groups/GroupSettingsContent";
+import GroupActionToast, { type GroupAction } from "../../../components/groups/GroupActionToast";
 import CustomChallengeCreatePage from "../../../components/groups/CustomChallengeCreatePage";
 import CustomChallengeQueuePage from "../../../components/groups/CustomChallengeQueuePage";
 import BottomSheet from "../../../components/BottomSheet";
@@ -184,6 +186,8 @@ export default function MainPagerScreen() {
   const lastSyncRef = useRef<number>(0);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);
+  // Toast affiché sur la liste des groupes après avoir quitté / supprimé un groupe
+  const [groupActionToast, setGroupActionToast] = useState<GroupAction | null>(null);
 
   // Toast capture
   const cameraFrameTop = SCREEN_HEIGHT - NAVBAR_HEIGHT - SCREEN_WIDTH * (16 / 9);
@@ -985,6 +989,7 @@ export default function MainPagerScreen() {
 
   const handleLeaveGroup = async () => {
     if (!user || !activeGroupId) return;
+    const leftName = groupName;
     setIsLeaving(true);
     try {
       const others = members.filter((m: any) => m.user_id !== user.id);
@@ -1017,6 +1022,8 @@ export default function MainPagerScreen() {
         setShowLeaveConfirm(false);
         setShowGroupSettings(false);
         setActiveGroupId(remaining[0].id);
+        jumpTo(0);
+        setGroupActionToast({ type: "left", name: leftName });
       } else {
         router.replace("/(app)/groups");
       }
@@ -1029,6 +1036,7 @@ export default function MainPagerScreen() {
 
   const handleDeleteGroup = async () => {
     if (!activeGroupId) return;
+    const deletedName = groupName;
     try {
       const { error } = await supabase.from("groups").delete().eq("id", activeGroupId);
       if (error) throw new Error(error.message);
@@ -1038,6 +1046,8 @@ export default function MainPagerScreen() {
         setAllGroups(remaining);
         setGroupData((prev) => { const next = { ...prev }; delete next[activeGroupId]; return next; });
         setActiveGroupId(remaining[0].id);
+        jumpTo(0);
+        setGroupActionToast({ type: "deleted", name: deletedName });
       } else {
         router.replace("/(app)/groups");
       }
@@ -1055,7 +1065,7 @@ export default function MainPagerScreen() {
       ]);
       if (r1.error) throw new Error(r1.error.message);
       if (r2.error) throw new Error(r2.error.message);
-      await fetchAllData();
+      await fetchAllData({ force: true });
     } catch (e: any) {
       Alert.alert("Erreur", e.message);
       throw e;
@@ -1324,11 +1334,37 @@ export default function MainPagerScreen() {
       onAddGroup={() => setShowAddGroupModal(true)}
       onGoToCapture={() => jumpTo(1)}
       onOpenReveal={() => { if (currentUserPostedThisWeek) setShowReveal(true); }}
+      onOpenSettings={() => setShowGroupSettings(true)}
       onScrollLock={setGroupsPagerLocked}
       onDebugNamePress={__DEV__ ? () => setShowDebugMenu(true) : undefined}
       debugUnlocked={__DEV__ ? debugUnlocked : undefined}
     />
   ), [allGroups, groupData, revealConfig, activePage === 0, user?.id, enterGroupId, handleSwitchGroup, currentUserPostedThisWeek, debugUnlocked]);
+
+  // Page initiale de la feuille de réglages du groupe (titre "Paramètres" porté par SettingsSheet)
+  const groupSettingsInitialPage = useMemo(() => ({
+    title: "Paramètres",
+    content: (
+      <GroupSettingsContent
+        groupName={groupName}
+        inviteCode={groupInviteCode}
+        isAdmin={isAdmin}
+        userId={user?.id ?? ""}
+        members={members}
+        revealConfig={revealConfig}
+        activeGroupId={activeGroupId}
+        onRename={handleRenameGroup}
+        onLeave={handleLeaveGroup}
+        onDelete={handleDeleteGroup}
+        onTransferAdmin={handleTransferAdmin}
+        onRemoveMember={async (memberId) => {
+          const { error } = await supabase.from("group_members").delete().eq("group_id", activeGroupId).eq("user_id", memberId);
+          if (error) throw new Error(error.message);
+          await fetchAllData({ force: true });
+        }}
+      />
+    ),
+  }), [groupName, groupInviteCode, isAdmin, user?.id, members, revealConfig, activeGroupId, handleTransferAdmin, fetchAllData]);
 
   const memoizedCameraPage = useMemo(() => (
     <ForceThemeMode mode="Dark">
@@ -1653,19 +1689,15 @@ export default function MainPagerScreen() {
         </ForceTheme>
       )}
 
-      {/* ── GROUP SETTINGS MODAL ── */}
-      <GroupSettingsModal
+      {/* ── GROUP SETTINGS (feuille de réglages, même UX que le profil) ── */}
+      <SettingsSheet
         visible={showGroupSettings}
         onClose={() => setShowGroupSettings(false)}
-        groupName={groupName}
-        isAdmin={isAdmin}
-        members={members}
-        userId={user?.id ?? ""}
-        onRename={handleRenameGroup}
-        onLeave={handleLeaveGroup}
-        onDelete={handleDeleteGroup}
-        onTransferAdmin={handleTransferAdmin}
+        initialPage={groupSettingsInitialPage}
       />
+
+      {/* ── Toast quitter / supprimer un groupe (liste des groupes) ── */}
+      <GroupActionToast action={groupActionToast} onDismiss={() => setGroupActionToast(null)} />
 
       {/* ── LEAVE CONFIRM (non-admin) ── */}
       <BottomSheet visible={showLeaveConfirm} onClose={() => setShowLeaveConfirm(false)}>
