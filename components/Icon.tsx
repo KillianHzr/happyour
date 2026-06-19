@@ -11,7 +11,7 @@ import { useTheme } from "../lib/theme-context";
  * design system. On peut la surcharger via `color`, mais jamais via la couleur
  * d'origine du SVG.
  */
-export type IconName = "flash" | "flash-on" | "rotate" | "zoom" | "rollback" | "trash" | "lock" | "lock-filled" | "user" | "user-filled" | "circle" | "circle-filled" | "check" | "x" | "mic" | "play" | "chevron-left" | "chevron-right" | "more-vertical" | "menu" | "droplet" | "bell" | "moon" | "eye" | "plus" | "shield" | "life-buoy" | "info" | "log-out" | "key" | "search" | "copy" | "archive" | "settings" | "crown" | "unlock" | "arrow-right" | "smiley" | "edit" | "award" | "calendar" | "loader";
+export type IconName = "flash" | "flash-on" | "rotate" | "zoom" | "rollback" | "trash" | "lock" | "lock-filled" | "user" | "user-filled" | "circle" | "circle-filled" | "check" | "x" | "mic" | "play" | "chevron-left" | "chevron-right" | "more-vertical" | "menu" | "droplet" | "bell" | "moon" | "eye" | "plus" | "shield" | "life-buoy" | "info" | "log-out" | "key" | "search" | "copy" | "archive" | "settings" | "crown" | "unlock" | "arrow-right" | "smiley" | "edit" | "award" | "calendar" | "loader" | "lock-border";
 
 type IconDef = { viewBox: string; paths: string[]; stroke?: boolean; strokeWidth?: number };
 
@@ -233,6 +233,12 @@ const ICONS: Record<IconName, IconDef> = {
     viewBox: "0 0 16 16",
     paths: [
       "M7.43408 2.76752C7.7465 2.4551 8.2535 2.4551 8.56592 2.76752L13.2329 7.43353C13.5453 7.7459 13.5452 8.25294 13.2329 8.56537L8.56592 13.2324C8.25349 13.5446 7.74645 13.5447 7.43408 13.2324C7.12172 12.92 7.12183 12.413 7.43408 12.1005L10.7349 8.79974H3.3335C2.89178 8.79974 2.53387 8.44162 2.53369 7.99994C2.53369 7.55811 2.89167 7.19916 3.3335 7.19916H10.7349L7.43408 3.89838C7.1221 3.58604 7.1221 3.07985 7.43408 2.76752Z",
+    ],
+  },
+  "lock-border": {
+    viewBox: "0 0 16 16",
+    paths: [
+      "M13.2002 8.66602C13.2 8.37172 12.9613 8.13299 12.667 8.13281H3.33301C3.03871 8.13299 2.79998 8.37172 2.7998 8.66602V13.333C2.79981 13.6275 3.03861 13.866 3.33301 13.8662H12.667C12.9614 13.866 13.2002 13.6275 13.2002 13.333V8.66602ZM10.5332 4.66602C10.5331 3.99425 10.266 3.35002 9.79102 2.875C9.31594 2.40001 8.6718 2.13281 8 2.13281C7.3282 2.13281 6.68406 2.40001 6.20898 2.875C5.73397 3.35002 5.46688 3.99425 5.4668 4.66602V6.5332H10.5332V4.66602ZM12.1338 6.5332H12.667C13.8449 6.53338 14.7996 7.48807 14.7998 8.66602V13.333C14.7998 14.5111 13.8451 15.4666 12.667 15.4668H3.33301C2.15495 15.4666 1.2002 14.5111 1.2002 13.333V8.66602C1.20037 7.48807 2.15506 6.53338 3.33301 6.5332H3.86621V4.66602C3.8663 3.5699 4.30207 2.51824 5.07715 1.74316C5.85228 0.968116 6.90385 0.533203 8 0.533203C9.09615 0.533203 10.1477 0.968115 10.9229 1.74316C11.6979 2.51824 12.1337 3.5699 12.1338 4.66602V6.5332Z",
     ],
   },
   loader: {

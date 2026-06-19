@@ -1,8 +1,9 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Animated, Dimensions, Easing, LayoutAnimation, Modal, Platform, ScrollView,
-  StyleSheet, Text, TouchableOpacity, UIManager, View,
+  Animated, Dimensions, Easing, Modal, Platform, Pressable, ScrollView,
+  StyleSheet, Text, TouchableOpacity, View,
 } from "react-native";
+import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, Easing as REasing } from "react-native-reanimated";
 import { Image } from "expo-image";
 import { BlurView as NativeBlurView } from "@sbaiahmed1/react-native-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -16,15 +17,12 @@ import EdgeSwipeBack from "../EdgeSwipeBack";
 import BottomSheet from "../BottomSheet";
 import StickerGraphic from "../atoms/StickerGraphic";
 import ArchiveRevealView, { type ArchiveRevealMeta } from "./ArchiveRevealView";
+import ArchivesCalendar from "./ArchivesCalendar";
 import { GRADIENT_ORANGE } from "../../lib/assets";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MONTHS = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
-
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 // Couleurs fixes "sombres" des cartes d'archive (texte en -fix → toujours sur fond sombre).
 const darkColors = buildColors("Dark");
@@ -86,6 +84,31 @@ export default function ArchivesSheet({
 
   const [reveals, setReveals] = useState<Reveal[]>([]);
   const [availableBgUrl, setAvailableBgUrl] = useState<string | null>(null);
+
+  // ── Calendrier / sélection de période ──
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [selStart, setSelStart] = useState<Date | null>(null);
+  const [selEnd, setSelEnd] = useState<Date | null>(null);
+
+  // Bornes : pas plus ancien que le premier reveal ; pas plus récent qu'aujourd'hui.
+  const minDate = useMemo(() => {
+    const oldest = reveals[reveals.length - 1];
+    const d = oldest ? oldest.start : new Date();
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }, [reveals]);
+  const maxDate = useMemo(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  }, [reveals]);
+
+  // Reveals filtrés par la sélection (un seul jour → le reveal qui le contient).
+  const filteredReveals = useMemo(() => {
+    if (!selStart) return reveals;
+    const rangeStart = new Date(selStart.getFullYear(), selStart.getMonth(), selStart.getDate(), 0, 0, 0, 0).getTime();
+    const endRef = selEnd ?? selStart;
+    const rangeEnd = new Date(endRef.getFullYear(), endRef.getMonth(), endRef.getDate(), 23, 59, 59, 999).getTime();
+    return reveals.filter((r) => r.start.getTime() < rangeEnd && r.end.getTime() > rangeStart);
+  }, [reveals, selStart, selEnd]);
 
   // Clic sur une archive : disponible → ouvre le reveal archivé ; ancienne → premium ; en cours → rien.
   const handleRevealPress = (r: Reveal) => {
@@ -167,7 +190,7 @@ export default function ArchivesSheet({
   // ── Regroupement par mois (du plus récent au plus ancien) ──
   const groups = useMemo<MonthGroup[]>(() => {
     const out: MonthGroup[] = [];
-    for (const r of reveals) {
+    for (const r of filteredReveals) {
       const y = r.start.getFullYear();
       const m = r.start.getMonth();
       const key = `${y}-${m}`;
@@ -176,7 +199,7 @@ export default function ArchivesSheet({
       grp.reveals.push(r);
     }
     return out;
-  }, [reveals]);
+  }, [filteredReveals]);
 
   if (!mounted) return null;
 
@@ -196,8 +219,9 @@ export default function ArchivesSheet({
                 </TouchableOpacity>
                 <Text style={styles.title}>Archives</Text>
               </View>
-              <TouchableOpacity style={styles.calendarBtn} onPress={() => {}} activeOpacity={0.8}>
-                <Icon name="calendar" size={20} color={colors.iconNeutral} />
+              <TouchableOpacity style={styles.calendarBtn} onPress={() => setCalendarOpen((o) => !o)} activeOpacity={0.8}>
+                <Icon name="calendar" size={20} color={selStart ? colors.iconBrandTertiary : calendarOpen ? colors.iconBrand : colors.iconNeutral} />
+                {selStart && <View style={styles.calBadge} />}
               </TouchableOpacity>
             </View>
 
@@ -238,6 +262,7 @@ export default function ArchivesSheet({
                       availableBgUrl={availableBgUrl}
                       styles={styles}
                       iconColor={colors.icon}
+                      iconBrandColor={colors.iconBrandOnBrand}
                       onRevealPress={handleRevealPress}
                     />
                   </Fragment>
@@ -263,6 +288,22 @@ export default function ArchivesSheet({
               </View>
             </BottomSheet>
           </EdgeSwipeBack>
+
+          {/* ── Calendrier (popover sous le bouton, aligné à droite, 8px) ── */}
+          {calendarOpen && (
+            <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+              <Pressable style={StyleSheet.absoluteFill} onPress={() => setCalendarOpen(false)} />
+              <View style={[styles.calPopoverAnchor, { top: insets.top + spacing.lg + 40 + spacing.sm, right: spacing.lg }]}>
+                <ArchivesCalendar
+                  minDate={minDate}
+                  maxDate={maxDate}
+                  selStart={selStart}
+                  selEnd={selEnd}
+                  onChange={(s, e) => { setSelStart(s); setSelEnd(e); }}
+                />
+              </View>
+            </View>
+          )}
         </Animated.View>
       </GestureHandlerRootView>
 
@@ -295,34 +336,52 @@ function YearSeparator({ year, styles }: { year: number; styles: any }) {
 
 // ─── Accordéon d'un mois ───────────────────────────────────────────────────────
 function MonthAccordion({
-  group, defaultOpen, availableBgUrl, styles, iconColor, onRevealPress,
-}: { group: MonthGroup; defaultOpen: boolean; availableBgUrl: string | null; styles: any; iconColor: string; onRevealPress: (r: Reveal) => void }) {
+  group, defaultOpen, availableBgUrl, styles, iconColor, iconBrandColor, onRevealPress,
+}: { group: MonthGroup; defaultOpen: boolean; availableBgUrl: string | null; styles: any; iconColor: string; iconBrandColor: string; onRevealPress: (r: Reveal) => void }) {
   const [open, setOpen] = useState(defaultOpen);
-  const rot = useRef(new Animated.Value(defaultOpen ? 1 : 0)).current;
+  const [contentHeight, setContentHeight] = useState(0);
+  const progress = useSharedValue(defaultOpen ? 1 : 0);
+  const allLocked = group.reveals.every((r) => r.status === "locked");
 
   const toggle = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.create(260, LayoutAnimation.Types.easeInEaseOut, LayoutAnimation.Properties.opacity));
-    Animated.timing(rot, { toValue: open ? 0 : 1, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-    setOpen((o) => !o);
+    const next = open ? 0 : 1;
+    setOpen(!open);
+    progress.value = withTiming(next, { duration: 340, easing: REasing.bezier(0.22, 1, 0.36, 1) });
   };
 
-  const rotate = rot.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "90deg"] });
+  // Hauteur mesurée animée + fondu (auto avant la première mesure pour éviter tout flash).
+  const clipStyle = useAnimatedStyle(() => {
+    if (contentHeight === 0) {
+      return progress.value > 0.5 ? {} : { height: 0, opacity: 0 };
+    }
+    return { height: contentHeight * progress.value, opacity: progress.value };
+  });
+  const chevronStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${progress.value * 90}deg` }] }));
 
   return (
     <View style={styles.accordionSection}>
       <TouchableOpacity style={styles.accordionHeader} onPress={toggle} activeOpacity={0.7}>
-        <Text style={styles.accordionTitle}>{group.label}</Text>
-        <Animated.View style={{ transform: [{ rotate }] }}>
-          <Icon name="chevron-right" size={20} color={iconColor} />
-        </Animated.View>
-      </TouchableOpacity>
-      {open && (
-        <View style={styles.accordeon}>
-          {group.reveals.map((r) => (
-            <ArchiveRevealItem key={r.number} reveal={r} availableBgUrl={availableBgUrl} styles={styles} onPress={onRevealPress} />
-          ))}
+        <View style={styles.accordionTitleRow}>
+          <Text style={styles.accordionTitle}>{group.label}</Text>
+          {allLocked && (
+            <View style={styles.monthLockBadge}>
+              <Icon name="lock-border" size={16} color={iconBrandColor} />
+            </View>
+          )}
         </View>
-      )}
+        <Reanimated.View style={chevronStyle}>
+          <Icon name="chevron-right" size={20} color={iconColor} />
+        </Reanimated.View>
+      </TouchableOpacity>
+      <Reanimated.View style={[styles.accordeonClip, clipStyle]}>
+        <View onLayout={(e) => { const h = e.nativeEvent.layout.height; if (h > 0) setContentHeight(h); }}>
+          <View style={styles.accordeon}>
+            {group.reveals.map((r) => (
+              <ArchiveRevealItem key={r.number} reveal={r} availableBgUrl={availableBgUrl} styles={styles} onPress={onRevealPress} />
+            ))}
+          </View>
+        </View>
+      </Reanimated.View>
     </View>
   );
 }
@@ -384,7 +443,7 @@ function ArchiveRevealItem({ reveal, availableBgUrl, styles, onPress }: { reveal
             <View style={[styles.statusBadge, { backgroundColor: isCurrent ? darkColors.card : darkColors.brand }]}>
               {isCurrent
                 ? <SpinningLoader color={darkColors.icon} />
-                : <Icon name="lock" size={16} color={darkColors.iconBrand} />}
+                : <Icon name="lock-border" size={16} color={darkColors.iconBrandOnBrand} />}
             </View>
           )}
         </View>
@@ -432,6 +491,21 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: colors.card,
+  },
+  calPopoverAnchor: {
+    position: "absolute",
+    width: Math.min(340, SCREEN_WIDTH - spacing.lg * 2),
+  },
+  calBadge: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.brand,
+    borderWidth: 2,
+    borderColor: colors.bg,
   },
 
   // ── Contenu ──
@@ -504,7 +578,6 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   accordionSection: {
     flexDirection: "column",
     alignItems: "flex-start",
-    gap: spacing.md,
     alignSelf: "stretch",
   },
   accordionHeader: {
@@ -514,15 +587,33 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     alignSelf: "stretch",
     paddingVertical: spacing.xs,
   },
+  accordionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs2,
+  },
   accordionTitle: {
     ...textStyles.bodyBase,
     color: colors.text,
+  },
+  monthLockBadge: {
+    width: 24,
+    height: 24,
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 6,
+    backgroundColor: colors.brand,
+  },
+  accordeonClip: {
+    alignSelf: "stretch",
+    overflow: "hidden",
   },
   accordeon: {
     flexDirection: "column",
     alignItems: "flex-start",
     gap: spacing.md,               // space/300
     alignSelf: "stretch",
+    paddingTop: spacing.md,        // espace header → contenu (collapse avec l'accordéon)
   },
 
   // ── Séparateur d'année ──
