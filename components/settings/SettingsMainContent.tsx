@@ -2,7 +2,7 @@ import { useState } from "react";
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
 import { Image } from "expo-image";
 
-const bgGradientOrange = require("../../assets/images/background-gradient-orange.png");
+import { GRADIENT_ORANGE } from "../../lib/assets";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSettingsNav } from "../SettingsSheet";
 import { useAuth } from "../../lib/auth-context";
@@ -151,10 +151,12 @@ export default function SettingsMainContent({ username, avatarUrl, onUsernameUpd
             activeOpacity={0.85}
           >
             <Image
-              source={bgGradientOrange}
+              source={GRADIENT_ORANGE}
               style={StyleSheet.absoluteFill}
               contentFit="cover"
-              cachePolicy="memory"
+              cachePolicy="memory-disk"
+              transition={0}
+              priority="high"
             />
             <Icon name="key" size={20} color={colors.iconInverse} />
             <Text style={[styles.subscriptionText, { color: colors.textInverse }]}>

@@ -1704,6 +1704,7 @@ export default function MainPagerScreen() {
         visible={showArchives}
         onClose={() => setShowArchives(false)}
         groupId={activeGroupId}
+        revealConfig={revealConfig}
       />
 
       {/* ── Toast quitter / supprimer un groupe (liste des groupes) ── */}

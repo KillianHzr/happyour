@@ -3,7 +3,9 @@ import { Slot } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold } from "@expo-google-fonts/inter";
 import { useAssets } from "expo-asset";
+import { Image } from "expo-image";
 import { View, StyleSheet } from "react-native";
+import { GRADIENT_ORANGE } from "../lib/assets";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import * as Updates from "expo-updates";
@@ -40,7 +42,7 @@ export default function RootLayout() {
     // Nunito Sans (variable) chargée et disponible
     NunitoSans: require("../assets/fonts/NunitoSans.ttf"),
   });
-  const [assetsLoaded] = useAssets([require("../assets/images/background-gradient-orange.png")]);
+  const [assetsLoaded] = useAssets([GRADIENT_ORANGE]);
   const [checksReady, setChecksReady] = useState(false);
   const [splashDone, setSplashDone] = useState(false);
 
@@ -60,6 +62,16 @@ export default function RootLayout() {
               <ToastProvider>
                 <View style={{ flex: 1 }}>
                   <ThemedStatusBar />
+                  {/* Préchargement permanent du dégradé orange en cache mémoire (pleine résolution),
+                      pour qu'il ne soit jamais vu "charger" sur les boutons premium. */}
+                  <Image
+                    source={GRADIENT_ORANGE}
+                    style={styles.preload}
+                    cachePolicy="memory-disk"
+                    priority="high"
+                    allowDownscaling={false}
+                    pointerEvents="none"
+                  />
                   {!splashDone && (
                     <SplashScreen ready={appReady} onFinish={() => setSplashDone(true)} />
                   )}
@@ -100,4 +112,5 @@ async function checkOTAUpdate() {
 const styles = StyleSheet.create({
   visible: { flex: 1 },
   hidden: { flex: 1, opacity: 0 },
+  preload: { position: "absolute", width: 1, height: 1, opacity: 0 },
 });
