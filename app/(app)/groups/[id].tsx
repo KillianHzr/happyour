@@ -33,6 +33,7 @@ import AddGroupFlow from "../../../components/groups/AddGroupFlow";
 import SettingsSheet from "../../../components/SettingsSheet";
 import GroupSettingsContent from "../../../components/groups/GroupSettingsContent";
 import GroupActionToast, { type GroupAction } from "../../../components/groups/GroupActionToast";
+import ArchivesSheet from "../../../components/groups/ArchivesSheet";
 import CustomChallengeCreatePage from "../../../components/groups/CustomChallengeCreatePage";
 import CustomChallengeQueuePage from "../../../components/groups/CustomChallengeQueuePage";
 import BottomSheet from "../../../components/BottomSheet";
@@ -175,6 +176,7 @@ export default function MainPagerScreen() {
   const [revealTimeLeft, setRevealTimeLeft] = useState("");
   const [revealMsLeft, setRevealMsLeft] = useState(Infinity);
   const [showGroupSettings, setShowGroupSettings] = useState(false);
+  const [showArchives, setShowArchives] = useState(false);
   const [showAddGroupModal, setShowAddGroupModal] = useState(false);
   // Quand le flow d'ajout se termine : ouvrir la vue du nouveau groupe dans GroupsPage
   const [enterGroupId, setEnterGroupId] = useState<string | null>(null);
@@ -1335,6 +1337,7 @@ export default function MainPagerScreen() {
       onGoToCapture={() => jumpTo(1)}
       onOpenReveal={() => { if (currentUserPostedThisWeek) setShowReveal(true); }}
       onOpenSettings={() => setShowGroupSettings(true)}
+      onOpenArchives={() => setShowArchives(true)}
       onScrollLock={setGroupsPagerLocked}
       onDebugNamePress={__DEV__ ? () => setShowDebugMenu(true) : undefined}
       debugUnlocked={__DEV__ ? debugUnlocked : undefined}
@@ -1694,6 +1697,13 @@ export default function MainPagerScreen() {
         visible={showGroupSettings}
         onClose={() => setShowGroupSettings(false)}
         initialPage={groupSettingsInitialPage}
+      />
+
+      {/* ── ARCHIVES DU GROUPE ── */}
+      <ArchivesSheet
+        visible={showArchives}
+        onClose={() => setShowArchives(false)}
+        groupId={activeGroupId}
       />
 
       {/* ── Toast quitter / supprimer un groupe (liste des groupes) ── */}
