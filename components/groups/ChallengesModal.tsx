@@ -271,15 +271,9 @@ export function ChallengesSlider({
             <ActivityIndicator color={colors.text} size="large" />
           ) : gc.challenge ? (
             <View style={sliderStyles.challengeDetails}>
-              <View style={sliderStyles.captureBadge}>
-                {Platform.OS === "ios" ? (
-                  <NativeBlurView style={StyleSheet.absoluteFillObject} blurType="dark" blurAmount={30} />
-                ) : (
-                  <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(20, 20, 25, 0.85)" }]} />
-                )}
-                <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
-                <Text style={sliderStyles.captureBadgeText}>{CAPTURE_LABEL[captureType]} obligatoire</Text>
-                <Shape name={CAPTURE_TO_SHAPE[captureType]} size={16} color={colors.icon} />
+              <View style={[sliderStyles.captureBadge, { backgroundColor: colors.bgInverse }]}>
+                <Text style={[sliderStyles.captureBadgeText, { color: colors.textInverse }]}>{CAPTURE_LABEL[captureType]} obligatoire</Text>
+                <Shape name={CAPTURE_TO_SHAPE[captureType]} size={16} color={colors.bg} />
               </View>
               {isTarget ? (
                 <Text style={sliderStyles.challengeText}>{TARGET_CHALLENGE_PROMPT}</Text>

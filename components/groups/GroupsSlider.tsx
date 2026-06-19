@@ -137,9 +137,9 @@ const SliderCard = memo(function SliderCard({
 
         {/* Countdown + cadenas (ou état "reveal disponible") */}
         <View style={s.countdownWrap}>
-          {unlocked && (
-            <Text style={s.unlockHint}>Ouvre ton groupe pour le déverrouiller</Text>
-          )}
+          <Text style={s.unlockHint}>
+            {unlocked ? "Ouvre ton groupe pour le déverrouiller" : "Encore un peu de patience..."}
+          </Text>
           <View style={[s.countdown, unlocked && { borderColor: colors.borderBrandTertiary }]}>
             {unlocked ? (
               <Text style={s.countdownText}>Disponible</Text>
@@ -327,6 +327,7 @@ const makeSliderStyles = (colors: ThemeColors) => StyleSheet.create({
     ...textStyles.bodySmall,
     color: colors.textSecondary,
     lineHeight: undefined,
+    textAlign: "center",
   },
   countdown: {
     height: 80,

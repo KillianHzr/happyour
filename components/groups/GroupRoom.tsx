@@ -239,6 +239,9 @@ function RoomCard({ card, revealDate, unlocked, onCapture, onUnlock }: Props) {
           {!postedThisWeek && !unlocked && (
             <Text style={s.captureFirstText}>Capture un moment d'abord</Text>
           )}
+          {postedThisWeek && !unlocked && (
+            <Text style={s.captureFirstText}>Encore un peu de patience...</Text>
+          )}
           {unlocked && (
             <Text style={s.captureFirstText}>Fin du suspens, accèdes à ton Reveal !</Text>
           )}

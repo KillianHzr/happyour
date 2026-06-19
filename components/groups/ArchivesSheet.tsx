@@ -17,6 +17,7 @@ import EdgeSwipeBack from "../EdgeSwipeBack";
 import BottomSheet from "../BottomSheet";
 import StickerGraphic from "../atoms/StickerGraphic";
 import ArchiveRevealView, { type ArchiveRevealMeta } from "./ArchiveRevealView";
+import RandomMomentView from "./RandomMomentView";
 import ArchivesCalendar from "./ArchivesCalendar";
 import { GRADIENT_ORANGE } from "../../lib/assets";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -52,7 +53,7 @@ const pad2 = (n: number) => String(n).padStart(2, "0");
 const ddMM = (d: Date) => `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}`;
 
 type RevealStatus = "current" | "available" | "locked";
-type Reveal = { number: number; start: Date; end: Date; status: RevealStatus };
+type Reveal = { number: number; start: Date; end: Date; status: RevealStatus; bgUrl: string | null };
 type MonthGroup = { key: string; year: number; month: number; label: string; reveals: Reveal[] };
 
 type Member = { user_id: string; username: string; avatar_url?: string | null };
@@ -80,10 +81,10 @@ export default function ArchivesSheet({
   const [mounted, setMounted] = useState(visible);
   const [showComingSoon, setShowComingSoon] = useState(false);
   const [archiveReveal, setArchiveReveal] = useState<ArchiveRevealMeta | null>(null);
+  const [showRandom, setShowRandom] = useState(false);
   const sheetAnim = useRef(new Animated.Value(SCREEN_WIDTH)).current;
 
   const [reveals, setReveals] = useState<Reveal[]>([]);
-  const [availableBgUrl, setAvailableBgUrl] = useState<string | null>(null);
 
   // ── Calendrier / sélection de période ──
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -158,7 +159,7 @@ export default function ArchivesSheet({
       let end = nextReveal;
       while (end.getTime() > createdAt.getTime()) {
         const start = new Date(end.getTime() - WEEK_MS);
-        list.push({ number: 0, start, end: new Date(end), status: "locked" });
+        list.push({ number: 0, start, end: new Date(end), status: "locked", bgUrl: null });
         end = new Date(end.getTime() - WEEK_MS);
       }
       const total = list.length;
@@ -167,22 +168,23 @@ export default function ArchivesSheet({
         r.status = i === 0 ? "current" : i === 1 ? "available" : "locked";
       });
 
-      // Fond du reveal disponible : dernière photo postée dans sa fenêtre.
-      let bg: string | null = null;
-      const avail = list[1];
-      if (avail) {
-        const { data } = await supabase
-          .from("photos")
-          .select("image_path, created_at")
-          .eq("group_id", groupId)
-          .gte("created_at", avail.start.toISOString())
-          .lt("created_at", avail.end.toISOString())
-          .order("created_at", { ascending: false });
-        const lastPhoto = (data ?? []).find((p: any) => isPhotoPath(p.image_path));
-        bg = lastPhoto ? r2Storage.getPublicUrl(lastPhoto.image_path) : null;
+      // Fond de chaque reveal (sauf l'en-cours) : dernière vraie PHOTO de sa fenêtre.
+      const { data: allPhotos } = await supabase
+        .from("photos")
+        .select("image_path, created_at")
+        .eq("group_id", groupId)
+        .order("created_at", { ascending: false });   // plus récent d'abord
+      const photoRows = (allPhotos ?? []).filter((p: any) => isPhotoPath(p.image_path));
+      for (const r of list) {
+        if (r.status === "current") { r.bgUrl = null; continue; }
+        const last = photoRows.find((p: any) => {
+          const t = new Date(p.created_at).getTime();
+          return t >= r.start.getTime() && t < r.end.getTime();
+        });
+        r.bgUrl = last ? r2Storage.getPublicUrl(last.image_path) : null;
       }
 
-      if (!cancelled) { setReveals(list); setAvailableBgUrl(bg); }
+      if (!cancelled) setReveals(list);
     })();
     return () => { cancelled = true; };
   }, [visible, groupId, revealConfig.day, revealConfig.hour]);
@@ -259,7 +261,6 @@ export default function ArchivesSheet({
                     <MonthAccordion
                       group={grp}
                       defaultOpen={i === 0}
-                      availableBgUrl={availableBgUrl}
                       styles={styles}
                       iconColor={colors.icon}
                       iconBrandColor={colors.iconBrandOnBrand}
@@ -269,6 +270,14 @@ export default function ArchivesSheet({
                 );
               })}
             </ScrollView>
+
+            {/* ── Bouton fixe "Moment aléatoire" (35px au-dessus du bas) ── */}
+            <View style={styles.randomBtnWrap} pointerEvents="box-none">
+              <TouchableOpacity style={styles.randomBtn} onPress={() => setShowRandom(true)} activeOpacity={0.85}>
+                <Text style={styles.randomBtnText}>Moment aléatoire</Text>
+                <Icon name="shuffle" size={20} color={colors.icon} />
+              </TouchableOpacity>
+            </View>
 
             {/* ── Modal : abonnement premium (bientôt disponible) ── */}
             <BottomSheet visible={showComingSoon} onClose={() => setShowComingSoon(false)}>
@@ -319,6 +328,18 @@ export default function ArchivesSheet({
         groupName={groupName}
         reveal={archiveReveal}
       />
+
+      {/* ── Moment aléatoire (read-only, focus un seul moment) ── */}
+      <RandomMomentView
+        visible={showRandom}
+        onClose={() => setShowRandom(false)}
+        groupId={groupId ?? ""}
+        members={members}
+        currentUserId={currentUserId}
+        currentUsername={currentUsername}
+        currentUserAvatarUrl={currentUserAvatarUrl}
+        groupName={groupName}
+      />
     </Modal>
   );
 }
@@ -336,8 +357,8 @@ function YearSeparator({ year, styles }: { year: number; styles: any }) {
 
 // ─── Accordéon d'un mois ───────────────────────────────────────────────────────
 function MonthAccordion({
-  group, defaultOpen, availableBgUrl, styles, iconColor, iconBrandColor, onRevealPress,
-}: { group: MonthGroup; defaultOpen: boolean; availableBgUrl: string | null; styles: any; iconColor: string; iconBrandColor: string; onRevealPress: (r: Reveal) => void }) {
+  group, defaultOpen, styles, iconColor, iconBrandColor, onRevealPress,
+}: { group: MonthGroup; defaultOpen: boolean; styles: any; iconColor: string; iconBrandColor: string; onRevealPress: (r: Reveal) => void }) {
   const [open, setOpen] = useState(defaultOpen);
   const [contentHeight, setContentHeight] = useState(0);
   const progress = useSharedValue(defaultOpen ? 1 : 0);
@@ -349,13 +370,12 @@ function MonthAccordion({
     progress.value = withTiming(next, { duration: 340, easing: REasing.bezier(0.22, 1, 0.36, 1) });
   };
 
-  // Hauteur mesurée animée + fondu (auto avant la première mesure pour éviter tout flash).
-  const clipStyle = useAnimatedStyle(() => {
-    if (contentHeight === 0) {
-      return progress.value > 0.5 ? {} : { height: 0, opacity: 0 };
-    }
-    return { height: contentHeight * progress.value, opacity: progress.value };
-  });
+  // Le contenu (mesuré) est en position absolue → toujours dimensionné naturellement,
+  // donc onLayout fiable même replié. La hauteur du clip est toujours explicite.
+  const clipStyle = useAnimatedStyle(() => ({
+    height: contentHeight * progress.value,
+    opacity: progress.value,
+  }));
   const chevronStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${progress.value * 90}deg` }] }));
 
   return (
@@ -374,12 +394,13 @@ function MonthAccordion({
         </Reanimated.View>
       </TouchableOpacity>
       <Reanimated.View style={[styles.accordeonClip, clipStyle]}>
-        <View onLayout={(e) => { const h = e.nativeEvent.layout.height; if (h > 0) setContentHeight(h); }}>
-          <View style={styles.accordeon}>
-            {group.reveals.map((r) => (
-              <ArchiveRevealItem key={r.number} reveal={r} availableBgUrl={availableBgUrl} styles={styles} onPress={onRevealPress} />
-            ))}
-          </View>
+        <View
+          style={styles.accordeonMeasure}
+          onLayout={(e) => { const h = e.nativeEvent.layout.height; if (h > 0 && h !== contentHeight) setContentHeight(h); }}
+        >
+          {group.reveals.map((r) => (
+            <ArchiveRevealItem key={r.number} reveal={r} styles={styles} onPress={onRevealPress} />
+          ))}
         </View>
       </Reanimated.View>
     </View>
@@ -405,11 +426,11 @@ function SpinningLoader({ color }: { color: string }) {
 }
 
 // ─── Une archive de reveal ─────────────────────────────────────────────────────
-function ArchiveRevealItem({ reveal, availableBgUrl, styles, onPress }: { reveal: Reveal; availableBgUrl: string | null; styles: any; onPress: (r: Reveal) => void }) {
+function ArchiveRevealItem({ reveal, styles, onPress }: { reveal: Reveal; styles: any; onPress: (r: Reveal) => void }) {
   const isCurrent = reveal.status === "current";
-  const isAvailable = reveal.status === "available";
   const isLocked = reveal.status === "locked";
-  const showPhoto = isAvailable && !!availableBgUrl;
+  // Tous les reveals sauf l'en-cours affichent leur dernière photo en fond.
+  const showPhoto = !isCurrent && !!reveal.bgUrl;
 
   return (
     <TouchableOpacity
@@ -421,7 +442,7 @@ function ArchiveRevealItem({ reveal, availableBgUrl, styles, onPress }: { reveal
       {showPhoto ? (
         <>
           <Image
-            source={{ uri: availableBgUrl! }}
+            source={{ uri: reveal.bgUrl! }}
             style={StyleSheet.absoluteFillObject as any}
             contentFit="cover"
             transition={0}
@@ -495,6 +516,27 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   calPopoverAnchor: {
     position: "absolute",
     width: Math.min(340, SCREEN_WIDTH - spacing.lg * 2),
+  },
+  // ── Bouton "Moment aléatoire" (fixe, 35px du bas, centré) ──
+  randomBtnWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 35,
+    alignItems: "center",
+  },
+  randomBtn: {
+    flexDirection: "row",
+    padding: spacing.md,           // space/300
+    justifyContent: "center",
+    alignItems: "center",
+    gap: spacing.sm,               // space/200
+    borderRadius: radii.md,        // radius/300
+    backgroundColor: colors.bgNeutralTertiary,
+  },
+  randomBtnText: {
+    ...textStyles.singleLineBodyBaseStrong,
+    color: colors.text,
   },
   calBadge: {
     position: "absolute",
@@ -608,11 +650,15 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     alignSelf: "stretch",
     overflow: "hidden",
   },
-  accordeon: {
+  // Contenu mesuré en position absolue (toujours dimensionné naturellement, largeur pleine)
+  accordeonMeasure: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
     flexDirection: "column",
     alignItems: "flex-start",
     gap: spacing.md,               // space/300
-    alignSelf: "stretch",
     paddingTop: spacing.md,        // espace header → contenu (collapse avec l'accordéon)
   },
 

@@ -166,6 +166,7 @@ export default function ArchiveRevealView({
                 endPrimaryLabel="Fermer l'archive"
                 onBackToCapture={onClose}
                 readOnly
+                disableVideoCache
                 onScrollLock={() => {}}
                 onCommentModalChange={() => {}}
               />

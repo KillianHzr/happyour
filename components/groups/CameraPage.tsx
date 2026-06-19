@@ -8,7 +8,7 @@ import { useVideoPlayer, VideoView } from "expo-video";
 import { type CameraType, type FlashMode, useCameraPermissions } from "expo-camera";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import Svg, { Path } from "react-native-svg";
+import Svg, { Path, Circle } from "react-native-svg";
 import { useAudioRecorder, AudioModule, RecordingPresets, useAudioPlayer, useAudioPlayerStatus, useAudioRecorderState } from "expo-audio";
 import { SeamlessRecorder, type SeamlessRecorderRef } from "seamless-recorder";
 import { setCaptureData } from "../../lib/capture-store";
@@ -32,6 +32,14 @@ import { BlurView as NativeBlurView } from "@sbaiahmed1/react-native-blur";
 import Reanimated, { useSharedValue, useAnimatedProps, useAnimatedStyle, withTiming, Easing as REasing } from "react-native-reanimated";
 
 const ReanimatedLottieView = Reanimated.createAnimatedComponent(LottieView);
+const AnimatedCircle = Reanimated.createAnimatedComponent(Circle);
+
+// Anneau de progression autour du bouton de capture vidéo (plein à 15s = durée max)
+const MAX_VIDEO_SECONDS = 15;
+const RING_SIZE = 80;
+const RING_STROKE = 4;
+const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
 const NAVBAR_HEIGHT = 100;
 // Constantes de la barre de description (utilisées dans onShow ET startEditCaption)
@@ -191,6 +199,12 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const propsPhotoVideo = useAnimatedProps(() => ({ progress: progressPhotoVideo.value }));
   const propsPhotoDraw = useAnimatedProps(() => ({ progress: progressPhotoDraw.value }));
   const propsVideoDraw = useAnimatedProps(() => ({ progress: progressVideoDraw.value }));
+
+  // Progression de l'anneau d'enregistrement vidéo (0 → 1 sur 15s)
+  const recordRingProgress = useSharedValue(0);
+  const recordRingProps = useAnimatedProps(() => ({
+    strokeDashoffset: RING_CIRCUMFERENCE * (1 - recordRingProgress.value),
+  }));
 
   const stylePhotoVideo = useAnimatedStyle(() => ({ opacity: activeLottieIndex.value === 0 ? 1 : 0 }));
   const stylePhotoDraw = useAnimatedStyle(() => ({ opacity: activeLottieIndex.value === 1 ? 1 : 0 }));
@@ -570,8 +584,19 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     // (la session caméra est encore en train de se fermer juste après l'arrêt vidéo).
     p.audioMixingMode = "mixWithOthers";
     p.loop = true;
-    p.play();
+    // NB : pas de p.play() ici — ce callback ne tourne qu'à la CRÉATION du player.
+    // Sur les vidéos suivantes, expo-video fait un replace() sans rejouer ce callback,
+    // d'où l'image figée. On lance la lecture sur chaque event readyToPlay (ci-dessous).
   });
+
+  // Lance la lecture à chaque fois que la source est prête (robuste au replace de source).
+  useEffect(() => {
+    if (!videoPreviewPlayer) return;
+    const sub = videoPreviewPlayer.addListener("statusChange", ({ status }) => {
+      if (status === "readyToPlay") videoPreviewPlayer.play();
+    });
+    return () => sub.remove();
+  }, [videoPreviewPlayer]);
 
   const audioWaveAnims = useRef(
     [350, 500, 280, 420, 320, 480, 360].map((duration, i) => ({
@@ -758,11 +783,13 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     setIsRecording(true);
     setRecordingSeconds(0);
     recordingSecondsRef.current = 0;
+    recordRingProgress.value = 0;
+    recordRingProgress.value = withTiming(1, { duration: MAX_VIDEO_SECONDS * 1000, easing: REasing.linear });
     recordingTimer.current = setInterval(() => {
       setRecordingSeconds(s => {
-        const next = s >= 29 ? s : s + 1;
+        const next = s >= MAX_VIDEO_SECONDS - 1 ? s : s + 1;
         recordingSecondsRef.current = next;
-        if (s >= 29) stopVideoRecordingRef.current();
+        if (s >= MAX_VIDEO_SECONDS - 1) stopVideoRecordingRef.current();
         return next;
       });
     }, 1000);
@@ -783,13 +810,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     setIsVideoProcessing(true);
     setRecordingSeconds(0);
     recordingSecondsRef.current = 0;
-    const _t0 = Date.now();
-    console.log("[CAM] stopVideoRecording");
+    recordRingProgress.value = 0;
     seamlessRecorderRef.current?.stopRecording().then(uri => {
-      // Mesure : si ce delta est ~10s, le lag est NATIF (finishWriting). Sinon il est ailleurs.
-      console.log(`[CAM] native stopRecording resolved in ${Date.now() - _t0}ms`);
       if (uri) {
-        console.log("[CAM] video saved:", uri.slice(-30));
         saveToSlot({ mode: "VIDEO", uri, audioUri: null, textContent: "", note: "" });
       }
       setIsVideoProcessing(false);
@@ -1620,16 +1643,6 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
             ) : null
           )}
 
-          {isRecording && (
-            <View style={[challengeStyles.topContainer, { paddingTop: cameraFrameTop + CHALLENGE_GAP }]} pointerEvents="none">
-              <View style={[challengeStyles.challengeBtn, { backgroundColor: colors.bgDanger }]}>
-                <Text style={[challengeStyles.challengeBtnText, { color: colors.textDangerOnDanger }]}>
-                  {`${Math.floor(recordingSeconds / 60).toString().padStart(2, "0")}:${(recordingSeconds % 60).toString().padStart(2, "0")}/30s`}
-                </Text>
-              </View>
-            </View>
-          )}
-
           <View style={[styles.cameraFooter, { bottom: (capturingSecond && slot1) ? NAVBAR_HEIGHT + 104 : NAVBAR_HEIGHT + 24 }]}>
             <View style={{ alignItems: "center", gap: 6 }}>
               {(activeChallenge === null || capturingSecond) && !isRecording && !isAudioRecording && !(cameraMode === "DESSIN" && canUndo) && (
@@ -1654,6 +1667,29 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               >
                 <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} />
                 <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} />
+                {isRecording && (
+                  <Svg
+                    width={RING_SIZE}
+                    height={RING_SIZE}
+                    style={StyleSheet.absoluteFillObject}
+                    pointerEvents="none"
+                  >
+                    <AnimatedCircle
+                      cx={RING_SIZE / 2}
+                      cy={RING_SIZE / 2}
+                      r={RING_RADIUS}
+                      stroke={colors.borderNeutral}
+                      strokeWidth={RING_STROKE}
+                      strokeLinecap="round"
+                      fill="none"
+                      strokeDasharray={RING_CIRCUMFERENCE}
+                      animatedProps={recordRingProps}
+                      rotation={-90}
+                      originX={RING_SIZE / 2}
+                      originY={RING_SIZE / 2}
+                    />
+                  </Svg>
+                )}
                 {isRecording || isAudioRecording ? (
                   <Shape name="stop" size={40} color={colors.brand} />
                 ) : (

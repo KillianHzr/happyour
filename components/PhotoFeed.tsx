@@ -98,6 +98,8 @@ type Props = {
   readOnly?: boolean;
   /** Libellé du bouton de fin (défaut "Retour à la capture"). */
   endPrimaryLabel?: string;
+  /** Désactive le cache vidéo local (évite le switch URL distant→local qui relance la vidéo). */
+  disableVideoCache?: boolean;
 };
 
 function formatDayLabel(dateStr: string) {
@@ -146,6 +148,7 @@ const PhotoFeedContent = forwardRef(({
   onCommentModalChange,
   readOnly = false,
   endPrimaryLabel,
+  disableVideoCache = false,
 }: Props, ref) => {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -371,6 +374,7 @@ const PhotoFeedContent = forwardRef(({
   });
 
   useEffect(() => {
+    if (disableVideoCache) return;   // lecture directe (read-only) → pas de switch URL distant→local
     const videos = photos.filter((p) => p.url && p.image_path.endsWith(".mp4") && p.url.startsWith("http"));
     let cancelled = false;
     videos.forEach(async (p) => {
@@ -385,7 +389,7 @@ const PhotoFeedContent = forwardRef(({
       }
     });
     return () => { cancelled = true; };
-  }, [photos]);
+  }, [photos, disableVideoCache]);
 
   const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     if (viewableItems.length > 0 && viewableItems[0].index != null) {

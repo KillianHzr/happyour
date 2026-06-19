@@ -11,7 +11,7 @@ import { useTheme } from "../lib/theme-context";
  * design system. On peut la surcharger via `color`, mais jamais via la couleur
  * d'origine du SVG.
  */
-export type IconName = "flash" | "flash-on" | "rotate" | "zoom" | "rollback" | "trash" | "lock" | "lock-filled" | "user" | "user-filled" | "circle" | "circle-filled" | "check" | "x" | "mic" | "play" | "chevron-left" | "chevron-right" | "more-vertical" | "menu" | "droplet" | "bell" | "moon" | "eye" | "plus" | "shield" | "life-buoy" | "info" | "log-out" | "key" | "search" | "copy" | "archive" | "settings" | "crown" | "unlock" | "arrow-right" | "smiley" | "edit" | "award" | "calendar" | "loader" | "lock-border";
+export type IconName = "flash" | "flash-on" | "rotate" | "zoom" | "rollback" | "trash" | "lock" | "lock-filled" | "user" | "user-filled" | "circle" | "circle-filled" | "check" | "x" | "mic" | "play" | "chevron-left" | "chevron-right" | "more-vertical" | "menu" | "droplet" | "bell" | "moon" | "eye" | "plus" | "shield" | "life-buoy" | "info" | "log-out" | "key" | "search" | "copy" | "archive" | "settings" | "crown" | "unlock" | "arrow-right" | "smiley" | "edit" | "award" | "calendar" | "loader" | "lock-border" | "shuffle";
 
 type IconDef = { viewBox: string; paths: string[]; stroke?: boolean; strokeWidth?: number };
 
@@ -233,6 +233,12 @@ const ICONS: Record<IconName, IconDef> = {
     viewBox: "0 0 16 16",
     paths: [
       "M7.43408 2.76752C7.7465 2.4551 8.2535 2.4551 8.56592 2.76752L13.2329 7.43353C13.5453 7.7459 13.5452 8.25294 13.2329 8.56537L8.56592 13.2324C8.25349 13.5446 7.74645 13.5447 7.43408 13.2324C7.12172 12.92 7.12183 12.413 7.43408 12.1005L10.7349 8.79974H3.3335C2.89178 8.79974 2.53387 8.44162 2.53369 7.99994C2.53369 7.55811 2.89167 7.19916 3.3335 7.19916H10.7349L7.43408 3.89838C7.1221 3.58604 7.1221 3.07985 7.43408 2.76752Z",
+    ],
+  },
+  shuffle: {
+    viewBox: "0 0 20 20",
+    paths: [
+      "M11.7928 11.793C12.1833 11.4026 12.8164 11.4025 13.2069 11.793L16.4998 15.0859V13.333C16.5 12.7809 16.9477 12.333 17.4998 12.333C18.0519 12.3332 18.4997 12.781 18.4998 13.333V17.5C18.4998 18.0522 18.052 18.4998 17.4998 18.5H13.3329C12.7806 18.5 12.3329 18.0523 12.3329 17.5C12.3329 16.9477 12.7806 16.5 13.3329 16.5H15.0858L11.7928 13.207C11.4023 12.8165 11.4023 12.1835 11.7928 11.793ZM2.62582 2.62598C3.0163 2.23567 3.6494 2.23567 4.03988 2.62598L8.20687 6.79297C8.59718 7.18345 8.59718 7.81655 8.20687 8.20703C7.8164 8.5975 7.18335 8.59739 6.79281 8.20703L2.62582 4.04004C2.23546 3.6495 2.23535 3.01645 2.62582 2.62598ZM18.4998 6.66699C18.4997 7.21902 18.0519 7.66682 17.4998 7.66699C16.9477 7.66699 16.5 7.21913 16.4998 6.66699V4.91406L4.03988 17.374C3.6494 17.7643 3.0163 17.7643 2.62582 17.374C2.23535 16.9836 2.23546 16.3505 2.62582 15.96L15.0858 3.5H13.3329C12.7806 3.5 12.3329 3.05228 12.3329 2.5C12.3329 1.94772 12.7806 1.5 13.3329 1.5H17.4998C18.052 1.50018 18.4998 1.94782 18.4998 2.5V6.66699Z",
     ],
   },
   "lock-border": {
