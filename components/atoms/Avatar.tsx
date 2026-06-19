@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text } from "react-native";
+import { View, Text, type StyleProp, type ViewStyle } from "react-native";
 import { Image } from "expo-image";
 import { Svg, Path } from "react-native-svg";
 import { typography } from "../../lib/theme";
@@ -10,13 +10,15 @@ interface UserAvatarProps {
   username: string;
   size?: number;
   borderRadius?: number;
+  /** Extra styling (borders, margins, shadows…) applied to the clipping box. */
+  style?: StyleProp<ViewStyle>;
 }
 
-export const UserAvatar = ({ avatar_url, username, size = 28, borderRadius }: UserAvatarProps) => {
+export const UserAvatar = ({ avatar_url, username, size = 28, borderRadius, style }: UserAvatarProps) => {
   const { colors } = useTheme();
   const r = borderRadius ?? (size / 2);
   return (
-    <View style={{ width: size, height: size, borderRadius: r, backgroundColor: colors.text, justifyContent: "center", alignItems: "center", overflow: "hidden" }}>
+    <View style={[{ width: size, height: size, borderRadius: r, backgroundColor: colors.text, justifyContent: "center", alignItems: "center", overflow: "hidden" }, style]}>
       <Text style={{ color: colors.bg, fontFamily: typography.family.bold, fontSize: Math.round(size * 0.42) }}>
         {username[0]?.toUpperCase() ?? "?"}
       </Text>

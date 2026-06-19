@@ -7,7 +7,6 @@ import {
   Dimensions,
   ViewToken,
   Platform,
-  TouchableOpacity,
   Share,
   Animated as RNAnimated,
   Easing as RNEasing,
@@ -19,9 +18,6 @@ import Reanimated, {
   useDerivedValue,
   withTiming,
   Easing,
-  LinearTransition,
-  FadeIn,
-  FadeOut,
   type SharedValue,
 } from "react-native-reanimated";
 import * as FileSystem from "expo-file-system/legacy";
@@ -43,9 +39,10 @@ import { RevealIntroPage } from "./organisms/RevealIntroPage";
 import { CrownRevealPage } from "./organisms/CrownRevealPage";
 import { RevealEndPage } from "./organisms/RevealEndPage";
 import { RefreshIcon } from "./atoms/RefreshIcon";
+import { BottomActionBar } from "./molecules/BottomActionBar";
 import { AnimatedPageWrapper } from "./molecules/AnimatedPageWrapper";
 import { StickerToast } from "./atoms/StickerToast";
-import { radii, spacing, typography, textStyles, type ThemeColors } from "../lib/theme";
+import { radii, spacing, typography, type ThemeColors } from "../lib/theme";
 import { SHEET_BASE } from "../lib/comment-sheet";
 import { useTheme, useThemedStyles, ForceTheme } from "../lib/theme-context";
 
@@ -107,7 +104,6 @@ function formatDayLabel(dateStr: string) {
 }
 
 const AnimatedFlatList = Reanimated.createAnimatedComponent(FlatList) as unknown as typeof FlatList<FeedItem>;
-const AnimatedTouchableOpacity = Reanimated.createAnimatedComponent(TouchableOpacity);
 
 const PhotoFeed = forwardRef((props: Props, ref) => {
   return (
@@ -623,69 +619,45 @@ const PhotoFeedContent = forwardRef(({
         </Reanimated.View>
       )}
 
-      {showBottomSection && currentItem && !commentModalVisible && (
-        <View style={styles.bottomSection}>
-          {currentItem.type === "end" ? (
-            <>
-              <AnimatedTouchableOpacity
-                key="orange-btn"
-                layout={LinearTransition.duration(300)}
-                style={styles.reactionsBtn}
-                onPress={() => {
-                  onBackToCapture?.();
-                }}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.reactionsBtnText}>Retour à la capture</Text>
-              </AnimatedTouchableOpacity>
-              <AnimatedTouchableOpacity
-                key="refresh-btn"
-                entering={FadeIn.duration(200)}
-                exiting={FadeOut.duration(200)}
-                layout={LinearTransition.duration(300)}
-                style={[styles.placeholderBtn, { justifyContent: "center", alignItems: "center" }]}
-                onPress={() => {
+      {showBottomSection && currentItem && !commentModalVisible && (() => {
+        const item = currentItem;
+
+        if (item.type === "end") {
+          return (
+            <BottomActionBar
+              primaryLabel="Retour à la capture"
+              onPrimaryPress={() => onBackToCapture?.()}
+              secondary={{
+                key: "refresh-btn",
+                icon: <RefreshIcon size={24} color={colors.brand} />,
+                onPress: () => {
                   try {
                     flatListRef.current?.scrollToIndex({ index: 0, animated: true });
                   } catch (e) {
                     console.warn("Failed to scroll to start index:", e);
                   }
-                }}
-                activeOpacity={0.85}
-              >
-                <RefreshIcon size={24} color={colors.brand} />
-              </AnimatedTouchableOpacity>
-            </>
-          ) : currentItem.type === "moment" ? (
-            <>
-              <AnimatedTouchableOpacity
-                key="orange-btn"
-                layout={LinearTransition.duration(300)}
-                style={styles.reactionsBtn}
-                onPress={() => {
-                  const moment = currentItem.data;
-                  openComments(moment.id, moment.user_id);
-                }}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.reactionsBtnText}>Réactions</Text>
-                {currentItem.data?.hasNewComments && (
-                  <View style={styles.reactionsBtnBadge}>
-                    <Text style={styles.reactionsBtnBadgeText}>
-                      {currentItem.data?.newCommentsCount ?? 0}
-                    </Text>
-                  </View>
-                )}
-              </AnimatedTouchableOpacity>
-              <AnimatedTouchableOpacity
-                key="share-btn"
-                entering={FadeIn.duration(200)}
-                exiting={FadeOut.duration(200)}
-                layout={LinearTransition.duration(300)}
-                style={styles.placeholderBtn}
-                activeOpacity={0.7}
-                onPress={async () => {
-                  const url = currentItem.data?.url;
+                },
+              }}
+            />
+          );
+        }
+
+        if (item.type === "moment") {
+          const moment = item.data;
+          return (
+            <BottomActionBar
+              primaryLabel="Réactions"
+              onPrimaryPress={() => openComments(moment.id, moment.user_id)}
+              badgeCount={moment?.hasNewComments ? (moment?.newCommentsCount ?? 0) : null}
+              secondary={{
+                key: "share-btn",
+                icon: (
+                  <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <Path d="M2.75 20V12C2.75 11.3096 3.30964 10.75 4 10.75C4.69036 10.75 5.25 11.3096 5.25 12V20C5.25 20.1989 5.32907 20.3896 5.46973 20.5303C5.61038 20.6709 5.80109 20.75 6 20.75H18C18.1989 20.75 18.3896 20.6709 18.5303 20.5303C18.6709 20.3896 18.75 20.1989 18.75 20V12C18.75 11.3096 19.3096 10.75 20 10.75C20.6904 10.75 21.25 11.3096 21.25 12V20C21.25 20.862 20.9073 21.6884 20.2979 22.2979C19.6884 22.9073 18.862 23.25 18 23.25H6C5.13805 23.25 4.31164 22.9073 3.70215 22.2979C3.09266 21.6884 2.75 20.862 2.75 20ZM10.75 15V5.01758L8.88379 6.88379C8.39563 7.37194 7.60437 7.37194 7.11621 6.88379C6.62806 6.39563 6.62806 5.60437 7.11621 5.11621L11.1162 1.11621L11.2109 1.03027C11.7019 0.629789 12.4261 0.658549 12.8838 1.11621L16.8838 5.11621C17.3719 5.60437 17.3719 6.39563 16.8838 6.88379C16.3956 7.37194 15.6044 7.37194 15.1162 6.88379L13.25 5.01758V15C13.25 15.6904 12.6904 16.25 12 16.25C11.3096 16.25 10.75 15.6904 10.75 15Z" fill="#FF561A"/>
+                  </Svg>
+                ),
+                onPress: async () => {
+                  const url = moment?.url;
                   if (!url) return;
                   try {
                     const isAvailable = await Sharing.isAvailableAsync();
@@ -705,44 +677,35 @@ const PhotoFeedContent = forwardRef(({
                     console.error("Share error:", e);
                     Share.share({ url, message: url });
                   }
-                }}
-              >
-                <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                  <Path d="M2.75 20V12C2.75 11.3096 3.30964 10.75 4 10.75C4.69036 10.75 5.25 11.3096 5.25 12V20C5.25 20.1989 5.32907 20.3896 5.46973 20.5303C5.61038 20.6709 5.80109 20.75 6 20.75H18C18.1989 20.75 18.3896 20.6709 18.5303 20.5303C18.6709 20.3896 18.75 20.1989 18.75 20V12C18.75 11.3096 19.3096 10.75 20 10.75C20.6904 10.75 21.25 11.3096 21.25 12V20C21.25 20.862 20.9073 21.6884 20.2979 22.2979C19.6884 22.9073 18.862 23.25 18 23.25H6C5.13805 23.25 4.31164 22.9073 3.70215 22.2979C3.09266 21.6884 2.75 20.862 2.75 20ZM10.75 15V5.01758L8.88379 6.88379C8.39563 7.37194 7.60437 7.37194 7.11621 6.88379C6.62806 6.39563 6.62806 5.60437 7.11621 5.11621L11.1162 1.11621L11.2109 1.03027C11.7019 0.629789 12.4261 0.658549 12.8838 1.11621L16.8838 5.11621C17.3719 5.60437 17.3719 6.39563 16.8838 6.88379C16.3956 7.37194 15.6044 7.37194 15.1162 6.88379L13.25 5.01758V15C13.25 15.6904 12.6904 16.25 12 16.25C11.3096 16.25 10.75 15.6904 10.75 15Z" fill="#FF561A"/>
-                </Svg>
-              </AnimatedTouchableOpacity>
-            </>
-          ) : (
-            <AnimatedTouchableOpacity
-              key="orange-btn"
-              layout={LinearTransition.duration(300)}
-              style={styles.reactionsBtn}
-              onPress={() => {
-                if (currentItem.type === "intro" || currentItem.type === "crown") {
-                  try {
-                    flatListRef.current?.scrollToIndex({ index: visibleIndex + 1, animated: true });
-                  } catch (e) {
-                    console.warn("Failed to scroll to next index:", e);
-                  }
-                } else if (currentItem.type === "challenge_vote") {
-                  setActiveChallengeResponsesVisible(true);
-                }
+                },
               }}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.reactionsBtnText}>
-                {currentItem.type === "intro" 
-                  ? "Démarrer" 
-                  : currentItem.type === "crown" 
-                    ? "Suivant" 
-                    : currentItem.type === "challenge_vote"
-                      ? "Voir les réponses"
-                      : "Participer au vote"}
-              </Text>
-            </AnimatedTouchableOpacity>
-          )}
-        </View>
-      )}
+            />
+          );
+        }
+
+        const primaryLabel =
+          item.type === "intro" ? "Démarrer"
+          : item.type === "crown" ? "Suivant"
+          : item.type === "challenge_vote" ? "Voir les réponses"
+          : "Participer au vote";
+
+        return (
+          <BottomActionBar
+            primaryLabel={primaryLabel}
+            onPrimaryPress={() => {
+              if (item.type === "intro" || item.type === "crown") {
+                try {
+                  flatListRef.current?.scrollToIndex({ index: visibleIndex + 1, animated: true });
+                } catch (e) {
+                  console.warn("Failed to scroll to next index:", e);
+                }
+              } else if (item.type === "challenge_vote") {
+                setActiveChallengeResponsesVisible(true);
+              }
+            }}
+          />
+        );
+      })()}
       
       {activePhotoId && activePhotoOwnerId && (
         <CommentModal
@@ -870,58 +833,6 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   revealCountdownTextRed: {
     color: '#FFFFFF',
-  },
-  bottomSection: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 100, // NAVBAR_HEIGHT
-    backgroundColor: colors.bg,
-    flexDirection: "row",
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    gap: spacing.md,
-    alignItems: "flex-start",
-    zIndex: 10,
-  },
-  reactionsBtn: {
-    flex: 1,
-    height: 52,
-    backgroundColor: colors.brand,
-    borderRadius: radii.lg,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  reactionsBtnText: {
-    fontFamily: typography.family.bold,
-    fontSize: typography.size.md,
-    color: colors.textBrandOnBrandSecondary,
-  },
-  reactionsBtnBadge: {
-    position: "absolute",
-    top: -6,
-    right: -6,
-    minWidth: 24,
-    height: 24,
-    paddingHorizontal: 6,
-    borderRadius: radii.full,
-    backgroundColor: colors.bgInverse,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  reactionsBtnBadgeText: {
-    ...textStyles.bodySmall,
-    color: colors.textBrandTertiary,
-    textAlign: "center",
-  },
-  placeholderBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: radii.lg,
-    backgroundColor: colors.card, // background/default/secondary
-    justifyContent: "center",
-    alignItems: "center",
   },
 });
 

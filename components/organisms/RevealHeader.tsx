@@ -66,12 +66,17 @@ export const RevealHeader = ({
             <View style={styles.statusDot} />
 
             {visibleParticipants.map((p, index) => (
-              <View key={p.userId} style={[styles.avatarWrapper, index > 0 && { marginLeft: spacing.negSm }]}>
-                <UserAvatar avatar_url={p.avatarUrl} username={p.username} size={32} borderRadius={radii.sm} />
-              </View>
+              <UserAvatar
+                key={p.userId}
+                avatar_url={p.avatarUrl}
+                username={p.username}
+                size={32}
+                borderRadius={radii.sm}
+                style={[styles.avatar, index > 0 && { marginLeft: spacing.negSm }]}
+              />
             ))}
             {remainingCount > 0 && (
-              <View style={[styles.avatarWrapper, styles.avatarMore, { marginLeft: spacing.negSm }]}>
+              <View style={[styles.avatar, styles.avatarMore, { marginLeft: spacing.negSm }]}>
                 <Text style={styles.avatarMoreText}>+{remainingCount}</Text>
               </View>
             )}
@@ -102,6 +107,7 @@ const makeStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.cr
   middleGroup: {
     flexDirection: "row",
     alignItems: "center",
+    height: 40, // keep the whole header content a uniform 40px
     gap: spacing.sm, // space/200 (8px)
   },
   iconButton: {
@@ -115,9 +121,10 @@ const makeStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.cr
   timerPill: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center", // center the countdown within the fixed width
+    alignSelf: "stretch", // fill the 40px header height
+    width: 98, // fixed so the pill doesn't resize as digits change
     backgroundColor: colors.opacityLight,
-    paddingHorizontal: spacing.lg, // space/400 (16px)
-    paddingVertical: spacing.md,   // space/300 (12px)
     borderRadius: radii.sm,        // radius/200 (8px)
   },
   timerPillRed: {
@@ -126,6 +133,7 @@ const makeStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.cr
   timerText: {
     ...textStyles.singleLineBodyBaseStrong,
     color: colors.text,
+    fontVariant: ["tabular-nums"], // equal-width digits so the countdown doesn't shift
   },
   timerTextRed: {
     color: "#FFFFFF",
@@ -133,11 +141,11 @@ const makeStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.cr
   avatarsRow: {
     flexDirection: "row",
     alignItems: "center",
+    alignSelf: "stretch", // fill middleGroup's height to match the timer pill
     backgroundColor: colors.opacityLight,
     paddingHorizontal: 6,
     paddingVertical: 4,
     borderRadius: radii.sm, // radius/200 (8px)
-    height: 40,
   },
   statusDot: {
     width: 8,
@@ -147,13 +155,9 @@ const makeStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.cr
     marginRight: spacing.sm, // gap to first avatar
     marginLeft: 4,
   },
-  avatarWrapper: {
-    width: 32,
-    height: 32,
-    borderWidth: stroke.sm, // var(--sds-size-stroke-border)
+  avatar: {
+    borderWidth: stroke.sm, // stroke/025
     borderColor: colors.bg,
-    borderRadius: radii.sm, // var(--sds-size-radius-200)
-    backgroundColor: colors.bg,
     ...shadows.shadow200, // drop-shadow/200
   },
   avatarMore: {
