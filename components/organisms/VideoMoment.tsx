@@ -7,7 +7,6 @@ import { useVideoPlayer, VideoView } from "expo-video";
 import { Svg, Path } from "react-native-svg";
 
 import { PhotoImage } from "../atoms/PhotoImage";
-import { DownloadButton } from "../atoms/DownloadButton";
 import { SecondCaptureThumbnail } from "../molecules/SecondCaptureThumbnail";
 import { AuthorInfo } from "../molecules/AuthorInfo";
 import { ReactionsRow } from "../molecules/ReactionsRow";
@@ -209,16 +208,6 @@ export const VideoMoment = ({
                 <Text style={styles.groupTagText}>{moment.groupName}</Text>
               </Reanimated.View>
             )}
-            {!swapped && (
-              <Reanimated.View style={[styles.downloadBtnContainer, animatedUiStyle]}>
-                <DownloadButton url={cachedUrl} filename={moment.id} />
-              </Reanimated.View>
-            )}
-            {swapped && hasSecond && moment.second_image_path !== "text_mode" && (
-              <Reanimated.View style={[styles.downloadBtnContainer, animatedUiStyle]}>
-                <DownloadButton url={r2Storage.getPublicUrl(moment.second_image_path!)} filename={`${moment.id}_2`} />
-              </Reanimated.View>
-            )}
             <Reanimated.View style={[styles.momentOverlay, animatedUiStyle]} pointerEvents="box-none">
               <LinearGradient
                 colors={["transparent", scrimColor]}
@@ -352,12 +341,6 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: typography.family.regular,
     fontSize: typography.size.sm,
     lineHeight: typography.size.sm * 1.4,
-  },
-  downloadBtnContainer: {
-    position: "absolute",
-    top: spacing.md + 2,
-    right: spacing.md + 2,
-    zIndex: 10,
   },
   pauseOverlay: {
     ...StyleSheet.absoluteFillObject,

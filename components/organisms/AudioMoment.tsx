@@ -9,7 +9,6 @@ import { spacing, radii, typography, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
 
 import { PhotoImage } from "../atoms/PhotoImage";
-import { DownloadButton } from "../atoms/DownloadButton";
 import { SecondCaptureThumbnail } from "../molecules/SecondCaptureThumbnail";
 import { AuthorInfo } from "../molecules/AuthorInfo";
 import { ReactionsRow } from "../molecules/ReactionsRow";
@@ -185,11 +184,6 @@ export const AudioMoment = ({
                 <Text style={styles.groupTagText}>{moment.groupName}</Text>
               </Reanimated.View>
             )}
-            {swapped && hasSecond && moment.second_image_path !== "text_mode" && (
-              <Reanimated.View style={[styles.downloadBtnContainer, animatedUiStyle]}>
-                <DownloadButton url={secondaryUrl} filename={`${moment.id}_2`} />
-              </Reanimated.View>
-            )}
             <Reanimated.View style={[styles.momentOverlay, animatedUiStyle]} pointerEvents="box-none">
               <LinearGradient
                 colors={["transparent", scrimColor]}
@@ -327,11 +321,5 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: typography.family.regular,
     fontSize: typography.size.sm,
     lineHeight: typography.size.sm * 1.4,
-  },
-  downloadBtnContainer: {
-    position: "absolute",
-    top: spacing.md,
-    right: spacing.md,
-    zIndex: 10,
   },
 });
