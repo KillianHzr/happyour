@@ -33,25 +33,23 @@ export default function MailLoginScreen() {
   const isEmailEntered = email.trim().length > 0;
 
   const handleSendOtp = async () => {
-    if (!email) {
-      return showToast("Attention", "Veuillez entrer votre adresse email.");
-    }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
-      return showToast("Erreur", "Veuillez entrer une adresse email valide.");
+    if (!email.trim() || !emailRegex.test(email.trim())) {
+      return showToast("Veuillez rentrer un mail valide.", undefined, "error");
     }
 
     setLoading(true);
     try {
       const formattedEmail = email.trim().toLowerCase();
       await sendOtp(formattedEmail);
-      showToast("Succès", "Code de vérification envoyé par email.");
+      showToast("Code de vérification envoyé par mail.", undefined, "success");
       router.push({
         pathname: "/(auth)/codeverif",
         params: { email: formattedEmail },
       });
     } catch (e: any) {
-      showToast("Erreur", translateError(e.message));
+      console.error("[sendOtp] erreur brute Supabase:", e?.message ?? e);
+      showToast(translateError(e.message), undefined, "error");
     } finally {
       setLoading(false);
     }

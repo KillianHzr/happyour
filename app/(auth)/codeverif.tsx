@@ -31,34 +31,34 @@ export default function CodeVerifScreen() {
   const [loading, setLoading] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
 
-  const isOtpEntered = otp.trim().length === 6;
+  const isOtpEntered = otp.trim().length === 8;
 
   const handleDevBypass = async (isExisting: boolean) => {
     try {
       await bypassAuthDev(isExisting);
-      showToast("Dev Mode", "Authentification simulée.");
+      showToast("Authentification simulée.", undefined, "success");
       if (isExisting) {
         router.replace("/(app)/groups");
       } else {
         router.replace("/(onboarding)/intro");
       }
     } catch (e: any) {
-      showToast("Erreur Dev", e.message);
+      showToast(e.message, undefined, "error");
     }
   };
 
   const handleVerifyOtp = async () => {
     if (!otp || otp.length < 8) {
-      return showToast("Attention", "Veuillez entrer le code à 6 chiffres.");
+      return showToast("Veuillez entrer le code à 8 chiffres.", undefined, "info");
     }
     if (!email) {
-      return showToast("Erreur", "Email manquant, veuillez recommencer.");
+      return showToast("Email manquant, veuillez recommencer.", undefined, "error");
     }
 
     setLoading(true);
     try {
       const isComplete = await verifyOtp(email, otp.trim());
-      showToast("Succès", "Validation réussie !");
+      showToast("Validation réussie !", undefined, "success");
       
       if (isComplete) {
         router.replace("/(app)/groups");
@@ -66,7 +66,7 @@ export default function CodeVerifScreen() {
         router.replace("/(onboarding)/intro");
       }
     } catch (e: any) {
-      showToast("Erreur", translateError(e.message));
+      showToast(translateError(e.message), undefined, "error");
     } finally {
       setLoading(false);
     }
@@ -77,9 +77,9 @@ export default function CodeVerifScreen() {
     setLoading(true);
     try {
       await sendOtp(email);
-      showToast("Succès", "Un nouveau code de vérification a été envoyé.");
+      showToast("Un nouveau code de vérification a été envoyé.", undefined, "success");
     } catch (e: any) {
-      showToast("Erreur", translateError(e.message));
+      showToast(translateError(e.message), undefined, "error");
     } finally {
       setLoading(false);
     }
@@ -150,7 +150,7 @@ export default function CodeVerifScreen() {
                 { backgroundColor: isOtpEntered ? colors.brand : colors.bgNeutralTertiary }
               ]}
               onPress={handleVerifyOtp}
-              disabled={loading}
+              disabled={loading || !isOtpEntered}
               activeOpacity={0.85}
             >
               {loading ? (

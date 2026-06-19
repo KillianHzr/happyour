@@ -15,6 +15,8 @@ export default function OnboardingLayout() {
       if (!session) {
         router.replace("/(auth)/intro");
       } else if (profileComplete === true) {
+        // Utilisateur complet qui ne fait que transiter par l'onboarding
+        // (ex. login admin) → on l'envoie vers l'app, pas vers l'écran join.
         router.replace("/(app)/groups");
       }
     }

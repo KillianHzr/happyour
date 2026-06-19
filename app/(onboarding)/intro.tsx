@@ -11,6 +11,7 @@ import { useRouter } from "expo-router";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import { spacing, radii, typography, textStyles, type ThemeColors } from "../../lib/theme";
 import Svg, { Path, Circle } from "react-native-svg";
+import Icon from "../../components/Icon";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -97,17 +98,30 @@ export default function OnboardingIntroScreen() {
     }
   };
 
+  // Retour : revient à la slide précédente (la « vue précédente » du carousel).
+  const handleBack = () => setCurrentStep((prev) => Math.max(0, prev - 1));
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Top Skip button */}
+      {/* Top bar : retour (slide précédente) à gauche, Passer à droite */}
       <View style={styles.header}>
-        {!isLastStep && (
+        {currentStep > 0 ? (
+          <TouchableOpacity onPress={handleBack} style={styles.backBtn} activeOpacity={0.7}>
+            <Icon name="chevron-left" size={20} color={colors.iconNeutral} />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.headerSpacer} />
+        )}
+
+        {!isLastStep ? (
           <TouchableOpacity
             onPress={() => router.push("/(onboarding)/username")}
             style={styles.skipBtn}
           >
             <Text style={styles.skipText}>Passer</Text>
           </TouchableOpacity>
+        ) : (
+          <View style={styles.headerSpacer} />
         )}
       </View>
 
@@ -157,8 +171,21 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   header: {
     height: 48,
     paddingHorizontal: 24,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.md,
+    backgroundColor: colors.card,
     justifyContent: "center",
-    alignItems: "flex-end",
+    alignItems: "center",
+  },
+  headerSpacer: {
+    width: 40,
+    height: 40,
   },
   skipBtn: {
     paddingVertical: 8,

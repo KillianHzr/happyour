@@ -17,6 +17,7 @@ import { spacing, radii, typography, textStyles, type ThemeColors } from "../../
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import Loader from "../../components/Loader";
 import { TextSticker } from "../../components/atoms/TextSticker";
+import Icon from "../../components/Icon";
 
 export default function OnboardingUsernameScreen() {
   const router = useRouter();
@@ -56,21 +57,23 @@ export default function OnboardingUsernameScreen() {
         return showToast("Indisponible", "Ce nom d'utilisateur est déjà pris.");
       }
 
-      // 2. Update the profile
-      const { error: updateError } = await supabase
+      // 2. Upsert the profile. A brand-new OTP user has no `profiles` row yet,
+      //    so a plain update would silently affect 0 rows and the username would
+      //    never persist — profileComplete stays false and the app layout bounces
+      //    the user back to onboarding (the carousel ↔ username loop).
+      const { error: upsertError } = await supabase
         .from("profiles")
-        .update({ username: trimmedUsername })
-        .eq("id", user.id);
+        .upsert({ id: user.id, username: trimmedUsername }, { onConflict: "id" });
 
-      if (updateError) throw updateError;
+      if (upsertError) throw upsertError;
 
       showToast("Bienvenue !", "Ton compte a été configuré.");
 
-      // 3. Refresh profile status in AuthContext, which triggers redirection
+      // 3. Refresh profile status in AuthContext (profileComplete → true).
       await checkProfileStatus(user.id);
-      
-      // Clear route stack and go to app
-      router.replace("/(app)/groups");
+
+      // 4. L'onboarding se poursuit sur l'écran « rejoindre un groupe ».
+      router.replace("/(app)/groups/join");
     } catch (e: any) {
       showToast("Erreur", e.message || "Une erreur est survenue lors de la création du pseudo.");
     } finally {
@@ -84,6 +87,13 @@ export default function OnboardingUsernameScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <SafeAreaView style={styles.safeArea}>
+        {/* Top Header Back Button — ramène à l'intro principale (le carousel) */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
+            <Icon name="chevron-left" size={20} color={colors.iconNeutral} />
+          </TouchableOpacity>
+        </View>
+
         {/* Main Content */}
         <View style={styles.centerContainer}>
           {/* Title Header */}
@@ -152,6 +162,19 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   safeArea: {
     flex: 1,
+  },
+  header: {
+    height: 48,
+    paddingHorizontal: 20,
+    justifyContent: "center",
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.md,
+    backgroundColor: colors.card,
+    justifyContent: "center",
+    alignItems: "center",
   },
   centerContainer: {
     flex: 1,

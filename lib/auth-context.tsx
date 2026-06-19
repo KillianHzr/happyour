@@ -88,7 +88,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const sendOtp = async (email: string) => {
-    const { error } = await supabase.auth.signInWithOtp({ email });
+    // shouldCreateUser: true → un code est envoyé que le compte existe ou non
+    // (l'utilisateur est créé à la volée si nécessaire). Le routage app vs
+    // onboarding se fait ensuite à la vérification du code (checkProfileStatus).
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { shouldCreateUser: true },
+    });
     if (error) throw error;
   };
 
