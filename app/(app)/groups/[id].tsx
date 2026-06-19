@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Image } from "expo-image";
-import { View, Text, StyleSheet, ScrollView, Dimensions, Animated, TouchableOpacity, Alert, TextInput, AppState, Modal, KeyboardAvoidingView, Platform, Pressable } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Dimensions, Animated, TouchableOpacity, Alert, TextInput, AppState, Modal, KeyboardAvoidingView, Platform, Pressable, BackHandler } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import BlurView from "../../../components/atoms/BlurView";
 import { SvgCutout } from "../../../components/atoms/SvgCutout";
@@ -34,6 +34,7 @@ import SettingsSheet from "../../../components/SettingsSheet";
 import GroupSettingsContent from "../../../components/groups/GroupSettingsContent";
 import GroupActionToast, { type GroupAction } from "../../../components/groups/GroupActionToast";
 import ArchivesSheet from "../../../components/groups/ArchivesSheet";
+import EdgeSwipeBack from "../../../components/EdgeSwipeBack";
 import CustomChallengeCreatePage from "../../../components/groups/CustomChallengeCreatePage";
 import CustomChallengeQueuePage from "../../../components/groups/CustomChallengeQueuePage";
 import BottomSheet from "../../../components/BottomSheet";
@@ -714,6 +715,18 @@ export default function MainPagerScreen() {
   }, [user, activeGroupId]);
 
   useEffect(() => { fetchAllData(); }, [fetchAllData]);
+
+  // Retour Android : fermer le reveal (sauf si le modal commentaires est ouvert → il gère son propre retour)
+  useEffect(() => {
+    if (!showReveal) return;
+    const onBack = () => {
+      if (hideRevealHeader) return false;
+      setShowReveal(false);
+      return true;
+    };
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+    return () => sub.remove();
+  }, [showReveal, hideRevealHeader]);
 
   const activeRevealEndTime = activeRevealEndDate.getTime();
 
@@ -1486,7 +1499,11 @@ export default function MainPagerScreen() {
       {/* ── REVEAL OVERLAY ── */}
       {showReveal && (
         <ForceTheme mode="Dark">
-          <View style={[StyleSheet.absoluteFill, styles.revealOverlay]}>
+          <EdgeSwipeBack
+            style={[StyleSheet.absoluteFill, styles.revealOverlay]}
+            enabled={!hideRevealHeader}
+            onBack={() => setShowReveal(false)}
+          >
           {!hideRevealHeader && (
             <RevealHeader
               onClose={() => setShowReveal(false)}
@@ -1688,7 +1705,7 @@ export default function MainPagerScreen() {
                </View>
              </KeyboardAvoidingView>
            </Modal>
-          </View>
+          </EdgeSwipeBack>
         </ForceTheme>
       )}
 
@@ -1705,6 +1722,11 @@ export default function MainPagerScreen() {
         onClose={() => setShowArchives(false)}
         groupId={activeGroupId}
         revealConfig={revealConfig}
+        groupName={groupName}
+        members={members}
+        currentUserId={user?.id}
+        currentUsername={username}
+        currentUserAvatarUrl={avatarUrl}
       />
 
       {/* ── Toast quitter / supprimer un groupe (liste des groupes) ── */}

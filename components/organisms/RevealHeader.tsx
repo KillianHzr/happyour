@@ -20,6 +20,8 @@ interface RevealHeaderProps {
   revealMsLeft: number;
   participants: Participant[];
   onNotificationPress?: () => void;
+  /** Mode archive : remplace timer + présence par "Reveal XX" + plage de dates. */
+  archive?: { numberLabel: string; dateLabel: string };
 }
 
 // ─── Presence animations (single source of truth) ────────────────────────────
@@ -38,6 +40,7 @@ export const RevealHeader = ({
   revealMsLeft,
   participants = [],
   onNotificationPress,
+  archive,
 }: RevealHeaderProps) => {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -69,8 +72,16 @@ export const RevealHeader = ({
           resizes, so the timer pill rides along smoothly and never overlaps the
           avatars (animating the pill on its own desyncs it from its sibling). */}
       <Reanimated.View style={styles.middleGroup} layout={presenceTransitions.layout}>
+        {/* Mode archive : "Reveal XX" + plage de dates (ni timer ni présence) */}
+        {archive && (
+          <View style={styles.archiveChip}>
+            <Text style={styles.archiveNumber}>{archive.numberLabel}</Text>
+            <Text style={styles.archiveDate}>{archive.dateLabel}</Text>
+          </View>
+        )}
+
         {/* 2. Timer Pill */}
-        {countdownText !== "" && (
+        {!archive && countdownText !== "" && (
           <View style={[styles.timerPill, isLowTime && styles.timerPillRed]}>
             <Text style={[styles.timerText, isLowTime && styles.timerTextRed]}>
               {countdownText}
@@ -79,7 +90,7 @@ export const RevealHeader = ({
         )}
 
         {/* 3. Connected Users Row */}
-        {participants.length > 0 && (
+        {!archive && participants.length > 0 && (
           <Reanimated.View style={styles.avatarsRow} layout={presenceTransitions.layout}>
             {/* Green Connected Status Dot */}
             <View style={styles.statusDot} />
@@ -159,6 +170,24 @@ const makeStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.cr
     width: 98, // fixed so the pill doesn't resize as digits change
     backgroundColor: colors.opacityLight,
     borderRadius: radii.sm,        // radius/200 (8px)
+  },
+  archiveChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "stretch",          // 40px header height
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.opacityLight,
+    borderRadius: radii.sm,
+  },
+  archiveNumber: {
+    ...textStyles.singleLineBodyBaseStrong,
+    color: colors.text,
+  },
+  archiveDate: {
+    ...textStyles.singleLineBodySmall,
+    color: colors.textSecondary,
   },
   timerPillRed: {
     backgroundColor: "#EC221F",

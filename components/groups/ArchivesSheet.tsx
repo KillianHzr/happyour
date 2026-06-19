@@ -15,6 +15,7 @@ import Icon from "../Icon";
 import EdgeSwipeBack from "../EdgeSwipeBack";
 import BottomSheet from "../BottomSheet";
 import StickerGraphic from "../atoms/StickerGraphic";
+import ArchiveRevealView, { type ArchiveRevealMeta } from "./ArchiveRevealView";
 import { GRADIENT_ORANGE } from "../../lib/assets";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -56,24 +57,50 @@ type RevealStatus = "current" | "available" | "locked";
 type Reveal = { number: number; start: Date; end: Date; status: RevealStatus };
 type MonthGroup = { key: string; year: number; month: number; label: string; reveals: Reveal[] };
 
+type Member = { user_id: string; username: string; avatar_url?: string | null };
+
 type Props = {
   visible: boolean;
   onClose: () => void;
   groupId?: string;
   revealConfig: { day: number; hour: number };
+  groupName?: string;
+  members?: Member[];
+  currentUserId?: string;
+  currentUsername?: string;
+  currentUserAvatarUrl?: string | null;
 };
 
-export default function ArchivesSheet({ visible, onClose, groupId, revealConfig }: Props) {
+export default function ArchivesSheet({
+  visible, onClose, groupId, revealConfig, groupName, members = [],
+  currentUserId, currentUsername, currentUserAvatarUrl,
+}: Props) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
 
   const [mounted, setMounted] = useState(visible);
   const [showComingSoon, setShowComingSoon] = useState(false);
+  const [archiveReveal, setArchiveReveal] = useState<ArchiveRevealMeta | null>(null);
   const sheetAnim = useRef(new Animated.Value(SCREEN_WIDTH)).current;
 
   const [reveals, setReveals] = useState<Reveal[]>([]);
   const [availableBgUrl, setAvailableBgUrl] = useState<string | null>(null);
+
+  // Clic sur une archive : disponible → ouvre le reveal archivé ; ancienne → premium ; en cours → rien.
+  const handleRevealPress = (r: Reveal) => {
+    if (r.status === "available") {
+      setArchiveReveal({
+        number: r.number,
+        start: r.start,
+        end: r.end,
+        numberLabel: `Reveal ${pad2(r.number)}`,
+        dateLabel: `${ddMM(r.start)} - ${ddMM(new Date(r.end.getTime() - DAY_MS))}`,
+      });
+    } else if (r.status === "locked") {
+      setShowComingSoon(true);
+    }
+  };
 
   // ── Slide in / out ──
   useEffect(() => {
@@ -211,6 +238,7 @@ export default function ArchivesSheet({ visible, onClose, groupId, revealConfig 
                       availableBgUrl={availableBgUrl}
                       styles={styles}
                       iconColor={colors.icon}
+                      onRevealPress={handleRevealPress}
                     />
                   </Fragment>
                 );
@@ -237,6 +265,19 @@ export default function ArchivesSheet({ visible, onClose, groupId, revealConfig 
           </EdgeSwipeBack>
         </Animated.View>
       </GestureHandlerRootView>
+
+      {/* ── Reveal archivé (read-only) ── */}
+      <ArchiveRevealView
+        visible={!!archiveReveal}
+        onClose={() => setArchiveReveal(null)}
+        groupId={groupId ?? ""}
+        members={members}
+        currentUserId={currentUserId}
+        currentUsername={currentUsername}
+        currentUserAvatarUrl={currentUserAvatarUrl}
+        groupName={groupName}
+        reveal={archiveReveal}
+      />
     </Modal>
   );
 }
@@ -254,8 +295,8 @@ function YearSeparator({ year, styles }: { year: number; styles: any }) {
 
 // ─── Accordéon d'un mois ───────────────────────────────────────────────────────
 function MonthAccordion({
-  group, defaultOpen, availableBgUrl, styles, iconColor,
-}: { group: MonthGroup; defaultOpen: boolean; availableBgUrl: string | null; styles: any; iconColor: string }) {
+  group, defaultOpen, availableBgUrl, styles, iconColor, onRevealPress,
+}: { group: MonthGroup; defaultOpen: boolean; availableBgUrl: string | null; styles: any; iconColor: string; onRevealPress: (r: Reveal) => void }) {
   const [open, setOpen] = useState(defaultOpen);
   const rot = useRef(new Animated.Value(defaultOpen ? 1 : 0)).current;
 
@@ -278,7 +319,7 @@ function MonthAccordion({
       {open && (
         <View style={styles.accordeon}>
           {group.reveals.map((r) => (
-            <ArchiveRevealItem key={r.number} reveal={r} availableBgUrl={availableBgUrl} styles={styles} />
+            <ArchiveRevealItem key={r.number} reveal={r} availableBgUrl={availableBgUrl} styles={styles} onPress={onRevealPress} />
           ))}
         </View>
       )}
@@ -291,7 +332,7 @@ function SpinningLoader({ color }: { color: string }) {
   const rot = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const anim = Animated.loop(
-      Animated.timing(rot, { toValue: 1, duration: 1000, easing: Easing.linear, useNativeDriver: true })
+      Animated.timing(rot, { toValue: 1, duration: 2000, easing: Easing.linear, useNativeDriver: true })
     );
     anim.start();
     return () => anim.stop();
@@ -305,14 +346,18 @@ function SpinningLoader({ color }: { color: string }) {
 }
 
 // ─── Une archive de reveal ─────────────────────────────────────────────────────
-function ArchiveRevealItem({ reveal, availableBgUrl, styles }: { reveal: Reveal; availableBgUrl: string | null; styles: any }) {
+function ArchiveRevealItem({ reveal, availableBgUrl, styles, onPress }: { reveal: Reveal; availableBgUrl: string | null; styles: any; onPress: (r: Reveal) => void }) {
   const isCurrent = reveal.status === "current";
   const isAvailable = reveal.status === "available";
   const isLocked = reveal.status === "locked";
   const showPhoto = isAvailable && !!availableBgUrl;
 
   return (
-    <View style={[styles.archiveItem, isLocked && { opacity: 0.3 }]}>
+    <TouchableOpacity
+      style={[styles.archiveItem, isLocked && { opacity: 0.3 }]}
+      activeOpacity={0.85}
+      onPress={() => onPress(reveal)}
+    >
       {/* Fond */}
       {showPhoto ? (
         <>
@@ -350,7 +395,7 @@ function ArchiveRevealItem({ reveal, availableBgUrl, styles }: { reveal: Reveal;
 
       {/* Sticker */}
       <StickerGraphic width={102.4} color={darkColors.icon} />
-    </View>
+    </TouchableOpacity>
   );
 }
 

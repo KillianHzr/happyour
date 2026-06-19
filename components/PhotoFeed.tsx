@@ -94,6 +94,10 @@ type Props = {
   currentUserAvatarUrl?: string | null;
   currentUsername?: string;
   onCommentModalChange?: (visible: boolean) => void;
+  /** Mode archive : réactions visibles, mais aucune interaction (sticker/commentaire). */
+  readOnly?: boolean;
+  /** Libellé du bouton de fin (défaut "Retour à la capture"). */
+  endPrimaryLabel?: string;
 };
 
 function formatDayLabel(dateStr: string) {
@@ -140,6 +144,8 @@ const PhotoFeedContent = forwardRef(({
   currentUserAvatarUrl,
   currentUsername,
   onCommentModalChange,
+  readOnly = false,
+  endPrimaryLabel,
 }: Props, ref) => {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -526,7 +532,7 @@ const PhotoFeedContent = forwardRef(({
               flatListRef.current?.setNativeProps({ scrollEnabled: !locked }); 
               onScrollLock?.(locked); 
             }} 
-            onOpenPicker={onOpenPicker}
+            onOpenPicker={readOnly ? undefined : onOpenPicker}
             onOpenComments={(pid, oid) => { openComments(pid, oid); onOpenComments?.(pid, oid); }}
             isShrunken={commentModalVisible}
             postCountText={postCountTexts[index]}
@@ -540,7 +546,7 @@ const PhotoFeedContent = forwardRef(({
             currentUserId={currentUserId} 
             crownWinnerId={crownWinnerId} 
             cachedUrl={videoCache[moment.url] ?? moment.url} 
-            onOpenPicker={onOpenPicker} 
+            onOpenPicker={readOnly ? undefined : onOpenPicker} 
             onOpenComments={(pid, oid) => { openComments(pid, oid); onOpenComments?.(pid, oid); }} 
             isShrunken={commentModalVisible}
             postCountText={postCountTexts[index]}
@@ -552,7 +558,7 @@ const PhotoFeedContent = forwardRef(({
             moment={moment}
             currentUserId={currentUserId}
             crownWinnerId={crownWinnerId}
-            onOpenPicker={onOpenPicker}
+            onOpenPicker={readOnly ? undefined : onOpenPicker}
             onOpenComments={(pid, oid) => { openComments(pid, oid); onOpenComments?.(pid, oid); }}
             isVisible={index === visibleIndex}
             isShrunken={commentModalVisible}
@@ -625,7 +631,7 @@ const PhotoFeedContent = forwardRef(({
         if (item.type === "end") {
           return (
             <BottomActionBar
-              primaryLabel="Retour à la capture"
+              primaryLabel={endPrimaryLabel ?? "Retour à la capture"}
               onPrimaryPress={() => onBackToCapture?.()}
               secondary={{
                 key: "refresh-btn",
@@ -710,6 +716,7 @@ const PhotoFeedContent = forwardRef(({
       {activePhotoId && activePhotoOwnerId && (
         <CommentModal
           embedded
+          readOnly={readOnly}
           visible={commentModalVisible}
           onClose={() => setCommentModalVisible(false)}
           keyboardHeightShared={kb}

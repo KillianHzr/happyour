@@ -101,6 +101,8 @@ interface CommentModalProps {
   embedded?: boolean;
   inline?: boolean;
   style?: any;
+  /** Lecture seule (archives) : on voit commentaires + réactions, mais pas d'ajout/suppression. */
+  readOnly?: boolean;
 }
 
 // ── Mounting shell ────────────────────────────────────────────────────────────
@@ -195,6 +197,7 @@ function CommentModalContent({
   embedded,
   inline,
   style,
+  readOnly = false,
 }: CommentModalProps & { onCloseComplete: () => void; requestCloseRef?: React.MutableRefObject<() => void> }) {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
@@ -734,12 +737,12 @@ function CommentModalContent({
     <CommentItem
       item={item}
       isMyComment={item.user_id === user?.id}
-      onLongPressDelete={handleLongPressDelete}
+      onLongPressDelete={readOnly ? (() => {}) : handleLongPressDelete}
       isActive={item.id === deletePopup?.commentId}
       groupMembers={fetchedGroupMembers}
       animateIn={item.id === newestCommentId}
     />
-  ), [user?.id, handleLongPressDelete, fetchedGroupMembers, newestCommentId, deletePopup?.commentId]);
+  ), [user?.id, handleLongPressDelete, fetchedGroupMembers, newestCommentId, deletePopup?.commentId, readOnly]); // eslint-disable-line
 
   if (inline) {
     return (
@@ -765,6 +768,7 @@ function CommentModalContent({
             closingRef={intentionalCloseRef}
             isStickerDeleteMode={isStickerDeleteMode}
             onStickerDelete={handleStickerDelete}
+            readOnly={readOnly}
           />
 
           {toastMessage !== null && (
@@ -831,6 +835,7 @@ function CommentModalContent({
               closingRef={intentionalCloseRef}
               isStickerDeleteMode={isStickerDeleteMode}
               onStickerDelete={handleStickerDelete}
+              readOnly={readOnly}
             />
           </Reanimated.View>
         </ForceTheme>
@@ -873,6 +878,7 @@ function CommentModalBody({
   closingRef,
   isStickerDeleteMode,
   onStickerDelete,
+  readOnly,
 }: any) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -998,37 +1004,42 @@ function CommentModalBody({
           ))}
       </View>
 
-      <View style={{ paddingBottom }}>
-        {mode === "sticker" && (
-          <View style={styles.stickerPreviewContainer}>
-            <TextSticker text={content.trim().toUpperCase() || " "} fontSize={36} />
-          </View>
-        )}
-        {mode !== "sticker" && (
-          <MentionSuggestionsPopup
-            keyword={mentionKeyword}
-            members={groupMembers}
-            onSelect={handleSuggestionSelect}
+      {/* Composer masqué en lecture seule (archives) : on peut voir, pas écrire/supprimer */}
+      {readOnly ? (
+        <View style={{ height: insets.bottom + themeRadii.lg }} />
+      ) : (
+        <View style={{ paddingBottom }}>
+          {mode === "sticker" && (
+            <View style={styles.stickerPreviewContainer}>
+              <TextSticker text={content.trim().toUpperCase() || " "} fontSize={36} />
+            </View>
+          )}
+          {mode !== "sticker" && (
+            <MentionSuggestionsPopup
+              keyword={mentionKeyword}
+              members={groupMembers}
+              onSelect={handleSuggestionSelect}
+            />
+          )}
+          <CommentInput
+            content={content}
+            setContent={setContent}
+            onSubmit={handleSubmit}
+            submitting={submitting}
+            maxLength={mode === "sticker" ? 8 : undefined}
+            placeholder={mode === "sticker" ? "Ton message..." : undefined}
+            autoCapitalize={mode === "sticker" ? "characters" : undefined}
+            isStickerMode={mode === "sticker"}
+            onStickerToggle={onStickerToggle}
+            onMentionSearch={setMentionKeyword}
+            onFocus={handleInputFocus}
+            onBlur={handleInputBlur}
+            closingRef={closingRef}
+            stickerDeleteMode={isStickerDeleteMode}
+            onStickerDelete={onStickerDelete}
           />
-        )}
-        <CommentInput
-          content={content}
-          setContent={setContent}
-          onSubmit={handleSubmit}
-          submitting={submitting}
-          maxLength={mode === "sticker" ? 8 : undefined}
-          placeholder={mode === "sticker" ? "Ton message..." : undefined}
-          autoCapitalize={mode === "sticker" ? "characters" : undefined}
-          isStickerMode={mode === "sticker"}
-          onStickerToggle={onStickerToggle}
-          onMentionSearch={setMentionKeyword}
-          onFocus={handleInputFocus}
-          onBlur={handleInputBlur}
-          closingRef={closingRef}
-          stickerDeleteMode={isStickerDeleteMode}
-          onStickerDelete={onStickerDelete}
-        />
-      </View>
+        </View>
+      )}
     </>
   );
 }
