@@ -20,6 +20,8 @@ interface RevealHeaderProps {
   revealMsLeft: number;
   participants: Participant[];
   onNotificationPress?: () => void;
+  /** Affiche une pastille brand en haut-droite du bouton Activité (nouvelle activité non vue). */
+  hasUnseenActivity?: boolean;
   /** Mode archive : remplace timer + présence par "Reveal XX" + plage de dates. */
   archive?: { numberLabel: string; dateLabel: string };
 }
@@ -40,6 +42,7 @@ export const RevealHeader = ({
   revealMsLeft,
   participants = [],
   onNotificationPress,
+  hasUnseenActivity = false,
   archive,
 }: RevealHeaderProps) => {
   const insets = useSafeAreaInsets();
@@ -130,6 +133,8 @@ export const RevealHeader = ({
       {/* 4. Notifications Button */}
       <TouchableOpacity style={styles.iconButton} onPress={onNotificationPress} activeOpacity={0.7}>
         <BellIcon size={22} color={colors.text} />
+        {/* Pastille "nouvelle activité" — coin haut-droite, couleur brand (#FF561A). */}
+        {hasUnseenActivity && <View style={styles.activityDot} />}
       </TouchableOpacity>
       </View>
     </LayoutAnimationConfig>
@@ -161,6 +166,15 @@ const makeStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.cr
     backgroundColor: colors.opacityLight, // background/default/default-opacity
     justifyContent: "center",
     alignItems: "center",
+  },
+  activityDot: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.brand, // background/brand/default (#FF561A)
   },
   timerPill: {
     flexDirection: "row",
@@ -219,7 +233,7 @@ const makeStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.cr
   },
   avatar: {
     borderWidth: stroke.sm, // stroke/025
-    borderColor: colors.bg,
+    borderColor: colors.cardBorder, // Color/border/default/default
     ...shadows.shadow200, // drop-shadow/200
   },
   avatarMore: {
