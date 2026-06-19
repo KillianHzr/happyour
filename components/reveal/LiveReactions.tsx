@@ -216,6 +216,10 @@ export default function LiveReactions({
 
   const channelRef   = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const pRef         = useRef<Map<string, Participant>>(new Map());
+  // Latest identity, read inside track() so changing username/avatar doesn't
+  // tear down and rebuild the presence channel (which would replay animations).
+  const identityRef  = useRef({ username: currentUsername, avatarUrl: currentAvatarUrl });
+  identityRef.current = { username: currentUsername, avatarUrl: currentAvatarUrl };
   const lastWaveRef       = useRef(0);
   const reversalsRef      = useRef<number[]>([]); // timestamps of X-axis direction reversals
   const lastXDirectionRef = useRef<0 | 1 | -1>(0); // last committed X direction
@@ -293,6 +297,10 @@ export default function LiveReactions({
           if (!data) continue;
           const existing = pRef.current.get(key);
           if (existing) {
+            // Keep the same object (no re-animation), but refresh metadata in
+            // case it changed (e.g. a late-loading avatar) since first seen.
+            existing.username = data.username;
+            existing.avatarUrl = data.avatarUrl;
             next.set(key, existing);
           } else {
             const p = makeParticipant(data.userId, data.username, data.avatarUrl);
@@ -314,7 +322,7 @@ export default function LiveReactions({
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
           await channel
-            .track({ userId: currentUserId, username: currentUsername, avatarUrl: currentAvatarUrl })
+            .track({ userId: currentUserId, ...identityRef.current })
             .catch(() => {});
         }
       });
@@ -326,7 +334,7 @@ export default function LiveReactions({
         await ch.untrack().catch(() => {});
       } else if (nextState === "active") {
         await ch
-          .track({ userId: currentUserId, username: currentUsername, avatarUrl: currentAvatarUrl })
+          .track({ userId: currentUserId, ...identityRef.current })
           .catch(() => {});
       }
     };
@@ -339,13 +347,24 @@ export default function LiveReactions({
       pRef.current.clear();
       setParticipants(new Map());
       setWaveTriggers(new Map());
+      // Reset the parent's participant list so a later reopen starts empty
+      // instead of replaying enter/exit animations for stale members.
+      onParticipantsChange?.([]);
       if (ch) {
         ch.untrack()
           .catch(() => {})
           .finally(() => supabase.removeChannel(ch));
       }
     };
-  }, [isVisible, groupId, currentUserId, currentUsername, currentAvatarUrl]);
+  }, [isVisible, groupId, currentUserId]);
+
+  // Re-track presence metadata when the user's identity changes, without
+  // rebuilding the channel (avoids a teardown/rebuild that replays animations).
+  useEffect(() => {
+    channelRef.current
+      ?.track({ userId: currentUserId, username: currentUsername, avatarUrl: currentAvatarUrl })
+      .catch(() => {});
+  }, [currentUserId, currentUsername, currentAvatarUrl]);
 
   // ── shake detection ────────────────────────────────────────────────────────
   useEffect(() => {

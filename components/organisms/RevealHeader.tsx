@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Reanimated, { FadeInRight, FadeOutRight, LinearTransition, LayoutAnimationConfig } from "react-native-reanimated";
 import Svg, { Path } from "react-native-svg";
 import { UserAvatar } from "../atoms/Avatar";
 import { BellIcon } from "../atoms/BellIcon";
@@ -21,6 +22,16 @@ interface RevealHeaderProps {
   onNotificationPress?: () => void;
 }
 
+// ─── Presence animations (single source of truth) ────────────────────────────
+// `avatarEnter`/`avatarExit` slide each avatar in/out from the right as members
+// join/leave; `layout` smoothly morphs the container width (and shifts the
+// remaining avatars) when the active member list changes size.
+const presenceTransitions = {
+  avatarEnter: FadeInRight.duration(250),
+  avatarExit: FadeOutRight.duration(200),
+  layout: LinearTransition.duration(250),
+};
+
 export const RevealHeader = ({
   onClose,
   countdownText,
@@ -36,8 +47,13 @@ export const RevealHeader = ({
   const visibleParticipants = participants.slice(0, 3);
   const remainingCount = participants.length - 3;
 
+  // The whole header is mounted/unmounted as a unit (e.g. it unmounts when
+  // comments open). `skipEntering`/`skipExiting` make the presence avatars
+  // appear/disappear instantly with the rest of the header on that mount/unmount
+  // — only genuine participant joins/leaves while mounted play the slide.
   return (
-    <View style={[styles.headerContainer, { paddingTop: insets.top + 16 }]}>
+    <LayoutAnimationConfig skipEntering skipExiting>
+      <View style={[styles.headerContainer, { paddingTop: insets.top + 16 }]}>
       {/* 1. Leave Button */}
       <TouchableOpacity style={styles.iconButton} onPress={onClose} activeOpacity={0.7}>
         <Svg width="7" height="12" viewBox="0 0 7 12" fill="none">
@@ -49,7 +65,10 @@ export const RevealHeader = ({
       </TouchableOpacity>
 
       {/* Middle Group (Timer & Connected Users) */}
-      <View style={styles.middleGroup}>
+      {/* `layout` animates the whole group's frame as the avatar row appears/
+          resizes, so the timer pill rides along smoothly and never overlaps the
+          avatars (animating the pill on its own desyncs it from its sibling). */}
+      <Reanimated.View style={styles.middleGroup} layout={presenceTransitions.layout}>
         {/* 2. Timer Pill */}
         {countdownText !== "" && (
           <View style={[styles.timerPill, isLowTime && styles.timerPillRed]}>
@@ -61,34 +80,48 @@ export const RevealHeader = ({
 
         {/* 3. Connected Users Row */}
         {participants.length > 0 && (
-          <View style={styles.avatarsRow}>
+          <Reanimated.View style={styles.avatarsRow} layout={presenceTransitions.layout}>
             {/* Green Connected Status Dot */}
             <View style={styles.statusDot} />
 
             {visibleParticipants.map((p, index) => (
-              <UserAvatar
+              <Reanimated.View
                 key={p.userId}
-                avatar_url={p.avatarUrl}
-                username={p.username}
-                size={32}
-                borderRadius={radii.sm}
-                style={[styles.avatar, index > 0 && { marginLeft: spacing.negSm }]}
-              />
+                entering={presenceTransitions.avatarEnter}
+                exiting={presenceTransitions.avatarExit}
+                layout={presenceTransitions.layout}
+                style={index > 0 && { marginLeft: spacing.negSm }}
+              >
+                <UserAvatar
+                  avatar_url={p.avatarUrl}
+                  username={p.username}
+                  size={32}
+                  borderRadius={radii.sm}
+                  style={styles.avatar}
+                />
+              </Reanimated.View>
             ))}
             {remainingCount > 0 && (
-              <View style={[styles.avatar, styles.avatarMore, { marginLeft: spacing.negSm }]}>
+              <Reanimated.View
+                key="more"
+                entering={presenceTransitions.avatarEnter}
+                exiting={presenceTransitions.avatarExit}
+                layout={presenceTransitions.layout}
+                style={[styles.avatar, styles.avatarMore, { marginLeft: spacing.negSm }]}
+              >
                 <Text style={styles.avatarMoreText}>+{remainingCount}</Text>
-              </View>
+              </Reanimated.View>
             )}
-          </View>
+          </Reanimated.View>
         )}
-      </View>
+      </Reanimated.View>
 
       {/* 4. Notifications Button */}
       <TouchableOpacity style={styles.iconButton} onPress={onNotificationPress} activeOpacity={0.7}>
         <BellIcon size={22} color={colors.text} />
       </TouchableOpacity>
-    </View>
+      </View>
+    </LayoutAnimationConfig>
   );
 };
 
