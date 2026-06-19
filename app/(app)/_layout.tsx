@@ -4,13 +4,17 @@ import { registerForPushNotifications, scheduleAllRecaps } from "../../lib/notif
 import { useEffect } from "react";
 
 export default function AppLayout() {
-  const { session, loading } = useAuth();
+  const { session, loading, profileComplete } = useAuth();
 
   useEffect(() => {
-    if (!loading && !session) {
-      router.replace("/(auth)/login");
+    if (!loading && profileComplete !== null) {
+      if (!session) {
+        router.replace("/(auth)/intro");
+      } else if (profileComplete === false) {
+        router.replace("/(onboarding)/intro");
+      }
     }
-  }, [session, loading]);
+  }, [session, loading, profileComplete]);
 
   useEffect(() => {
     if (session?.user?.id) {

@@ -10,6 +10,7 @@ import {
 import BlurView from "../components/atoms/BlurView";
 import Svg, { Path, Circle } from "react-native-svg";
 import { radii, typography } from "./theme";
+import { AppToast } from "../components/atoms/AppToast";
 
 
 
@@ -40,13 +41,6 @@ const CrossIcon = () => (
   <Svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <Circle cx="12" cy="12" r="10" />
     <Path d="M15 9l-6 6M9 9l6 6" />
-  </Svg>
-);
-
-const InfoCircleIcon = () => (
-  <Svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <Circle cx="12" cy="12" r="10" />
-    <Path d="M12 16v-4M12 8h.01" />
   </Svg>
 );
 
@@ -120,7 +114,13 @@ function ToastHost({ toasts, onDismiss }: { toasts: ToastData[]; onDismiss: (id:
   return (
     <View style={[styles.rootOverlay, { top: topInset }]} pointerEvents="box-none">
       {toasts.map((toast) => (
-        <ToastItem key={toast.id} toast={toast} onDismiss={() => onDismiss(toast.id)} />
+        <AppToast
+          key={toast.id}
+          title={toast.title}
+          message={toast.message}
+          type={toast.type}
+          onDismiss={() => onDismiss(toast.id)}
+        />
       ))}
     </View>
   );
@@ -169,38 +169,6 @@ function UploadBanner({ upload }: { upload: { id: string; progress: number; stat
       <View style={styles.textContainer}>
         <Text style={styles.title}>{label}</Text>
         {upload.status === "uploading" && <AnimatedProgressBar progress={upload.progress} />}
-      </View>
-    </Animated.View>
-  );
-}
-
-// --- Toast item ---
-function ToastItem({ toast, onDismiss }: { toast: ToastData; onDismiss: () => void }) {
-  const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(-20)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.spring(opacity, { toValue: 1, useNativeDriver: true, tension: 40, friction: 7 }),
-      Animated.spring(translateY, { toValue: 0, useNativeDriver: true, tension: 40, friction: 7 }),
-    ]).start();
-  }, []);
-
-  const iconBg =
-    toast.type === "success" ? "rgba(22,163,74,0.08)" :
-    toast.type === "error" ? "rgba(220,38,38,0.08)" :
-    "rgba(37,99,235,0.08)";
-
-  return (
-    <Animated.View style={[styles.card, { opacity, transform: [{ translateY }] }]}>
-      <BlurView intensity={80} tint="light" style={StyleSheet.absoluteFill} />
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(255,255,255,0.45)" }]} />
-      <View style={[styles.iconWrapper, { backgroundColor: iconBg }]}>
-        {toast.type === "success" ? <CheckIcon /> : toast.type === "error" ? <CrossIcon /> : <InfoCircleIcon />}
-      </View>
-      <View style={styles.textContainer}>
-        <Text style={styles.title}>{toast.title}</Text>
-        {toast.message && <Text style={styles.message}>{toast.message}</Text>}
       </View>
     </Animated.View>
   );
