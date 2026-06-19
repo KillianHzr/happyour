@@ -11,6 +11,7 @@ import { DownloadButton } from "../atoms/DownloadButton";
 import { SecondCaptureThumbnail } from "../molecules/SecondCaptureThumbnail";
 import { AuthorInfo } from "../molecules/AuthorInfo";
 import { ReactionsRow } from "../molecules/ReactionsRow";
+import { PostCountBadge } from "../molecules/PostCountBadge";
 import { r2Storage } from "../../lib/r2";
 import { radii, spacing, typography, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
@@ -230,11 +231,7 @@ export const VideoMoment = ({
                     <Text style={styles.dayText}>{getDayText(moment.created_at)}</Text>
                     <Text style={styles.timeText}>{getTimeText(moment.created_at)}</Text>
                   </View>
-                  {postCountText ? (
-                    <View style={styles.postCountBadge}>
-                      <Text style={styles.postCountText}>{postCountText}</Text>
-                    </View>
-                  ) : null}
+                  <PostCountBadge text={postCountText} />
                 </View>
                 <AuthorInfo
                   avatar_url={moment.avatar_url}
@@ -355,22 +352,6 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: typography.family.regular,
     fontSize: typography.size.sm,
     lineHeight: typography.size.sm * 1.4,
-  },
-  postCountBadge: {
-    backgroundColor: colors.opacityLight,
-    borderRadius: radii.md,
-    paddingTop: spacing.xs,
-    paddingRight: spacing.sm,
-    paddingBottom: spacing.xs,
-    paddingLeft: spacing.sm,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  postCountText: {
-    color: colors.text,
-    fontFamily: typography.family.bold,
-    fontSize: typography.size.xxs,
-    lineHeight: typography.size.xxs,
   },
   downloadBtnContainer: {
     position: "absolute",

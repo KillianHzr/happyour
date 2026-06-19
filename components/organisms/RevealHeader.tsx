@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Reanimated, { FadeInRight, FadeOutRight, LinearTransition, LayoutAnimationConfig } from "react-native-reanimated";
 import Svg, { Path } from "react-native-svg";
 import { UserAvatar } from "../atoms/Avatar";
 import { BellIcon } from "../atoms/BellIcon";
@@ -21,6 +22,16 @@ interface RevealHeaderProps {
   onNotificationPress?: () => void;
 }
 
+// ─── Presence animations (single source of truth) ────────────────────────────
+// `avatarEnter`/`avatarExit` slide each avatar in/out from the right as members
+// join/leave; `layout` smoothly morphs the container width (and shifts the
+// remaining avatars) when the active member list changes size.
+const presenceTransitions = {
+  avatarEnter: FadeInRight.duration(250),
+  avatarExit: FadeOutRight.duration(200),
+  layout: LinearTransition.duration(250),
+};
+
 export const RevealHeader = ({
   onClose,
   countdownText,
@@ -36,8 +47,13 @@ export const RevealHeader = ({
   const visibleParticipants = participants.slice(0, 3);
   const remainingCount = participants.length - 3;
 
+  // The whole header is mounted/unmounted as a unit (e.g. it unmounts when
+  // comments open). `skipEntering`/`skipExiting` make the presence avatars
+  // appear/disappear instantly with the rest of the header on that mount/unmount
+  // — only genuine participant joins/leaves while mounted play the slide.
   return (
-    <View style={[styles.headerContainer, { paddingTop: insets.top + 16 }]}>
+    <LayoutAnimationConfig skipEntering skipExiting>
+      <View style={[styles.headerContainer, { paddingTop: insets.top + 16 }]}>
       {/* 1. Leave Button */}
       <TouchableOpacity style={styles.iconButton} onPress={onClose} activeOpacity={0.7}>
         <Svg width="7" height="12" viewBox="0 0 7 12" fill="none">
@@ -49,7 +65,10 @@ export const RevealHeader = ({
       </TouchableOpacity>
 
       {/* Middle Group (Timer & Connected Users) */}
-      <View style={styles.middleGroup}>
+      {/* `layout` animates the whole group's frame as the avatar row appears/
+          resizes, so the timer pill rides along smoothly and never overlaps the
+          avatars (animating the pill on its own desyncs it from its sibling). */}
+      <Reanimated.View style={styles.middleGroup} layout={presenceTransitions.layout}>
         {/* 2. Timer Pill */}
         {countdownText !== "" && (
           <View style={[styles.timerPill, isLowTime && styles.timerPillRed]}>
@@ -61,29 +80,48 @@ export const RevealHeader = ({
 
         {/* 3. Connected Users Row */}
         {participants.length > 0 && (
-          <View style={styles.avatarsRow}>
+          <Reanimated.View style={styles.avatarsRow} layout={presenceTransitions.layout}>
             {/* Green Connected Status Dot */}
             <View style={styles.statusDot} />
 
             {visibleParticipants.map((p, index) => (
-              <View key={p.userId} style={[styles.avatarWrapper, index > 0 && { marginLeft: spacing.negSm }]}>
-                <UserAvatar avatar_url={p.avatarUrl} username={p.username} size={32} borderRadius={radii.sm} />
-              </View>
+              <Reanimated.View
+                key={p.userId}
+                entering={presenceTransitions.avatarEnter}
+                exiting={presenceTransitions.avatarExit}
+                layout={presenceTransitions.layout}
+                style={index > 0 && { marginLeft: spacing.negSm }}
+              >
+                <UserAvatar
+                  avatar_url={p.avatarUrl}
+                  username={p.username}
+                  size={32}
+                  borderRadius={radii.sm}
+                  style={styles.avatar}
+                />
+              </Reanimated.View>
             ))}
             {remainingCount > 0 && (
-              <View style={[styles.avatarWrapper, styles.avatarMore, { marginLeft: spacing.negSm }]}>
+              <Reanimated.View
+                key="more"
+                entering={presenceTransitions.avatarEnter}
+                exiting={presenceTransitions.avatarExit}
+                layout={presenceTransitions.layout}
+                style={[styles.avatar, styles.avatarMore, { marginLeft: spacing.negSm }]}
+              >
                 <Text style={styles.avatarMoreText}>+{remainingCount}</Text>
-              </View>
+              </Reanimated.View>
             )}
-          </View>
+          </Reanimated.View>
         )}
-      </View>
+      </Reanimated.View>
 
       {/* 4. Notifications Button */}
       <TouchableOpacity style={styles.iconButton} onPress={onNotificationPress} activeOpacity={0.7}>
         <BellIcon size={22} color={colors.text} />
       </TouchableOpacity>
-    </View>
+      </View>
+    </LayoutAnimationConfig>
   );
 };
 
@@ -102,6 +140,7 @@ const makeStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.cr
   middleGroup: {
     flexDirection: "row",
     alignItems: "center",
+    height: 40, // keep the whole header content a uniform 40px
     gap: spacing.sm, // space/200 (8px)
   },
   iconButton: {
@@ -115,9 +154,10 @@ const makeStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.cr
   timerPill: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center", // center the countdown within the fixed width
+    alignSelf: "stretch", // fill the 40px header height
+    width: 98, // fixed so the pill doesn't resize as digits change
     backgroundColor: colors.opacityLight,
-    paddingHorizontal: spacing.lg, // space/400 (16px)
-    paddingVertical: spacing.md,   // space/300 (12px)
     borderRadius: radii.sm,        // radius/200 (8px)
   },
   timerPillRed: {
@@ -126,6 +166,7 @@ const makeStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.cr
   timerText: {
     ...textStyles.singleLineBodyBaseStrong,
     color: colors.text,
+    fontVariant: ["tabular-nums"], // equal-width digits so the countdown doesn't shift
   },
   timerTextRed: {
     color: "#FFFFFF",
@@ -133,11 +174,11 @@ const makeStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.cr
   avatarsRow: {
     flexDirection: "row",
     alignItems: "center",
+    alignSelf: "stretch", // fill middleGroup's height to match the timer pill
     backgroundColor: colors.opacityLight,
     paddingHorizontal: 6,
     paddingVertical: 4,
     borderRadius: radii.sm, // radius/200 (8px)
-    height: 40,
   },
   statusDot: {
     width: 8,
@@ -147,13 +188,9 @@ const makeStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.cr
     marginRight: spacing.sm, // gap to first avatar
     marginLeft: 4,
   },
-  avatarWrapper: {
-    width: 32,
-    height: 32,
-    borderWidth: stroke.sm, // var(--sds-size-stroke-border)
+  avatar: {
+    borderWidth: stroke.sm, // stroke/025
     borderColor: colors.bg,
-    borderRadius: radii.sm, // var(--sds-size-radius-200)
-    backgroundColor: colors.bg,
     ...shadows.shadow200, // drop-shadow/200
   },
   avatarMore: {
