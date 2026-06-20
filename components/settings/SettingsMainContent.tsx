@@ -166,7 +166,7 @@ export default function SettingsMainContent({ username, avatarUrl, onUsernameUpd
 
           <SettingsSection
             items={[
-              { label: "Se déconnecter", icon: "log-out", danger: true, onPress: () => setShowLogout(true) },
+              { label: "Me déconnecter", icon: "log-out", danger: true, onPress: () => setShowLogout(true) },
               { label: "Supprimer mon compte", icon: "trash", danger: true, onPress: () => setShowDeleteStep1(true) },
             ]}
           />
@@ -200,7 +200,7 @@ export default function SettingsMainContent({ username, avatarUrl, onUsernameUpd
         visible={showLogout}
         onClose={() => setShowLogout(false)}
         title="Te déconnecter ?"
-        confirmLabel="Se déconnecter"
+        confirmLabel="Me déconnecter"
         cancelLabel="Annuler"
         confirmVariant="brand"
         onConfirm={handleLogout}
