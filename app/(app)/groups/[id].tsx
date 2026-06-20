@@ -452,11 +452,35 @@ export default function MainPagerScreen() {
       const photoStart = inRevealWindow ? weekBeforeReveal : prevRevealDate;
       const photoEnd = inRevealWindow ? prevRevealDate : currentRevealDate;
 
-      const { data: groupsData } = await supabase.from("group_members").select("groups(id, name, invite_code, created_at)").eq("user_id", user.id);
+      // On sélectionne aussi group_id : le join embarqué `groups(...)` peut renvoyer null de
+      // manière transitoire côté prod, et un simple .filter(Boolean) ferait alors disparaître
+      // silencieusement un groupe dont l'utilisateur est pourtant membre (bug remonté : profil
+      // qui affiche 2 groupes au lieu de 3). group_id reste, lui, toujours fiable.
+      const { data: groupsData } = await supabase
+        .from("group_members")
+        .select("group_id, groups(id, name, invite_code, created_at)")
+        .eq("user_id", user.id);
 
-      const groups: GroupInfo[] = (groupsData ?? [])
-        .map((g: any) => g.groups)
-        .filter(Boolean)
+      const groupRows = groupsData ?? [];
+      const groupsList: any[] = groupRows.map((r: any) => r.groups).filter(Boolean);
+
+      // Filet anti-disparition : pour chaque appartenance dont le join a renvoyé null, on
+      // récupère le groupe via une requête directe (fraîche, non sujette au null transitoire).
+      // En dernier recours seulement, on garde un placeholder pour ne jamais retirer le groupe.
+      const missingGroupIds = groupRows.filter((r: any) => !r.groups).map((r: any) => r.group_id);
+      if (missingGroupIds.length > 0) {
+        console.warn("[fetchAllData] join groups null pour", missingGroupIds, "→ récupération directe");
+        const { data: recovered } = await supabase
+          .from("groups")
+          .select("id, name, invite_code, created_at")
+          .in("id", missingGroupIds);
+        const recoveredById = new Map((recovered ?? []).map((g: any) => [g.id, g]));
+        for (const gid of missingGroupIds) {
+          groupsList.push(recoveredById.get(gid) ?? { id: gid, name: "Groupe", invite_code: "", created_at: new Date(0).toISOString() });
+        }
+      }
+
+      const groups: GroupInfo[] = groupsList
         .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
       setAllGroups(groups);
 
