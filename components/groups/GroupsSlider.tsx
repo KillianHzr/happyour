@@ -4,7 +4,6 @@ import {
   ActivityIndicator, useWindowDimensions, Animated,
 } from "react-native";
 import { Image } from "expo-image";
-import BlurView from "../atoms/BlurView";
 import {
   radii, typography, spacing, stroke, textStyles,
   type ThemeColors,
@@ -90,15 +89,16 @@ const SliderCard = memo(function SliderCard({
     >
       {card.bgUrl ? (
         <>
-          {/* Même flou que la RevealIntroPage (atoms/BlurView 75) — cohérence partout */}
+          {/* Flou STATIQUE (blurRadius) + voile sombre — léger (pas de BlurView live ×N cartes) */}
           <Image
             source={{ uri: card.bgUrl }}
             style={StyleSheet.absoluteFillObject as any}
             contentFit="cover"
             transition={0}
             cachePolicy="memory-disk"
+            blurRadius={38}
           />
-          <BlurView intensity={75} tint="dark" style={StyleSheet.absoluteFillObject} pointerEvents="none" />
+          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.45)" }]} pointerEvents="none" />
         </>
       ) : (
         // Aucun moment → background/default/default (forcé dark via ForceThemeMode)

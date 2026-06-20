@@ -22,6 +22,7 @@ import Reanimated, {
 } from "react-native-reanimated";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
+import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Svg, Path } from "react-native-svg";
 
@@ -435,6 +436,10 @@ const PhotoFeedContent = forwardRef(({
   }, [photos, crownWinnerId, challengePeriod1, challengePeriod2, hideIntro, hideEnd]);
 
   const currentItem = useMemo(() => items[visibleIndex] || null, [items, visibleIndex]);
+  // Fond plein écran de l'intro (derrière la FlatList + le BottomActionBar) — flou statique
+  // identique au filmstrip de transition. La FlatList clippe ses items à FEED_HEIGHT, donc on
+  // rend ce fond hors-feed pour qu'il passe vraiment derrière la zone du bouton "Démarrer".
+  const introBgUrl = (photos[0] as any)?.video_thumbnail_url ?? photos[0]?.url;
 
   const postCountTexts = useMemo(() => {
     const texts: Record<number, string> = {};
@@ -577,7 +582,14 @@ const PhotoFeedContent = forwardRef(({
 
   return (
     <View style={styles.list}>
-      <Reanimated.View style={[styles.contentWrapper, animatedContentStyle]}>
+      {/* Fond plein écran de l'intro (derrière la FlatList et le BottomActionBar) */}
+      {currentItem?.type === "intro" && introBgUrl ? (
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          <Image source={{ uri: introBgUrl }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} cachePolicy="memory-disk" blurRadius={38} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.45)" }]} />
+        </View>
+      ) : null}
+      <Reanimated.View style={[styles.contentWrapper, animatedContentStyle, currentItem?.type === "intro" && { backgroundColor: "transparent" }]}>
         {/* Fixed full height so the cropped (shorter) contentWrapper clips it from the
             bottom instead of the FlatList re-fitting the image. */}
         <View style={{ height: FEED_HEIGHT, width: "100%" }}>
@@ -603,7 +615,7 @@ const PhotoFeedContent = forwardRef(({
             initialNumToRender={2}
             removeClippedSubviews={Platform.OS === "android"}
             overScrollMode="never"
-            style={styles.list}
+            style={[styles.list, currentItem?.type === "intro" && { backgroundColor: "transparent" }]}
             scrollEnabled={!commentModalVisible}
             keyboardShouldPersistTaps="always"
           />

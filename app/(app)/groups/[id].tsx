@@ -30,6 +30,7 @@ import VaultPage from "../../../components/groups/VaultPage";
 import GroupsPage from "../../../components/groups/GroupsPage";
 import PagerTabBar from "../../../components/groups/PagerTabBar";
 import RevealTransition from "../../../components/groups/RevealTransition";
+import { getRevealLottie } from "../../../components/groups/revealLottie";
 import AddGroupFlow from "../../../components/groups/AddGroupFlow";
 import SettingsSheet from "../../../components/SettingsSheet";
 import GroupSettingsContent from "../../../components/groups/GroupSettingsContent";
@@ -278,6 +279,21 @@ export default function MainPagerScreen() {
   const handleCardFrame = useCallback((f: { x: number; y: number; width: number; height: number }) => {
     cardFrameRef.current = f;
   }, []);
+  // Lottie central (source + timing) + sa frame → re-rendu AU-DESSUS de la transition.
+  const lottieFrameRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
+  const handleLottieFrame = useCallback((f: { x: number; y: number; width: number; height: number }) => {
+    lottieFrameRef.current = f;
+  }, []);
+  const revealLottie = useMemo(() => {
+    const last: any = photos[photos.length - 1];
+    const ip: string = last?.image_path ?? "";
+    const shape = ip === "text_mode" ? "texte"
+      : ip.endsWith(".mp4") ? "video"
+      : ip.endsWith(".m4a") ? "audio"
+      : ip.includes("_draw") ? "dessin"
+      : ip ? "photo" : null;
+    return getRevealLottie(shape as any, photos.length);
+  }, [photos]);
 
   const activitiesList = useMemo(() => {
     if (!activeData || !user) return [];
@@ -376,16 +392,17 @@ export default function MainPagerScreen() {
   const inPrevRevealWindow = now >= prevRevealDate && now < prevRevealEndDate;
   const activeRevealEndDate = inPrevRevealWindow ? prevRevealEndDate : revealEndDate;
   const isAfterRevealWindow = now >= activeRevealEndDate;
-  const unlocked = inCurrentRevealWindow || inPrevRevealWindow || (__DEV__ && debugUnlocked);
+  const unlocked = inCurrentRevealWindow || inPrevRevealWindow || debugUnlocked;
   const lockedRevealDate = now >= revealDate ? nextRevealDate : revealDate;
   const currentUserRespondedToChallenge = activeData?.currentUserRespondedToChallenge ?? false;
-  const currentUserPostedThisWeek = photos.some(p => p.user_id === user?.id) || currentUserRespondedToChallenge || (__DEV__ && debugUnlocked);
+  const currentUserPostedThisWeek = photos.some(p => p.user_id === user?.id) || currentUserRespondedToChallenge || debugUnlocked;
 
   // Déclenché à la fin du Lottie (slide) : lance la transition filmstrip → reveal.
-  // Appelé à la fin du grow de la card (GroupRoom) : lance le filmstrip → reveal.
+  // Fin de l'aspiration du chrome (GroupRoom) : lance la transition (grow + filmstrip) → reveal.
   const handleGroupRoomUnlock = useCallback(() => {
     if (!currentUserPostedThisWeek) return;
-    if (revealStripUrls.length === 0) { setShowReveal(true); return; } // pas d'images → reveal direct
+    // Pas de frame mesurée ou pas d'images → reveal direct (jamais bloqué).
+    if (!cardFrameRef.current || revealStripUrls.length === 0) { setShowReveal(true); return; }
     Image.prefetch(revealStripUrls);
     setRevealTransition(true);
   }, [currentUserPostedThisWeek, revealStripUrls]);
@@ -1217,7 +1234,9 @@ export default function MainPagerScreen() {
   const menuExitOpacity = menuExit.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
   const handleRevealStart = useCallback(() => {
     Animated.timing(menuExit, { toValue: 1, duration: 700, easing: Easing.bezier(0.7, 0, 0.84, 0), useNativeDriver: true }).start();
-  }, [menuExit]);
+    // Précharge tôt (pendant l'aspiration du chrome) → images floutées prêtes pour le filmstrip.
+    if (revealStripUrls.length) Image.prefetch(revealStripUrls);
+  }, [menuExit, revealStripUrls]);
   // Réaffiche le menu quand le reveal se ferme.
   useEffect(() => { if (!showReveal) menuExit.setValue(0); }, [showReveal, menuExit]);
 
@@ -1396,13 +1415,14 @@ export default function MainPagerScreen() {
       onOpenReveal={handleGroupRoomUnlock}
       onRevealStart={currentUserPostedThisWeek ? handleRevealStart : undefined}
       onCardFrame={handleCardFrame}
+      onLottieFrame={handleLottieFrame}
       onOpenSettings={() => setShowGroupSettings(true)}
       onOpenArchives={() => setShowArchives(true)}
       onScrollLock={setGroupsPagerLocked}
-      onDebugNamePress={__DEV__ ? () => setShowDebugMenu(true) : undefined}
-      debugUnlocked={__DEV__ ? debugUnlocked : undefined}
+      onDebugNamePress={() => setShowDebugMenu(true)}
+      debugUnlocked={debugUnlocked}
     />
-  ), [allGroups, groupData, revealConfig, activePage === 0, user?.id, enterGroupId, handleSwitchGroup, currentUserPostedThisWeek, debugUnlocked, handleRevealStart, handleGroupRoomUnlock, handleCardFrame]);
+  ), [allGroups, groupData, revealConfig, activePage === 0, user?.id, enterGroupId, handleSwitchGroup, currentUserPostedThisWeek, debugUnlocked, handleRevealStart, handleGroupRoomUnlock, handleCardFrame, handleLottieFrame]);
 
   // Page initiale de la feuille de réglages du groupe (titre "Paramètres" porté par SettingsSheet)
   const groupSettingsInitialPage = useMemo(() => ({
@@ -1546,10 +1566,13 @@ export default function MainPagerScreen() {
         </Animated.View>
       )}
 
-      {/* ── TRANSITION single → reveal (la card a grandi dans GroupRoom → filmstrip flouté) ── */}
-      {revealTransition && revealStripUrls.length > 0 && (
+      {/* ── TRANSITION single → reveal (card grandit → filmstrip flouté, en continu) ── */}
+      {revealTransition && cardFrameRef.current && revealStripUrls.length > 0 && (
         <RevealTransition
+          cardFrame={cardFrameRef.current}
           urls={revealStripUrls}
+          lottie={revealLottie}
+          lottieFrame={lottieFrameRef.current}
           onArrived={() => setShowReveal(true)}
           onDone={() => setRevealTransition(false)}
         />
@@ -1811,32 +1834,30 @@ export default function MainPagerScreen() {
         </TouchableOpacity>
       </BottomSheet>
 
-      {/* ── DEBUG MENU (DEV uniquement) — ouvert au clic sur le nom du groupe ── */}
-      {__DEV__ && (
-        <BottomSheet visible={showDebugMenu} onClose={() => setShowDebugMenu(false)}>
-          <Text style={styles.debugTitle}>🛠️ Debug (DEV)</Text>
-          <Text style={styles.debugBody}>
-            Accès local uniquement, sur ton app. Déverrouille le reveal pour afficher l'UI reveal disponible.
-          </Text>
-          <TouchableOpacity
-            style={styles.debugBtn}
-            activeOpacity={0.85}
-            onPress={() => { setDebugUnlocked(true); setShowDebugMenu(false); setShowReveal(true); }}
-          >
-            <Text style={styles.debugBtnText}>Déverrouiller & ouvrir le reveal</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.debugBtnSecondary}
-            activeOpacity={0.85}
-            onPress={() => { setDebugUnlocked(true); setShowDebugMenu(false); }}
-          >
-            <Text style={styles.debugBtnSecondaryText}>Déverrouiller seulement</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setShowDebugMenu(false)} style={styles.leaveCancelWrap}>
-            <Text style={styles.leaveCancelText}>Fermer</Text>
-          </TouchableOpacity>
-        </BottomSheet>
-      )}
+      {/* ── DÉMO — ouvert au clic sur le nom du groupe (geste caché) ── */}
+      <BottomSheet visible={showDebugMenu} onClose={() => setShowDebugMenu(false)}>
+        <Text style={styles.debugTitle}>🎬 Démo</Text>
+        <Text style={styles.debugBody}>
+          Déverrouille le reveal pour le présenter, même hors de la fenêtre du dimanche.
+        </Text>
+        <TouchableOpacity
+          style={styles.debugBtn}
+          activeOpacity={0.85}
+          onPress={() => { setDebugUnlocked(true); setShowDebugMenu(false); }}
+        >
+          <Text style={styles.debugBtnText}>Déverrouiller le reveal</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.debugBtnSecondary}
+          activeOpacity={0.85}
+          onPress={() => { setDebugUnlocked(true); setShowDebugMenu(false); setShowReveal(true); }}
+        >
+          <Text style={styles.debugBtnSecondaryText}>Ouvrir le reveal directement</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => setShowDebugMenu(false)} style={styles.leaveCancelWrap}>
+          <Text style={styles.leaveCancelText}>Fermer</Text>
+        </TouchableOpacity>
+      </BottomSheet>
 
       {/* ── AJOUTER UN GROUPE (flow créer / rejoindre / félicitations / invite) ── */}
       <AddGroupFlow

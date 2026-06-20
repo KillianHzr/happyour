@@ -2,8 +2,6 @@ import React, { useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Animated } from "react-native";
 import { Svg, Path } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Image } from "expo-image";
-import BlurView from "../atoms/BlurView";
 import { TextSticker } from "../atoms/TextSticker";
 import { spacing, typography, radii, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
@@ -62,17 +60,8 @@ export const RevealIntroPage = ({
 
   return (
     <View style={styles.fullscreenPage}>
-      {firstPhotoUrl ? (
-        <View style={StyleSheet.absoluteFill}>
-          <Image
-            source={{ uri: firstPhotoUrl }}
-            style={StyleSheet.absoluteFill}
-            contentFit="cover"
-          />
-          <BlurView intensity={75} tint="dark" style={StyleSheet.absoluteFill} />
-        </View>
-      ) : null}
-
+      {/* Le fond (image floutée plein écran) est rendu par PhotoFeed, derrière la FlatList,
+          pour passer vraiment derrière la zone du bouton "Démarrer". */}
       <Animated.View style={[styles.middleContainer, { opacity, transform: [{ scale }] }]}>
         <View style={styles.stickerWrapper}>
           <TextSticker 
@@ -119,7 +108,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     height: "100%",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: colors.bg
+    backgroundColor: "transparent", // le fond plein écran est rendu par PhotoFeed (derrière)
   },
   middleContainer: {
     alignItems: "center",

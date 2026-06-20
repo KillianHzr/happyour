@@ -1,17 +1,18 @@
 import { useState, useEffect, useRef, useMemo, memo } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, ActivityIndicator,
-  Platform, Animated, PanResponder, Dimensions,
+  Platform, Animated, PanResponder,
 } from "react-native";
 import { Image } from "expo-image";
 import { BlurView as NativeBlurView } from "@sbaiahmed1/react-native-blur";
-import BlurView from "../atoms/BlurView";
 import LottieView from "lottie-react-native";
 import Reanimated, {
   useSharedValue,
   useAnimatedProps,
   useAnimatedStyle,
   withTiming,
+  interpolate,
+  Extrapolation,
   Easing,
   runOnJS,
   type SharedValue,
@@ -24,9 +25,6 @@ import { getRevealLottie } from "./revealLottie";
 import type { GroupCard } from "./GroupsSlider";
 
 const ReanimatedLottie = Reanimated.createAnimatedComponent(LottieView);
-
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
-const GROW_MS = 420; // durée du grossissement de la card → plein écran (à 1.7s de Lottie)
 
 /** "Xj HH:MM:SS" — "0j" masqué s'il reste moins d'un jour (sauf si forcé). */
 function formatCountdown(ms: number): string {
@@ -79,7 +77,7 @@ function UnlockSlider({ onUnlock }: { onUnlock: () => void }) {
           firedRef.current = true;
           widthAnim.setValue(maxW);
           onUnlock();
-          setTimeout(() => widthAnim.setValue(NOB_MIN), 500);
+          setTimeout(() => widthAnim.setValue(NOB_MIN), 800);
           return;
         }
         widthAnim.setValue(w);
@@ -127,6 +125,8 @@ type Props = {
   onRevealStart?: () => void;
   /** Frame de la card (coords fenêtre) — point de départ de la transition reveal. */
   onCardFrame?: (frame: { x: number; y: number; width: number; height: number }) => void;
+  /** Frame du Lottie (coords fenêtre) — pour le re-rendre AU-DESSUS de la transition. */
+  onLottieFrame?: (frame: { x: number; y: number; width: number; height: number }) => void;
   onDebugNamePress?: () => void;
 };
 
@@ -142,9 +142,14 @@ export default function GroupRoom(props: Props) {
   );
   const revealProgress = useSharedValue(reveal.freezeProgress);
   const exit = useSharedValue(0); // 0 = repos, 1 = chrome disparu
-  const grow = useSharedValue(0); // 0 = card normale, 1 = card plein écran (scale + radius 0)
   const animatingRef = useRef(false);
   const lottieProps = useAnimatedProps(() => ({ progress: revealProgress.value }));
+
+  // Fondu du Lottie sur ses ~0,2s finales (sinon il disparaît d'un coup).
+  const lottieFadeStart = reveal.endProgress - (reveal.endProgress - reveal.freezeProgress) * 200 / reveal.durationMs;
+  const lottieOpacityStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(revealProgress.value, [lottieFadeStart, reveal.endProgress], [1, 0], Extrapolation.CLAMP),
+  }));
 
   // Recale la frame figée si le Lottie change (type/nombre de moments).
   useEffect(() => {
@@ -152,30 +157,25 @@ export default function GroupRoom(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reveal]);
 
-  // Fin du grow → ouvre le reveal (filmstrip), puis réarme tout sous le reveal (invisible).
+  // Fin de l'aspiration du chrome (1,7s) → ouvre la transition reveal (l'overlay fait
+  // grandir la card plein écran puis défile), puis réarme tout sous le reveal (invisible).
   const finishReveal = () => {
     onUnlock();
     setTimeout(() => {
       revealProgress.value = reveal.freezeProgress;
       exit.value = 0;
-      grow.value = 0;
       animatingRef.current = false;
     }, 600);
   };
 
-  // Slide → Lottie (1s→fin) + sortie du chrome (0,7s) + menu. À la fin du chrome (1,7s),
-  // la CARD grossit en plein écran (perte du radius), puis on ouvre le reveal.
+  // Slide → Lottie (1s→fin) + sortie du chrome (0,7s) + menu, puis ouverture du reveal.
   const startReveal = () => {
     if (animatingRef.current) return;
     animatingRef.current = true;
     onRevealStart?.();
     revealProgress.value = withTiming(reveal.endProgress, { duration: reveal.durationMs, easing: Easing.linear });
     exit.value = withTiming(1, { duration: 700, easing: Easing.bezier(0.7, 0, 0.84, 0) }, (finExit) => {
-      if (finExit) {
-        grow.value = withTiming(1, { duration: GROW_MS, easing: Easing.out(Easing.cubic) }, (finGrow) => {
-          if (finGrow) runOnJS(finishReveal)();
-        });
-      }
+      if (finExit) runOnJS(finishReveal)();
     });
   };
 
@@ -222,7 +222,7 @@ export default function GroupRoom(props: Props) {
       {/* Carte plein écran (forcée sombre) */}
       <View style={headerStyles.cardWrap}>
         <ForceThemeMode mode="Dark">
-          <RoomCard {...props} lottieProps={lottieProps} exit={exit} grow={grow} startReveal={startReveal} lottieSource={reveal.source} />
+          <RoomCard {...props} lottieProps={lottieProps} lottieOpacityStyle={lottieOpacityStyle} exit={exit} startReveal={startReveal} lottieSource={reveal.source} />
         </ForceThemeMode>
       </View>
     </View>
@@ -231,30 +231,29 @@ export default function GroupRoom(props: Props) {
 
 type RoomCardProps = Props & {
   lottieProps: any;
+  lottieOpacityStyle: any;
   lottieSource: any;
   exit: SharedValue<number>;
-  grow: SharedValue<number>;
   startReveal: () => void;
   onCardFrame?: (frame: { x: number; y: number; width: number; height: number }) => void;
+  onLottieFrame?: (frame: { x: number; y: number; width: number; height: number }) => void;
 };
 
-function RoomCard({ card, revealDate, unlocked, onCapture, lottieProps, lottieSource, exit, grow, startReveal, onCardFrame }: RoomCardProps) {
+function RoomCard({ card, revealDate, unlocked, onCapture, lottieProps, lottieOpacityStyle, lottieSource, exit, startReveal, onCardFrame, onLottieFrame }: RoomCardProps) {
   const { colors } = useTheme();
   const s = useThemedStyles(makeStyles);
   const hasMoments = card.momentCount > 0;
   const postedThisWeek = card.postedThisWeek ?? false;
   const cardRef = useRef<View>(null);
-  // Frame mesurée de la card (coords fenêtre) → sert au scale plein écran.
-  // Défauts = plein écran → si la mesure échoue, scale = 1 (pas de grow) plutôt qu'une explosion.
-  const cfX = useSharedValue(0), cfY = useSharedValue(0), cfW = useSharedValue(SCREEN_W), cfH = useSharedValue(SCREEN_H);
+  const lottieRef = useRef<any>(null);
+  // Frames (coords fenêtre) → départ du grow de l'overlay + repositionnement du Lottie au-dessus.
   const measureCard = () => {
-    // rAF : garantit que le noeud natif est posé avant measureInWindow (sinon 0,0,0,0).
     requestAnimationFrame(() => {
       cardRef.current?.measureInWindow((x, y, width, height) => {
-        if (width > 0 && height > 0) {
-          cfX.value = x; cfY.value = y; cfW.value = width; cfH.value = height;
-          onCardFrame?.({ x, y, width, height });
-        }
+        if (width > 0 && height > 0) onCardFrame?.({ x, y, width, height });
+      });
+      lottieRef.current?.measureInWindow?.((x: number, y: number, width: number, height: number) => {
+        if (width > 0 && height > 0) onLottieFrame?.({ x, y, width, height });
       });
     });
   };
@@ -264,29 +263,14 @@ function RoomCard({ card, revealDate, unlocked, onCapture, lottieProps, lottieSo
   const countExitStyle = useAnimatedStyle(() => ({ opacity: 1 - exit.value, transform: [{ translateY: -exit.value * 48 }] })); // nb moments ↑
   const bottomExitStyle = useAnimatedStyle(() => ({ opacity: 1 - exit.value, transform: [{ translateY: -exit.value * 80 }] })); // slider ↑
 
-  // Grossissement de la card → plein écran (scale uniforme pour couvrir + perte du radius).
-  // La card est déjà centrée horizontalement dans sa page → translateX = 0 (ne PAS utiliser
-  // cfX : measureInWindow est faussé par le scroll horizontal du pager). Seul le centrage
-  // vertical utilise la mesure (Y stable).
-  const growStyle = useAnimatedStyle(() => {
-    const g = grow.value;
-    const w = cfW.value, h = cfH.value;
-    const sc = Math.max(SCREEN_W / w, SCREEN_H / h);
-    const ty = (SCREEN_H / 2 - (cfY.value + h / 2)) * g;
-    return {
-      transform: [{ translateY: ty }, { scale: 1 + (sc - 1) * g }],
-      borderRadius: radii.xl * (1 - g),
-    };
-  });
-
   return (
-    <View ref={cardRef} style={s.cardMeasure} onLayout={measureCard} collapsable={false}>
-    <Reanimated.View style={[s.card, growStyle]}>
+    <View ref={cardRef} style={s.card} onLayout={measureCard} collapsable={false}>
       {card.bgUrl ? (
         <>
-          {/* Même flou que la RevealIntroPage (atoms/BlurView 75) pour un raccord identique */}
-          <Image source={{ uri: card.bgUrl }} style={StyleSheet.absoluteFillObject as any} contentFit="cover" transition={0} cachePolicy="memory-disk" />
-          <BlurView intensity={75} tint="dark" style={StyleSheet.absoluteFillObject} pointerEvents="none" />
+          {/* Flou STATIQUE (blurRadius) + voile sombre — léger (pas de BlurView live) et
+              identique au filmstrip → raccord card↔transition propre. */}
+          <Image source={{ uri: card.bgUrl }} style={StyleSheet.absoluteFillObject as any} contentFit="cover" transition={0} cachePolicy="memory-disk" blurRadius={38} />
+          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.45)" }]} pointerEvents="none" />
         </>
       ) : (
         <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.bg }]} />
@@ -341,7 +325,7 @@ function RoomCard({ card, revealDate, unlocked, onCapture, lottieProps, lottieSo
           ) : (
             <>
               {hasMoments ? (
-                <View style={s.lottieWrap} pointerEvents="none">
+                <Reanimated.View ref={lottieRef} style={[s.lottieWrap, lottieOpacityStyle]} pointerEvents="none">
                   <ReanimatedLottie
                     source={lottieSource}
                     animatedProps={lottieProps}
@@ -350,7 +334,7 @@ function RoomCard({ card, revealDate, unlocked, onCapture, lottieProps, lottieSo
                     resizeMode="contain"
                     style={s.lottie}
                   />
-                </View>
+                </Reanimated.View>
               ) : (
                 <Icon name="circle-filled" size={136} color={colors.icon} />
               )}
@@ -387,7 +371,6 @@ function RoomCard({ card, revealDate, unlocked, onCapture, lottieProps, lottieSo
         </Reanimated.View>
         </View>
       </View>
-    </Reanimated.View>
     </View>
   );
 }
@@ -405,8 +388,6 @@ const makeHeaderStyles = (colors: ThemeColors) => StyleSheet.create({
 });
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
-  // cardMeasure = boîte de layout mesurée (frame de la card) ; card = visuel scalé par-dessus.
-  cardMeasure: { flex: 1 },
   card: { flex: 1, borderRadius: radii.xl, overflow: "hidden", backgroundColor: "#0A0A0A" },
   cardContent: {
     flex: 1, justifyContent: "space-between", alignItems: "center",
