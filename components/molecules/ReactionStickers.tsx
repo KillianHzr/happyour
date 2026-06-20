@@ -33,8 +33,8 @@ const isEmoji = (str: string) => {
   return false;
 };
 
-function FloatingSticker({ side, topPct, rotation, text, avatarUrl, username, previewScale, removing, hidden, hiddenSV }: {
-  side: "left" | "right"; topPct: number; rotation: number; text: string; avatarUrl: string | null; username: string; previewScale?: SharedValue<number>; removing?: boolean; hidden?: boolean; hiddenSV?: SharedValue<number>;
+function FloatingSticker({ side, topPct, rotation, text, avatarUrl, username, previewScale, sizeFactor, removing, hidden, hiddenSV }: {
+  side: "left" | "right"; topPct: number; rotation: number; text: string; avatarUrl: string | null; username: string; previewScale?: SharedValue<number>; sizeFactor?: SharedValue<number>; removing?: boolean; hidden?: boolean; hiddenSV?: SharedValue<number>;
 }) {
   const styles = useThemedStyles(makeStyles);
   // Scale drives every transition: pop in on mount / when un-hidden (spring), shrink to
@@ -80,7 +80,8 @@ function FloatingSticker({ side, topPct, rotation, text, avatarUrl, username, pr
 
   const animatedStyle = useAnimatedStyle(() => {
     const inv = previewScale && previewScale.value > 0 ? 1 / previewScale.value : 1;
-    return { transform: [{ rotate: `${rotation}deg` }, { scale: popScale.value * inv }] };
+    const sf = sizeFactor ? sizeFactor.value : 1;
+    return { transform: [{ rotate: `${rotation}deg` }, { scale: popScale.value * inv * sf }] };
   });
   return (
     <Reanimated.View
@@ -103,7 +104,7 @@ function FloatingSticker({ side, topPct, rotation, text, avatarUrl, username, pr
  * alternate left/right, hugging each horizontal edge, stacked and centered vertically.
  * They keep a fixed size via the `previewScale` counter-scale (see FloatingSticker).
  */
-export function ReactionStickers({ reactions, previewScale, removingUserId, hidden, hiddenSV }: { reactions: Reaction[]; previewScale?: SharedValue<number>; removingUserId?: string | null; hidden?: boolean; hiddenSV?: SharedValue<number> }) {
+export function ReactionStickers({ reactions, previewScale, sizeFactor, removingUserId, hidden, hiddenSV }: { reactions: Reaction[]; previewScale?: SharedValue<number>; sizeFactor?: SharedValue<number>; removingUserId?: string | null; hidden?: boolean; hiddenSV?: SharedValue<number> }) {
   const text = useMemo(() => reactions.filter((r) => !isEmoji(r.sticker_id)), [reactions]);
   if (text.length === 0) return null;
   const leftCount = Math.ceil(text.length / 2);
@@ -126,6 +127,7 @@ export function ReactionStickers({ reactions, previewScale, removingUserId, hidd
             avatarUrl={r.avatar_url ?? null}
             username={r.username ?? ""}
             previewScale={previewScale}
+            sizeFactor={sizeFactor}
             removing={!!removingUserId && r.user_id === removingUserId}
             hidden={hidden}
             hiddenSV={hiddenSV}

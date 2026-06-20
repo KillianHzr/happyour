@@ -68,6 +68,14 @@ interface CommentModalProps {
   keyboardHeightShared?: SharedValue<number>;
   /** Shared value to animate and report sheet height in real-time. */
   sheetHeightShared?: SharedValue<number>;
+  /**
+   * Shared value reporting how many pixels the sheet actually covers from the bottom
+   * of the screen, frame-by-frame — i.e. its on-screen top edge. Unlike sheetHeightShared
+   * (a constant height), this folds in the slide-in (sheetProgress), keyboard lift and
+   * drag, so a parent preview can pin its bottom edge to the sheet's top during open/close
+   * exactly like it tracks the keyboard (no lag / empty band at the bottom).
+   */
+  drawerCoverageShared?: SharedValue<number>;
   /** Notifies the parent when the keyboard opens/closes so it can hide the stickers. */
   onKeyboardActiveChange?: (active: boolean) => void;
   /** Shared value set immediately in the onStart worklet (no JS bridge) so the parent
@@ -180,6 +188,7 @@ function CommentModalContent({
   onKeyboardHeightChange,
   keyboardHeightShared,
   sheetHeightShared,
+  drawerCoverageShared,
   onKeyboardActiveChange,
   keyboardActiveShared,
   onSheetHeightChange,
@@ -307,12 +316,21 @@ function CommentModalContent({
 
   // Sheet transform: slide in from below + drag offset − keyboard lift. Height comes
   // from Reanimated `sheetHeightSV` for frame-by-frame smoothness.
+  const sheetTranslateY = useDerivedValue(
+    () => (1 - sheetProgress.value) * SHEET_BASE + dragY.value - kbSV.value
+  );
   const sheetStyle = useAnimatedStyle(() => ({
     height: sheetHeightSV.value,
-    transform: [
-      { translateY: (1 - sheetProgress.value) * SHEET_BASE + dragY.value - kbSV.value },
-    ],
+    transform: [{ translateY: sheetTranslateY.value }],
   }));
+
+  // Report the sheet's true on-screen coverage (height minus how far it's slid/dragged
+  // off the bottom) so a parent preview can track its top edge frame-by-frame.
+  useDerivedValue(() => {
+    if (drawerCoverageShared) {
+      drawerCoverageShared.value = sheetHeightSV.value - sheetTranslateY.value;
+    }
+  });
 
   // ── Fetch group members ───────────────────────────────────────────────────────
   useEffect(() => {

@@ -20,7 +20,7 @@ import { r2Storage } from "../../lib/r2";
 import ChallengeAudioPlayer from "./ChallengeAudioPlayer";
 import { AudioCaptionPlayer } from "../molecules/AudioCaptionPlayer";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
-import { radii, typography, spacing, textStyles, buildColors, type ThemeColors } from "../../lib/theme";
+import { radii, typography, spacing, textStyles, stroke, buildColors, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import { supabase } from "../../lib/supabase";
 import CommentModal from "../CommentModal";
@@ -51,6 +51,15 @@ const HEADER_SHIFT = 52; // How many pixels the header translates upward when co
 // reveal, which relies on a dark scrim. These are fixed, theme-independent token values.
 const DRAWING_DETAIL_COLOR = buildColors("Light").textNeutral; // #303030 · --sds-color-text-neutral-default
 const DRAWING_WAVE_COLOR = buildColors("Dark").bg;             // #1E1E1E · --sds-color-background-default-default (black)
+
+// Reanimated 4 CSS transition for the focus ring: opacity fades smoothly whenever it
+// changes (swipe to another card, or comments opening/closing). Kept out of StyleSheet
+// because these props aren't in RN's ViewStyle type — Reanimated reads them at runtime.
+const FOCUS_RING_TRANSITION = {
+  transitionProperty: "opacity",
+  transitionDuration: 250,
+  transitionTimingFunction: "ease-out",
+} as any;
 
 // function getSecondUrl(r: ChallengeResponse): string | null {
 //   if (!r.second_image_path || r.second_image_path === "text_mode") return null;
@@ -113,6 +122,7 @@ const ChallengeResponseSlide = React.memo(function ChallengeResponseSlide({
   activeIndex,
   progress,
   swapped,
+  commentsOpen,
   cvStyles,
 }: {
   item: ChallengeResponse;
@@ -120,6 +130,7 @@ const ChallengeResponseSlide = React.memo(function ChallengeResponseSlide({
   activeIndex: number;
   progress: SharedValue<number>;
   swapped: boolean;
+  commentsOpen: boolean;
   cvStyles: any;
 }) {
   const animatedStyle = useAnimatedStyle(() => {
@@ -202,6 +213,22 @@ const ChallengeResponseSlide = React.memo(function ChallengeResponseSlide({
           </View>
         </View>
       </Reanimated.View>
+
+      {/* Focus ring drawn as an absolute overlay so toggling it never insets the
+          media (a real borderWidth shrinks the content box → layout shift).
+          Rendered LAST so it sits above the bottom shadow gradient — otherwise the
+          gradient darkens the lower part of the border.
+          Always mounted; only opacity changes so the CSS transition (transitionProperty
+          on slideFocusRing) can fade it out on swipe-away / when comments open, and fade
+          it in on the newly centered card. */}
+      <Reanimated.View
+        pointerEvents="none"
+        style={[
+          cvStyles.slideFocusRing,
+          FOCUS_RING_TRANSITION,
+          { opacity: index === activeIndex && !commentsOpen ? 1 : 0 },
+        ]}
+      />
     </Reanimated.View>
   );
 });
@@ -323,6 +350,10 @@ export default function ChallengeVotePage({
 
   // Reanimated states for responsiveness (exact same structure as PhotoFeed)
   const kb = useSharedValue(0);
+  // True on-screen coverage of the comment sheet (folds in slide-in, keyboard & drag),
+  // written by CommentModal. The preview pins its bottom to this so it tracks the sheet
+  // frame-by-frame on open/close — same smoothness as the keyboard lift.
+  const drawerCoverage = useSharedValue(0);
   const keyboardActiveSV = useSharedValue(0); // set in CommentModal's onStart (UI thread)
   const progress = useSharedValue(0);
   const sheetSV = useSharedValue(SHEET_BASE);
@@ -407,6 +438,11 @@ export default function ChallengeVotePage({
     return null;
   }, [activeResponse, poppedReaction, commentModalVisible, reactionsMap]);
 
+  // Shrink the floating stickers by 20% only while the custom-sticker view is up
+  // (isStickerModeSV → 1), where the preview is smallest and space is tight. Normal
+  // size in comment mode. Driven off isStickerModeSV so it eases with the mode switch.
+  const stickerSizeFactor = useDerivedValue(() => 1 - 0.2 * isStickerModeSV.value);
+
   const stickersHidden = activeModalMode === "comment" && keyboardActive;
   // 1 when the keyboard is up in comment mode, 0 otherwise. keyboardActiveSV is
   // set once in CommentModal's onStart worklet, so this flips on the UI thread the
@@ -430,7 +466,7 @@ export default function ChallengeVotePage({
   });
 
   const scale = useDerivedValue(() => {
-    const liveDrawer = kb.value + sheetSV.value;
+    const liveDrawer = drawerCoverage.value;
     const drawerTopX = SHEET_BASE + isStickerModeSV.value * (liveDrawer - SHEET_BASE);
     const availableX = SCREEN_HEIGHT - drawerTopX - targetTop.value - PREVIEW_GAP;
     const fitX = Math.max(0.05, Math.min(1, availableX / CAROUSEL_HEIGHT));
@@ -438,7 +474,7 @@ export default function ChallengeVotePage({
   });
 
   const animatedHeight = useDerivedValue(() => {
-    const liveDrawer = kb.value + sheetSV.value;
+    const liveDrawer = drawerCoverage.value;
     const availableY = SCREEN_HEIGHT - liveDrawer - PREVIEW_GAP - targetTop.value;
     const fullScaledH = CAROUSEL_HEIGHT * scale.value;
     const cropOpen =
@@ -463,6 +499,9 @@ export default function ChallengeVotePage({
     return {
       height: animatedHeight.value,
       width: commentModalVisible ? 340 : SCREEN_WIDTH,
+      // Radius only while the image is shrunk for comments (progress 1). At full
+      // width (progress 0) it stays square so the edges sit flush off-screen.
+      borderRadius: radii.md * progress.value,
       transform: [
         { translateY: translateY.value },
         { scale: scale.value },
@@ -514,10 +553,11 @@ export default function ChallengeVotePage({
         activeIndex={activeIndex}
         progress={progress}
         swapped={swapped}
+        commentsOpen={commentModalVisible}
         cvStyles={cvStyles}
       />
     );
-  }, [activeIndex, progress, swapped, cvStyles]);
+  }, [activeIndex, progress, swapped, commentModalVisible, cvStyles]);
 
   return (
     <View style={cvStyles.container}>
@@ -592,13 +632,18 @@ export default function ChallengeVotePage({
                 )}
               </Reanimated.View>
 
-              <Text style={cvStyles.modalQuestionText}>
-                Si{" "}
-                <Text style={cvStyles.orangeText}>{challenge.target_username}</Text>
-                {" était un"}{"aeiouyAEIOUY".includes(challenge.theme.label?.[0] ?? "") ? "" : "·e"}{" "}
-                <Text style={cvStyles.orangeText}>{challenge.theme.label}</Text>
-                {", ça serait..."}
-              </Text>
+              {/* Fixed 2-line height so the header (and thus the preview top) doesn't
+                  shift when the question wraps to 1 vs 2 lines — keeps the gap above
+                  the preview constant. */}
+              <View style={cvStyles.modalQuestionContainer}>
+                <Text style={cvStyles.modalQuestionText} numberOfLines={2}>
+                  Si{" "}
+                  <Text style={cvStyles.orangeText}>{challenge.target_username}</Text>
+                  {" était un"}{"aeiouyAEIOUY".includes(challenge.theme.label?.[0] ?? "") ? "" : "·e"}{" "}
+                  <Text style={cvStyles.orangeText}>{challenge.theme.label}</Text>
+                  {", ça serait..."}
+                </Text>
+              </View>
             </Reanimated.View>
           </View>
 
@@ -649,6 +694,7 @@ export default function ChallengeVotePage({
                   <ReactionStickers
                     reactions={activeReactionDisplay.reactions}
                     previewScale={scale}
+                    sizeFactor={stickerSizeFactor}
                     removingUserId={removingReactionUserId}
                     hidden={stickersHidden}
                     hiddenSV={stickersHiddenSV}
@@ -759,6 +805,7 @@ export default function ChallengeVotePage({
               keyboardHeightShared={kb}
               keyboardActiveShared={keyboardActiveSV}
               sheetHeightShared={sheetSV}
+              drawerCoverageShared={drawerCoverage}
               onKeyboardActiveChange={setKeyboardActive}
               onModeChange={(m) => setActiveModalMode(m)}
               onStickerPosted={handleStickerPosted}
@@ -877,13 +924,19 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: 32,
     color: colors.text,
   },
+  // Reserves exactly two lines of question text so the header height (measured via
+  // onLayout → headerHeightSV) is identical for 1- and 2-line questions, keeping the
+  // preview's top position — and the gap above it — constant.
+  modalQuestionContainer: {
+    height: 12 + textStyles.subheading.lineHeight * 2, // paddingTop + 2 lines
+    paddingTop: 12,
+    paddingHorizontal: 16,
+    justifyContent: "flex-start",
+  },
   modalQuestionText: {
     ...textStyles.subheading,
     color: colors.text,
     textAlign: "center",
-    paddingTop: 12,
-    paddingBottom: 0,
-    paddingHorizontal: 16,
   },
   orangeText: {
     color: colors.brand,
@@ -913,9 +966,9 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     width: SCREEN_WIDTH,
     height: 500,
     backgroundColor: "transparent",
-    // Radius lives on this (the cropped/scaled view) so the bottom stays rounded when the
-    // height shrinks. Matches slideCard.borderRadius so the two are concentric/consistent.
-    borderRadius: radii.md,
+    // borderRadius is applied dynamically in animatedContentStyle (radii.md * progress)
+    // so it only rounds while the height shrinks for comments; at full width it stays
+    // square. Matches slideCard.borderRadius so the two are concentric when open.
   },
   slideCard: {
     width: 340,
@@ -925,8 +978,16 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: "#000000",
     marginHorizontal: spacing.lg / 2,
     borderRadius: radii.md,
-    // borderWidth: stroke.md,
-    // borderColor: colors.borderBrandTertiary,
+  },
+  // Orange focus ring around the slide currently centered in the carousel.
+  // Toggled via activeIndex (set in onSnapToItem) so it follows the active card.
+  // Rendered as an absolute overlay (not a border on slideCard) so showing/hiding
+  // it never reflows the media inside the card.
+  slideFocusRing: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: radii.md,        // concentric with slideCard
+    borderWidth: stroke.md,        // --sds-size-stroke-focus-ring (2)
+    borderColor: colors.borderBrandTertiary, // --sds-color-border-brand-tertiary
   },
   slideMediaWrapper: {
     width: "100%",
