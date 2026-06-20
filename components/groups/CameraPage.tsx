@@ -170,6 +170,28 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const stopVideoRecordingRef = useRef<() => void>(() => {});
   const lastVolumeButtonTrigger = useRef(0);
   const lastVolumeRef = useRef(0);
+  // Timestamp de la dernière (ré)initialisation pouvant émettre un événement volume parasite :
+  // passage au premier plan, remount du recorder, ET flip caméra. Sert à ignorer ces
+  // événements parasites (voir le listener volume). Déclaré ici pour être accessible depuis
+  // handleFlipCamera (défini avant le bloc volume).
+  const appBecameActiveAt = useRef(0);
+  // Flag de suppression de la capture par bouton volume. Contrairement à la fenêtre temporelle
+  // (sujette à une course : l'event volume parasite peut précéder l'event AppState "active"),
+  // ce flag est ARMÉ quand on QUITTE l'app (inactive/background), donc toujours avant le retour.
+  const suppressVolumeCapture = useRef(false);
+  const suppressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Arme la suppression pour ~2s puis la lève automatiquement (utilisé au foreground, au remount
+  // du recorder, et au flip caméra — tous des moments où iOS peut émettre un event volume parasite).
+  const armVolumeSuppressionRef = useRef<() => void>(() => {});
+  armVolumeSuppressionRef.current = () => {
+    suppressVolumeCapture.current = true;
+    appBecameActiveAt.current = Date.now();
+    if (suppressTimerRef.current) clearTimeout(suppressTimerRef.current);
+    suppressTimerRef.current = setTimeout(() => {
+      suppressVolumeCapture.current = false;
+      suppressTimerRef.current = null;
+    }, 2000);
+  };
 
   // Direct ref to onScrollLock for synchronous calls (bypass React state cycle)
   const onScrollLockRef = useRef(onScrollLock);
@@ -845,6 +867,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     setZoom(0);
     savedZoomRef.current = 0;
     setZoomPresetIdx(1);
+    // Le flip reconfigure l'AVCaptureSession → la session audio peut se réinitialiser et
+    // émettre un événement volume parasite. On arme la suppression pour l'ignorer ~2s.
+    armVolumeSuppressionRef.current();
     setFacing(prev => prev === "back" ? "front" : "back");
     if (isRecording) seamlessRecorderRef.current?.switchCamera();
   };
@@ -1165,17 +1190,23 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   capturingRef.current = capturing;
   const cameraModeRef = useRef(cameraMode);
   cameraModeRef.current = cameraMode;
-  // Timestamp of the last time the app became active — used to ignore spurious
-  // volume events fired by iOS when the audio session is re-initialised on foreground.
-  const appBecameActiveAt = useRef(0);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
-      if (nextState === "active") {
+      if (nextState === "inactive" || nextState === "background") {
+        // On QUITTE l'app (changement d'app, lock écran). On arme la suppression MAINTENANT,
+        // sans timer : elle reste active tant qu'on est dehors. C'est ce qui élimine la course —
+        // l'event volume parasite émis au retour trouvera toujours le flag déjà armé.
+        suppressVolumeCapture.current = true;
         appBecameActiveAt.current = Date.now();
+        if (suppressTimerRef.current) { clearTimeout(suppressTimerRef.current); suppressTimerRef.current = null; }
+      } else if (nextState === "active") {
+        // De retour : on relance le timer de 2s qui lèvera la suppression une fois la
+        // session audio stabilisée.
+        armVolumeSuppressionRef.current();
       }
     });
-    return () => subscription.remove();
+    return () => { subscription.remove(); if (suppressTimerRef.current) clearTimeout(suppressTimerRef.current); };
   }, []);
 
   // SeamlessRecorder is inside {isCapturing && ...}, so it unmounts when the preview
@@ -1185,7 +1216,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const prevIsCapturing = useRef(isCapturing);
   useEffect(() => {
     if (isCapturing && !prevIsCapturing.current) {
-      appBecameActiveAt.current = Date.now();
+      armVolumeSuppressionRef.current();
     }
     prevIsCapturing.current = isCapturing;
   }, [isCapturing]);
@@ -1204,8 +1235,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         }
       }
     }).catch(() => {});
-    // Mark this activation so the listener cooldown starts now.
-    appBecameActiveAt.current = Date.now();
+    // Page caméra qui (re)devient active → recorder qui (re)monte : arme la suppression.
+    armVolumeSuppressionRef.current();
 
     if (Platform.OS === "ios") {
       VolumeManager.enable(true, true).catch(() => {});
@@ -1236,11 +1267,19 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     };
 
     const volumeListener = VolumeManager.addVolumeListener(async (result) => {
-      // Ignore volume events fired within 1.5s of the app becoming active —
-      // iOS re-initialises the audio session and may emit a spurious change.
-      if (Date.now() - appBecameActiveAt.current < 1500) return;
-
+      // On resync TOUJOURS la référence de volume (même pendant la fenêtre de garde), pour que
+      // la comparaison reste correcte ensuite. Sans ça, un volume parasite élevé ignoré mais non
+      // resynchronisé produirait un faux "volume up" différé juste après la fenêtre.
       const wasVolumeUp = await handleVolume(result);
+
+      // Garde principale (anti-course) : suppression armée AVANT de quitter l'app / au flip /
+      // au remount, donc toujours en place quand l'event parasite arrive au retour.
+      if (suppressVolumeCapture.current) return;
+
+      // Garde secondaire (filet de sécurité) : ignore aussi les événements émis dans les 2s
+      // suivant une (ré)initialisation, au cas où le flag aurait déjà été levé.
+      if (Date.now() - appBecameActiveAt.current < 2000) return;
+
       if (!wasVolumeUp) return;
 
       const now = Date.now();
