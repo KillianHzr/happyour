@@ -18,6 +18,28 @@ import SplashScreen from "../components/SplashScreen";
 
 setupNotificationHandler();
 
+// DEV ONLY : React Native (new arch) loggue chaque rendu de composant via
+// performance.measure -> NativePerformance.reportMeasure, qui peut throw
+// "Exception in HostFunction: std::bad_alloc" au lancement (component
+// performance track). On rend ces appels non-fatals : on n'utilise pas
+// l'API performance nous-mêmes, donc aucun impact fonctionnel.
+if (__DEV__ && typeof globalThis.performance !== "undefined") {
+  const perf = globalThis.performance as any;
+  for (const method of ["measure", "mark"] as const) {
+    const original = perf[method];
+    if (typeof original === "function") {
+      perf[method] = function (...args: any[]) {
+        try {
+          return original.apply(this, args);
+        } catch {
+          // swallow std::bad_alloc et autres erreurs natives de tracking
+          return undefined;
+        }
+      };
+    }
+  }
+}
+
 // Catch toutes les erreurs JS non catchées (handlers async, promises, etc.)
 const _ErrorUtils = (global as any).ErrorUtils;
 if (_ErrorUtils) {

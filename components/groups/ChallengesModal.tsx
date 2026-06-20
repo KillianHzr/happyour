@@ -70,14 +70,11 @@ export function ChallengePromptText({
   colors: ThemeColors;
   textStyle?: any;
 }) {
-  const vowels = "aeiouyAEIOUY";
-  const startsWithVowel = vowels.includes(themeLabel[0] ?? "");
-  const art = startsWithVowel ? "un" : "un·e";
   return (
     <Text style={[{ ...textStyles.heading, color: colors.text, lineHeight: undefined, textAlign: "center" }, textStyle]}>
       {"Si "}
       <Text style={{ color: colors.textBrandTertiary }}>{targetUsername}</Text>
-      {` était ${art} `}
+      {" était "}
       <Text style={{ color: colors.textBrandTertiary }}>{themeLabel}</Text>
       {", ça serait..."}
     </Text>

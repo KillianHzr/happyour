@@ -365,7 +365,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         const targetW = Math.floor(targetH * 9 / 16);
         const chalTargetH = mediaFrameBottom - (insets.top + spacing.lg);
         const chalTargetW = Math.floor(chalTargetH * 4 / 6);
-        const chalMarginBottom = winHeight - (insets.top + spacing.lg) - chalTargetH - NAVBAR_HEIGHT;
+        const chalMarginBottom = winHeight - (insets.top + spacing.lg) - chalTargetH;
         Animated.parallel([
           Animated.timing(previewWidthAnim, { toValue: activeChallenge !== null ? chalTargetW : targetW, duration: 150, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
           Animated.timing(captionBarBottomAnim, { toValue: captionBarBottom, duration: 150, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
@@ -384,7 +384,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       const targetW = Math.floor(targetH * 9 / 16);
       const chalTargetH = mediaFrameBottom - (insets.top + spacing.lg);
       const chalTargetW = Math.floor(chalTargetH * 4 / 6);
-      const chalMarginBottom = winHeight - (insets.top + spacing.lg) - chalTargetH - NAVBAR_HEIGHT;
+      const chalMarginBottom = winHeight - (insets.top + spacing.lg) - chalTargetH;
       Animated.parallel([
         Animated.timing(previewWidthAnim, { toValue: activeChallenge !== null ? chalTargetW : targetW, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         Animated.timing(previewBottomRadiusAnim, { toValue: radii.lg, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
@@ -415,7 +415,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
           Animated.timing(captionBarBottomAnim, { toValue: NAVBAR_HEIGHT + spacing.lg, duration: 250, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
           Animated.timing(previewWidthAnim, { toValue: winWidth, duration: 250, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
           Animated.timing(previewBottomRadiusAnim, { toValue: 0, duration: 250, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
-          Animated.timing(previewMarginBottomAnim, { toValue: 0, duration: 250, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+          Animated.timing(previewMarginBottomAnim, { toValue: activeChallenge !== null ? NAVBAR_HEIGHT : 0, duration: 250, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
           Animated.timing(uiOpacityAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
         ]).start();
         return;
@@ -427,7 +427,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         Animated.timing(previewWidthAnim, { toValue: winWidth, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         Animated.timing(previewBottomRadiusAnim, { toValue: 0, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         Animated.timing(captionBarBottomAnim, { toValue: NAVBAR_HEIGHT + spacing.lg, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
-        Animated.timing(previewMarginBottomAnim, { toValue: 0, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(previewMarginBottomAnim, { toValue: activeChallenge !== null ? NAVBAR_HEIGHT : 0, duration: dur, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         Animated.timing(uiOpacityAnim, { toValue: 1, duration: dur, useNativeDriver: true }),
       ]).start(() => {
         if (isEditingCaptionRef.current) {
@@ -458,7 +458,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       const targetW = Math.floor(targetH * 9 / 16);
       const chalTargetH = mediaFrameBottom - (insets.top + spacing.lg);
       const chalTargetW = Math.floor(chalTargetH * 4 / 6);
-      const chalMarginBottom = winHeight - (insets.top + spacing.lg) - chalTargetH - NAVBAR_HEIGHT;
+      const chalMarginBottom = winHeight - (insets.top + spacing.lg) - chalTargetH;
       Animated.parallel([
         Animated.timing(captionBarBottomAnim, { toValue: captionBarBottom, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         Animated.timing(previewWidthAnim, { toValue: activeChallenge !== null ? chalTargetW : targetW, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
@@ -476,7 +476,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         Animated.timing(captionBarBottomAnim, { toValue: NAVBAR_HEIGHT + spacing.lg, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         Animated.timing(previewWidthAnim, { toValue: winWidth, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         Animated.timing(previewBottomRadiusAnim, { toValue: 0, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
-        Animated.timing(previewMarginBottomAnim, { toValue: 0, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(previewMarginBottomAnim, { toValue: activeChallenge !== null ? NAVBAR_HEIGHT : 0, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         Animated.timing(uiOpacityAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
       ]).start(() => {
         if (isEditingCaptionRef.current) {
@@ -765,6 +765,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     setIsDrawingActive(false);
     setShowColorPalette(false);
     setActiveChallenge(null);
+    previewMarginBottomAnim.setValue(0);
     setZoom(0);
     savedZoomRef.current = 0;
     if (isEditingCaptionRef.current) {
@@ -783,6 +784,10 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const handleSelectChallenge = (challenge: ActiveChallenge) => {
     setActiveChallenge(challenge);
     setCameraMode(challenge.captureType as typeof cameraMode);
+    // Relève la frame de preview de NAVBAR_HEIGHT pour l'aligner sur la frame de capture
+    // (qui est relevée via paddingBottom). Sinon elle descend tout en bas et passe
+    // derrière le bouton « Participer ».
+    previewMarginBottomAnim.setValue(NAVBAR_HEIGHT);
   };
 
   const handleTrash = () => {
@@ -1484,21 +1489,10 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                   </TouchableOpacity>
                   <Text style={challengeStyles.inlineTitle}>Défi {allGroups.find(g => g.id === activeChallenge.groupId)?.name ?? ""}</Text>
                 </View>
-
-                <View style={{ marginTop: 12, height: 48, justifyContent: "center", alignItems: "center" }}>
-                   {activeChallenge.isTarget ? (
-                     <Text style={{ ...textStyles.subheading, color: colors.text, textAlign: "center" }}>{TARGET_CHALLENGE_PROMPT}</Text>
-                   ) : (
-                     <ChallengePromptText 
-                       targetUsername={activeChallenge.targetUsername} 
-                       themeLabel={activeChallenge.themeLabel} 
-                       colors={colors} 
-                       textStyle={{ ...textStyles.subheading, color: colors.text, textAlign: "center" }}
-                     />
-                   )}
-                </View>
               </View>
             )}
+
+            {activeChallenge && <ChallengeCapturePrompt activeChallenge={activeChallenge} colors={colors} />}
 
             <View style={[styles.drawingArea, activeChallenge && { aspectRatio: 4 / 6 }]}>
               <DrawingCanvas ref={drawingRef} color={drawingColor} strokeWidth={drawingStrokeWidth} onHistoryChange={(u, r) => { setCanUndo(u); setCanRedo(r); }} />
@@ -1616,21 +1610,10 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                   </TouchableOpacity>
                   <Text style={challengeStyles.inlineTitle}>Défi {allGroups.find(g => g.id === activeChallenge.groupId)?.name ?? ""}</Text>
                 </View>
-
-                <View style={{ marginTop: 12, height: 48, justifyContent: "center", alignItems: "center" }}>
-                   {activeChallenge.isTarget ? (
-                     <Text style={{ ...textStyles.subheading, color: colors.text, textAlign: "center" }}>{TARGET_CHALLENGE_PROMPT}</Text>
-                   ) : (
-                     <ChallengePromptText 
-                       targetUsername={activeChallenge.targetUsername} 
-                       themeLabel={activeChallenge.themeLabel} 
-                       colors={colors} 
-                       textStyle={{ ...textStyles.subheading, color: colors.text, textAlign: "center" }}
-                     />
-                   )}
-                </View>
               </View>
             )}
+
+            {activeChallenge && <ChallengeCapturePrompt activeChallenge={activeChallenge} colors={colors} />}
 
             <View style={[styles.cameraInner, activeChallenge && { aspectRatio: 4 / 6 }]}>
               <>
@@ -1781,6 +1764,14 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               {cameraMode !== "TEXTE" && <View style={styles.sideControlPlaceholder} />}
             </View>
           </View>
+          {/* Bouton Participer désactivé — visible aussi pendant la capture (mode défi),
+               activé seulement une fois le moment capturé (preview). Limité aux modes
+               PHOTO/VIDEO qui réservent la bande basse (NAVBAR_HEIGHT) sous la frame. */}
+          {activeChallenge !== null && (cameraMode === "PHOTO" || cameraMode === "VIDEO") && !isRecording && (
+            <View style={[styles.previewSendArea, { position: "absolute", left: 0, right: 0, bottom: 0 }]} pointerEvents="none">
+              <PrimaryButton label="Participer" onPress={() => {}} disabled />
+            </View>
+          )}
           {isVideoProcessing && (
             <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFillObject} pointerEvents="box-none" />
           )}
@@ -1792,7 +1783,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         <View style={[styles.previewFullContainer, {
            justifyContent: activeChallenge !== null ? "flex-end" : "flex-start", 
            paddingBottom: 0,
-           backgroundColor: activeChallenge !== null ? "transparent" : colors.bg 
+           backgroundColor: colors.bg
         }]}>
           {activeChallenge === null && (
             <View style={{ height: Math.max(0, winHeight - winWidth * 16 / 9 - NAVBAR_HEIGHT) }} pointerEvents="none" />
@@ -1811,19 +1802,12 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 </TouchableOpacity>
                 <Text style={challengeStyles.inlineTitle}>Défi {allGroups.find(g => g.id === activeChallenge.groupId)?.name ?? ""}</Text>
               </View>
+            </Animated.View>
+          )}
 
-              <View style={{ marginTop: 12, height: 48, justifyContent: "center", alignItems: "center" }}>
-                 {activeChallenge.isTarget ? (
-                   <Text style={{ ...textStyles.subheading, color: colors.text, textAlign: "center" }}>{TARGET_CHALLENGE_PROMPT}</Text>
-                 ) : (
-                   <ChallengePromptText 
-                     targetUsername={activeChallenge.targetUsername} 
-                     themeLabel={activeChallenge.themeLabel} 
-                     colors={colors} 
-                     textStyle={{ ...textStyles.subheading, color: colors.text, textAlign: "center" }}
-                   />
-                 )}
-              </View>
+          {activeChallenge !== null && (
+            <Animated.View style={{ width: "100%", opacity: uiOpacityAnim }} pointerEvents="none">
+              <ChallengeCapturePrompt activeChallenge={activeChallenge} colors={colors} />
             </Animated.View>
           )}
 
@@ -2173,6 +2157,24 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       />
 
     </>
+  );
+}
+
+// Prompt du défi — posé 12px au-dessus de la frame de capture, pleine largeur (wrap si long).
+function ChallengeCapturePrompt({ activeChallenge, colors }: { activeChallenge: ActiveChallenge; colors: ThemeColors }) {
+  return (
+    <View style={{ width: "100%", paddingHorizontal: spacing.lg, marginBottom: 12 }} pointerEvents="none">
+      {activeChallenge.isTarget ? (
+        <Text style={{ ...textStyles.subheading, color: colors.text, textAlign: "left" }}>{TARGET_CHALLENGE_PROMPT}</Text>
+      ) : (
+        <ChallengePromptText
+          targetUsername={activeChallenge.targetUsername}
+          themeLabel={activeChallenge.themeLabel}
+          colors={colors}
+          textStyle={{ ...textStyles.subheading, color: colors.text, textAlign: "left" }}
+        />
+      )}
+    </View>
   );
 }
 
