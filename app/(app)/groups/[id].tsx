@@ -94,6 +94,8 @@ type GroupData = {
   isAdmin: boolean;
   challenges: { period1: ChallengeWithData | null; period2: ChallengeWithData | null } | null;
   currentUserRespondedToChallenge: boolean;
+  /** Quand l'utilisateur courant a ouvert sa page Activité de ce groupe (pour la pastille). */
+  activityLastViewedAt: string | null;
 };
 
 function getWeekBounds(revealDayOfWeek = 0, revealHour = 20) {
@@ -371,6 +373,40 @@ export default function MainPagerScreen() {
     return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [activeData, photos, user, members, username]);
 
+  // Pastille Activité : visible si une interaction te concernant est plus récente que
+  // ta dernière ouverture de la page Activité (activitiesList est déjà triée desc, donc
+  // [0] est la plus récente). activitiesList ne contient QUE les interactions sur tes
+  // posts / mentions — une interaction sur le contenu d'autrui ne peut pas l'allumer.
+  const hasUnseenActivity = useMemo(() => {
+    if (activitiesList.length === 0) return false;
+    const newest = activitiesList[0].created_at;
+    const lastViewed = activeData?.activityLastViewedAt ?? null;
+    if (!lastViewed) return true;
+    return new Date(newest).getTime() > new Date(lastViewed).getTime();
+  }, [activitiesList, activeData?.activityLastViewedAt]);
+
+  // Ouverture de la page Activité : marque tout comme vu (upsert serveur, miroir de
+  // markAsSeen pour les commentaires) + clear optimiste immédiat de la pastille.
+  const handleOpenActivity = useCallback(async () => {
+    setShowNotificationsModal(true);
+    if (!user || !activeGroupId) return;
+    const nowIso = new Date().toISOString();
+    setGroupData((prev) => {
+      const g = prev[activeGroupId];
+      if (!g) return prev;
+      return { ...prev, [activeGroupId]: { ...g, activityLastViewedAt: nowIso } };
+    });
+    try {
+      const { error } = await supabase.from("activity_views").upsert(
+        { user_id: user.id, group_id: activeGroupId, last_viewed_at: nowIso },
+        { onConflict: "user_id,group_id" }
+      );
+      if (error) throw error;
+    } catch (e) {
+      console.error("[activity_views] upsert error:", e);
+    }
+  }, [user, activeGroupId]);
+
   const handleActivityClick = useCallback((item: any) => {
     setShowNotificationsModal(false);
     setTimeout(() => {
@@ -494,7 +530,7 @@ export default function MainPagerScreen() {
 
       const dataEntries = await Promise.all(
         groups.map(async (g) => {
-          const [membersRes, photosRes] = await Promise.all([
+          const [membersRes, photosRes, activityViewRes] = await Promise.all([
             supabase.from("group_members").select("user_id, role, profiles:user_id(username, avatar_url)").eq("group_id", g.id),
             supabase.from("photos")
               .select("id, image_path, second_image_path, audio_note_path, waveform, caption_waveform, created_at, note, user_id, video_thumbnail_path, second_video_thumbnail_path, profiles:user_id(username, avatar_url)")
@@ -502,7 +538,11 @@ export default function MainPagerScreen() {
               .gte("created_at", photoStart.toISOString())
               .lt("created_at", photoEnd.toISOString())
               .order("created_at", { ascending: true }),
+            // Marqueur "dernière ouverture de la page Activité" pour ce groupe (pastille).
+            supabase.from("activity_views").select("last_viewed_at").eq("user_id", user.id).eq("group_id", g.id).maybeSingle(),
           ]);
+
+          const activityLastViewedAt = (activityViewRes.data as any)?.last_viewed_at ?? null;
 
           const membersData = (membersRes.data ?? []).map((m: any) => ({
             ...m.profiles, user_id: m.user_id, role: m.role,
@@ -684,6 +724,7 @@ export default function MainPagerScreen() {
               isAdmin: isAdminForGroup,
               challenges,
               currentUserRespondedToChallenge,
+              activityLastViewedAt,
             }] as [string, GroupData];
           }
 
@@ -700,6 +741,7 @@ export default function MainPagerScreen() {
             isAdmin: isAdminForGroup,
             challenges,
             currentUserRespondedToChallenge,
+            activityLastViewedAt,
           }] as [string, GroupData];
         })
       );
@@ -1359,6 +1401,10 @@ export default function MainPagerScreen() {
     } catch (e) {
       console.error("[DB FETCH] handleCommentSeen Sync Error:", e);
     }
+
+    // Rafraîchit aussi le feed Activité (commentaires + réactions de l'autre) à chaque
+    // ouverture de commentaire. Sans force : le cooldown de 45s évite les syncs en rafale.
+    fetchAllDataRef.current();
   }, [user, activeGroupId, groupData]);
 
   const memoizedVaultPage = useMemo(() => (
@@ -1620,7 +1666,8 @@ export default function MainPagerScreen() {
               countdownText={revealTimeLeft}
               revealMsLeft={revealMsLeft}
               participants={connectedParticipants}
-              onNotificationPress={() => setShowNotificationsModal(true)}
+              onNotificationPress={handleOpenActivity}
+              hasUnseenActivity={hasUnseenActivity}
             />
           )}
           <PhotoFeed

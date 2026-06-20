@@ -13,9 +13,9 @@ import { supabase } from "../../lib/supabase";
 import Accelerometer from "expo-sensors/build/Accelerometer";
 import Svg, { Circle, Path } from "react-native-svg";
 import { radii, spacing, typography, textStyles, stroke, type ThemeColors, type ThemeShadows } from "../../lib/theme";
-import { useTheme, useThemedStyles } from "../../lib/theme-context";
+import { useThemedStyles } from "../../lib/theme-context";
 import { UserAvatar } from "../atoms/Avatar";
-import Icon from "../Icon";
+import LottieView from "lottie-react-native";
 
 // ─── shake detection tunables ─────────────────────────────────────────────────
 // Strategy: count X-axis direction reversals (left→right or right→left).
@@ -123,14 +123,17 @@ function BigWave({
   currentUserId: string;
 }) {
   const styles = useThemedStyles(makeStyles);
-  const { colors } = useTheme();
-  const scale   = useRef(new Animated.Value(0.6)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
+  const scale     = useRef(new Animated.Value(0.6)).current;
+  const opacity   = useRef(new Animated.Value(0)).current;
+  const handRef   = useRef<LottieView>(null);
 
   useEffect(() => {
     if (trigger === 0) return;
     scale.setValue(0.6);
     opacity.setValue(0);
+    // Replay the hand-shake Lottie from the start on each wave.
+    handRef.current?.reset();
+    handRef.current?.play();
 
     // Fade in → hold for the full swing → fade out together
     Animated.sequence([
@@ -156,25 +159,101 @@ function BigWave({
         { opacity, transform: [{ scale }] },
       ]}
     >
-      <Icon name="smiley" size={96} color={colors.icon} />
-      
-      {targetParticipants.length > 0 && (
+      {/* Lottie hand-shake — seulement sur l'écran du saluant. */}
+      <LottieView
+        ref={handRef}
+        source={require("../../assets/animations/hand - shake.json")}
+        autoPlay={false}
+        loop={false}
+        resizeMode="cover"
+        style={styles.handLottie}
+      />
+
+      {targetParticipants.length > 0 ? (
         <View style={styles.wavedToContainer}>
           <Text style={styles.wavedToText}>Tu salues</Text>
           <View style={styles.wavedAvatarsRow}>
             {visibleTargets.map((p, index) => (
-              <View key={p.userId} style={[styles.wavedAvatarWrapper, index > 0 && { marginLeft: spacing.negSm }]}>
-                <UserAvatar avatar_url={p.avatarUrl} username={p.username} size={32} borderRadius={radii.sm} />
-              </View>
+              <UserAvatar
+                key={p.userId}
+                avatar_url={p.avatarUrl}
+                username={p.username}
+                size={32}
+                borderRadius={radii.sm}
+                style={[styles.wavedAvatar, index > 0 && { marginLeft: spacing.negSm }]}
+              />
             ))}
             {remainingTargetsCount > 0 && (
-              <View style={[styles.wavedAvatarWrapper, styles.wavedAvatarMore, { marginLeft: spacing.negSm }]}>
+              <View style={[styles.wavedAvatarMore, { marginLeft: spacing.negSm }]}>
                 <Text style={styles.wavedAvatarMoreText}>+{remainingTargetsCount}</Text>
               </View>
             )}
           </View>
         </View>
+      ) : (
+        // Personne d'autre connecté au reveal au moment du shake.
+        <View style={styles.wavedToContainer}>
+          <Text style={styles.wavedToText}>Tu ne salues personne</Text>
+        </View>
       )}
+    </Animated.View>
+  );
+}
+
+// ─── IncomingWave — centred overlay shown on the *recipient's* screen ─────────
+// Mirrors BigWave's animation, but shows "<saluant> te salue" with their avatar.
+
+type IncomingWaveState = {
+  trigger: number; // bumped on each received wave so the animation re-fires
+  userId: string;
+  username: string;
+  avatarUrl: string | null;
+};
+
+function IncomingWave({ wave }: { wave: IncomingWaveState | null }) {
+  const styles = useThemedStyles(makeStyles);
+  const scale   = useRef(new Animated.Value(0.6)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const trigger = wave?.trigger ?? 0;
+
+  useEffect(() => {
+    if (trigger === 0) return;
+    scale.setValue(0.6);
+    opacity.setValue(0);
+
+    // Same timing as BigWave: pop in → hold for the swing → fade out.
+    Animated.sequence([
+      Animated.parallel([
+        Animated.spring(scale,   { toValue: 1, useNativeDriver: true, tension: 90, friction: 7 }),
+        Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+      ]),
+      Animated.delay(SWING_DURATION - 180),
+      Animated.timing(opacity, { toValue: 0, duration: 350, useNativeDriver: true }),
+    ]).start();
+  }, [trigger]);
+
+  if (!wave) return null;
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        StyleSheet.absoluteFill,
+        styles.bigWaveContainer,
+        { opacity, transform: [{ scale }] },
+      ]}
+    >
+      {/* Pas d'icône côté destinataire : seulement l'avatar du saluant + le texte. */}
+      <View style={styles.wavedToContainer}>
+        <UserAvatar
+          avatar_url={wave.avatarUrl}
+          username={wave.username}
+          size={32}
+          borderRadius={radii.sm}
+          style={styles.wavedAvatar}
+        />
+        <Text style={[styles.wavedToText, { marginLeft: spacing.sm }]}>{wave.username} te salue</Text>
+      </View>
     </Animated.View>
   );
 }
@@ -210,8 +289,9 @@ export default function LiveReactions({
   const insets = useSafeAreaInsets();
   const styles = useThemedStyles(makeStyles);
   const [participants, setParticipants] = useState<Map<string, Participant>>(new Map());
-  // Per-user monotonically-increasing wave trigger
-  const [waveTriggers, setWaveTriggers] = useState<Map<string, number>>(new Map());
+  // Latest wave received from someone else → drives the centred "X te salue" overlay.
+  const [incomingWave, setIncomingWave] = useState<IncomingWaveState | null>(null);
+  const incomingTriggerRef = useRef(0);
   const [myWaveTrigger, setMyWaveTrigger] = useState(0);
 
   const channelRef   = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -318,10 +398,15 @@ export default function LiveReactions({
       })
       .on("broadcast", { event: "wave" }, ({ payload }) => {
         const { userId } = payload as { userId: string };
-        setWaveTriggers((prev) => {
-          const next = new Map(prev);
-          next.set(userId, (next.get(userId) ?? 0) + 1);
-          return next;
+        if (userId === currentUserId) return; // ignore our own wave (no self-echo anyway)
+        // Resolve the sender's identity from presence so we can show their name + avatar.
+        const sender = pRef.current.get(userId);
+        incomingTriggerRef.current += 1;
+        setIncomingWave({
+          trigger: incomingTriggerRef.current,
+          userId,
+          username: sender?.username ?? "Quelqu'un",
+          avatarUrl: sender?.avatarUrl ?? null,
         });
       })
       .subscribe(async (status) => {
@@ -351,7 +436,7 @@ export default function LiveReactions({
       channelRef.current = null;
       pRef.current.clear();
       setParticipants(new Map());
-      setWaveTriggers(new Map());
+      setIncomingWave(null);
       // Reset the parent's participant list so a later reopen starts empty
       // instead of replaying enter/exit animations for stale members.
       onParticipantsChange?.([]);
@@ -416,6 +501,9 @@ export default function LiveReactions({
         participants={participants}
         currentUserId={currentUserId}
       />
+
+      {/* Incoming wave — shown on the recipient's screen ("X te salue") */}
+      <IncomingWave wave={incomingWave} />
     </View>
   );
 }
@@ -455,6 +543,16 @@ const makeStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.cr
     justifyContent: "center",
     alignItems: "center",
   },
+  handLottie: {
+    // L'artboard Lottie (402×874) est format téléphone avec la main au centre :
+    // `cover` la fait grande (~127px à width 400), et on crope la hauteur + décale le
+    // rendu vers le bas (translateY) pour que le BAS de la main touche le bas de la
+    // boîte → l'écart réel avec le texte vaut alors exactement marginTop (space/600).
+    width: 400,
+    height: 150,
+    overflow: "hidden",
+    transform: [{ translateY: 12 }],
+  },
   wavedToContainer: {
     marginTop: spacing.xl, // size-space-600 away (24px)
     flexDirection: "row",
@@ -474,13 +572,11 @@ const makeStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.cr
     marginLeft: spacing.sm, // to its right with size-space-200 (8px)
     height: 32,
   },
-  wavedAvatarWrapper: {
-    width: 32,
-    height: 32,
+  // Bordure appliquée directement sur l'avatar (comme les avatars de présence du
+  // RevealHeader) — le wrapper View avec bordure faisait déborder l'avatar carré.
+  wavedAvatar: {
     borderWidth: stroke.sm,
-    borderColor: colors.bg,
-    borderRadius: radii.sm,
-    backgroundColor: colors.bg,
+    borderColor: colors.cardBorder, // Color/border/default/default
     ...shadows.shadow200,
   },
   wavedAvatarMore: {
