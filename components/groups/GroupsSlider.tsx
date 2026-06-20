@@ -189,6 +189,9 @@ export default function GroupsSlider({ cards, revealDate, onSelect, showActiveBo
   // Scroll vers le milieu au premier rendu
   useEffect(() => {
     if (count === 0 || availableHeight === 0 || !needsLoop) return;
+    // Initialise scrollX sur l'offset de départ, sinon la bordure de la carte centrée
+    // (pilotée par scrollX) reste à 0 tant qu'on n'a pas scrollé manuellement.
+    scrollX.setValue(startIdx * snapInterval);
     const t = setTimeout(() => {
       scrollRef.current?.scrollTo({ x: startIdx * snapInterval, animated: false });
     }, 30);

@@ -11,6 +11,7 @@ import { type ShapeName } from "../Shape";
 import GroupsSlider, { type GroupCard } from "./GroupsSlider";
 import GroupRoom from "./GroupRoom";
 import GroupSearchSheet from "./GroupSearchSheet";
+import { type ActiveChallenge, TARGET_CHALLENGE_PROMPT, getChallengePrompt } from "../../lib/challenges";
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -54,6 +55,7 @@ type Props = {
   onSelectGroup: (groupId: string) => void;
   onAddGroup: () => void;
   onGoToCapture: () => void;           // ouvrir la vue capture
+  onOpenChallenge?: (challenge: ActiveChallenge) => void; // ouvrir la capture d'un défi précis
   onOpenReveal: () => void;            // déverrouiller / ouvrir le reveal
   onRevealStart?: () => void;          // début du slide reveal → sortie du menu parent
   onCardFrame?: (frame: { x: number; y: number; width: number; height: number }) => void; // frame de la card (transition reveal)
@@ -100,7 +102,7 @@ function computeNextRevealDate(revealDayOfWeek: number, revealHour: number): Dat
   return reveal;
 }
 
-export default function GroupsPage({ allGroups, groupData, revealConfig, isActive, userId, enterGroupId, onEnteredGroup, onSelectGroup, onAddGroup, onGoToCapture, onOpenReveal, onRevealStart, onCardFrame, onLottieFrame, onOpenSettings, onOpenArchives, onScrollLock, onDebugNamePress, debugUnlocked }: Props) {
+export default function GroupsPage({ allGroups, groupData, revealConfig, isActive, userId, enterGroupId, onEnteredGroup, onSelectGroup, onAddGroup, onGoToCapture, onOpenChallenge, onOpenReveal, onRevealStart, onCardFrame, onLottieFrame, onOpenSettings, onOpenArchives, onScrollLock, onDebugNamePress, debugUnlocked }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -230,6 +232,29 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
   const slideAnim = useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const [groupViewMounted, setGroupViewMounted] = useState(false);
 
+  // Construit l'ActiveChallenge du défi en cours d'un groupe (même logique que la card),
+  // pour ouvrir directement sa capture au clic sur l'encart "Défi @…".
+  const buildActiveChallenge = useCallback((groupId: string): ActiveChallenge | null => {
+    const ch = groupData[groupId]?.challenges?.period1 ?? groupData[groupId]?.challenges?.period2 ?? null;
+    if (!ch) return null;
+    const isTarget = ch.target_user_id === userId;
+    return {
+      challengeId: ch.id,
+      captureType: isTarget ? "PHOTO" : ch.theme.capture_type,
+      promptText: isTarget ? TARGET_CHALLENGE_PROMPT : getChallengePrompt(ch.target_username, ch.theme.label),
+      groupId,
+      isTarget,
+      proposedByUsername: ch.proposed_by_username ?? null,
+      targetUsername: ch.target_username,
+      themeLabel: ch.theme.label,
+    };
+  }, [groupData, userId]);
+
+  const handleOpenChallenge = useCallback((groupId: string) => {
+    const challenge = buildActiveChallenge(groupId);
+    if (challenge) onOpenChallenge?.(challenge);
+  }, [buildActiveChallenge, onOpenChallenge]);
+
   const openGroup = useCallback((groupId: string) => {
     onSelectGroup(groupId);
     setViewingGroupId(groupId);
@@ -284,6 +309,7 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
         onSettings={() => onOpenSettings?.()}
         onArchive={() => onOpenArchives?.()}
         onCapture={onGoToCapture}
+        onOpenChallenge={onOpenChallenge ? () => handleOpenChallenge(cards[0].id) : undefined}
         onUnlock={onOpenReveal}
         onRevealStart={onRevealStart}
         onCardFrame={onCardFrame}
@@ -334,6 +360,7 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
               onSettings={() => onOpenSettings?.()}
               onArchive={() => onOpenArchives?.()}
               onCapture={onGoToCapture}
+              onOpenChallenge={onOpenChallenge && openedGroup ? () => handleOpenChallenge(openedGroup.id) : undefined}
               onUnlock={onOpenReveal}
               onRevealStart={onRevealStart}
               onCardFrame={onCardFrame}

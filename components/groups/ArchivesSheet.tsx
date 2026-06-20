@@ -8,7 +8,7 @@ import { Image } from "expo-image";
 import { BlurView as NativeBlurView } from "@sbaiahmed1/react-native-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { spacing, radii, textStyles, typography, buildColors, type ThemeColors } from "../../lib/theme";
+import { spacing, radii, stroke, textStyles, typography, buildColors, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import { supabase } from "../../lib/supabase";
 import { r2Storage } from "../../lib/r2";
@@ -434,7 +434,12 @@ function ArchiveRevealItem({ reveal, styles, onPress }: { reveal: Reveal; styles
 
   return (
     <TouchableOpacity
-      style={[styles.archiveItem, isLocked && { opacity: 0.3 }]}
+      style={[
+        styles.archiveItem,
+        isLocked && { opacity: 0.3 },
+        // Stroke/050 border/brand/tertiary sur le reveal en cours.
+        isCurrent && { borderWidth: stroke.md, borderColor: darkColors.borderBrandTertiary },
+      ]}
       activeOpacity={0.85}
       onPress={() => onPress(reveal)}
     >

@@ -19,7 +19,7 @@ import Svg, { Path } from "react-native-svg";
 
 import PhotoFeed, { type PhotoEntry, type Reaction } from "../../../components/PhotoFeed";
 import { TextSticker } from "../../../components/atoms/TextSticker";
-import { fetchChallengeData, getChallengeWeekStart, getChallengePrompt, type ChallengeWithData } from "../../../lib/challenges";
+import { fetchChallengeData, getChallengeWeekStart, getChallengePrompt, type ChallengeWithData, type ActiveChallenge } from "../../../lib/challenges";
 import Loader from "../../../components/Loader";
 import { ProfileIcon, VaultIcon, MomentIcon, FlowerIcon } from "../../../components/icons";
 import { CloseIcon } from "../../../components/groups/GroupIcons";
@@ -169,6 +169,8 @@ export default function MainPagerScreen() {
   // Page "active" différée : pilote l'activation des pages lourdes (caméra, fetch…)
   // APRÈS la transition, pour ne pas geler le swipe ni retarder l'affichage du menu.
   const [activePage, setActivePage] = useState(1);
+  // Défi à activer dans la capture (clic sur l'encart "Défi @…" dans la single du groupe).
+  const [pendingChallenge, setPendingChallenge] = useState<ActiveChallenge | null>(null);
   const [cameraScrollLocked, setCameraScrollLocked] = useState(false);
   const [cameraHideMenu, setCameraHideMenu] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -1485,6 +1487,7 @@ export default function MainPagerScreen() {
       onSelectGroup={handleSwitchGroup}
       onAddGroup={() => setShowAddGroupModal(true)}
       onGoToCapture={() => jumpTo(1)}
+      onOpenChallenge={(ch) => { setPendingChallenge(ch); jumpTo(1); }}
       onOpenReveal={handleGroupRoomUnlock}
       onRevealStart={currentUserPostedThisWeek ? handleRevealStart : undefined}
       onCardFrame={handleCardFrame}
@@ -1529,12 +1532,14 @@ export default function MainPagerScreen() {
         userId={user?.id ?? ""}
         isActive={activePage === 1}
         allGroups={allGroups}
+        pendingChallenge={pendingChallenge}
+        onPendingChallengeConsumed={() => setPendingChallenge(null)}
         onScrollLock={(v) => { setCameraScrollLocked(v); scrollRef.current?.setNativeProps({ scrollEnabled: !v }); }}
         onHideMenu={setCameraHideMenu}
         onCaptureSent={(info) => { setProfileRefreshKey(k => k + 1); showCaptureToast(info); }}
       />
     </ForceThemeMode>
-  ), [activeGroupId, user?.id, activePage === 1, allGroups]);
+  ), [activeGroupId, user?.id, activePage === 1, allGroups, pendingChallenge]);
 
   const memoizedProfilePage = useMemo(() => (
     <ProfilePage

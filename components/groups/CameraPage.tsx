@@ -96,6 +96,9 @@ type Props = {
   onScrollLock: (locked: boolean) => void;
   onHideMenu?: (hidden: boolean) => void;
   onCaptureSent?: (info: { mode: string; groupName: string }) => void;
+  // Défi à activer directement (clic sur l'encart "Défi @…" dans la single du groupe).
+  pendingChallenge?: ActiveChallenge | null;
+  onPendingChallengeConsumed?: () => void;
 };
 
 class CameraErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean; error: string }> {
@@ -108,7 +111,7 @@ class CameraErrorBoundary extends Component<{ children: React.ReactNode }, { has
   }
 }
 
-function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, onHideMenu, onCaptureSent }: Props) {
+function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, onHideMenu, onCaptureSent, pendingChallenge, onPendingChallengeConsumed }: Props) {
   const insets = useSafeAreaInsets();
   const { width: winWidth, height: winHeight } = useWindowDimensions();
   const { colors } = useTheme();
@@ -791,6 +794,15 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     // derrière le bouton « Participer ».
     previewMarginBottomAnim.setValue(NAVBAR_HEIGHT);
   };
+
+  // Active directement un défi demandé depuis l'extérieur (encart "Défi @…" de la single).
+  useEffect(() => {
+    if (!pendingChallenge) return;
+    handleSelectChallenge(pendingChallenge);
+    setShowChallengesInline(false);
+    onPendingChallengeConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingChallenge]);
 
   const handleTrash = () => {
     if (viewingSlot === 2) {

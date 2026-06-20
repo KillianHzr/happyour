@@ -120,6 +120,8 @@ type Props = {
   onSettings: () => void;
   onArchive: () => void;
   onCapture: () => void;
+  /** Clic sur l'encart "Défi @… " → ouvre la capture de ce défi. */
+  onOpenChallenge?: () => void;
   onUnlock: () => void;
   /** Appelé dès le slide (début de la transition reveal) → sortie du menu/header parent. */
   onRevealStart?: () => void;
@@ -239,7 +241,7 @@ type RoomCardProps = Props & {
   onLottieFrame?: (frame: { x: number; y: number; width: number; height: number }) => void;
 };
 
-function RoomCard({ card, revealDate, unlocked, onCapture, lottieProps, lottieOpacityStyle, lottieSource, exit, startReveal, onCardFrame, onLottieFrame }: RoomCardProps) {
+function RoomCard({ card, revealDate, unlocked, onCapture, onOpenChallenge, lottieProps, lottieOpacityStyle, lottieSource, exit, startReveal, onCardFrame, onLottieFrame }: RoomCardProps) {
   const { colors } = useTheme();
   const s = useThemedStyles(makeStyles);
   const hasMoments = card.momentCount > 0;
@@ -289,14 +291,14 @@ function RoomCard({ card, revealDate, unlocked, onCapture, lottieProps, lottieOp
           <View style={s.topInfosMask}>
           <Reanimated.View style={[s.topInfos, topExitStyle]}>
             {!!card.challengeLabel && (
-              <View style={s.challengeBtn}>
+              <TouchableOpacity style={s.challengeBtn} activeOpacity={0.85} onPress={onOpenChallenge} disabled={!onOpenChallenge}>
                 {Platform.OS === "ios"
                   ? <NativeBlurView style={StyleSheet.absoluteFillObject} blurType="dark" blurAmount={20} />
                   : null}
                 <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
                 <Text style={s.challengeText}>Défi @{card.challengeLabel}</Text>
                 {card.challengeShape && <Shape name={card.challengeShape} size={20} color={colors.icon} />}
-              </View>
+              </TouchableOpacity>
             )}
             <View style={s.tagQueenKing}>
               <View style={s.avatar}>
