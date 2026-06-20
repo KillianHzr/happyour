@@ -293,6 +293,7 @@ export const buildColors = (mode: ThemeMode) => ({
   accentMuted:           resolveToken("-> Color/background/default/tertiary",         mode), // #444444
   bgTertiaryHover:       resolveToken("-> Color/background/default/tertiary-hover",   mode), // #383838
   opacityLight:          adjustAlpha(resolveToken("-> Color/background/default/default-opacity", mode), -0.2), // token -0.2 alpha (ex: 0.4 → 0.2)
+  bgDefaultOpacity:      resolveToken("-> Color/background/default/default-opacity", mode), // token brut (sans ajustement alpha)
   opacityDark:           resolveToken("-> Color/background/default/secondary-opacity", mode), // Dark: rgba(12,12,13,0.1)  (ex "opacity-dark")
   bgInverse:             resolveToken("-> Color/background/default/default-inverse",   mode), // Dark: #FFFFFF / Light: #0C0C0D
 

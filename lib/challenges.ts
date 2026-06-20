@@ -124,7 +124,7 @@ export function getCurrentSeasonStart(now: Date = new Date()): Date {
   return current;
 }
 
-export const TARGET_CHALLENGE_PROMPT = "Tu es la cible ! Prends une photo qui te représente 📸";
+export const TARGET_CHALLENGE_PROMPT = "Tu es la cible, prends une photo de toi";
 
 export function mapChallenge(row: any): WeeklyChallenge {
   const theme = Array.isArray(row.challenge_themes) ? row.challenge_themes[0] : row.challenge_themes;

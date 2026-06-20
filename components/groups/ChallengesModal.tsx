@@ -34,6 +34,7 @@ type GroupChallenge = {
   challenge: WeeklyChallenge | null;
   hasResponded: boolean;
   loading: boolean;
+  responseCount?: number;
 };
 
 type Props = {
@@ -64,18 +65,23 @@ export function ChallengePromptText({
   themeLabel,
   colors,
   textStyle,
+  accentColor,
 }: {
   targetUsername: string;
   themeLabel: string;
   colors: ThemeColors;
   textStyle?: any;
+  // Couleur des parties surnom/thème. Brand par défaut (capture du défi),
+  // forcé en blanc (text/default) dans les cards du slider.
+  accentColor?: string;
 }) {
+  const accent = accentColor ?? colors.textBrandTertiary;
   return (
     <Text style={[{ ...textStyles.heading, color: colors.text, lineHeight: undefined, textAlign: "center" }, textStyle]}>
       {"Si "}
-      <Text style={{ color: colors.textBrandTertiary }}>{targetUsername}</Text>
+      <Text style={{ color: accent }}>{targetUsername}</Text>
       {" était "}
-      <Text style={{ color: colors.textBrandTertiary }}>{themeLabel}</Text>
+      <Text style={{ color: accent }}>{themeLabel}</Text>
       {", ça serait..."}
     </Text>
   );
@@ -131,13 +137,19 @@ export function ChallengesSlider({
           challenge = await fetchOrGenerateChallenge(g.id, effectivePeriod, weekStart, members, new Date(), false);
         }
         let hasResponded = false;
+        let responseCount = 0;
         if (challenge) {
-          const { data: resp } = await supabase.from("challenge_responses").select("id")
-            .eq("challenge_id", challenge.id).eq("user_id", currentUserId).maybeSingle();
+          const [{ data: resp }, { count }] = await Promise.all([
+            supabase.from("challenge_responses").select("id")
+              .eq("challenge_id", challenge.id).eq("user_id", currentUserId).maybeSingle(),
+            supabase.from("challenge_responses").select("id", { count: "exact", head: true })
+              .eq("challenge_id", challenge.id),
+          ]);
           hasResponded = !!resp;
+          responseCount = count ?? 0;
         }
         setGroupChallenges((prev) => prev.map((gc) =>
-          gc.groupId === g.id ? { ...gc, challenge, hasResponded, loading: false } : gc
+          gc.groupId === g.id ? { ...gc, challenge, hasResponded, responseCount, loading: false } : gc
         ));
       } catch {
         setGroupChallenges((prev) => prev.map((gc) =>
@@ -281,7 +293,7 @@ export function ChallengesSlider({
               {isTarget ? (
                 <Text style={sliderStyles.challengeText}>{TARGET_CHALLENGE_PROMPT}</Text>
               ) : (
-                <ChallengePromptText targetUsername={gc.challenge.target_username} themeLabel={gc.challenge.theme.label} colors={colors} />
+                <ChallengePromptText targetUsername={gc.challenge.target_username} themeLabel={gc.challenge.theme.label} colors={colors} accentColor={colors.text} />
               )}
               {gc.challenge.target_avatar_url ? (
                 <Image source={{ uri: gc.challenge.target_avatar_url }} style={sliderStyles.targetAvatar} contentFit="cover" transition={0} cachePolicy="memory-disk" />
@@ -292,6 +304,11 @@ export function ChallengesSlider({
                   </Text>
                 </View>
               )}
+              <View style={sliderStyles.responsesBadge}>
+                <Text style={sliderStyles.responsesText}>
+                  {(gc.responseCount ?? 0)} {(gc.responseCount ?? 0) > 1 ? "réponses" : "réponse"}
+                </Text>
+              </View>
             </View>
           ) : (
             <Text style={sliderStyles.noChallengeText}>Aucun défi configuré</Text>
@@ -387,6 +404,21 @@ const makeSliderStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: spacing.sm,
   },
   captureBadgeText: {
+    ...textStyles.singleLineBodyBaseStrong,
+    color: colors.text,
+    lineHeight: undefined,
+  },
+  responsesBadge: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: spacing.xs,               // space/100
+    paddingVertical: spacing.sm,   // space/200
+    paddingHorizontal: spacing.md, // space/300
+    borderRadius: radii.sm,        // radius/200
+    backgroundColor: colors.bgDefaultOpacity,
+  },
+  responsesText: {
     ...textStyles.singleLineBodyBaseStrong,
     color: colors.text,
     lineHeight: undefined,
