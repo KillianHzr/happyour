@@ -256,7 +256,8 @@ export default function MainPagerScreen() {
   const challenges = activeData?.challenges ?? null;
 
   // ── Transition single → reveal (filmstrip flouté) ──
-  const [revealTransition, setRevealTransition] = useState(false);
+  const [revealTransition, setRevealTransition] = useState(false); // monté (préchauffe) dès le slide
+  const [revealActive, setRevealActive] = useState(false);         // anim lancée à la fin de l'aspiration
   const cardFrameRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
   // 10 dernières photos (récent→ancien) + tout premier moment, en URLs d'affichage floutables.
   const revealStripUrls = useMemo(() => {
@@ -398,13 +399,13 @@ export default function MainPagerScreen() {
   const currentUserPostedThisWeek = photos.some(p => p.user_id === user?.id) || currentUserRespondedToChallenge || debugUnlocked;
 
   // Déclenché à la fin du Lottie (slide) : lance la transition filmstrip → reveal.
-  // Fin de l'aspiration du chrome (GroupRoom) : lance la transition (grow + filmstrip) → reveal.
+  // Fin de l'aspiration du chrome (GroupRoom) : ACTIVE l'anim (déjà montée au slide) → reveal.
   const handleGroupRoomUnlock = useCallback(() => {
     if (!currentUserPostedThisWeek) return;
     // Pas de frame mesurée ou pas d'images → reveal direct (jamais bloqué).
     if (!cardFrameRef.current || revealStripUrls.length === 0) { setShowReveal(true); return; }
-    Image.prefetch(revealStripUrls);
-    setRevealTransition(true);
+    setRevealTransition(true); // au cas où le slide n'a pas monté (sécurité)
+    setRevealActive(true);
   }, [currentUserPostedThisWeek, revealStripUrls]);
 
   useEffect(() => {
@@ -1234,8 +1235,10 @@ export default function MainPagerScreen() {
   const menuExitOpacity = menuExit.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
   const handleRevealStart = useCallback(() => {
     Animated.timing(menuExit, { toValue: 1, duration: 700, easing: Easing.bezier(0.7, 0, 0.84, 0), useNativeDriver: true }).start();
-    // Précharge tôt (pendant l'aspiration du chrome) → images floutées prêtes pour le filmstrip.
+    // Précharge + MONTE la transition (invisible) dès le slide → préchauffe textures/Lottie
+    // pendant l'aspiration du chrome, pour que le grow démarre sans freeze.
     if (revealStripUrls.length) Image.prefetch(revealStripUrls);
+    if (cardFrameRef.current && revealStripUrls.length) setRevealTransition(true);
   }, [menuExit, revealStripUrls]);
   // Réaffiche le menu quand le reveal se ferme.
   useEffect(() => { if (!showReveal) menuExit.setValue(0); }, [showReveal, menuExit]);
@@ -1573,8 +1576,9 @@ export default function MainPagerScreen() {
           urls={revealStripUrls}
           lottie={revealLottie}
           lottieFrame={lottieFrameRef.current}
+          active={revealActive}
           onArrived={() => setShowReveal(true)}
-          onDone={() => setRevealTransition(false)}
+          onDone={() => { setRevealTransition(false); setRevealActive(false); }}
         />
       )}
 

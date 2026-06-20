@@ -33,6 +33,9 @@ type Props = {
   urls: string[];   // du plus récent (= fond de la card) au plus ancien (= 1er moment)
   lottie?: Lottie;
   lottieFrame?: Frame | null; // frame du lottieWrap de la card (x recentré)
+  /** false = monté mais invisible (préchauffe textures/Lottie pendant l'aspiration) ;
+   *  true = on lance le grow + scroll. Découple le montage (coûteux) du démarrage de l'anim. */
+  active: boolean;
   onArrived: () => void;
   onDone: () => void;
 };
@@ -43,7 +46,7 @@ type Props = {
  * z-index → on le rejoue ici, à l'identique : même source, même vitesse, en continuant
  * exactement là où la card en était à la fin de l'aspiration).
  */
-export default function RevealTransition({ cardFrame, urls, lottie, lottieFrame, onArrived, onDone }: Props) {
+export default function RevealTransition({ cardFrame, urls, lottie, lottieFrame, active, onArrived, onDone }: Props) {
   const grow = useSharedValue(0);
   const strip = useSharedValue(0);
   const n = Math.max(1, urls.length);
@@ -58,12 +61,14 @@ export default function RevealTransition({ cardFrame, urls, lottie, lottieFrame,
   const lottieFadeStart = lottie ? lottie.endProgress - (lottie.endProgress - lottie.freezeProgress) * 200 / lottie.durationMs : 0;
   const lottieProgress = useSharedValue(lottieStart);
 
+  // L'anim ne démarre QUE quand active=true (le montage a déjà préchauffé textures/Lottie).
   useEffect(() => {
+    if (!active) return;
     const arrived = () => {
       onArrived();
       setTimeout(onDone, 150);
     };
-    grow.value = withTiming(1, { duration: GROW_MS, easing: Easing.out(Easing.cubic) }, (finGrow) => {
+    grow.value = withTiming(1, { duration: GROW_MS, easing: Easing.bezier(0.5, 0, 0.75, 0) }, (finGrow) => {
       if (finGrow) {
         strip.value = withTiming(1, { duration: STRIP_MS, easing: Easing.inOut(Easing.cubic) }, (finStrip) => {
           if (finStrip) runOnJS(arrived)();
@@ -74,7 +79,7 @@ export default function RevealTransition({ cardFrame, urls, lottie, lottieFrame,
       lottieProgress.value = withTiming(lottie.endProgress, { duration: lottieRemaining, easing: Easing.linear });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [active]);
 
   const containerStyle = useAnimatedStyle(() => {
     const g = grow.value;
@@ -96,7 +101,8 @@ export default function RevealTransition({ cardFrame, urls, lottie, lottieFrame,
   }));
 
   return (
-    <View style={styles.root} pointerEvents="none">
+    // opacity 0 tant que !active : monté (préchauffe) mais invisible, la card/aspiration reste visible.
+    <View style={[styles.root, { opacity: active ? 1 : 0 }]} pointerEvents="none">
       <Reanimated.View style={[styles.card, containerStyle]}>
         <Reanimated.View style={[styles.row, { width: n * SW }, rowStyle]}>
           {urls.map((u, i) => (
