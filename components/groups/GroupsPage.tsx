@@ -10,6 +10,7 @@ import EdgeSwipeBack from "../EdgeSwipeBack";
 import { type ShapeName } from "../Shape";
 import GroupsSlider, { type GroupCard } from "./GroupsSlider";
 import GroupRoom from "./GroupRoom";
+import GroupSearchSheet from "./GroupSearchSheet";
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -105,6 +106,7 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
   const styles = useThemedStyles(makeStyles);
 
   const [viewingGroupId, setViewingGroupId] = useState<string | null>(null);
+  const [showSearch, setShowSearch] = useState(false);
   const revealDate = useMemo(
     () => computeNextRevealDate(revealConfig.day, revealConfig.hour),
     [revealConfig.day, revealConfig.hour]
@@ -299,7 +301,7 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
         <View style={[styles.headerRow, { justifyContent: "space-between" }]}>
           <Text style={styles.title}>Groupes</Text>
           <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.addBtn} onPress={() => {}} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.addBtn} onPress={() => setShowSearch(true)} activeOpacity={0.8}>
               <Icon name="search" size={20} color={colors.iconNeutral} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.addBtn} onPress={onAddGroup} activeOpacity={0.8}>
@@ -341,6 +343,13 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
           </EdgeSwipeBack>
         </Animated.View>
       )}
+
+      <GroupSearchSheet
+        visible={showSearch}
+        onClose={() => setShowSearch(false)}
+        groups={allGroups}
+        onSelectGroup={(id) => { setShowSearch(false); openGroup(id); }}
+      />
     </View>
   );
 }
