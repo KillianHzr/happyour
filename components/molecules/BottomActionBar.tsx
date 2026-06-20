@@ -11,7 +11,10 @@ const AnimatedTouchableOpacity = Reanimated.createAnimatedComponent(TouchableOpa
 // `enter`/`exit` fade the secondary button in and out.
 const transitions = {
   layout: LinearTransition.duration(300),
-  secondaryEnter: FadeIn.duration(200),
+  // Delay the fade-in so it starts after the primary button has shrunk to make room —
+  // otherwise the secondary button fades in on top of (overlapping) the primary one
+  // while the layout is still morphing.
+  secondaryEnter: FadeIn.duration(300).delay(150),
   secondaryExit: FadeOut.duration(200),
 };
 
