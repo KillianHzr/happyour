@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Dimensions,
   TouchableOpacity,
+  Pressable,
   Animated as RNAnimated,
   Easing as RNEasing,
   Share
@@ -20,6 +21,7 @@ import { r2Storage } from "../../lib/r2";
 import ChallengeAudioPlayer from "./ChallengeAudioPlayer";
 import { AudioCaptionPlayer } from "../molecules/AudioCaptionPlayer";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import { useVideoPlayer, VideoView } from "expo-video";
 import { radii, typography, spacing, textStyles, stroke, buildColors, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import { supabase } from "../../lib/supabase";
@@ -43,7 +45,7 @@ import Carousel, { Pagination, ICarouselInstance } from "react-native-reanimated
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const CAROUSEL_HEIGHT = 500;
 const PREVIEW_GAP = 0; // Gap (px) between the bottom of the card preview and the top of the comments sheet
-const PREVIEW_TOP_GAP = 30; // Gap (px) between the bottom of the question text and the top of the card preview
+const PREVIEW_TOP_GAP = 40; // Gap (px) between the bottom of the question text and the top of the card preview
 const HEADER_SHIFT = 52; // How many pixels the header translates upward when comments are open
 
 // Drawing responses always render on a light (white) canvas, so their details (author name,
@@ -66,17 +68,60 @@ const FOCUS_RING_TRANSITION = {
 //   return r2Storage.getPublicUrl(r.second_image_path);
 // }
 
-function mediaType(path: string | null): "text" | "audio" | "drawing" | "photo" {
+function mediaType(path: string | null): "text" | "audio" | "drawing" | "video" | "photo" {
   if (!path || path === "text_mode") return "text";
   if (path.endsWith(".m4a")) return "audio";
+  if (path.endsWith(".mp4")) return "video";
   if (path.includes("_draw")) return "drawing";
   return "photo";
 }
 
 // Modal media renderer — respects exact same ratios as PhotoFeed
-function ModalMedia({ imagePath, url, note }: { imagePath: string | null; url: string | null; note: string | null }) {
+function ModalMedia({ imagePath, url, note, isActive, isPaused }: { imagePath: string | null; url: string | null; note: string | null; isActive?: boolean; isPaused?: boolean }) {
   const { colors } = useTheme();
   const type = mediaType(imagePath);
+
+  // Video player — only loaded when this media is a video. Plays/loops while the slide
+  // is the active (centered) one, pauses otherwise.
+  const videoPlayer = useVideoPlayer(type === "video" ? (url ?? null) : null, (p) => {
+    p.loop = true;
+    p.muted = false;
+  });
+
+  // Playback is controlled by the parent slide: play only when this is the active
+  // (centered) slide and the user hasn't tapped to pause it.
+  const shouldPlayRef = useRef(false);
+  shouldPlayRef.current = type === "video" && !!isActive && !isPaused;
+
+  useEffect(() => {
+    try {
+      if (shouldPlayRef.current) videoPlayer.play();
+      else videoPlayer.pause();
+    } catch (_) {}
+  }, [type, isActive, isPaused, url, videoPlayer]);
+
+  // Remote .mp4 streams emit a spurious `isPlaying = false` (buffering stall) right
+  // after starting, which otherwise leaves the video paused after ~1s. Re-assert play
+  // when that happens while the slide should be playing. Mirrors VideoMoment in the reveal.
+  useEffect(() => {
+    if (type !== "video" || !videoPlayer) return;
+    let stallTimer: ReturnType<typeof setTimeout> | null = null;
+    const sub = videoPlayer.addListener("playingChange", ({ isPlaying }) => {
+      if (!isPlaying && shouldPlayRef.current) {
+        if (stallTimer) clearTimeout(stallTimer);
+        stallTimer = setTimeout(() => {
+          stallTimer = null;
+          if (shouldPlayRef.current) { try { videoPlayer.play(); } catch (_) {} }
+        }, 200);
+      }
+    });
+    if (shouldPlayRef.current) { try { videoPlayer.play(); } catch (_) {} }
+    return () => {
+      if (stallTimer) clearTimeout(stallTimer);
+      sub.remove();
+    };
+  }, [type, videoPlayer]);
+
   if (type === "text") {
     return (
       <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.bg, justifyContent: "center", alignItems: "center", padding: 28 }]}>
@@ -89,6 +134,31 @@ function ModalMedia({ imagePath, url, note }: { imagePath: string | null; url: s
   if (type === "audio") {
     if (!url) return null;
     return <ChallengeAudioPlayer key={url} url={url} waveform={undefined} />;
+  }
+  if (type === "video") {
+    if (!url) return null;
+    return (
+      <View style={StyleSheet.absoluteFill}>
+        <VideoView
+          player={videoPlayer}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          nativeControls={false}
+        />
+        {isActive && isPaused && (
+          <View
+            style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center" }]}
+            pointerEvents="none"
+          >
+            <View style={{ width: 64, height: 64, borderRadius: radii.xl, backgroundColor: colors.opacityLight, justifyContent: "center", alignItems: "center" }}>
+              <Svg width="24" height="24" viewBox="0 0 24 24" fill={colors.text}>
+                <Path d="M8 5v14l11-7z" />
+              </Svg>
+            </View>
+          </View>
+        )}
+      </View>
+    );
   }
   if (type === "drawing") {
     return (
@@ -151,15 +221,21 @@ const ChallengeResponseSlide = React.memo(function ChallengeResponseSlide({
   const slideNote = swapped ? (item.second_note ?? null) : item.note;
   const isTextOnly = mediaType(slideImagePath) === "text";
   const isDrawing = mediaType(slideImagePath) === "drawing";
+  const isVideo = mediaType(slideImagePath) === "video";
   const hasAudioNote = !swapped && !!item.audio_note_path && !!item.audio_note_url;
 
   const audioPlayer = useAudioPlayer(item.audio_note_url ?? "");
   const audioStatus = useAudioPlayerStatus(audioPlayer);
 
+  // Tap-to-pause for video. Reset to "playing" whenever the slide stops being the
+  // active one so a swiped-away video resumes when you come back to it.
+  const [isPaused, setIsPaused] = useState(false);
+
   // Pause the note when this slide isn't the active one (carousel keeps slides mounted).
   useEffect(() => {
     if (index !== activeIndex) {
       try { audioPlayer.pause(); } catch (_) {}
+      setIsPaused(false);
     }
   }, [index, activeIndex]);
 
@@ -168,8 +244,12 @@ const ChallengeResponseSlide = React.memo(function ChallengeResponseSlide({
       cvStyles.slideCard,
       animatedStyle,
     ]}>
+      {/* Top-level tap target so tapping anywhere on the card toggles video
+          pause/play. Overlays (gradient, details, focus ring) sit inside it;
+          their interactive children (audio caption) still capture their own taps. */}
+      <Pressable style={StyleSheet.absoluteFill} onPress={isVideo ? () => setIsPaused((v) => !v) : undefined}>
       <View style={cvStyles.slideMediaWrapper}>
-        <ModalMedia imagePath={slideImagePath} url={slideUrl} note={slideNote} />
+        <ModalMedia imagePath={slideImagePath} url={slideUrl} note={slideNote} isActive={index === activeIndex} isPaused={isPaused} />
       </View>
 
       {!isTextOnly && !isDrawing && (
@@ -229,6 +309,7 @@ const ChallengeResponseSlide = React.memo(function ChallengeResponseSlide({
           { opacity: index === activeIndex && !commentsOpen ? 1 : 0 },
         ]}
       />
+      </Pressable>
     </Reanimated.View>
   );
 });
