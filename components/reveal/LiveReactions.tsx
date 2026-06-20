@@ -279,6 +279,11 @@ export default function LiveReactions({
   useEffect(() => {
     if (!isVisible) return;
 
+    // Réouverture rapide : supprime tout channel résiduel du même topic, sinon
+    // supabase réutilise une instance déjà souscrite → ".on(presence) après subscribe()" jette.
+    const topic = `realtime:reveal:${groupId}`;
+    supabase.getChannels().forEach((c) => { if (c.topic === topic) supabase.removeChannel(c); });
+
     const channel = supabase.channel(`reveal:${groupId}`, {
       config: { presence: { key: currentUserId } },
     });
@@ -351,9 +356,10 @@ export default function LiveReactions({
       // instead of replaying enter/exit animations for stale members.
       onParticipantsChange?.([]);
       if (ch) {
-        ch.untrack()
-          .catch(() => {})
-          .finally(() => supabase.removeChannel(ch));
+        // Suppression immédiate (removeChannel se charge du unsubscribe) pour libérer
+        // le topic tout de suite → pas de réutilisation d'un channel mourant au remount.
+        ch.untrack().catch(() => {});
+        supabase.removeChannel(ch);
       }
     };
   }, [isVisible, groupId, currentUserId]);

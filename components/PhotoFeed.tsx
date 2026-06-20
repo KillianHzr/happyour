@@ -471,7 +471,7 @@ const PhotoFeedContent = forwardRef(({
           isVisible={index === visibleIndex} 
           customTitle={introTitle} 
           customSubtitle={introSubtitle} 
-          firstPhotoUrl={photos[0]?.url}
+          firstPhotoUrl={(photos[0] as any)?.video_thumbnail_url ?? photos[0]?.url}
           momentsCount={photos.length}
         />
       );
@@ -517,7 +517,7 @@ const PhotoFeedContent = forwardRef(({
         <RevealEndPage
           photos={photos}
           isVisible={index === visibleIndex}
-          firstPhotoUrl={photos[0]?.url}
+          firstPhotoUrl={(photos[0] as any)?.video_thumbnail_url ?? photos[0]?.url}
         />
       );
     } else {

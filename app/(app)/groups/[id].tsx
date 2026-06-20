@@ -29,6 +29,7 @@ import CameraPage from "../../../components/groups/CameraPage";
 import VaultPage from "../../../components/groups/VaultPage";
 import GroupsPage from "../../../components/groups/GroupsPage";
 import PagerTabBar from "../../../components/groups/PagerTabBar";
+import RevealTransition from "../../../components/groups/RevealTransition";
 import AddGroupFlow from "../../../components/groups/AddGroupFlow";
 import SettingsSheet from "../../../components/SettingsSheet";
 import GroupSettingsContent from "../../../components/groups/GroupSettingsContent";
@@ -253,6 +254,31 @@ export default function MainPagerScreen() {
   const isAdmin = activeData?.isAdmin ?? false;
   const challenges = activeData?.challenges ?? null;
 
+  // ── Transition single → reveal (filmstrip flouté) ──
+  const [revealTransition, setRevealTransition] = useState(false);
+  const cardFrameRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
+  // 10 dernières photos (récent→ancien) + tout premier moment, en URLs d'affichage floutables.
+  const revealStripUrls = useMemo(() => {
+    if (!photos.length) return [] as string[];
+    const isRealPhoto = (p: any) =>
+      p.image_path !== "text_mode" && !p.image_path.endsWith(".mp4") && !p.image_path.endsWith(".m4a") && !p.image_path.includes("_draw");
+    const displayUrl = (p: any) => (p.video_thumbnail_url ?? p.url) as string | undefined;
+    const last6 = photos.filter(isRealPhoto).slice(-10).reverse(); // 10 dernières, plus récent en premier
+    const seq = [...last6, photos[0]]; // … puis le tout premier moment (le plus ancien)
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const p of seq) {
+      if (!p || seen.has(p.id)) continue;
+      seen.add(p.id);
+      const u = displayUrl(p);
+      if (u) out.push(u);
+    }
+    return out;
+  }, [photos]);
+  const handleCardFrame = useCallback((f: { x: number; y: number; width: number; height: number }) => {
+    cardFrameRef.current = f;
+  }, []);
+
   const activitiesList = useMemo(() => {
     if (!activeData || !user) return [];
 
@@ -354,6 +380,15 @@ export default function MainPagerScreen() {
   const lockedRevealDate = now >= revealDate ? nextRevealDate : revealDate;
   const currentUserRespondedToChallenge = activeData?.currentUserRespondedToChallenge ?? false;
   const currentUserPostedThisWeek = photos.some(p => p.user_id === user?.id) || currentUserRespondedToChallenge || (__DEV__ && debugUnlocked);
+
+  // Déclenché à la fin du Lottie (slide) : lance la transition filmstrip → reveal.
+  // Appelé à la fin du grow de la card (GroupRoom) : lance le filmstrip → reveal.
+  const handleGroupRoomUnlock = useCallback(() => {
+    if (!currentUserPostedThisWeek) return;
+    if (revealStripUrls.length === 0) { setShowReveal(true); return; } // pas d'images → reveal direct
+    Image.prefetch(revealStripUrls);
+    setRevealTransition(true);
+  }, [currentUserPostedThisWeek, revealStripUrls]);
 
   useEffect(() => {
     if (onboarding === "true" && allGroups.length <= 1) {
@@ -1358,15 +1393,16 @@ export default function MainPagerScreen() {
       onSelectGroup={handleSwitchGroup}
       onAddGroup={() => setShowAddGroupModal(true)}
       onGoToCapture={() => jumpTo(1)}
-      onOpenReveal={() => { if (currentUserPostedThisWeek) setShowReveal(true); }}
+      onOpenReveal={handleGroupRoomUnlock}
       onRevealStart={currentUserPostedThisWeek ? handleRevealStart : undefined}
+      onCardFrame={handleCardFrame}
       onOpenSettings={() => setShowGroupSettings(true)}
       onOpenArchives={() => setShowArchives(true)}
       onScrollLock={setGroupsPagerLocked}
       onDebugNamePress={__DEV__ ? () => setShowDebugMenu(true) : undefined}
       debugUnlocked={__DEV__ ? debugUnlocked : undefined}
     />
-  ), [allGroups, groupData, revealConfig, activePage === 0, user?.id, enterGroupId, handleSwitchGroup, currentUserPostedThisWeek, debugUnlocked, handleRevealStart]);
+  ), [allGroups, groupData, revealConfig, activePage === 0, user?.id, enterGroupId, handleSwitchGroup, currentUserPostedThisWeek, debugUnlocked, handleRevealStart, handleGroupRoomUnlock, handleCardFrame]);
 
   // Page initiale de la feuille de réglages du groupe (titre "Paramètres" porté par SettingsSheet)
   const groupSettingsInitialPage = useMemo(() => ({
@@ -1508,6 +1544,15 @@ export default function MainPagerScreen() {
             <Icon name="x" size={20} color={colors.icon} />
           </TouchableOpacity>
         </Animated.View>
+      )}
+
+      {/* ── TRANSITION single → reveal (la card a grandi dans GroupRoom → filmstrip flouté) ── */}
+      {revealTransition && revealStripUrls.length > 0 && (
+        <RevealTransition
+          urls={revealStripUrls}
+          onArrived={() => setShowReveal(true)}
+          onDone={() => setRevealTransition(false)}
+        />
       )}
 
       {/* ── REVEAL OVERLAY ── */}
