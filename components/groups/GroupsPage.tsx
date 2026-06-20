@@ -54,6 +54,7 @@ type Props = {
   onAddGroup: () => void;
   onGoToCapture: () => void;           // ouvrir la vue capture
   onOpenReveal: () => void;            // déverrouiller / ouvrir le reveal
+  onRevealStart?: () => void;          // début du slide reveal → sortie du menu parent
   onOpenSettings?: () => void;         // ouvrir les réglages du groupe courant
   onOpenArchives?: () => void;         // ouvrir les archives du groupe courant
   onScrollLock?: (locked: boolean) => void;
@@ -96,7 +97,7 @@ function computeNextRevealDate(revealDayOfWeek: number, revealHour: number): Dat
   return reveal;
 }
 
-export default function GroupsPage({ allGroups, groupData, revealConfig, isActive, userId, enterGroupId, onEnteredGroup, onSelectGroup, onAddGroup, onGoToCapture, onOpenReveal, onOpenSettings, onOpenArchives, onScrollLock, onDebugNamePress, debugUnlocked }: Props) {
+export default function GroupsPage({ allGroups, groupData, revealConfig, isActive, userId, enterGroupId, onEnteredGroup, onSelectGroup, onAddGroup, onGoToCapture, onOpenReveal, onRevealStart, onOpenSettings, onOpenArchives, onScrollLock, onDebugNamePress, debugUnlocked }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -280,6 +281,7 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
         onArchive={() => onOpenArchives?.()}
         onCapture={onGoToCapture}
         onUnlock={onOpenReveal}
+        onRevealStart={onRevealStart}
         onDebugNamePress={onDebugNamePress}
       />
     );
@@ -327,6 +329,7 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
               onArchive={() => onOpenArchives?.()}
               onCapture={onGoToCapture}
               onUnlock={onOpenReveal}
+              onRevealStart={onRevealStart}
               onDebugNamePress={onDebugNamePress}
             />
           </EdgeSwipeBack>

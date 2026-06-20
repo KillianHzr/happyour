@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Image } from "expo-image";
-import { View, Text, StyleSheet, ScrollView, Dimensions, Animated, TouchableOpacity, Alert, TextInput, AppState, Modal, KeyboardAvoidingView, Platform, Pressable, BackHandler } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Dimensions, Animated, Easing, TouchableOpacity, Alert, TextInput, AppState, Modal, KeyboardAvoidingView, Platform, Pressable, BackHandler } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import BlurView from "../../../components/atoms/BlurView";
 import { SvgCutout } from "../../../components/atoms/SvgCutout";
@@ -1176,6 +1176,16 @@ export default function MainPagerScreen() {
   const captureMenuOpacity = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [0, 1, 0], extrapolate: 'clamp' });
   const appMenuOpacity = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [1, 0, 1], extrapolate: 'clamp' });
 
+  // Sortie du menu pendant la transition reveal (slide ↓ + fondu), synchro avec le Lottie.
+  const menuExit = useRef(new Animated.Value(0)).current; // 0 = visible, 1 = sorti
+  const menuTranslateY = menuExit.interpolate({ inputRange: [0, 1], outputRange: [0, 140] });
+  const menuExitOpacity = menuExit.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+  const handleRevealStart = useCallback(() => {
+    Animated.timing(menuExit, { toValue: 1, duration: 700, easing: Easing.bezier(0.7, 0, 0.84, 0), useNativeDriver: true }).start();
+  }, [menuExit]);
+  // Réaffiche le menu quand le reveal se ferme.
+  useEffect(() => { if (!showReveal) menuExit.setValue(0); }, [showReveal, menuExit]);
+
   const cameraTranslateX = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH] });
   const cameraScale = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [0.9, 1, 0.9] });
   const cameraOpacity = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [0.4, 1, 0.4] });
@@ -1349,13 +1359,14 @@ export default function MainPagerScreen() {
       onAddGroup={() => setShowAddGroupModal(true)}
       onGoToCapture={() => jumpTo(1)}
       onOpenReveal={() => { if (currentUserPostedThisWeek) setShowReveal(true); }}
+      onRevealStart={currentUserPostedThisWeek ? handleRevealStart : undefined}
       onOpenSettings={() => setShowGroupSettings(true)}
       onOpenArchives={() => setShowArchives(true)}
       onScrollLock={setGroupsPagerLocked}
       onDebugNamePress={__DEV__ ? () => setShowDebugMenu(true) : undefined}
       debugUnlocked={__DEV__ ? debugUnlocked : undefined}
     />
-  ), [allGroups, groupData, revealConfig, activePage === 0, user?.id, enterGroupId, handleSwitchGroup, currentUserPostedThisWeek, debugUnlocked]);
+  ), [allGroups, groupData, revealConfig, activePage === 0, user?.id, enterGroupId, handleSwitchGroup, currentUserPostedThisWeek, debugUnlocked, handleRevealStart]);
 
   // Page initiale de la feuille de réglages du groupe (titre "Paramètres" porté par SettingsSheet)
   const groupSettingsInitialPage = useMemo(() => ({
@@ -1454,7 +1465,10 @@ export default function MainPagerScreen() {
 
       {/* NAV BAR — deux menus thémés (capture sombre / app) qui se croisent en fondu natif */}
       {!showReveal && (
-        <>
+        <Animated.View
+          style={[StyleSheet.absoluteFill, { zIndex: 100, transform: [{ translateY: menuTranslateY }], opacity: menuExitOpacity }]}
+          pointerEvents="box-none"
+        >
           {/* Menu de l'app (Groupes/Profil) — invisible sur la capture via l'opacité */}
           <PagerTabBar
             scrollX={scrollX}
@@ -1475,7 +1489,7 @@ export default function MainPagerScreen() {
               onJump={jumpTo}
             />
           )}
-        </>
+        </Animated.View>
       )}
 
       {/* ── Toast capture ── */}

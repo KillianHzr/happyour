@@ -1,15 +1,28 @@
-import { useState, useEffect, useRef, memo } from "react";
+import { useState, useEffect, useRef, useMemo, memo } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, ActivityIndicator,
   Platform, Animated, PanResponder,
 } from "react-native";
 import { Image } from "expo-image";
 import { BlurView as NativeBlurView } from "@sbaiahmed1/react-native-blur";
+import LottieView from "lottie-react-native";
+import Reanimated, {
+  useSharedValue,
+  useAnimatedProps,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+  runOnJS,
+  type SharedValue,
+} from "react-native-reanimated";
 import { radii, spacing, stroke, textStyles, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles, ForceThemeMode } from "../../lib/theme-context";
 import Shape, { type ShapeName } from "../Shape";
 import Icon from "../Icon";
+import { getRevealLottie } from "./revealLottie";
 import type { GroupCard } from "./GroupsSlider";
+
+const ReanimatedLottie = Reanimated.createAnimatedComponent(LottieView);
 
 /** "Xj HH:MM:SS" — "0j" masqué s'il reste moins d'un jour (sauf si forcé). */
 function formatCountdown(ms: number): string {
@@ -106,32 +119,82 @@ type Props = {
   onArchive: () => void;
   onCapture: () => void;
   onUnlock: () => void;
+  /** Appelé dès le slide (début de la transition reveal) → sortie du menu/header parent. */
+  onRevealStart?: () => void;
   onDebugNamePress?: () => void;
 };
 
 export default function GroupRoom(props: Props) {
   const { colors } = useTheme();
   const headerStyles = useThemedStyles(makeHeaderStyles);
-  const { card, showBack, showAddButton, topInset, onBack, onAddGroup, onSettings, onArchive, onDebugNamePress } = props;
+  const { card, showBack, showAddButton, topInset, onBack, onAddGroup, onSettings, onArchive, onDebugNamePress, onRevealStart, onUnlock } = props;
+
+  // ── État de la transition reveal (partagé carte + header) ──
+  const reveal = useMemo(
+    () => getRevealLottie(card.shape, card.momentCount),
+    [card.shape, card.momentCount]
+  );
+  const revealProgress = useSharedValue(reveal.freezeProgress);
+  const exit = useSharedValue(0); // 0 = repos, 1 = chrome disparu
+  const animatingRef = useRef(false);
+  const lottieProps = useAnimatedProps(() => ({ progress: revealProgress.value }));
+
+  // Recale la frame figée si le Lottie change (type/nombre de moments).
+  useEffect(() => {
+    if (!animatingRef.current) revealProgress.value = reveal.freezeProgress;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reveal]);
+
+  // Ouvre le reveal (à la fin du Lottie) puis réarme tout sous le reveal (invisible).
+  const finishReveal = () => {
+    onUnlock();
+    setTimeout(() => {
+      revealProgress.value = reveal.freezeProgress;
+      exit.value = 0;
+      animatingRef.current = false;
+    }, 600);
+  };
+
+  // Slide → lance Lottie (1s→fin) + sortie du chrome (0,7s, fin à 1,7s de Lottie) + menu parent.
+  const startReveal = () => {
+    if (animatingRef.current) return;
+    animatingRef.current = true;
+    onRevealStart?.();
+    exit.value = withTiming(1, { duration: 700, easing: Easing.bezier(0.7, 0, 0.84, 0) }); // "aspiré" : lent puis happé
+    revealProgress.value = withTiming(
+      reveal.endProgress,
+      { duration: reveal.durationMs, easing: Easing.linear },
+      (finished) => {
+        if (finished) runOnJS(finishReveal)();
+      }
+    );
+  };
+
+  // Header : nom (+ retour) part à gauche, boutons à droite. Déplacement court +
+  // fondu accéléré (transparent dès ~exit 0,55) → plus discret que le chrome de la carte.
+  const leftExitStyle = useAnimatedStyle(() => ({ opacity: Math.max(0, 1 - exit.value * 1.8), transform: [{ translateX: -exit.value * 60 }] }));
+  const rightExitStyle = useAnimatedStyle(() => ({ opacity: Math.max(0, 1 - exit.value * 1.8), transform: [{ translateX: exit.value * 60 }] }));
 
   return (
     <View style={[headerStyles.container, { paddingTop: topInset }]}>
       {/* Header (thème app) */}
       <View style={headerStyles.header}>
         <View style={headerStyles.headerRow}>
-          {showBack && (
-            <TouchableOpacity style={headerStyles.iconBtn} onPress={onBack} activeOpacity={0.7}>
-              <Icon name="chevron-left" size={20} color={colors.icon} />
-            </TouchableOpacity>
-          )}
-          {onDebugNamePress ? (
-            <TouchableOpacity style={{ flexShrink: 1 }} onPress={onDebugNamePress} activeOpacity={0.6} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Reanimated.View style={[headerStyles.headerLeft, leftExitStyle]}>
+            {showBack && (
+              <TouchableOpacity style={headerStyles.iconBtn} onPress={onBack} activeOpacity={0.7}>
+                <Icon name="chevron-left" size={20} color={colors.icon} />
+              </TouchableOpacity>
+            )}
+            {onDebugNamePress ? (
+              <TouchableOpacity style={{ flexShrink: 1 }} onPress={onDebugNamePress} activeOpacity={0.6} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={headerStyles.title} numberOfLines={1} ellipsizeMode="tail">{card.name}</Text>
+              </TouchableOpacity>
+            ) : (
               <Text style={headerStyles.title} numberOfLines={1} ellipsizeMode="tail">{card.name}</Text>
-            </TouchableOpacity>
-          ) : (
-            <Text style={headerStyles.title} numberOfLines={1} ellipsizeMode="tail">{card.name}</Text>
-          )}
-          <View style={headerStyles.headerActions}>
+            )}
+          </Reanimated.View>
+          <Reanimated.View style={[headerStyles.headerActions, rightExitStyle]}>
             <TouchableOpacity style={headerStyles.addBtn} onPress={onArchive} activeOpacity={0.8}>
               <Icon name="archive" size={20} color={colors.iconNeutral} />
             </TouchableOpacity>
@@ -143,25 +206,37 @@ export default function GroupRoom(props: Props) {
                 <Icon name="plus" size={20} color={colors.iconNeutral} />
               </TouchableOpacity>
             )}
-          </View>
+          </Reanimated.View>
         </View>
       </View>
 
       {/* Carte plein écran (forcée sombre) */}
       <View style={headerStyles.cardWrap}>
         <ForceThemeMode mode="Dark">
-          <RoomCard {...props} />
+          <RoomCard {...props} lottieProps={lottieProps} exit={exit} startReveal={startReveal} lottieSource={reveal.source} />
         </ForceThemeMode>
       </View>
     </View>
   );
 }
 
-function RoomCard({ card, revealDate, unlocked, onCapture, onUnlock }: Props) {
+type RoomCardProps = Props & {
+  lottieProps: any;
+  lottieSource: any;
+  exit: SharedValue<number>;
+  startReveal: () => void;
+};
+
+function RoomCard({ card, revealDate, unlocked, onCapture, lottieProps, lottieSource, exit, startReveal }: RoomCardProps) {
   const { colors } = useTheme();
   const s = useThemedStyles(makeStyles);
   const hasMoments = card.momentCount > 0;
   const postedThisWeek = card.postedThisWeek ?? false;
+
+  // Sorties du chrome de la carte pendant la transition reveal (exit 0→1).
+  const topExitStyle = useAnimatedStyle(() => ({ opacity: 1 - exit.value, transform: [{ translateY: exit.value * 48 }] }));   // couronne/défi ↓
+  const countExitStyle = useAnimatedStyle(() => ({ opacity: 1 - exit.value, transform: [{ translateY: -exit.value * 48 }] })); // nb moments ↑
+  const bottomExitStyle = useAnimatedStyle(() => ({ opacity: 1 - exit.value, transform: [{ translateY: -exit.value * 80 }] })); // slider ↑
 
   return (
     <View style={s.card}>
@@ -185,7 +260,8 @@ function RoomCard({ card, revealDate, unlocked, onCapture, onUnlock }: Props) {
             </TouchableOpacity>
           </View>
         ) : (
-          <View style={s.topInfos}>
+          <View style={s.topInfosMask}>
+          <Reanimated.View style={[s.topInfos, topExitStyle]}>
             {!!card.challengeLabel && (
               <View style={s.challengeBtn}>
                 {Platform.OS === "ios"
@@ -212,6 +288,7 @@ function RoomCard({ card, revealDate, unlocked, onCapture, onUnlock }: Props) {
                 <Text style={s.queenKingLabel}>Couronne</Text>
               </View>
             </View>
+          </Reanimated.View>
           </View>
         )}
 
@@ -221,21 +298,33 @@ function RoomCard({ card, revealDate, unlocked, onCapture, onUnlock }: Props) {
             <ActivityIndicator color={colors.text} />
           ) : (
             <>
-              {hasMoments && card.shape ? (
-                <Shape name={card.shape} size={136} color={colors.icon} />
+              {hasMoments ? (
+                <View style={s.lottieWrap} pointerEvents="none">
+                  <ReanimatedLottie
+                    source={lottieSource}
+                    animatedProps={lottieProps}
+                    autoPlay={false}
+                    loop={false}
+                    resizeMode="contain"
+                    style={s.lottie}
+                  />
+                </View>
               ) : (
                 <Icon name="circle-filled" size={136} color={colors.icon} />
               )}
-              <View style={s.dataTextRow}>
-                <Text style={s.momentCount}>{card.momentCount}</Text>
-                <Text style={s.momentLabel}>Moments</Text>
+              <View style={s.countMask}>
+                <Reanimated.View style={[s.dataTextRow, countExitStyle]}>
+                  <Text style={s.momentCount}>{card.momentCount}</Text>
+                  <Text style={s.momentLabel}>Moments</Text>
+                </Reanimated.View>
               </View>
             </>
           )}
         </View>
 
         {/* ── Bas : compte à rebours / slider de déverrouillage ── */}
-        <View style={s.bottomBlock}>
+        <View style={s.bottomMask}>
+        <Reanimated.View style={[s.bottomBlock, bottomExitStyle]}>
           {!postedThisWeek && !unlocked && (
             <Text style={s.captureFirstText}>Capture un moment d'abord</Text>
           )}
@@ -246,13 +335,14 @@ function RoomCard({ card, revealDate, unlocked, onCapture, onUnlock }: Props) {
             <Text style={s.captureFirstText}>Fin du suspens, accèdes à ton Reveal !</Text>
           )}
           {unlocked ? (
-            <UnlockSlider onUnlock={onUnlock} />
+            <UnlockSlider onUnlock={startReveal} />
           ) : (
             <View style={s.countdown}>
               <RevealCountdown revealDate={revealDate} textStyle={s.countdownText} />
               <Icon name="lock" size={24} color={colors.icon} />
             </View>
           )}
+        </Reanimated.View>
         </View>
       </View>
     </View>
@@ -263,6 +353,7 @@ const makeHeaderStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   header: { paddingHorizontal: spacing.lg, marginTop: spacing.lg },
   headerRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, minHeight: 40 },
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flexShrink: 1 },
   headerActions: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginLeft: "auto" },
   iconBtn: { width: 40, height: 40, borderRadius: radii.md, justifyContent: "center", alignItems: "center" },
   addBtn: { width: 40, height: 40, borderRadius: radii.md, justifyContent: "center", alignItems: "center", backgroundColor: colors.card },
@@ -284,6 +375,12 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: spacing.sm, borderRadius: radii.md, backgroundColor: colors.brand,
   },
   captureBtnText: { ...textStyles.singleLineBodyBaseStrong, color: "#FFFFFF" },
+  // ── masques de sortie ("aspiré derrière un mur") : clippent le chrome de la carte
+  //    pendant la transition reveal. paddingTop/marginTop sur topInfos pour ne pas
+  //    rogner la couronne (qui dépasse en haut) au repos.
+  topInfosMask: { overflow: "hidden", paddingTop: 20, marginTop: -20 },
+  countMask: { overflow: "hidden" },
+  bottomMask: { alignSelf: "stretch", overflow: "hidden" },
   // ── top-infos ──
   topInfos: { flexDirection: "column", alignItems: "center", gap: spacing.lg },
   challengeBtn: {
@@ -303,7 +400,15 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   // gap: space/neg-100 entre le user et le label — via marginTop négatif car RN clampe le gap négatif à 0.
   queenKingLabel: { ...textStyles.bodySmall, color: colors.text, lineHeight: undefined, marginTop: spacing.negXs },
   // ── data block ──
-  dataBlock: { flexDirection: "column", justifyContent: "center", alignItems: "center", gap: spacing.lg },
+  dataBlock: { alignSelf: "stretch", flexDirection: "column", justifyContent: "center", alignItems: "center", gap: spacing.lg },
+  // Lottie central : le canvas (402×874) est rendu plein-largeur via aspectRatio
+  // (donc plus haut que la boîte) puis centré verticalement et clippé, pour montrer
+  // la bande centrale où vit la shape. Joue au déverrouillage, le reveal recouvre ensuite.
+  // height 180 = espace réservé dans le layout (taille de la pose au repos) ; pas
+  // d'overflow:hidden → la vue Lottie (~plein écran) peut déborder pour l'envol final.
+  lottieWrap: { width: "120%", height: 180, alignItems: "center", justifyContent: "center" },
+  // La shape n'est pas au centre exact du canvas → on la descend via translateY (px, ajustable).
+  lottie: { width: "100%", aspectRatio: 402 / 874, transform: [{ translateY: 50 }] },
   dataTextRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   momentCount: { ...textStyles.titlePage, color: colors.text, lineHeight: undefined },
   momentLabel: { ...textStyles.subheading, color: colors.text, lineHeight: undefined },
