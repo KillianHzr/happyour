@@ -69,7 +69,7 @@ const RevealCountdown = memo(function RevealCountdown({ revealDate, textStyle }:
  * en mode sombre, donc `useTheme()` ici renvoie toujours les couleurs dark.
  */
 const SliderCard = memo(function SliderCard({
-  card, width, height, marginRight, revealDate, unlocked, onSelect,
+  card, width, height, marginRight, revealDate, unlocked, onSelect, borderOpacity,
 }: {
   card: GroupCard;
   width: number;
@@ -78,6 +78,7 @@ const SliderCard = memo(function SliderCard({
   revealDate: Date;
   unlocked: boolean;
   onSelect: (groupId: string) => void;
+  borderOpacity?: Animated.AnimatedInterpolation<number>;
 }) {
   const { colors } = useTheme();
   const s = useThemedStyles(makeSliderStyles);
@@ -144,6 +145,12 @@ const SliderCard = memo(function SliderCard({
           </View>
         </View>
       </View>
+      {borderOpacity && (
+        <Animated.View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFillObject, s.cardActive, { borderRadius: radii.xl, opacity: borderOpacity }]}
+        />
+      )}
     </TouchableOpacity>
   );
 });
@@ -187,6 +194,20 @@ export default function GroupsSlider({ cards, revealDate, onSelect, showActiveBo
     }, 30);
     return () => clearTimeout(t);
   }, [count, availableHeight, snapInterval, needsLoop, startIdx]);
+
+  // Bordure de sélection animée par carte : opacité 1 quand centrée, fondu vers 0
+  // en s'éloignant. Nœuds stables (useMemo) pour ne pas casser le memo de SliderCard.
+  const borderOpacities = useMemo(
+    () => displayItems.map((_, idx) => {
+      const center = idx * snapInterval;
+      return scrollX.interpolate({
+        inputRange: [center - snapInterval, center, center + snapInterval],
+        outputRange: [0, 1, 0],
+        extrapolate: "clamp",
+      });
+    }),
+    [displayItems.length, snapInterval, scrollX]
+  );
 
   const handleScroll = Animated.event(
     [{ nativeEvent: { contentOffset: { x: scrollX } } }],
@@ -236,27 +257,10 @@ export default function GroupsSlider({ cards, revealDate, onSelect, showActiveBo
                   revealDate={revealDate}
                   unlocked={unlocked}
                   onSelect={onSelect}
+                  borderOpacity={showActiveBorder ? borderOpacities[idx] : undefined}
                 />
               ))}
             </Animated.ScrollView>
-
-            {/* Stroke brand tertiary sur la carte active (overlay non interactif) */}
-            {showActiveBorder && (
-              <View
-                style={[
-                  StyleSheet.absoluteFillObject,
-                  sliderStyles.cardActive,
-                  {
-                    width: cardWidth,
-                    height: cardHeight,
-                    left: sideMargin,
-                    borderRadius: radii.xl,
-                    zIndex: 50,
-                  },
-                ]}
-                pointerEvents="none"
-              />
-            )}
 
             {needsLoop && (
               <View style={sliderStyles.paginationWrap}>
@@ -281,8 +285,10 @@ const makeSliderStyles = (colors: ThemeColors) => StyleSheet.create({
     overflow: "hidden",
     backgroundColor: "#0A0A0A",
   },
+  // 3px = valeur custom : stroke/050 (2px) est le token le plus épais mais rend la bordure
+  // un peu fine ici.
   cardActive: {
-    borderWidth: stroke.md,
+    borderWidth: 3,
     borderColor: colors.borderBrandTertiary,
   },
   cardContent: {

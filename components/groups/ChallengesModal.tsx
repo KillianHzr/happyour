@@ -8,7 +8,7 @@ import { Image } from "expo-image";
 import Svg, { Path } from "react-native-svg";
 import { supabase } from "../../lib/supabase";
 import {
-  radii, typography, spacing, stroke, textStyles, blur, blurIntensity, glassBlurIntensity,
+  radii, typography, spacing, textStyles, blur, blurIntensity, glassBlurIntensity,
   type ThemeColors,
 } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
@@ -234,10 +234,16 @@ export function ChallengesSlider({
 
 
   const renderCard = (gc: GroupChallenge, idx: number) => {
-    const realIdx = needsLoop ? ((idx % count) + count) % count : idx;
-    const isActive = realIdx === activeIndex || !needsLoop;
     const isTarget = gc.challenge?.target_user_id === currentUserId;
     const captureType: ChallengeCapture = isTarget ? "PHOTO" : (gc.challenge?.theme.capture_type ?? "PHOTO");
+    // Bordure de sélection animée : opacité 1 quand la carte est centrée, fondu vers 0
+    // dès qu'elle s'éloigne (la bordure de la carte qui arrive apparaît proportionnellement).
+    const center = idx * snapInterval;
+    const borderOpacity = scrollX.interpolate({
+      inputRange: [center - snapInterval, center, center + snapInterval],
+      outputRange: [0, 1, 0],
+      extrapolate: "clamp",
+    });
     return (
       <View
         key={idx}
@@ -291,6 +297,10 @@ export function ChallengesSlider({
             <Text style={sliderStyles.noChallengeText}>Aucun défi configuré</Text>
           )}
         </View>
+        <Animated.View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFillObject, sliderStyles.cardActive, { borderRadius: radii.xl, opacity: borderOpacity }]}
+        />
       </View>
     );
   };
@@ -326,20 +336,6 @@ export function ChallengesSlider({
               >
                 {displayItems.map((gc, idx) => renderCard(gc, idx))}
               </Animated.ScrollView>
-              <View
-                style={[
-                  StyleSheet.absoluteFillObject,
-                  sliderStyles.cardActive,
-                  { 
-                    width: cardWidth, 
-                    height: cardHeight, 
-                    left: sideMargin,
-                    borderRadius: radii.xl,
-                    zIndex: 50,
-                  }
-                ]}
-                pointerEvents="none"
-              />
               {needsLoop && (
                 <View style={sliderStyles.dotsContainer}>
                   {groupChallenges.map((_, idx) => (
@@ -361,9 +357,10 @@ const makeSliderStyles = (colors: ThemeColors) => StyleSheet.create({
     overflow: "hidden",
     backgroundColor: "#0A0A0A",
   },
-  // Stroke/050 (2px) + border/brand/tertiary uniquement sur la carte active
+  // border/brand/tertiary sur la carte sélectionnée. 3px = valeur custom : stroke/050 (2px)
+  // est le token le plus épais du design system mais rend la bordure un peu fine ici.
   cardActive: {
-    borderWidth: stroke.md,
+    borderWidth: 3,
     borderColor: colors.borderBrandTertiary,
   },
   cardContent: {
