@@ -293,6 +293,12 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const previewBottomRadiusAnim = useRef(new Animated.Value(0)).current;
   const previewMarginBottomAnim = useRef(new Animated.Value(0)).current;
   const uiOpacityAnim = useRef(new Animated.Value(1)).current;
+  // Opacité du bouton check (valider la légende) : visible pendant l'édition, disparaît
+  // en fondu synchronisé avec la fermeture du clavier, avant le retour à l'état hors-input.
+  const confirmBtnOpacityAnim = useRef(new Animated.Value(1)).current;
+  // Opacité du bouton micro (vocal) : caché pendant l'édition, apparaît en fondu pendant
+  // la fermeture du clavier — cross-fade avec le bouton check qui disparaît.
+  const micOpacityAnim = useRef(new Animated.Value(1)).current;
   // Position verticale de la barre de légende (absolue dans previewFullContainer).
   const captionBarBottomAnim = useRef(new Animated.Value(NAVBAR_HEIGHT + spacing.lg)).current;
   // Dernière hauteur clavier connue sur Android (ajusté une fois après keyboardDidShow).
@@ -317,6 +323,12 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     const onShow = Keyboard.addListener(kbShow, (e) => {
       if (!isEditingCaptionRef.current) return;
       const kbH = e.endCoordinates.height;
+
+      // Cross-fade synchronisé avec l'ouverture du clavier (miroir de onHide) :
+      // le micro disparaît, le check apparaît.
+      const openDur = (e as any).duration > 10 ? (e as any).duration : 250;
+      Animated.timing(confirmBtnOpacityAnim, { toValue: 1, duration: openDur, useNativeDriver: true }).start();
+      Animated.timing(micOpacityAnim, { toValue: 0, duration: openDur, useNativeDriver: true }).start();
 
       if (Platform.OS === "android") {
         // Le build a adjustResize en manifest mais sur Android edge-to-edge moderne
@@ -361,6 +373,11 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     });
 
     const onHide = Keyboard.addListener(kbHide, (e) => {
+      // Cross-fade synchronisé avec la fermeture du clavier (iOS keyboardWillHide →
+      // démarre dès le début de la descente) : le check disparaît, le micro apparaît.
+      const checkDur = (e as any).duration > 10 ? (e as any).duration : 250;
+      Animated.timing(confirmBtnOpacityAnim, { toValue: 0, duration: checkDur, useNativeDriver: true }).start();
+      Animated.timing(micOpacityAnim, { toValue: 1, duration: checkDur, useNativeDriver: true }).start();
       if (Platform.OS === "android") {
         // Animation déjà lancée dans confirmEditCaption. onHide gère les fermetures
         // externes (bouton retour) et s'assure que l'état est bien réinitialisé.
@@ -404,6 +421,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const startEditCaption = () => {
     isEditingCaptionRef.current = true;
     setIsEditingCaption(true);
+    confirmBtnOpacityAnim.setValue(0); // check caché au départ, apparaît en fondu à l'ouverture
+    micOpacityAnim.setValue(1);        // micro visible au départ, disparaît en fondu à l'ouverture
 
     if (Platform.OS === "android") {
       // Démarre IMMÉDIATEMENT avec le kbH estimé (mesure réelle du dernier keyboardDidShow,
@@ -733,6 +752,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       previewWidthAnim.setValue(winWidth);
       previewBottomRadiusAnim.setValue(0);
       previewMarginBottomAnim.setValue(0);
+      micOpacityAnim.setValue(1);        // micro de nouveau visible pour la prochaine preview
+      confirmBtnOpacityAnim.setValue(1);
       Keyboard.dismiss();
     }
   };
@@ -1924,29 +1945,41 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                   </TouchableOpacity>
                 )}
 
-                {previewSlot.mode !== "AUDIO" && !slot1!.captionAudioUri && (
-                  isEditingCaption ? (
-                    Platform.OS !== "android" && (
-                      <TouchableOpacity style={styles.captionConfirmBtn} onPress={confirmEditCaption} activeOpacity={0.8}>
-                        <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
-                        <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
-                        <Icon name="check" size={16} color={colors.icon} />
-                      </TouchableOpacity>
-                    )
-                  ) : (!slot1!.note.trim() || isCaptionRecording) ? (
-                    <View style={[styles.captionMicBtn, isSwipingToCancel && { opacity: 0.5 }]} {...captionPanResponder.panHandlers}>
-                      {Platform.OS === "ios" && (
-                        <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                {previewSlot.mode !== "AUDIO" && !slot1!.captionAudioUri && (() => {
+                  // Check (iOS) et micro superposés dans le même slot 32×32 pour se cross-fader
+                  // pendant la fermeture du clavier (check → 0, micro → 1).
+                  const showCheck = isEditingCaption && Platform.OS !== "android";
+                  const showMic = !slot1!.note.trim() || isCaptionRecording;
+                  if (!showCheck && !showMic) return null;
+                  return (
+                    <View style={{ width: 32, height: 32, alignSelf: "center" }}>
+                      {showMic && (
+                        <Animated.View style={[StyleSheet.absoluteFill, { opacity: micOpacityAnim }]} pointerEvents={isEditingCaption ? "none" : "auto"}>
+                          <View style={[styles.captionMicBtn, isSwipingToCancel && { opacity: 0.5 }]} {...captionPanResponder.panHandlers}>
+                            {Platform.OS === "ios" && (
+                              <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                            )}
+                            <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
+                            <Icon
+                              name={(isCaptionRecording && !isHoldRecording) ? "check" : "mic"}
+                              size={(isCaptionRecording && !isHoldRecording) ? 16 : 18}
+                              color={colors.icon}
+                            />
+                          </View>
+                        </Animated.View>
                       )}
-                      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
-                      <Icon 
-                        name={(isCaptionRecording && !isHoldRecording) ? "check" : "mic"} 
-                        size={(isCaptionRecording && !isHoldRecording) ? 16 : 18} 
-                        color={colors.icon} 
-                      />
+                      {showCheck && (
+                        <Animated.View style={[StyleSheet.absoluteFill, { opacity: confirmBtnOpacityAnim }]}>
+                          <TouchableOpacity style={styles.captionConfirmBtn} onPress={confirmEditCaption} activeOpacity={0.8}>
+                            <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                            <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
+                            <Icon name="check" size={16} color={colors.icon} />
+                          </TouchableOpacity>
+                        </Animated.View>
+                      )}
                     </View>
-                  ) : null
-                )}
+                  );
+                })()}
             </View>
           </Animated.View>
 
@@ -2596,8 +2629,10 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   captionRecordingText: { color: colors.textSecondary, fontFamily: typography.family.bold, fontSize: typography.size.xs, minWidth: 24 },
   // Unique barre de légende, toujours position:absolute dans previewFullContainer
   captionBarOuter: { position: "absolute", left: spacing.lg, right: spacing.lg },
-  // TextInput : même police que captionNoteText, sans lineHeight pour que le placeholder s'aligne correctement
-  captionEditInput: { ...textStyles.bodyBase, flex: 1, color: colors.text, textAlignVertical: "top", paddingVertical: 0, lineHeight: undefined },
+  // TextInput : lineHeight FIXE (issu de bodyBase) volontairement conservé. Sans lui, iOS calcule
+  // la hauteur de ligne automatiquement et l'insertion d'un emoji (police Apple Color Emoji, ascent
+  // plus grand) fait sauter le texte de 1-2px. Un lineHeight fixe garde la ligne stable.
+  captionEditInput: { ...textStyles.bodyBase, flex: 1, color: colors.text, textAlignVertical: "top", paddingVertical: 0 },
   // Bouton confirmation : taille fixe 32×32, centré verticalement quelle que soit la hauteur de la barre
   captionConfirmBtn: { width: 32, height: 32, borderRadius: radii.sm, overflow: "hidden", justifyContent: "center", alignItems: "center", alignSelf: "center" },
 });
