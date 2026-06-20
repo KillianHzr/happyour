@@ -266,6 +266,22 @@ export const palette = {
   },
 } as const;
 
+/**
+ * Décale l'alpha d'une couleur `rgba(r, g, b, a)` d'un delta (clampé sur [0,1]).
+ * Sert à dériver une variante d'un token d'opacité sans le coder en dur : si le
+ * designer fait passer le token de 0.4 à 0.6, un delta de -0.2 suit (0.2 → 0.4).
+ * Renvoie la valeur inchangée si ce n'est pas une chaîne rgba (ex: hex).
+ */
+const adjustAlpha = (color: any, delta: number): any => {
+  if (typeof color !== "string") return color;
+  const m = color.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)$/);
+  if (!m) return color;
+  const [r, g, b] = [m[1], m[2], m[3]];
+  const a = m[4] !== undefined ? parseFloat(m[4]) : 1;
+  const next = Math.max(0, Math.min(1, a + delta));
+  return `rgba(${r}, ${g}, ${b}, ${next})`;
+};
+
 // ─── Couleurs sémantiques (fabrique par mode) ────────────────────────────────
 export const buildColors = (mode: ThemeMode) => ({
 
@@ -276,7 +292,7 @@ export const buildColors = (mode: ThemeMode) => ({
   cardHover:             resolveToken("-> Color/background/default/secondary-hover",  mode), // #1E1E1E
   accentMuted:           resolveToken("-> Color/background/default/tertiary",         mode), // #444444
   bgTertiaryHover:       resolveToken("-> Color/background/default/tertiary-hover",   mode), // #383838
-  opacityLight:          resolveToken("-> Color/background/default/default-opacity",   mode), // Dark: rgba(12,12,13,0.4)  (ex "opacity-light")
+  opacityLight:          adjustAlpha(resolveToken("-> Color/background/default/default-opacity", mode), -0.2), // token -0.2 alpha (ex: 0.4 → 0.2)
   opacityDark:           resolveToken("-> Color/background/default/secondary-opacity", mode), // Dark: rgba(12,12,13,0.1)  (ex "opacity-dark")
   bgInverse:             resolveToken("-> Color/background/default/default-inverse",   mode), // Dark: #FFFFFF / Light: #0C0C0D
 

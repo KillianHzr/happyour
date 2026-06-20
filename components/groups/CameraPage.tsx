@@ -1445,7 +1445,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
 
               {!canUndo && (
                 <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center" }]} pointerEvents="none">
-                  <Text style={{ ...textStyles.bodyBase, color: colors.textNeutralTertiary, textAlign: "center" }}>Commence à crobarder</Text>
+                  <Text style={{ ...textStyles.bodyBase, color: colors.textNeutralTertiary, textAlign: "center" }}>Commence à dessiner</Text>
                 </View>
               )}
 
@@ -1492,12 +1492,12 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 <TouchableOpacity style={styles.cameraCtrlBtn} onPress={() => drawingRef.current?.undo()} activeOpacity={0.8} disabled={!canUndo}>
                   <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
                   <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
-                  <Icon name="rollback" size={20} color={canUndo ? colors.icon : colors.iconDisabled} />
+                  <Icon name="rollback" size={20} color={canUndo ? colors.icon : colors.iconOnDisabled} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.cameraCtrlBtn} onPress={() => setShowClearConfirm(true)} activeOpacity={0.8} disabled={!canUndo}>
                   <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
                   <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
-                  <Icon name="trash" size={20} color={canUndo ? colors.icon : colors.iconDisabled} />
+                  <Icon name="trash" size={20} color={canUndo ? colors.icon : colors.iconOnDisabled} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -1950,8 +1950,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
             </View>
           </Animated.View>
 
-          {/* Bouton Partager / Participer */}
-          <Animated.View style={[styles.previewSendArea, { opacity: uiOpacityAnim }]} pointerEvents={isEditingCaption ? "none" : "box-none"}>
+          {/* Bouton Partager / Participer — pinné en bas (absolu) : toujours visible et
+               fixe, ne suit JAMAIS le clavier (contrairement à la barre de légende). */}
+          <View style={[styles.previewSendArea, { position: "absolute", left: 0, right: 0, bottom: 0 }]} pointerEvents="box-none">
             {activeChallenge !== null ? (
               <PrimaryButton 
                 label="Participer" 
@@ -1962,10 +1963,10 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               <PrimaryButton 
                 label="Partager" 
                 onPress={openGroupPicker} 
-                disabled={slot1 === null || isCapturing || capturingSecond} 
+                disabled={slot1 === null || isCapturing || capturingSecond}
               />
             )}
-          </Animated.View>
+          </View>
 
         </View>
       )}
