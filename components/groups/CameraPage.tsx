@@ -157,6 +157,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const [showChallengesInline, setShowChallengesInline] = useState(false);
   const [activeChallenge, setActiveChallenge] = useState<ActiveChallenge | null>(null);
   const challengeChooseRef = useRef<(() => void) | null>(null);
+  // Carte de défi active déjà répondue → bouton « Choisir » désactivé.
+  const [challengeActiveResponded, setChallengeActiveResponded] = useState(false);
 
   const drawingRef = useRef<DrawingCanvasRef>(null);
   const textInputRef = useRef<any>(null);
@@ -1487,7 +1489,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                   >
                     <Icon name="chevron-left" size={20} color={colors.icon} />
                   </TouchableOpacity>
-                  <Text style={challengeStyles.inlineTitle}>Défi {allGroups.find(g => g.id === activeChallenge.groupId)?.name ?? ""}</Text>
+                  <Text style={challengeStyles.inlineTitle} numberOfLines={1} ellipsizeMode="tail">Défi {allGroups.find(g => g.id === activeChallenge.groupId)?.name ?? ""}</Text>
                 </View>
               </View>
             )}
@@ -1608,7 +1610,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                   >
                     <Icon name="chevron-left" size={20} color={colors.icon} />
                   </TouchableOpacity>
-                  <Text style={challengeStyles.inlineTitle}>Défi {allGroups.find(g => g.id === activeChallenge.groupId)?.name ?? ""}</Text>
+                  <Text style={challengeStyles.inlineTitle} numberOfLines={1} ellipsizeMode="tail">Défi {allGroups.find(g => g.id === activeChallenge.groupId)?.name ?? ""}</Text>
                 </View>
               </View>
             )}
@@ -1800,7 +1802,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 >
                   <Icon name="chevron-left" size={20} color={colors.icon} />
                 </TouchableOpacity>
-                <Text style={challengeStyles.inlineTitle}>Défi {allGroups.find(g => g.id === activeChallenge.groupId)?.name ?? ""}</Text>
+                <Text style={challengeStyles.inlineTitle} numberOfLines={1} ellipsizeMode="tail">Défi {allGroups.find(g => g.id === activeChallenge.groupId)?.name ?? ""}</Text>
               </View>
             </Animated.View>
           )}
@@ -2066,12 +2068,15 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               }}
               onClose={() => setShowChallengesInline(false)}
               chooseRef={challengeChooseRef}
+              onActiveChange={(info) => setChallengeActiveResponded(info.hasResponded)}
+              visible={showChallengesInline}
             />
           </View>
 
-          {/* Bouton Choisir — sélectionne le défi actif (celui avec la stroke) */}
+          {/* Bouton Choisir — sélectionne le défi actif (celui avec la stroke).
+               Désactivé si l'utilisateur a déjà participé à ce défi. */}
           <View style={styles.previewSendArea}>
-            <PrimaryButton label="Choisir" onPress={() => challengeChooseRef.current?.()} disabled={getCurrentChallengePeriod() === null} />
+            <PrimaryButton label="Choisir" onPress={() => challengeChooseRef.current?.()} disabled={getCurrentChallengePeriod() === null || challengeActiveResponded} />
           </View>
         </View>
 
@@ -2770,6 +2775,7 @@ const makeChallengeStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.text,
     lineHeight: undefined,
     fontSize: 32,
+    flexShrink: 1,
   },
   inlineDeadline: {
     ...textStyles.bodySmall,

@@ -89,6 +89,12 @@ export function ChallengePromptText({
 
 type ChallengesSliderProps = ChallengesContentProps & {
   chooseRef?: React.MutableRefObject<(() => void) | null>;
+  // Remonte l'état de la carte active (notamment si l'utilisateur a déjà participé),
+  // pour piloter le bouton « Choisir » qui vit dans le parent (CameraPage).
+  onActiveChange?: (info: { hasResponded: boolean }) => void;
+  // Visibilité de la vue (le slider reste monté, l'opacité est togglée). À chaque
+  // ouverture on rafraîchit silencieusement les réponses (participation, compteur).
+  visible?: boolean;
 };
 
 export function ChallengesSlider({
@@ -97,6 +103,8 @@ export function ChallengesSlider({
   onSelectChallenge,
   onClose,
   chooseRef,
+  onActiveChange,
+  visible,
 }: ChallengesSliderProps) {
   const { colors } = useTheme();
   const sliderStyles = useThemedStyles(makeSliderStyles);
@@ -108,6 +116,36 @@ export function ChallengesSlider({
   const [isGap, setIsGap] = useState(false);
 
   const groupIdsStr = allGroups.map((g) => g.id).join(",");
+
+  // Ref vers l'état courant pour le refresh silencieux (évite des deps inutiles).
+  const groupChallengesRef = useRef(groupChallenges);
+  groupChallengesRef.current = groupChallenges;
+
+  // Rafraîchit uniquement participation + compteur de réponses des défis déjà chargés,
+  // en patchant en place (pas de spinner / reset de scroll).
+  const refreshResponses = async () => {
+    await Promise.all(groupChallengesRef.current.map(async (gc) => {
+      if (!gc.challenge) return;
+      const challengeId = gc.challenge.id;
+      const [{ data: resp }, { count }] = await Promise.all([
+        supabase.from("challenge_responses").select("id")
+          .eq("challenge_id", challengeId).eq("user_id", currentUserId).maybeSingle(),
+        supabase.from("challenge_responses").select("id", { count: "exact", head: true })
+          .eq("challenge_id", challengeId),
+      ]);
+      setGroupChallenges((prev) => prev.map((p) =>
+        p.groupId === gc.groupId ? { ...p, hasResponded: !!resp, responseCount: count ?? 0 } : p
+      ));
+    }));
+  };
+
+  // À chaque ouverture de la vue (visible false → true), refresh silencieux.
+  const prevVisibleRef = useRef(false);
+  useEffect(() => {
+    if (visible && !prevVisibleRef.current) refreshResponses();
+    prevVisibleRef.current = !!visible;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
 
   useEffect(() => {
     const period = getCurrentChallengePeriod();
@@ -205,6 +243,28 @@ export function ChallengesSlider({
   const scrollRef = useRef<ScrollView>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
 
+  // Remonte au parent l'état de la carte active. Piloté à la fin du scroll (callbacks JS
+  // directs, instantanés) et après refresh des données — PAS via le listener natif de
+  // handleScroll qui lag de plusieurs secondes en scroll rapide. Dédupliqué : on ne notifie
+  // le parent (→ re-render de CameraPage) que quand le booléen change réellement.
+  const onActiveChangeRef = useRef(onActiveChange);
+  onActiveChangeRef.current = onActiveChange;
+  const activeIndexRef = useRef(0);
+  const lastRespondedRef = useRef<boolean | null>(null);
+  const reportActive = (realIdx: number) => {
+    activeIndexRef.current = realIdx;
+    const responded = !!groupChallengesRef.current[realIdx]?.hasResponded;
+    if (lastRespondedRef.current !== responded) {
+      lastRespondedRef.current = responded;
+      onActiveChangeRef.current?.({ hasResponded: responded });
+    }
+  };
+  // Après chargement/refresh des données, réévalue la carte courante (participation à jour).
+  useEffect(() => {
+    reportActive(activeIndexRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupChallenges]);
+
   // 20 copies → "infiniment" scrollable, et largement supporté par un ScrollView classique (évite bug FlatList)
   const LOOP_COUNT = 20;
   const startIdx = needsLoop && count > 0 ? Math.floor(LOOP_COUNT / 2) * count : 0;
@@ -223,6 +283,11 @@ export function ChallengesSlider({
     return () => clearTimeout(t);
   }, [count, availableHeight, snapInterval, needsLoop, startIdx]);
 
+  // Listener ULTRA-léger : il ne fait QUE reportActive (calcul d'index + compare booléenne
+  // dédupliquée → ne re-render le parent qu'au flip). Surtout PAS de setActiveIndex ici :
+  // ça re-renderait toutes les cartes à chaque frame et créait le backlog de ~2s.
+  // Le bouton se met ainsi à jour dès le passage de la moitié (pendant le scroll), sans
+  // attendre la fin du momentum.
   const handleScroll = Animated.event(
     [{ nativeEvent: { contentOffset: { x: scrollX } } }],
     {
@@ -230,17 +295,20 @@ export function ChallengesSlider({
       listener: (e: any) => {
         if (count === 0 || snapInterval === 0) return;
         const x = e.nativeEvent.contentOffset.x;
-        const idx = Math.round(x / snapInterval);
-        setActiveIndex(((idx % count) + count) % count);
-      }
+        const realIdx = ((Math.round(x / snapInterval) % count) + count) % count;
+        reportActive(realIdx);
+      },
     }
   );
 
-  const handleMomentumScrollEnd = (e: any) => {
+  // Fin de scroll (settle) : met à jour l'index ET notifie le parent immédiatement.
+  // Math.round prédit l'index de snap même au lâcher (avant l'anim de snap).
+  const handleScrollSettle = (e: any) => {
     if (count === 0 || snapInterval === 0) return;
     const x = e.nativeEvent.contentOffset.x;
-    const idx = Math.round(x / snapInterval);
-    setActiveIndex(((idx % count) + count) % count);
+    const realIdx = ((Math.round(x / snapInterval) % count) + count) % count;
+    setActiveIndex(realIdx);
+    reportActive(realIdx);
   };
 
 
@@ -309,6 +377,9 @@ export function ChallengesSlider({
                   {(gc.responseCount ?? 0)} {(gc.responseCount ?? 0) > 1 ? "réponses" : "réponse"}
                 </Text>
               </View>
+              {gc.hasResponded && (
+                <Text style={sliderStyles.respondedText}>Tu as déjà participé ✓</Text>
+              )}
             </View>
           ) : (
             <Text style={sliderStyles.noChallengeText}>Aucun défi configuré</Text>
@@ -346,7 +417,8 @@ export function ChallengesSlider({
                 decelerationRate="fast"
                 contentContainerStyle={{ paddingHorizontal: sideMargin }}
                 onScroll={handleScroll}
-                onMomentumScrollEnd={handleMomentumScrollEnd}
+                onMomentumScrollEnd={handleScrollSettle}
+                onScrollEndDrag={handleScrollSettle}
                 scrollEventThrottle={16}
                 bounces={false}
                 overScrollMode="never"
@@ -422,6 +494,12 @@ const makeSliderStyles = (colors: ThemeColors) => StyleSheet.create({
     ...textStyles.singleLineBodyBaseStrong,
     color: colors.text,
     lineHeight: undefined,
+  },
+  respondedText: {
+    ...textStyles.singleLineBodyBaseStrong,
+    color: colors.textBrandTertiary,
+    lineHeight: undefined,
+    textAlign: "center",
   },
   challengeText: {
     ...textStyles.heading,
