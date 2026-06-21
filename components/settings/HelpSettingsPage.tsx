@@ -175,7 +175,7 @@ export default function HelpSettingsPage() {
           </View>
           <View style={[styles.textarea, { borderColor: borderFor("description"), backgroundColor: colors.bg }]}>
             <TextInput
-              style={[styles.inputText, { color: colors.text }]}
+              style={[styles.inputText, { color: colors.text, flex: 1, alignSelf: "stretch" }]}
               value={description}
               onChangeText={setDescription}
               placeholder="Informations"

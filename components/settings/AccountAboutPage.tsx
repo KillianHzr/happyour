@@ -1,15 +1,22 @@
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useTheme, useThemedStyles } from "../../lib/theme-context";
-import { spacing, textStyles, type ThemeColors } from "../../lib/theme";
+import { useThemedStyles } from "../../lib/theme-context";
+import { spacing, type ThemeColors } from "../../lib/theme";
 import { useAuth } from "../../lib/auth-context";
 import {
-  APP_NAME, COMPANY_EMAIL,
-  Section, P, BulletList, Highlight, ContactCard,
+  APP_NAME,
+  Section, P, BulletList, Card, CardText, CardRow,
 } from "./LegalComponents";
 
+const formatDate = (raw?: string | null) => {
+  if (!raw) return "—";
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return "—";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`;
+};
+
 export default function AccountAboutPage() {
-  const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -20,32 +27,23 @@ export default function AccountAboutPage() {
       contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xxl }]}
       showsVerticalScrollIndicator={false}
     >
-      {/* ── Compte actif ── */}
-      {user && (
-        <View style={[styles.accountCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-          <View style={styles.accountRow}>
-            <Text style={[styles.accountLabel, { color: colors.textSecondary }]}>Compte</Text>
-            <Text style={[styles.accountValue, { color: colors.text }]}>{user.email}</Text>
-          </View>
-          <View style={[styles.accountDivider, { backgroundColor: colors.cardBorder }]} />
-          <View style={styles.accountRow}>
-            <Text style={[styles.accountLabel, { color: colors.textSecondary }]}>Inscrit le</Text>
-            <Text style={[styles.accountValue, { color: colors.text }]}>
-              {user.created_at ? new Date(user.created_at).toLocaleDateString("fr-FR") : "—"}
-            </Text>
-          </View>
-        </View>
-      )}
+      {/* ── Carte compte ── */}
+      <Card>
+        <CardRow label="Compte" value={user?.email ?? "—"} />
+        <CardRow label="Inscrit" value={formatDate(user?.created_at)} />
+      </Card>
 
       <Section title="Ce que contient votre compte">
-        <P>{`Votre compte ${APP_NAME} regroupe :`}</P>
-        <BulletList items={[
-          "Vos informations de profil (pseudo, photo, e-mail)",
-          "L'ensemble des moments que vous avez partagés dans vos groupes",
-          "Vos réactions et commentaires sur les moments des autres",
-          "Vos préférences (thème, langue, notifications)",
-          "L'historique de vos reveals",
-        ]} />
+        <BulletList
+          intro={`Votre compte ${APP_NAME} regroupe :`}
+          items={[
+            "Vos informations de profil (pseudo, photo, e-mail)",
+            "L'ensemble des moments que vous avez partagés dans vos groupes",
+            "Vos réactions et commentaires sur les moments des autres",
+            "Vos préférences (thème, langue, notifications)",
+            "L'historique de vos reveals",
+          ]}
+        />
       </Section>
 
       <Section title="Sécurité de votre compte">
@@ -55,21 +53,27 @@ export default function AccountAboutPage() {
           "La déconnexion invalide immédiatement votre session",
           "Vous pouvez ajouter un e-mail de récupération dans les paramètres",
         ]} />
-        <Highlight>
-          {`En cas d'accès non autorisé suspecté, changez immédiatement votre mot de passe et contactez-nous.`}
-        </Highlight>
+        <Card>
+          <CardText>En cas d'accès non autorisé suspecté, changez immédiatement votre mot de passe et contactez-nous.</CardText>
+        </Card>
       </Section>
 
       <Section title="Accéder à vos données">
-        <P>Vous pouvez à tout moment :</P>
-        <BulletList items={[
-          "Consulter et modifier votre profil dans les paramètres",
-          "Supprimer un moment publié depuis l'écran de reveal",
-          "Demander une copie complète de vos données par e-mail",
-          "Supprimer définitivement votre compte depuis les paramètres",
-        ]} />
+        <BulletList
+          intro="Vous pouvez à tout moment :"
+          items={[
+            "Consulter et modifier votre profil dans les paramètres",
+            "Supprimer un moment publié depuis l'écran de reveal",
+            "Demander une copie complète de vos données par e-mail",
+            "Supprimer définitivement votre compte depuis les paramètres",
+          ]}
+        />
         <P>Pour toute demande d'export ou question sur vos données :</P>
-        <ContactCard />
+        <Card>
+          <CardRow label="Société" value="Source Studio" />
+          <CardRow label="Adresse" value="Annecy, France" />
+          <CardRow label="E-mail" value="source.studio@etik.com" />
+        </Card>
       </Section>
 
       <Section title="Suppression du compte">
@@ -80,15 +84,17 @@ export default function AccountAboutPage() {
           "Les membres de vos groupes ne verront plus votre contenu",
           "Vos données ne sont pas récupérables après suppression",
         ]} />
-        <Highlight>
-          {`Vous pouvez supprimer votre compte depuis Paramètres → Se déconnecter → Supprimer mon compte.`}
-        </Highlight>
+        <P>Vous pouvez supprimer votre compte depuis : Profil → Paramètres → Supprimer mon compte</P>
       </Section>
 
-      <Section title="Besoin d'aide ?">
-        <P>{`Pour toute question sur votre compte ou vos données, contactez l'équipe ${APP_NAME} :`}</P>
-        <ContactCard />
-        <P>{`Vous pouvez aussi utiliser le formulaire dans Paramètres → Aide et assistance.`}</P>
+      <Section title="Besoin d'aide">
+        <P>Pour toute question sur votre compte ou vos données, contactez l'équipe Disclose :</P>
+        <Card>
+          <CardRow label="Société" value="Source Studio" />
+          <CardRow label="Adresse" value="Annecy, France" />
+          <CardRow label="E-mail" value="source.studio@etik.com" />
+        </Card>
+        <P>Vous pouvez aussi utiliser le formulaire dans : Profil → Paramètres → Aide et assistance</P>
       </Section>
     </ScrollView>
   );
@@ -97,33 +103,9 @@ export default function AccountAboutPage() {
 const makeStyles = (_colors: ThemeColors) => StyleSheet.create({
   content: {
     flexDirection: "column",
-    gap: spacing.xxl,
+    alignItems: "flex-start",
+    gap: spacing.xl2,             // space/1000 = 40px
     marginHorizontal: spacing.lg,
     marginTop: spacing.xxl,
-  },
-  accountCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    overflow: "hidden",
-  },
-  accountRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    gap: spacing.md,
-  },
-  accountDivider: {
-    height: 1,
-  },
-  accountLabel: {
-    ...textStyles.bodyExtraSmall,
-    flexShrink: 0,
-  },
-  accountValue: {
-    ...textStyles.bodyBase,
-    flex: 1,
-    textAlign: "right",
   },
 });

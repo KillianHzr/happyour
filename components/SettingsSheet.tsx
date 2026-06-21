@@ -148,6 +148,7 @@ const headerSt = StyleSheet.create({
     alignItems: "center",
   },
   titleWrap: {
+    flex: 1,
     flexDirection: "column",
     alignItems: "flex-start",
   },
