@@ -439,12 +439,12 @@ export default function MainPagerScreen() {
   // Déclenché à la fin du Lottie (slide) : lance la transition filmstrip → reveal.
   // Fin de l'aspiration du chrome (GroupRoom) : ACTIVE l'anim (déjà montée au slide) → reveal.
   const handleGroupRoomUnlock = useCallback(() => {
-    if (!currentUserPostedThisWeek) return;
+    // On peut voir les moments des proches même sans avoir posté soi-même.
     // Pas de frame mesurée ou pas d'images → reveal direct (jamais bloqué).
     if (!cardFrameRef.current || revealStripUrls.length === 0) { setShowReveal(true); return; }
     setRevealTransition(true); // au cas où le slide n'a pas monté (sécurité)
     setRevealActive(true);
-  }, [currentUserPostedThisWeek, revealStripUrls]);
+  }, [revealStripUrls]);
 
   useEffect(() => {
     if (onboarding === "true" && allGroups.length <= 1) {
@@ -712,7 +712,9 @@ export default function MainPagerScreen() {
               };
             });
 
-            const crown = computeCrownWinner(groupPhotos, prevRevealDate, currentRevealDate);
+            // Couronne calculée sur la même fenêtre que les moments affichés : pendant le
+            // reveal c'est la semaine révélée (photoStart→photoEnd), pas la nouvelle semaine.
+            const crown = computeCrownWinner(groupPhotos, photoStart, photoEnd);
             return [g.id, {
               name: g.name,
               inviteCode: g.invite_code,
@@ -1489,7 +1491,7 @@ export default function MainPagerScreen() {
       onGoToCapture={() => jumpTo(1)}
       onOpenChallenge={(ch) => { setPendingChallenge(ch); jumpTo(1); }}
       onOpenReveal={handleGroupRoomUnlock}
-      onRevealStart={currentUserPostedThisWeek ? handleRevealStart : undefined}
+      onRevealStart={handleRevealStart}
       onCardFrame={handleCardFrame}
       onLottieFrame={handleLottieFrame}
       onOpenSettings={() => setShowGroupSettings(true)}
@@ -1498,7 +1500,7 @@ export default function MainPagerScreen() {
       onDebugNamePress={() => setShowDebugMenu(true)}
       debugUnlocked={debugUnlocked}
     />
-  ), [allGroups, groupData, revealConfig, activePage === 0, user?.id, enterGroupId, handleSwitchGroup, currentUserPostedThisWeek, debugUnlocked, handleRevealStart, handleGroupRoomUnlock, handleCardFrame, handleLottieFrame]);
+  ), [allGroups, groupData, revealConfig, activePage === 0, user?.id, enterGroupId, handleSwitchGroup, debugUnlocked, handleRevealStart, handleGroupRoomUnlock, handleCardFrame, handleLottieFrame]);
 
   // Page initiale de la feuille de réglages du groupe (titre "Paramètres" porté par SettingsSheet)
   const groupSettingsInitialPage = useMemo(() => ({

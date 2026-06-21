@@ -353,9 +353,6 @@ export default function GroupSettingsContent({
       <BottomSheet visible={showReveal} onClose={() => setShowReveal(false)}>
         <View style={styles.comingContent}>
           <View style={styles.comingTextBlock}>
-            <View style={[styles.comingIconWrap, { backgroundColor: colors.brandTertiary }]}>
-              <Icon name="lock" size={28} color={colors.brand} />
-            </View>
             <Text style={styles.comingTitle}>Bientôt disponible</Text>
             <Text style={styles.comingSubtitle}>
               La personnalisation de la temporalité du reveal arrivera avec l'abonnement. Tu seras notifié dès son lancement.

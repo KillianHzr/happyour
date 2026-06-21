@@ -24,6 +24,12 @@ export default function ArchivesCalendar({ minDate, maxDate, selStart, selEnd, o
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
 
+  // Jour actuel de l'utilisateur (minuit local).
+  const today = useMemo(() => {
+    const n = new Date();
+    return atMidnight(n.getFullYear(), n.getMonth(), n.getDate());
+  }, []);
+
   const init = selStart ?? maxDate;
   const [viewYear, setViewYear] = useState(init.getFullYear());
   const [viewMonth, setViewMonth] = useState(init.getMonth());
@@ -174,6 +180,8 @@ export default function ArchivesCalendar({ minDate, maxDate, selStart, selEnd, o
                 const date = atMidnight(viewYear, viewMonth, d);
                 const disabled = cmp(date, minDate) < 0 || cmp(date, maxDate) > 0;
                 const st = dayState(d);
+                // Jour actuel : style spécial, sauf s'il fait partie de la sélection.
+                const showToday = st === "none" && date.getTime() === today.getTime();
                 const bg =
                   st === "between" ? { backgroundColor: colors.card } :
                   (st === "start" || st === "end" || st === "single") ? { backgroundColor: colors.brand } :
@@ -182,10 +190,12 @@ export default function ArchivesCalendar({ minDate, maxDate, selStart, selEnd, o
                   st === "start" ? { borderTopLeftRadius: radii.sm, borderBottomLeftRadius: radii.sm } :
                   st === "end" ? { borderTopRightRadius: radii.sm, borderBottomRightRadius: radii.sm } :
                   st === "single" ? { borderRadius: radii.sm } :
+                  showToday ? { borderRadius: radii.sm, borderWidth: stroke.sm, borderColor: colors.borderBrandTertiary } :
                   null;
                 const textColor =
                   st === "between" ? colors.brandText :
                   (st === "start" || st === "end" || st === "single") ? colors.textBrandOnBrand :
+                  showToday ? colors.brand :
                   disabled ? colors.textTertiary : colors.text;
                 return (
                   <TouchableOpacity

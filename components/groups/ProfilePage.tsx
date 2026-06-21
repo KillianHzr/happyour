@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, RefreshControl, Dimensions,
+  ActivityIndicator, RefreshControl, Dimensions, Animated, Easing,
 } from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -81,19 +81,50 @@ type Props = {
 };
 
 // ─── SVG Icons ───────────────────────────────────────────────────────────────
-const DropletIcon = ({ size = 20, color = "#FF561A" }: { size?: number; color?: string }) => (
+const FireIcon = ({ size = 20, color = "#FF3F05" }: { size?: number; color?: string }) => (
   <Svg width={size} height={size} viewBox="0 0 20 20" fill="none">
-    <Path d="M9.9997 1.24219C10.265 1.24208 10.5191 1.34765 10.7067 1.53516L15.4235 6.25195C16.4961 7.32389 17.2269 8.68957 17.5231 10.1768C17.8194 11.6641 17.6677 13.2062 17.0876 14.6074C16.5075 16.0085 15.5251 17.2062 14.2644 18.0488C13.0036 18.8914 11.521 19.3408 10.0046 19.3408C8.4882 19.3408 7.00563 18.8913 5.74482 18.0488C4.48398 17.2062 3.50074 16.0085 2.9206 14.6074C2.34048 13.2062 2.18883 11.6641 2.48506 10.1768C2.78122 8.68985 3.51145 7.32381 4.58369 6.25195L9.29267 1.53613L9.36592 1.46875C9.54379 1.32289 9.76765 1.24229 9.9997 1.24219Z" fill={color} />
+    <Path d="M3 12.1051C3 10.9733 3.37399 9.87321 4.0625 8.97131C4.32278 8.63072 4.77162 8.49417 5.17773 8.63146C5.58381 8.76892 5.85742 9.14999 5.85742 9.57873C5.85746 9.86604 5.97316 10.1455 6.18555 10.3541C6.39856 10.5633 6.69129 10.6842 7 10.6842C7.30871 10.6842 7.60144 10.5633 7.81445 10.3541C8.02684 10.1455 8.14254 9.86604 8.14258 9.57873C8.14258 9.00531 7.93627 8.57161 7.6084 7.92736C7.29348 7.30858 6.85742 6.47851 6.85742 5.36779C6.85753 3.78924 7.86073 2.40907 9.38184 1.2135C9.6478 1.00446 10.002 0.944443 10.3223 1.05334C10.6421 1.16228 10.8852 1.42513 10.9688 1.75256C11.4901 3.80126 12.5215 5.43815 14.0625 6.69982C15.93 8.22891 17 10.0327 17 12.1051C16.9999 13.9393 16.2579 15.6944 14.9434 16.986C13.6293 18.277 11.8509 18.9996 10 18.9996C8.14914 18.9996 6.3707 18.277 5.05664 16.986C3.74215 15.6944 3.00006 13.9393 3 12.1051Z" fill={color} />
   </Svg>
 );
 
-// ─── Group name pill ──────────────────────────────────────────────────────────
-function GroupNamePill({ name, bg, fg }: { name: string; bg: string; fg: string }) {
+// ─── Compteur "casino" ─────────────────────────────────────────────────────────
+// Au changement de groupe (spinKey) — ou quand une stat asynchrone arrive (value) —
+// la valeur fait défiler un ruban de chiffres aléatoires et s'arrête sur la valeur
+// finale, façon machine à sous. Elle tourne même si la valeur est identique.
+function SlotNumber({ value, spinKey, style }: { value: number; spinKey: string | number; style: any }) {
+  const translateY = useRef(new Animated.Value(0)).current;
+  const [rowH, setRowH] = useState(0);
+  const prevValue = useRef(value);
+  // Ruban à 2 lignes : on glisse de la valeur précédente vers la nouvelle.
+  const [reel, setReel] = useState<[number, number]>([value, value]);
+
+  useEffect(() => {
+    if (rowH === 0) return; // on attend la mesure d'une ligne avant d'animer
+    setReel([prevValue.current, value]);
+    translateY.setValue(0);
+    const anim = Animated.timing(translateY, {
+      toValue: -rowH,
+      duration: 350,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+    anim.start(() => { prevValue.current = value; });
+    return () => anim.stop();
+  }, [spinKey, value, rowH]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
-    <View style={{ height: 40, paddingHorizontal: spacing.xs2, backgroundColor: bg, justifyContent: "center", overflow: "hidden" }}>
-      <Text style={{ fontFamily: textStyles.subtitleStrong.fontFamily, fontSize: typography.size.subtitle, textTransform: "uppercase", color: fg, includeFontPadding: false } as any} numberOfLines={1}>
-        {name}
-      </Text>
+    <View style={{ height: rowH || undefined, overflow: "hidden", alignSelf: "flex-start" }}>
+      <Animated.View style={{ transform: [{ translateY }] }}>
+        {reel.map((n, i) => (
+          <Text
+            key={i}
+            onLayout={i === 0 && rowH === 0 ? (e) => setRowH(e.nativeEvent.layout.height) : undefined}
+            style={[style, rowH ? { height: rowH, lineHeight: rowH, includeFontPadding: false, textAlignVertical: "center" } : null]}
+          >
+            {n}
+          </Text>
+        ))}
+      </Animated.View>
     </View>
   );
 }
@@ -340,7 +371,7 @@ export default function ProfilePage({
           <View style={[styles.topHeaderWrap, { paddingTop: insets.top, marginTop: 16 }]}>
             <View style={styles.topHeaderRow}>
               <View style={styles.topHeaderLeft}>
-                <GroupNamePill name={username} bg={colors.brand} fg={colors.textInverse} />
+                <Text style={[textStyles.subtitleStrong, { color: colors.text }]} numberOfLines={1}>{username}</Text>
               </View>
               <View style={styles.topHeaderRight}>
                 <TouchableOpacity style={styles.moreBtn} activeOpacity={0.75} onPress={() => setShowSettings(true)}>
@@ -377,7 +408,7 @@ export default function ProfilePage({
               <View style={styles.newStreaks}>
                 <View style={styles.newStreakRow}>
                   <Text style={styles.newStreakNum}>{streak}</Text>
-                  <DropletIcon size={20} color={colors.brand} />
+                  <FireIcon size={20} color={colors.brand} />
                 </View>
                 <Text style={styles.newStreakLabel}>streak</Text>
               </View>
@@ -398,7 +429,7 @@ export default function ProfilePage({
                     },
                   ]}>
                     {(state === "active" || state === "lost") && (
-                      <DropletIcon size={16} color={colors.iconBrandOnBrand} />
+                      <FireIcon size={16} color={colors.iconBrandOnBrand} />
                     )}
                   </View>
                   <Text style={[styles.newDayLabel, state === "today" && { color: colors.textBrandTertiary }]}>{DAY_LABELS[i]}</Text>
@@ -446,25 +477,21 @@ export default function ProfilePage({
               <View style={styles.cofreBento}>
                 <View style={styles.cofreBentoRow}>
                   <View style={[styles.cofreBentoItem, { flex: 1 }]}>
-                    <Text style={styles.cofreBentoNum}>{coffreMomentsCount}</Text>
+                    <SlotNumber value={coffreMomentsCount} spinKey={coffreGroupIndex} style={styles.cofreBentoNum} />
                     <Text style={styles.cofreBentoLabel}>Moments partagés</Text>
                   </View>
                   <View style={[styles.cofreBentoItem, { flex: 1 }]}>
-                    <Text style={styles.cofreBentoNum}>{coffreRevealsCount}</Text>
+                    <SlotNumber value={coffreRevealsCount} spinKey={coffreGroupIndex} style={styles.cofreBentoNum} />
                     <Text style={styles.cofreBentoLabel}>Reveal vécus</Text>
                   </View>
                 </View>
                 <View style={styles.cofreBentoRow}>
                   <View style={[styles.cofreBentoItem, { flex: 1 }]}>
-                    <Text style={styles.cofreBentoNum}>
-                      {coffreGroupStat?.loading ? "…" : String(coffreGroupStat?.comments ?? 0)}
-                    </Text>
+                    <SlotNumber value={coffreGroupStat?.comments ?? 0} spinKey={coffreGroupIndex} style={styles.cofreBentoNum} />
                     <Text style={styles.cofreBentoLabel}>Commentaires</Text>
                   </View>
                   <View style={[styles.cofreBentoItem, { flex: 1 }]}>
-                    <Text style={styles.cofreBentoNum}>
-                      {coffreGroupStat?.loading ? "…" : String(coffreGroupStat?.stickers ?? 0)}
-                    </Text>
+                    <SlotNumber value={coffreGroupStat?.stickers ?? 0} spinKey={coffreGroupIndex} style={styles.cofreBentoNum} />
                     <Text style={styles.cofreBentoLabel}>Stickers</Text>
                   </View>
                 </View>

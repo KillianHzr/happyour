@@ -363,7 +363,7 @@ function RoomCard({ card, revealDate, unlocked, onCapture, onOpenChallenge, lott
             <Text style={s.captureFirstText}>Fin du suspens, accèdes à ton Reveal !</Text>
           )}
           {unlocked && !hasMoments && (
-            <Text style={s.captureFirstText}>Aucun moment à révéler cette fois</Text>
+            <Text style={s.captureFirstText}>Zut, tu n’a rien posté...</Text>
           )}
           {unlocked ? (
             hasMoments ? (

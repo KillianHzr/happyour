@@ -53,7 +53,7 @@ const pad2 = (n: number) => String(n).padStart(2, "0");
 const ddMM = (d: Date) => `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}`;
 
 type RevealStatus = "current" | "available" | "locked";
-type Reveal = { number: number; start: Date; end: Date; status: RevealStatus; bgUrl: string | null };
+type Reveal = { number: number; start: Date; end: Date; status: RevealStatus; bgUrl: string | null; empty: boolean };
 type MonthGroup = { key: string; year: number; month: number; label: string; reveals: Reveal[] };
 
 type Member = { user_id: string; username: string; avatar_url?: string | null };
@@ -80,6 +80,7 @@ export default function ArchivesSheet({
 
   const [mounted, setMounted] = useState(visible);
   const [showComingSoon, setShowComingSoon] = useState(false);
+  const [showEmpty, setShowEmpty] = useState(false);
   const [archiveReveal, setArchiveReveal] = useState<ArchiveRevealMeta | null>(null);
   const [showRandom, setShowRandom] = useState(false);
   const sheetAnim = useRef(new Animated.Value(SCREEN_WIDTH)).current;
@@ -114,6 +115,7 @@ export default function ArchivesSheet({
   // Clic sur une archive : disponible → ouvre le reveal archivé ; ancienne → premium ; en cours → rien.
   const handleRevealPress = (r: Reveal) => {
     if (r.status === "available") {
+      if (r.empty) { setShowEmpty(true); return; }
       setArchiveReveal({
         number: r.number,
         start: r.start,
@@ -153,13 +155,19 @@ export default function ArchivesSheet({
       const { data: g } = await supabase.from("groups").select("created_at").eq("id", groupId).single();
       const createdAt = g?.created_at ? new Date(g.created_at) : new Date();
       const nextReveal = computeNextRevealDate(revealConfig.day, revealConfig.hour);
+      // Pendant les 24h qui suivent le reveal, le reveal "en cours" reste celui qu'on est
+      // en train de révéler : on n'avance pas vers la nouvelle semaine de collecte avant
+      // la fin de la fenêtre (cohérent avec le reste de l'app).
+      const justRevealed = new Date(nextReveal.getTime() - WEEK_MS);
+      const inRevealWindow = Date.now() - justRevealed.getTime() < DAY_MS;
+      const topEnd = inRevealWindow ? justRevealed : nextReveal;
 
       // Tous les reveals (du plus récent au plus ancien) dont la fenêtre touche l'après-création.
       const list: Reveal[] = [];
-      let end = nextReveal;
+      let end = new Date(topEnd);
       while (end.getTime() > createdAt.getTime()) {
         const start = new Date(end.getTime() - WEEK_MS);
-        list.push({ number: 0, start, end: new Date(end), status: "locked", bgUrl: null });
+        list.push({ number: 0, start, end: new Date(end), status: "locked", bgUrl: null, empty: true });
         end = new Date(end.getTime() - WEEK_MS);
       }
       const total = list.length;
@@ -174,8 +182,14 @@ export default function ArchivesSheet({
         .select("image_path, created_at")
         .eq("group_id", groupId)
         .order("created_at", { ascending: false });   // plus récent d'abord
-      const photoRows = (allPhotos ?? []).filter((p: any) => isPhotoPath(p.image_path));
+      const allRows = allPhotos ?? [];
+      const photoRows = allRows.filter((p: any) => isPhotoPath(p.image_path));
       for (const r of list) {
+        // Vide = aucun moment (tous types) dans la fenêtre du reveal.
+        r.empty = !allRows.some((p: any) => {
+          const t = new Date(p.created_at).getTime();
+          return t >= r.start.getTime() && t < r.end.getTime();
+        });
         if (r.status === "current") { r.bgUrl = null; continue; }
         const last = photoRows.find((p: any) => {
           const t = new Date(p.created_at).getTime();
@@ -222,7 +236,7 @@ export default function ArchivesSheet({
                 <Text style={styles.title}>Archives</Text>
               </View>
               <TouchableOpacity style={styles.calendarBtn} onPress={() => setCalendarOpen((o) => !o)} activeOpacity={0.8}>
-                <Icon name="calendar" size={20} color={selStart ? colors.iconBrandTertiary : calendarOpen ? colors.iconBrand : colors.iconNeutral} />
+                <Icon name="calendar" size={20} color={colors.iconNeutral} />
                 {selStart && <View style={styles.calBadge} />}
               </TouchableOpacity>
             </View>
@@ -283,16 +297,28 @@ export default function ArchivesSheet({
             <BottomSheet visible={showComingSoon} onClose={() => setShowComingSoon(false)}>
               <View style={styles.comingContent}>
                 <View style={styles.comingTextBlock}>
-                  <View style={[styles.comingIconWrap, { backgroundColor: colors.brandTertiary }]}>
-                    <Icon name="key" size={28} color={colors.brand} />
-                  </View>
-                  <Text style={styles.comingTitle}>Bientôt disponible</Text>
+                  <Text style={styles.comingTitle}>Bientôt disponible !</Text>
                   <Text style={styles.comingSubtitle}>
-                    L'accès Premium aux archives du Reveal arrivera avec l'abonnement. Tu seras notifié dès son lancement.
+                    L'accès aux archives du Reveal arrivera avec l'abonnement Premium. Tu sera notifié dès son lancement.
                   </Text>
                 </View>
                 <TouchableOpacity style={styles.comingBtn} onPress={() => setShowComingSoon(false)} activeOpacity={0.8}>
                   <Text style={styles.comingBtnText}>OK, j'attends !</Text>
+                </TouchableOpacity>
+              </View>
+            </BottomSheet>
+
+            {/* ── Modal : reveal passé vide ── */}
+            <BottomSheet visible={showEmpty} onClose={() => setShowEmpty(false)}>
+              <View style={styles.comingContent}>
+                <View style={styles.comingTextBlock}>
+                  <Text style={styles.comingTitle}>Ce reveal est vide...</Text>
+                  <Text style={styles.comingSubtitle}>
+                    Malheureusement aucun moment n'a été partagé dans ce reveal. Choisis-en un autre pour te remémorer de bons souvenirs !
+                  </Text>
+                </View>
+                <TouchableOpacity style={styles.emptyBtn} onPress={() => setShowEmpty(false)} activeOpacity={0.8}>
+                  <Text style={styles.emptyBtnText}>Retourner à la liste</Text>
                 </TouchableOpacity>
               </View>
             </BottomSheet>
@@ -437,10 +463,14 @@ function ArchiveRevealItem({ reveal, styles, onPress }: { reveal: Reveal; styles
       style={[
         styles.archiveItem,
         isLocked && { opacity: 0.3 },
-        // Stroke/050 border/brand/tertiary sur le reveal en cours.
-        isCurrent && { borderWidth: stroke.md, borderColor: darkColors.borderBrandTertiary },
+        // Autres reveals : stroke/025 border/default/tertiary.
+        !isCurrent && { borderWidth: stroke.sm, borderColor: darkColors.borderTertiary },
+        // Stroke/050 border/default/secondary sur le reveal en cours.
+        isCurrent && { borderWidth: stroke.md, borderColor: darkColors.borderSecondary },
       ]}
-      activeOpacity={0.85}
+      // Le reveal en cours n'est pas cliquable → pas d'effet d'appui.
+      activeOpacity={isCurrent ? 1 : 0.85}
+      disabled={isCurrent}
       onPress={() => onPress(reveal)}
     >
       {/* Fond */}
@@ -545,14 +575,12 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   calBadge: {
     position: "absolute",
-    top: -2,
-    right: -2,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    top: -6,
+    right: -6,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     backgroundColor: colors.brand,
-    borderWidth: 2,
-    borderColor: colors.bg,
   },
 
   // ── Contenu ──
@@ -764,5 +792,20 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     ...textStyles.singleLineSubheadingStrong,
     lineHeight: typography.size.xl + 4,
     color: colors.textBrandOnBrand,
+  },
+
+  // ── Modal "reveal vide" ──
+  emptyBtn: {
+    alignSelf: "stretch",
+    paddingVertical: spacing.lg,
+    borderRadius: radii.lg,
+    backgroundColor: colors.bgNeutralTertiary, // background/neutral/tertiary
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  emptyBtnText: {
+    ...textStyles.singleLineSubheadingStrong,
+    lineHeight: typography.size.xl + 4,
+    color: colors.textNeutral, // text/neutral/default
   },
 });

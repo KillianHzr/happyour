@@ -9,6 +9,8 @@ interface TextStickerProps {
   backgroundColor?: string;
   isPostSticker?: boolean;
   padY?: number;
+  /** Force le texte en majuscules (true pour les réactions, false pour un nom de groupe). */
+  uppercase?: boolean;
 }
 
 export const TextSticker = ({
@@ -17,10 +19,12 @@ export const TextSticker = ({
   backgroundColor,
   isPostSticker = false,
   padY = spacing.xs2,
+  uppercase = true,
 }: TextStickerProps) => {
   const { colors } = useTheme();
   const bg = backgroundColor ?? colors.brand;
-  const displayValue = (text || "—").toUpperCase();
+  const raw = text || "—";
+  const displayValue = uppercase ? raw.toUpperCase() : raw;
 
   // var(--sds-size-space-150) horizontal padding = 6px (spacing.xs2)
   const padX = spacing.xs2;

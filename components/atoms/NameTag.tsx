@@ -1,37 +1,18 @@
 import React from "react";
-import { View, Text } from "react-native";
-import { spacing, typography } from "../../lib/theme";
-import { useTheme } from "../../lib/theme-context";
+import { View } from "react-native";
+import { TextSticker } from "./TextSticker";
 
 /**
- * Étiquette "nom de groupe" utilisée dans les sliders (défis + groupes).
- * Texte en `text/default/default` sur fond `background/brand/default`, incliné de 2°.
+ * Étiquette "nom de groupe" utilisée dans les sliders (défis + groupes) et l'intro reveal.
+ * Reprend exactement le style des stickers de réaction (TextSticker), sans forcer les
+ * majuscules. Légèrement inclinée pour l'effet "autocollant".
  */
 export function NameTag({ text, fontSize = 32 }: { text: string; fontSize?: number }) {
-  const { colors } = useTheme();
-  // Seulement la première lettre du nom en majuscule (le reste tel que saisi)
+  // Seulement la première lettre du nom en majuscule (le reste tel que saisi).
   const display = text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
   return (
     <View style={{ transform: [{ rotate: "2deg" }] }}>
-      <View
-        style={{
-          backgroundColor: colors.brand,
-          paddingHorizontal: spacing.md,
-          paddingVertical: spacing.sm,
-          alignSelf: "flex-start",
-        }}
-      >
-        <Text
-          style={{
-            color: colors.text,
-            fontFamily: typography.family.bold,
-            fontSize,
-          }}
-          numberOfLines={1}
-        >
-          {display}
-        </Text>
-      </View>
+      <TextSticker text={display} fontSize={fontSize} uppercase={false} />
     </View>
   );
 }

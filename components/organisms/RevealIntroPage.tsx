@@ -64,10 +64,11 @@ export const RevealIntroPage = ({
           pour passer vraiment derrière la zone du bouton "Démarrer". */}
       <Animated.View style={[styles.middleContainer, { opacity, transform: [{ scale }] }]}>
         <View style={styles.stickerWrapper}>
-          <TextSticker 
-            text="Noyaux" 
-            fontSize={typography.size.titleSm} 
-            padY={spacing.md} 
+          <TextSticker
+            text={groupName || "—"}
+            fontSize={typography.size.titleSm}
+            padY={spacing.md}
+            uppercase={false}
           />
         </View>
 
