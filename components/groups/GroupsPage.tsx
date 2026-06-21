@@ -184,7 +184,13 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
   // Fetch à l'arrivée sur la liste : met à jour fond / nombre de moments / shape
   const refresh = useCallback(async () => {
     if (allGroups.length === 0) return;
-    const lastReveal = computeNextRevealDate(revealConfig.day, revealConfig.hour).getTime() - 7 * 24 * 60 * 60 * 1000;
+    // Dernier reveal passé = prochain reveal − 1 semaine.
+    const lastReveal = computeNextRevealDate(revealConfig.day, revealConfig.hour).getTime() - WEEK_MS;
+    // Pendant les 24h qui suivent le reveal, on garde les moments de la période RÉVÉLÉE
+    // (celle qui vient de se terminer), pas ceux de la nouvelle semaine de collecte.
+    const inRevealWindow = Date.now() - lastReveal < DAY_MS;
+    const windowStart = inRevealWindow ? lastReveal - WEEK_MS : lastReveal;
+    const windowEnd = inRevealWindow ? lastReveal : Infinity;
     await Promise.all(
       allGroups.map(async (g) => {
         const [photosRes, membersRes] = await Promise.all([
@@ -192,12 +198,16 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
           supabase.from("group_members").select("role, profiles:user_id(avatar_url)").eq("group_id", g.id),
         ]);
         const photos = photosRes.data ?? [];
-        const last = photos[0] as any | undefined;
-        const lastPhoto = photos.find((p: any) => isPhotoPath(p.image_path)) as any | undefined;
+        const windowed = photos.filter((p: any) => {
+          const t = new Date(p.created_at).getTime();
+          return t >= windowStart && t < windowEnd;
+        });
+        const last = windowed[0] as any | undefined;
+        const lastPhoto = windowed.find((p: any) => isPhotoPath(p.image_path)) as any | undefined;
         const admin = (membersRes.data ?? []).find((m: any) => m.role === "admin");
         const chiefAvatar = (admin as any)?.profiles?.avatar_url ?? null;
-        const momentCount = photos.filter((p: any) => new Date(p.created_at).getTime() >= lastReveal).length;
-        // Aucun moment → pas de fond (null = background/default/default dark)
+        const momentCount = windowed.length;
+        // Aucun moment → pas de fond (null = background/default/secondary dark)
         const bgUrl = momentCount > 0 ? (lastPhoto ? r2Storage.getPublicUrl(lastPhoto.image_path) : chiefAvatar) : null;
         setOverrides((prev) => ({
           ...prev,

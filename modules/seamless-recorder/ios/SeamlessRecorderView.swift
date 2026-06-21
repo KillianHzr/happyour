@@ -37,6 +37,17 @@ public class SeamlessRecorderView: ExpoView {
   required public init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     backgroundColor = .black
+    // Attacher la preview layer à la session ICI, synchrone sur le main thread, AVANT que
+    // la session queue ne touche à la session. `previewLayer.session = ...` déclenche en
+    // interne un commitConfiguration (+ validation Cinematic sur iOS 26) ; si ça s'exécute
+    // pendant que `startRunning()`/`commitConfiguration()` tournent sur la sessionQueue, deux
+    // queues mutent la même AVCaptureSession en parallèle → NSException AVFoundation non
+    // rattrapable → SIGABRT (crash observé SeamlessRecorderView.swift:89 vs :94). En faisant
+    // l'attache une seule fois ici, avant tout travail sur la sessionQueue, il n'y a plus
+    // jamais d'accès concurrent à la session entre les deux queues.
+    previewLayer.session = session
+    previewLayer.videoGravity = .resizeAspectFill
+    layer.addSublayer(previewLayer)
     setupSession()
   }
 
@@ -74,23 +85,20 @@ public class SeamlessRecorderView: ExpoView {
   }
 
   // MARK: - Setup
+  // Toute la (re)configuration de la session ET startRunning vivent sur la sessionQueue,
+  // sérialisés. La preview layer est déjà attachée à la session (dans init, sur le main)
+  // avant que ce bloc ne s'exécute → aucune mutation concurrente de la session.
   private func setupSession() {
-    session.sessionPreset = .hd1280x720
     sessionQueue.async { [weak self] in
       guard let self else { return }
       self.session.beginConfiguration()
+      self.session.sessionPreset = .hd1280x720
       self.addCameraInput(position: .back)
       self.addAudioInput()
       self.addOutputs()
       self.session.commitConfiguration()
       // Orientation MUST be set after commitConfiguration — connections are fully established here.
       self.setPortraitOrientation(on: self.videoOutput.connection(with: .video))
-      DispatchQueue.main.async {
-        self.previewLayer.session = self.session
-        self.previewLayer.videoGravity = .resizeAspectFill
-        self.layer.addSublayer(self.previewLayer)
-        self.previewLayer.frame = self.bounds
-      }
       self.session.startRunning()
     }
   }

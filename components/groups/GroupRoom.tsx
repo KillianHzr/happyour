@@ -359,11 +359,22 @@ function RoomCard({ card, revealDate, unlocked, onCapture, onOpenChallenge, lott
           {postedThisWeek && !unlocked && (
             <Text style={s.captureFirstText}>Encore un peu de patience...</Text>
           )}
-          {unlocked && (
+          {unlocked && hasMoments && (
             <Text style={s.captureFirstText}>Fin du suspens, accèdes à ton Reveal !</Text>
           )}
+          {unlocked && !hasMoments && (
+            <Text style={s.captureFirstText}>Aucun moment à révéler cette fois</Text>
+          )}
           {unlocked ? (
-            <UnlockSlider onUnlock={startReveal} />
+            hasMoments ? (
+              <UnlockSlider onUnlock={startReveal} />
+            ) : (
+              // Reveal atteint mais aucun moment → indisponible, cadenas (icon/neutral/default)
+              <View style={s.countdown}>
+                <Text style={s.countdownText}>Indisponible</Text>
+                <Icon name="lock" size={24} color={colors.iconNeutral} />
+              </View>
+            )
           ) : (
             <View style={s.countdown}>
               <RevealCountdown revealDate={revealDate} textStyle={s.countdownText} />

@@ -102,8 +102,8 @@ const SliderCard = memo(function SliderCard({
           <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.45)" }]} pointerEvents="none" />
         </>
       ) : (
-        // Aucun moment → background/default/default (forcé dark via ForceThemeMode)
-        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.bg }]} />
+        // Aucun moment → background/default/secondary (forcé dark via ForceThemeMode)
+        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.card }]} />
       )}
 
       <View style={s.cardContent}>
@@ -135,13 +135,27 @@ const SliderCard = memo(function SliderCard({
           <Text style={s.unlockHint}>
             {unlocked ? "Ouvre ton groupe pour le déverrouiller" : "Encore un peu de patience..."}
           </Text>
-          <View style={[s.countdown, unlocked && { borderColor: colors.borderBrandTertiary }]}>
+          {/* border/default/default sur le bouton (state "disponible" comme "indisponible") */}
+          <View style={s.countdown}>
             {unlocked ? (
-              <Text style={s.countdownText}>Disponible</Text>
+              card.momentCount > 0 ? (
+                <>
+                  <Text style={s.countdownText}>Disponible</Text>
+                  <Icon name="unlock" size={24} color={colors.iconBrandTertiary} />
+                </>
+              ) : (
+                // Reveal atteint mais aucun moment → indisponible, icône cadenas (icon/neutral/default)
+                <>
+                  <Text style={s.countdownText}>Indisponible</Text>
+                  <Icon name="lock" size={24} color={colors.iconNeutral} />
+                </>
+              )
             ) : (
-              <RevealCountdown revealDate={revealDate} textStyle={s.countdownText} />
+              <>
+                <RevealCountdown revealDate={revealDate} textStyle={s.countdownText} />
+                <Icon name="lock" size={24} color={colors.icon} />
+              </>
             )}
-            <Icon name={unlocked ? "unlock" : "lock"} size={24} color={unlocked ? colors.iconBrandTertiary : colors.icon} />
           </View>
         </View>
       </View>
@@ -161,7 +175,7 @@ export default function GroupsSlider({ cards, revealDate, onSelect, showActiveBo
 
   // Slider geometry — peek 1/10 sur chaque côté (identique aux défis)
   const gap = spacing.xl;
-  const cardWidth = (screenWidth - 2 * gap) / 1.2;
+  const cardWidth = (screenWidth - 2 * gap) / 1.2 + 30; // +15px de chaque côté
   const sideMargin = (screenWidth - cardWidth) / 2;
   const snapInterval = cardWidth + gap;
 
