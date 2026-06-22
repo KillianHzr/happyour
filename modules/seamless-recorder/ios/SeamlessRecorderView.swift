@@ -1,5 +1,7 @@
 import ExpoModulesCore
 import AVFoundation
+import CoreImage
+import UIKit
 
 public class SeamlessRecorderView: ExpoView {
   // MARK: - Session
@@ -29,6 +31,12 @@ public class SeamlessRecorderView: ExpoView {
   // MARK: - Photo
   private var pendingPhotoPromise: Promise?
   private var currentFlashMode: AVCaptureDevice.FlashMode = .off
+
+  // MARK: - Snapshot (gel de preview)
+  // Dernière frame vidéo reçue, pour produire un "gel" instantané de la preview.
+  private var latestVideoBuffer: CMSampleBuffer?
+  private let snapshotLock = NSLock()
+  private lazy var snapshotContext = CIContext()
 
   // MARK: - Zoom
   // Facteur de zoom "device" correspondant au 1x affiché. Sur un objectif virtuel
@@ -228,6 +236,40 @@ public class SeamlessRecorderView: ExpoView {
     }
   }
 
+  // Gel de preview : encode la dernière frame vidéo en JPEG et renvoie son URI.
+  // Quasi instantané (pas de capture photo haute résolution) → sert à figer l'écran
+  // à l'appui, avant que la vraie photo soit prête.
+  func snapshotPreview(promise: Promise) {
+    snapshotLock.lock()
+    let buffer = latestVideoBuffer
+    snapshotLock.unlock()
+    guard let buffer, let pixelBuffer = CMSampleBufferGetImageBuffer(buffer) else {
+      promise.reject("SNAPSHOT_ERROR", "No frame available"); return
+    }
+    var ci = CIImage(cvPixelBuffer: pixelBuffer)
+    // La preview est en miroir pour la caméra avant, mais pas les buffers → on miroir ici
+    // pour que le gel corresponde exactement à ce que voit l'utilisateur.
+    if currentCameraPosition == .front {
+      ci = ci.transformed(by: CGAffineTransform(scaleX: -1, y: 1))
+      ci = ci.transformed(by: CGAffineTransform(translationX: ci.extent.width, y: 0))
+    }
+    guard let cg = snapshotContext.createCGImage(ci, from: ci.extent) else {
+      promise.reject("SNAPSHOT_ERROR", "Render failed"); return
+    }
+    let image = UIImage(cgImage: cg)
+    guard let data = image.jpegData(compressionQuality: 0.85) else {
+      promise.reject("SNAPSHOT_ERROR", "Encode failed"); return
+    }
+    let url = URL(fileURLWithPath: NSTemporaryDirectory())
+      .appendingPathComponent("snap_\(Int(Date().timeIntervalSince1970 * 1000)).jpg")
+    do {
+      try data.write(to: url)
+      promise.resolve(url.absoluteString)
+    } catch {
+      promise.reject("SNAPSHOT_ERROR", error.localizedDescription)
+    }
+  }
+
   func capturePhoto(promise: Promise) {
     sessionQueue.async { [weak self] in
       guard let self else { return }
@@ -381,8 +423,14 @@ extension SeamlessRecorderView: AVCaptureVideoDataOutputSampleBufferDelegate,
   public func captureOutput(_ output: AVCaptureOutput,
                              didOutput sampleBuffer: CMSampleBuffer,
                              from connection: AVCaptureConnection) {
-    guard isWriting, let writer = assetWriter else { return }
     let isVideo = output is AVCaptureVideoDataOutput
+    // Mémorise la dernière frame vidéo pour le gel de preview (snapshotPreview), uniquement
+    // hors enregistrement : le gel ne sert qu'en mode PHOTO, et on évite ainsi de retenir un
+    // buffer du pool pendant le hot path d'enregistrement.
+    if isVideo && !isWriting {
+      snapshotLock.lock(); latestVideoBuffer = sampleBuffer; snapshotLock.unlock()
+    }
+    guard isWriting, let writer = assetWriter else { return }
     guard let normalised = normalise(sampleBuffer, isVideo: isVideo) else { return }
     let pts = CMSampleBufferGetPresentationTimeStamp(normalised)
     if writer.status == .unknown { writer.startWriting(); writer.startSession(atSourceTime: pts) }

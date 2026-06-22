@@ -29,6 +29,16 @@ public class SeamlessRecorderModule: Module {
       }
     }
 
+    AsyncFunction("snapshotPreview") { (viewTag: Int, promise: Promise) in
+      DispatchQueue.main.async {
+        guard let view = self.appContext?.findView(withTag: viewTag, ofType: SeamlessRecorderView.self) else {
+          promise.reject("VIEW_NOT_FOUND", "SeamlessRecorderView not found for tag \(viewTag)")
+          return
+        }
+        view.snapshotPreview(promise: promise)
+      }
+    }
+
     AsyncFunction("startRecording") { (viewTag: Int, promise: Promise) in
       DispatchQueue.main.async {
         guard let view = self.appContext?.findView(withTag: viewTag, ofType: SeamlessRecorderView.self) else {

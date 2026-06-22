@@ -9,6 +9,8 @@ const NativeModule = requireNativeModule('SeamlessRecorder');
 export interface SeamlessRecorderRef {
   /** iOS: single session, zero post-processing. Android: restarts clip per switch, concats at end. */
   capturePhoto(): Promise<string>;
+  /** Gel de preview : URI d'un JPEG de la frame courante (quasi instantané). */
+  snapshotPreview(): Promise<string>;
   startRecording(): Promise<void>;
   stopRecording(): Promise<string>;
   switchCamera(): Promise<void>;
@@ -40,6 +42,10 @@ const SeamlessRecorder = forwardRef<SeamlessRecorderRef, SeamlessRecorderProps>(
     useImperativeHandle(ref, () => ({
       capturePhoto: async (): Promise<string> => {
         return NativeModule.capturePhoto(getTag());
+      },
+
+      snapshotPreview: async (): Promise<string> => {
+        return NativeModule.snapshotPreview(getTag());
       },
 
       startRecording: async () => {

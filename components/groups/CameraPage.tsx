@@ -298,6 +298,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const [isZoomDragging, setIsZoomDragging] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [capturing, setCapturing] = useState(false);
+  // Gel de la preview à l'appui photo : URI du JPEG figé + opacité du flou (monte sur 200ms).
+  const [frozenUri, setFrozenUri] = useState<string | null>(null);
+  const freezeBlurAnim = useRef(new Animated.Value(0)).current;
   const [isEditingCaption, setIsEditingCaption] = useState(false);
   const isEditingCaptionRef = useRef(false);
   const captionEditInputRef = useRef<any>(null);
@@ -1185,17 +1188,39 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     if (capturing) return;
     if (isRecording) return;
     setCapturing(true);
+    // Gel NON BLOQUANT : on capture la frame courante en parallèle ; dès qu'elle arrive on
+    // l'affiche figée et on fait monter le flou (200ms). Ça n'attend RIEN et n'impacte jamais
+    // la vitesse de la photo. Le gel reste visible jusqu'à ce que la preview soit peinte
+    // (nettoyé via onLoad de l'Image de preview, + sécurité ci-dessous).
+    freezeBlurAnim.setValue(0);
+    seamlessRecorderRef.current?.snapshotPreview?.()
+      .then((snap) => {
+        if (snap) {
+          setFrozenUri(snap);
+          Animated.timing(freezeBlurAnim, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+        }
+      })
+      .catch(() => { /* pas de gel dispo (vieux build natif) → on continue sans */ });
+    // Sécurité : si la preview ne se charge jamais (échec), on retire le gel après 4s.
+    const freezeSafety = setTimeout(() => setFrozenUri(null), 4000);
     try {
       const uri = await seamlessRecorderRef.current?.capturePhoto();
       if (uri) {
-        // Pas de flip ici (bloquant) : on garde l'uri brute, on affiche la preview en
-        // miroir via transform, et le flip réel est fait à l'envoi (async, non bloquant).
+        // Affichage IMMÉDIAT de la preview (aucun prefetch bloquant). Le gel/placeholder
+        // couvre le court décodage. Le flip front réel est fait à l'envoi (async).
         saveToSlot({ mode: "PHOTO", uri, audioUri: null, textContent: "", note: "", mirror: facing === "front" });
+      } else {
+        clearTimeout(freezeSafety);
+        setFrozenUri(null);
       }
     } catch (e: any) {
       console.error("Capture error:", e);
+      clearTimeout(freezeSafety);
+      setFrozenUri(null);
       Alert.alert("Erreur", "Impossible de prendre la photo.");
-    } finally { setCapturing(false); }
+    } finally {
+      setCapturing(false);
+    }
   };
 
   const toggleGroup = (gId: string) => {
@@ -1661,6 +1686,19 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                       style={StyleSheet.absoluteFillObject}
                     />
                   )}
+                  {/* Gel à l'appui photo : la frame capturée (snapshotPreview) est affichée FIGÉE
+                      et nette, et le flou monte progressivement par-dessus (200ms). La caméra
+                      live tourne dessous mais est masquée par ce gel → plus aucun mouvement visible. */}
+                  {frozenUri && (
+                    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+                      <Image source={{ uri: frozenUri }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} cachePolicy="memory-disk" />
+                      <Animated.View style={[StyleSheet.absoluteFill, { opacity: freezeBlurAnim }]}>
+                        <BlurView intensity={60} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} />
+                        {/* Android n'a pas le flou (blurMethod "none") → voile plus marqué pour garder l'effet flouté. */}
+                        <View style={[StyleSheet.absoluteFill, { backgroundColor: Platform.OS === "ios" ? "rgba(0,0,0,0.15)" : "rgba(0,0,0,0.4)" }]} />
+                      </Animated.View>
+                    </View>
+                  )}
                 </View>
                 {/* Pinch-to-zoom (parent captures 2-finger before child Pressable sees them) */}
                 <View
@@ -1913,7 +1951,19 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               </View>
             )}
             {previewSlot.mode === "PHOTO" && (
-              <Image source={{ uri: previewSlot.uri ?? "" }} style={[{ width: "100%", height: "100%" }, previewSlot.mirror && { transform: [{ scaleX: -1 }] }]} contentFit="cover" />
+              <Image
+                source={{ uri: previewSlot.uri ?? "" }}
+                style={[{ width: "100%", height: "100%" }, previewSlot.mirror && { transform: [{ scaleX: -1 }] }]}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={0}
+                recyclingKey={previewSlot.uri}
+                // Le gel sert de placeholder → la preview s'affiche instantanément, puis la
+                // photo HD se substitue. (Pas en façade pour éviter un double miroir.)
+                placeholder={frozenUri && !previewSlot.mirror ? { uri: frozenUri } : undefined}
+                placeholderContentFit="cover"
+                onLoad={() => setFrozenUri(null)}
+              />
             )}
 
 
@@ -2670,7 +2720,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   processingText: { color: colors.secondary, fontFamily: typography.family.semibold, fontSize: typography.size.sm },
   // Preview unifié (même layout que capture : 9:16, ancré en bas)
   previewFullContainer: { flex: 1, backgroundColor: colors.bg },
-  previewMediaFrame: { aspectRatio: 9 / 16, overflow: "hidden", borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, alignSelf: "center" },
+  previewMediaFrame: { aspectRatio: 9 / 16, overflow: "hidden", borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, alignSelf: "center", backgroundColor: "#000" },
   previewSendArea: { height: NAVBAR_HEIGHT, backgroundColor: colors.bg, paddingHorizontal: spacing.lg, paddingTop: spacing.lg, justifyContent: "flex-start" },
   // Texte du bouton zoom cyclique : single-line/body-small-strong, text/default/default
   zoomPresetText: { ...textStyles.singleLineBodySmallStrong, color: colors.text },
