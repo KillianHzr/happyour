@@ -11,8 +11,10 @@ import { Reaction } from "../../lib/feed-types";
 // horizontal edges: a negative inset pokes them out past each side. Vertical position is
 // a percentage so it follows the frame as it resizes, with no measuring.
 const EDGE_OVERHANG = 40; // px the sticker pokes out past each left/right edge
-const ROW_STEP_PCT = 20;  // vertical gap between stacked stickers on a side (% of height)
+const ROW_STEP_PCT = 10;  // vertical step between consecutive stickers (% of height);
+                          // sides alternate, so two same-side stickers are 2×ROW_STEP_PCT apart
 const STICKER_FONT_SIZE = typography.size.xxl; // heading/size-base (24)
+const ROTATION = 5; // each sticker is tilted either -ROTATION° or +ROTATION°, chosen at random
 
 // True for emoji/symbol reactions, false for plain text stickers (which is what we
 // render here). Code-point check (no unicode literals) so plain text like "JVBBB" is
@@ -33,10 +35,13 @@ const isEmoji = (str: string) => {
   return false;
 };
 
-function FloatingSticker({ side, topPct, rotation, text, avatarUrl, username, previewScale, sizeFactor, removing, hidden, hiddenSV }: {
-  side: "left" | "right"; topPct: number; rotation: number; text: string; avatarUrl: string | null; username: string; previewScale?: SharedValue<number>; sizeFactor?: SharedValue<number>; removing?: boolean; hidden?: boolean; hiddenSV?: SharedValue<number>;
+function FloatingSticker({ side, topPct, text, avatarUrl, username, previewScale, sizeFactor, removing, hidden, hiddenSV }: {
+  side: "left" | "right"; topPct: number; text: string; avatarUrl: string | null; username: string; previewScale?: SharedValue<number>; sizeFactor?: SharedValue<number>; removing?: boolean; hidden?: boolean; hiddenSV?: SharedValue<number>;
 }) {
   const styles = useThemedStyles(makeStyles);
+  // Random tilt (-ROTATION° or +ROTATION°) picked once per mount, so the same reaction
+  // can land on a different side each time it's shown, but never spins on re-render.
+  const rotation = useMemo(() => (Math.random() < 0.5 ? -ROTATION : ROTATION), []);
   // Scale drives every transition: pop in on mount / when un-hidden (spring), shrink to
   // 0 when hidden (e.g. typing a comment) or being deleted. Runs on mount too, so the
   // initial appearance pops in.
@@ -107,22 +112,19 @@ function FloatingSticker({ side, topPct, rotation, text, avatarUrl, username, pr
 export function ReactionStickers({ reactions, previewScale, sizeFactor, removingUserId, hidden, hiddenSV }: { reactions: Reaction[]; previewScale?: SharedValue<number>; sizeFactor?: SharedValue<number>; removingUserId?: string | null; hidden?: boolean; hiddenSV?: SharedValue<number> }) {
   const text = useMemo(() => reactions.filter((r) => !isEmoji(r.sticker_id)), [reactions]);
   if (text.length === 0) return null;
-  const leftCount = Math.ceil(text.length / 2);
-  const rightCount = text.length - leftCount;
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       {text.map((r, i) => {
         const isLeft = i % 2 === 0;
-        const row = Math.floor(i / 2);
-        const colCount = isLeft ? leftCount : rightCount;
-        // Center each side's column vertically around the middle of the image.
-        const topPct = 50 + (row - (colCount - 1) / 2) * ROW_STEP_PCT;
+        // Single zigzag column: every sticker gets its own vertical slot (by global
+        // index) and alternates side, so left and right never share the same height —
+        // including when there's an even number of stickers.
+        const topPct = 50 + (i - (text.length - 1) / 2) * ROW_STEP_PCT;
         return (
           <FloatingSticker
             key={r.id}
             side={isLeft ? "left" : "right"}
             topPct={topPct}
-            rotation={(isLeft ? -1 : 1) * 6}
             text={r.sticker_id}
             avatarUrl={r.avatar_url ?? null}
             username={r.username ?? ""}

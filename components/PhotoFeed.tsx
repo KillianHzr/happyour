@@ -40,7 +40,7 @@ import { VideoMoment } from "./organisms/VideoMoment";
 import { RevealIntroPage } from "./organisms/RevealIntroPage";
 import { CrownRevealPage } from "./organisms/CrownRevealPage";
 import { RevealEndPage } from "./organisms/RevealEndPage";
-import { RefreshIcon } from "./atoms/RefreshIcon";
+import { ReplayIcon } from "./atoms/ReplayIcon";
 import { BottomActionBar } from "./molecules/BottomActionBar";
 import { AnimatedPageWrapper } from "./molecules/AnimatedPageWrapper";
 import { StickerToast } from "./atoms/StickerToast";
@@ -225,15 +225,22 @@ const PhotoFeedContent = forwardRef(({
     reactionToastAnim.setValue(0);
     RNAnimated.spring(reactionToastAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 10 }).start();
     reactionToastTimer.current = setTimeout(() => {
-      RNAnimated.timing(reactionToastAnim, {
-        toValue: 0,
-        duration: 250,
-        useNativeDriver: true,
-        easing: RNEasing.in(RNEasing.quad),
-      }).start(({ finished }) => {
-        if (finished) setReactionToast(null);
-      });
+      hideReactionToast();
     }, 2200);
+  }, [reactionToastAnim]);
+
+  // Animates the reaction toast out + clears it. Reused by the auto-dismiss timer
+  // and the toast's X close button.
+  const hideReactionToast = useCallback(() => {
+    if (reactionToastTimer.current) clearTimeout(reactionToastTimer.current);
+    RNAnimated.timing(reactionToastAnim, {
+      toValue: 0,
+      duration: 250,
+      useNativeDriver: true,
+      easing: RNEasing.in(RNEasing.quad),
+    }).start(({ finished }) => {
+      if (finished) setReactionToast(null);
+    });
   }, [reactionToastAnim]);
 
   // On close: hide the stickers (no lingering) and reset the delete state.
@@ -245,8 +252,13 @@ const PhotoFeedContent = forwardRef(({
 
   const handleStickerPosted = useCallback((text: string) => {
     const me = members.find((m: any) => m.user_id === currentUserId);
+    // Clear any lingering "removing" flag so a post right after a delete pops in
+    // instead of being stuck in the shrink-out state.
+    setRemovingReactionUserId(null);
     setPoppedReaction({
-      id: "optimistic-sticker",
+      // Unique id per post so the sticker remounts and re-plays its pop animation
+      // even when reacting twice in a row without closing the sheet.
+      id: `optimistic-${Date.now()}`,
       user_id: currentUserId ?? "",
       username: currentUsername ?? me?.username ?? "",
       avatar_url: currentUserAvatarUrl ?? me?.avatar_url ?? null,
@@ -676,8 +688,8 @@ const PhotoFeedContent = forwardRef(({
               primaryLabel={endPrimaryLabel ?? "Retour à la capture"}
               onPrimaryPress={() => onBackToCapture?.()}
               secondary={{
-                key: "refresh-btn",
-                icon: <RefreshIcon size={24} color={colors.brand} />,
+                key: "replay-btn",
+                icon: <ReplayIcon size={24} color={colors.brand} />,
                 onPress: () => {
                   try {
                     flatListRef.current?.scrollToIndex({ index: 0, animated: true });
@@ -796,6 +808,7 @@ const PhotoFeedContent = forwardRef(({
           onModeChange={(m) => setActiveModalMode(m)}
           onStickerPosted={handleStickerPosted}
           onStickerDeleted={handleStickerDeleted}
+          onToast={showReactionToast}
           onSeen={(pid) => {
             if (onOpenComments) {
               onOpenComments(pid, activePhotoOwnerId);
@@ -811,7 +824,7 @@ const PhotoFeedContent = forwardRef(({
 
       {/* Reaction add/delete toast, on the main feed (after the sheet closes). */}
       {reactionToast !== null && (
-        <StickerToast message={reactionToast} animValue={reactionToastAnim} topInset={insets.top} />
+        <StickerToast message={reactionToast} animValue={reactionToastAnim} topInset={insets.top} onClose={hideReactionToast} />
       )}
     </View>
   );

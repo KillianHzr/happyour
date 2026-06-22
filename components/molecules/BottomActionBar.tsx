@@ -89,7 +89,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     backgroundColor: colors.bg,
     flexDirection: "row",
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
+    paddingTop: 11,
     gap: spacing.md,
     alignItems: "flex-start",
     zIndex: 10,

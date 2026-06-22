@@ -78,6 +78,7 @@ export const CommentInput = ({
   const styles = useThemedStyles(makeStyles);
   const isDisabled = (!isStickerMode && !content.trim()) || submitting;
 
+  const [isFocused, setIsFocused] = useState(false);
   const borderOpacity = useRef(new Animated.Value(0)).current;
   const isStickerModeRef = useRef(isStickerMode);
   useEffect(() => { isStickerModeRef.current = isStickerMode; }, [isStickerMode]);
@@ -94,6 +95,16 @@ export const CommentInput = ({
         inputRef.current?.focus();
       }, 50);
       return () => clearTimeout(timer);
+    }
+  }, [isStickerMode]);
+
+  // Leaving sticker mode (e.g. returning to the comments view after posting/deleting
+  // a reaction): the input is still flagged focused from sticker mode, which keeps the
+  // sticker button hidden. Blur it and clear the focus flag so the button reappears.
+  useEffect(() => {
+    if (!isStickerMode) {
+      inputRef.current?.blur();
+      setIsFocused(false);
     }
   }, [isStickerMode]);
 
@@ -177,10 +188,12 @@ export const CommentInput = ({
           spellCheck={!isStickerMode}
           blurOnSubmit={!isStickerMode}
           onFocus={() => {
+            setIsFocused(true);
             Animated.timing(borderOpacity, { toValue: 1, duration: 150, useNativeDriver: true }).start();
             onFocus?.();
           }}
           onBlur={() => {
+            setIsFocused(false);
             Animated.timing(borderOpacity, { toValue: 0, duration: 150, useNativeDriver: true }).start();
             onBlur?.();
             // Re-focus immediately so Android back / iOS return can't escape the sticker input.
@@ -225,7 +238,7 @@ export const CommentInput = ({
           </TouchableOpacity>
         ) : null}
       </View>
-      {!isStickerMode && (
+      {!isStickerMode && !isFocused && (
         <TouchableOpacity
           style={[
             styles.placeholderBtn,
@@ -273,8 +286,8 @@ export const MentionSuggestionsPopup = ({
 
   return (
     <View style={styles.popup}>
-      {/* Fond glass : uniquement le flou */}
-      <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+      {/* Fond glass : flou clair pur (pas d'overlay sombre). */}
+      <BlurView intensity={40} tint="light" style={StyleSheet.absoluteFill} pointerEvents="none" />
       {filtered.map((member) => (
         <Pressable
           key={member.user_id}
@@ -328,7 +341,7 @@ const makeStyles = (colors: ThemeColors) =>
       backgroundColor: colors.card,
       borderRadius: themeRadii.lg,
       paddingLeft: themeSpacing.md,
-      paddingRight: themeSpacing.sm,
+      paddingRight: themeSpacing.md,
       paddingTop: 8,
       paddingBottom: 8,
       gap: themeSpacing.lg,

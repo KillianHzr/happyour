@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet,
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
@@ -171,12 +172,13 @@ export default function ProfileSettingsPage({ username, avatarUrl, email, onUser
     focusedField === field ? colors.borderBrandSecondary : colors.cardBorder;
 
   return (
-    <ScrollView
+    <KeyboardAwareScrollView
       style={{ flex: 1 }}
       contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]}
       showsVerticalScrollIndicator={false}
       alwaysBounceVertical={false}
       keyboardShouldPersistTaps="handled"
+      bottomOffset={36}
     >
       {/* ── I. Avatar ── */}
       <View style={styles.inputField}>
@@ -268,7 +270,7 @@ export default function ProfileSettingsPage({ username, avatarUrl, email, onUser
           />
         </View>
       </View>
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 

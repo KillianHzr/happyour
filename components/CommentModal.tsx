@@ -92,6 +92,14 @@ interface CommentModalProps {
   /** Fires when the user's text sticker is deleted (empty submit) — lets the parent
    *  shrink it out + show the toast before the sheet closes. */
   onStickerDeleted?: () => void;
+  /**
+   * Shows a toast from the *parent* instead of inside the sheet. The in-sheet toast is
+   * torn down the moment the modal closes; routing it up to a parent-owned toast (which
+   * outlives the sheet) lets confirmations like "Commentaire Ajouté" stay visible even
+   * if the user closes the comments immediately. Falls back to the in-sheet toast when
+   * not provided (e.g. archives / standalone contexts).
+   */
+  onToast?: (message: string) => void;
   photoId: string;
   photoOwnerId: string;
   reactions?: Reaction[];
@@ -196,6 +204,7 @@ function CommentModalContent({
   onModeChange,
   onStickerPosted,
   onStickerDeleted,
+  onToast,
   photoId,
   photoOwnerId,
   reactions = [],
@@ -550,20 +559,33 @@ function CommentModalContent({
   // actions that stay inside the sheet, e.g. deleting a comment.
   const toastHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showToast = (message: string) => {
+    // Prefer the parent-owned toast (outlives the sheet) when available, so the
+    // confirmation doesn't vanish if the user closes the comments right away.
+    if (onToast) {
+      onToast(message);
+      return;
+    }
     if (toastHideTimer.current) clearTimeout(toastHideTimer.current);
     setToastMessage(message);
     toastAnim.setValue(0);
     Animated.spring(toastAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 10 }).start();
     toastHideTimer.current = setTimeout(() => {
-      Animated.timing(toastAnim, {
-        toValue: 0,
-        duration: 250,
-        useNativeDriver: true,
-        easing: Easing.in(Easing.quad),
-      }).start(({ finished }) => {
-        if (finished) setToastMessage(null);
-      });
+      hideToast();
     }, 2000);
+  };
+
+  // Animates the toast out + clears it. Reused by the auto-dismiss timer and the
+  // toast's X close button.
+  const hideToast = () => {
+    if (toastHideTimer.current) clearTimeout(toastHideTimer.current);
+    Animated.timing(toastAnim, {
+      toValue: 0,
+      duration: 250,
+      useNativeDriver: true,
+      easing: Easing.in(Easing.quad),
+    }).start(({ finished }) => {
+      if (finished) setToastMessage(null);
+    });
   };
 
   // ── Pan responder (drag to dismiss) ──────────────────────────────────────────
@@ -657,15 +679,33 @@ function CommentModalContent({
       // and a toast on the MAIN feed once the sheet closes. Other contexts (no callbacks)
       // fall back to an in-modal toast. Keyboard stays up during the wait.
       if (isDelete) {
+        // Single toast, fired immediately: the parent (reveal feed) shows it on the
+        // main feed (visible over the sheet); other contexts fall back to in-modal.
         if (onStickerDeleted) onStickerDeleted();
         else showToast("Réaction supprimé");
         if (gracefulCloseTimer.current) clearTimeout(gracefulCloseTimer.current);
-        gracefulCloseTimer.current = setTimeout(() => gracefulClose(), STICKER_DELETE_MS);
+        // After the shrink animation, return to the open comments view instead of
+        // closing the whole sheet (mirrors the post-sticker behaviour below).
+        gracefulCloseTimer.current = setTimeout(() => {
+          setMode("comment");
+          Keyboard.dismiss();
+        }, STICKER_DELETE_MS);
       } else {
+        // Single toast, fired immediately (see above). Also registers the optimistic
+        // pop on the post above the sheet (reveal feed).
         if (onStickerPosted) onStickerPosted(text);
         else showToast("Réaction Ajouté");
         if (gracefulCloseTimer.current) clearTimeout(gracefulCloseTimer.current);
-        gracefulCloseTimer.current = setTimeout(() => gracefulClose(), STICKER_POP_MS);
+        // After the post-pop animation, return to the open comments view instead of
+        // closing the whole sheet. Drop the keyboard and switch back to comment mode
+        // so the sheet eases up to the full comment list. setMode runs first so the
+        // input is no longer in sticker mode when Keyboard.dismiss() blurs it —
+        // otherwise CommentInput's sticker-mode onBlur would re-focus and fight the
+        // keyboard retraction.
+        gracefulCloseTimer.current = setTimeout(() => {
+          setMode("comment");
+          Keyboard.dismiss();
+        }, STICKER_POP_MS);
       }
       return;
     }
@@ -710,10 +750,15 @@ function CommentModalContent({
       .eq("user_id", user.id)
       .then(({ error }) => { if (error) console.error("Error deleting reaction:", error); });
     setContent("");
+    // Single toast, fired immediately (parent on the feed, or in-modal fallback).
     if (onStickerDeleted) onStickerDeleted();
     else showToast("Réaction supprimée");
     if (gracefulCloseTimer.current) clearTimeout(gracefulCloseTimer.current);
-    gracefulCloseTimer.current = setTimeout(() => gracefulClose(), STICKER_DELETE_MS);
+    // After the shrink animation, return to the open comments view instead of closing.
+    gracefulCloseTimer.current = setTimeout(() => {
+      setMode("comment");
+      Keyboard.dismiss();
+    }, STICKER_DELETE_MS);
   }, [user, photoId, onStickerDeleted]);
 
   const handleDeleteComment = async (commentId: string) => {
@@ -801,7 +846,7 @@ function CommentModalContent({
           />
 
           {toastMessage !== null && (
-            <StickerToast message={toastMessage} animValue={toastAnim} topInset={insets.top} />
+            <StickerToast message={toastMessage} animValue={toastAnim} topInset={insets.top} onClose={hideToast} />
           )}
 
           {deletePopup && (
@@ -871,7 +916,7 @@ function CommentModalContent({
       </View>
 
       {toastMessage !== null && (
-        <StickerToast message={toastMessage} animValue={toastAnim} topInset={insets.top} />
+        <StickerToast message={toastMessage} animValue={toastAnim} topInset={insets.top} onClose={hideToast} />
       )}
 
       {/* Delete popup — rendered last so it paints above stickers and the sheet */}
@@ -1056,7 +1101,7 @@ function CommentModalBody({
             onSubmit={handleSubmit}
             submitting={submitting}
             maxLength={mode === "sticker" ? 8 : undefined}
-            placeholder={mode === "sticker" ? "Ton message..." : undefined}
+            placeholder={mode === "sticker" ? "Ajouter un sticker" : undefined}
             autoCapitalize={mode === "sticker" ? "none" : undefined}
             isStickerMode={mode === "sticker"}
             onStickerToggle={onStickerToggle}
