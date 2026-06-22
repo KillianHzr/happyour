@@ -32,6 +32,7 @@ import BlurView from "./atoms/BlurView";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../lib/auth-context";
+import { notifyReaction } from "../lib/notifications";
 import { CommentItem, Comment, CommentRect } from "./molecules/CommentItem";
 import { DeleteCommentPopup } from "./atoms/DeleteCommentPopup";
 import { CommentInput, MentionSuggestionsPopup, GroupMember } from "./molecules/CommentInput";
@@ -645,6 +646,11 @@ function CommentModalContent({
             { onConflict: "photo_id,user_id" }
           )
           .then(({ error }) => { if (error) console.error("Error posting sticker:", error); });
+        // Notify the moment's owner (self-guarded if you react to your own moment).
+        if (photoOwnerId) {
+          const reactorName = fetchedGroupMembers.find((m: any) => m.user_id === user.id)?.username ?? "Quelqu'un";
+          notifyReaction(photoOwnerId, reactorName, text, "", user.id).catch(() => {});
+        }
       }
       setContent("");
       // Reveal feed: the parent (PhotoFeed) handles the on-post animation (pop / shrink)
@@ -683,6 +689,11 @@ function CommentModalContent({
       setContent("");
       Keyboard.dismiss();
       showToast("Commentaire Ajouté");
+      // Notify the moment's owner that someone commented (self-guarded inside notifyReaction).
+      if (photoOwnerId) {
+        const reactorName = fetchedGroupMembers.find((m: any) => m.user_id === user.id)?.username ?? "Quelqu'un";
+        notifyReaction(photoOwnerId, reactorName, "", "", user.id).catch(() => {});
+      }
     } catch (err) {
       console.error("Error posting comment:", err);
     } finally {

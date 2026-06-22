@@ -171,7 +171,10 @@ export async function cancelAllRecapNotifications() {
         n.identifier.startsWith("countdown_") ||
         n.identifier.startsWith("reactions_") ||
         n.identifier.startsWith("post_reminder_") ||
-        n.identifier.startsWith("challenge_24h_")
+        n.identifier.startsWith("challenge_24h_") ||
+        n.identifier.startsWith("challenge_4h_") ||
+        n.identifier.startsWith("challenge_available_") ||
+        n.identifier.startsWith("reveal_")
       ) {
         await Notifications.cancelScheduledNotificationAsync(n.identifier);
       }
@@ -195,8 +198,8 @@ export async function scheduleChallenge24hReminder(
     await Notifications.scheduleNotificationAsync({
       identifier: `challenge_24h_${groupId}_${deadline.getTime()}`,
       content: {
-        title: groupName,
-        body: "Plus que 24H pour participer au défis",
+        title: "Tic, tac...",
+        body: "Plus que 24H pour participer au défi !",
         data: { type: "new_photo", groupId },
         channelId: "default",
       },
@@ -204,6 +207,32 @@ export async function scheduleChallenge24hReminder(
     });
   } catch (e) {
     console.warn("scheduleChallenge24hReminder error:", e);
+  }
+}
+
+export async function scheduleChallenge4hReminder(
+  groupId: string,
+  groupName: string,
+  deadline: Date
+) {
+  if (!Notifications) return;
+  const now = new Date();
+  const fourHoursBefore = new Date(deadline.getTime() - 4 * 3600 * 1000);
+  const secondsUntil = Math.floor((fourHoursBefore.getTime() - now.getTime()) / 1000);
+  if (secondsUntil <= 0) return;
+  try {
+    await Notifications.scheduleNotificationAsync({
+      identifier: `challenge_4h_${groupId}_${deadline.getTime()}`,
+      content: {
+        title: "Tic, tac...",
+        body: "Plus que 4H pour participer au défi !",
+        data: { type: "new_photo", groupId },
+        channelId: "default",
+      },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: secondsUntil },
+    });
+  } catch (e) {
+    console.warn("scheduleChallenge4hReminder error:", e);
   }
 }
 
@@ -262,6 +291,78 @@ export async function scheduleCountdownNotification(
   }
 }
 
+// Reveal milestones — scheduled ONCE (not per group): every group reveals at the same global
+// time, so a single notification per milestone avoids spamming N identical pushes to a user in
+// N groups. Copy is intentionally group-agnostic.
+export async function scheduleRevealNotifications(revealDate: Date) {
+  if (!Notifications) return;
+  const now = new Date();
+  const milestones: { id: string; offsetMs: number; title: string; body: string }[] = [
+    { id: "reveal_24h", offsetMs: 24 * 3600 * 1000, title: "L'attente touche à sa fin", body: "Plus que 24H avant le reveal" },
+    { id: "reveal_4h", offsetMs: 4 * 3600 * 1000, title: "L'attente touche à sa fin", body: "Plus que 4H avant le reveal" },
+    { id: "reveal_available", offsetMs: 0, title: "LE REVEAL EST DISPO !", body: "Découvre le quotidien de tes proches :)" },
+  ];
+  for (const m of milestones) {
+    const sendAt = new Date(revealDate.getTime() - m.offsetMs);
+    const secondsUntil = Math.floor((sendAt.getTime() - now.getTime()) / 1000);
+    if (secondsUntil <= 0) continue;
+    try {
+      await Notifications.scheduleNotificationAsync({
+        identifier: m.id,
+        content: {
+          title: m.title,
+          body: m.body,
+          data: { type: "recap" },
+          channelId: "default",
+        },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: secondsUntil },
+      });
+    } catch (e) {
+      console.warn(`scheduleRevealNotifications (${m.id}) error:`, e);
+    }
+  }
+}
+
+// "Nouveau défi disponible" — scheduled ONCE for all groups (period timing is global).
+//  • Period 1 challenge: 24h after the reveal that opens the week (reveal Sun 20h → Mon 20h).
+//  • Period 2 challenge: the period boundary is Thursday 00:00, but we fire it Thursday at 09:00
+//    (never in the middle of the night).
+export async function scheduleNewChallengeNotifications(revealDate: Date) {
+  if (!Notifications) return;
+  const now = new Date();
+
+  // revealDate is the UPCOMING reveal (end of this week). The week opened at the previous reveal.
+  const weekStart = new Date(revealDate.getTime() - 7 * 24 * 3600 * 1000);
+  const p1At = new Date(weekStart.getTime() + 24 * 3600 * 1000); // Monday 20:00
+
+  const p2At = new Date(revealDate);
+  p2At.setDate(p2At.getDate() - 3); // Thursday
+  p2At.setHours(9, 0, 0, 0);        // Thursday 09:00
+
+  const items = [
+    { id: "challenge_available_p1", at: p1At },
+    { id: "challenge_available_p2", at: p2At },
+  ];
+  for (const it of items) {
+    const secondsUntil = Math.floor((it.at.getTime() - now.getTime()) / 1000);
+    if (secondsUntil <= 0) continue;
+    try {
+      await Notifications.scheduleNotificationAsync({
+        identifier: it.id,
+        content: {
+          title: "L'heure de juger tes potes",
+          body: "Un nouveau défi t'attend, viens !",
+          data: { type: "new_photo" },
+          channelId: "default",
+        },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: secondsUntil },
+      });
+    } catch (e) {
+      console.warn(`scheduleNewChallengeNotifications (${it.id}) error:`, e);
+    }
+  }
+}
+
 export async function schedulePostReminderNotification(
   groupId: string,
   groupName: string,
@@ -314,23 +415,28 @@ export async function scheduleAllRecaps(userId: string) {
     sunday.setDate(sunday.getDate() + 7);
   }
 
+  // Reveal milestones (24h before / 4h before / available) — once for all groups.
+  await scheduleRevealNotifications(sunday);
+  // New-challenge notifications (period 1 & 2) — once for all groups.
+  await scheduleNewChallengeNotifications(sunday);
+
   for (const m of memberships as any[]) {
     const groupName = m.groups?.name;
     if (groupName) {
-      await scheduleRecapNotification(m.group_id, groupName, sunday);
-      await scheduleCountdownNotification(m.group_id, groupName, sunday);
       await scheduleReactionsReminder(m.group_id, groupName, sunday);
       await schedulePostReminderNotification(m.group_id, groupName, sunday);
-      
-      // Challenges reminders (24h before end of period)
+
+      // Challenges reminders (24h + 4h before end of period)
       // Period 1: Ends Wednesday midnight (Thursday 00:00)
       const p1Deadline = new Date(sunday);
       p1Deadline.setDate(p1Deadline.getDate() - 3);
-      p1Deadline.setHours(0, 0, 0, 0); 
+      p1Deadline.setHours(0, 0, 0, 0);
       await scheduleChallenge24hReminder(m.group_id, groupName, p1Deadline);
-      
+      await scheduleChallenge4hReminder(m.group_id, groupName, p1Deadline);
+
       // Period 2: Ends Sunday 20:00
       await scheduleChallenge24hReminder(m.group_id, groupName, sunday);
+      await scheduleChallenge4hReminder(m.group_id, groupName, sunday);
 
       // Vérification asynchrone de la participation (après 2 jours)
       checkGroupParticipationAndNotify(m.group_id, groupName);
@@ -422,7 +528,7 @@ export async function notifyNewPhoto(
 ) {
   const tokens = await getGroupMemberTokens(groupId, senderId);
   if (tokens.length === 0) return;
-  await sendPushToTokens(tokens, groupName, `${senderName} a partage un moment !`, { type: "new_photo", groupId });
+  await sendPushToTokens(tokens, `${senderName} a parlé !`, `Un nouveau moment dans ${groupName}`, { type: "new_photo", groupId });
 }
 
 // Notify the EXISTING members when someone joins their group. The joiner has already been
@@ -441,7 +547,7 @@ export async function notifyGroupJoin(
     const { data } = await supabase.from("profiles").select("username").eq("id", joinerId).single();
     name = data?.username ?? "Quelqu'un";
   }
-  await sendPushToTokens(tokens, groupName, `${name} a rejoint le groupe !`, { type: "group_join", groupId });
+  await sendPushToTokens(tokens, `${name} est dans la place !`, `Un nouveau membre a rejoint ${groupName}`, { type: "group_join", groupId });
 }
 
 export async function notifyGroupInvite(
@@ -466,7 +572,7 @@ export async function notifyReaction(
     const { data } = await supabase.from("profiles").select("expo_push_token").eq("id", photoOwnerId).single();
     const token = data?.expo_push_token;
     if (!token) return;
-    await sendPushToTokens([token], groupName, `${reactorName} a réagi à ton moment ${sticker}`);
+    await sendPushToTokens([token], `${reactorName} a réagi !`, "Viens voir les dernières réactions", { type: "new_photo", groupName });
   } catch (e) {
     console.warn("[Notif] notifyReaction error:", e);
   }
@@ -512,6 +618,43 @@ export async function cancelFirstMomentReminder(groupId: string) {
   try {
     await Notifications.cancelScheduledNotificationAsync(`first_moment_${groupId}`);
   } catch (_) {}
+}
+
+// ── "Tu dors ?" — fires 24h after the user's LAST share. Call it on every successful upload:
+// it cancels the previous one and re-arms +24h, so it only fires if the user goes 24h without
+// sharing. Clamped to daytime (9h–22h) so it never lands in the middle of the night.
+export async function scheduleNoShareReminder() {
+  if (!Notifications) return;
+  try {
+    await Notifications.cancelScheduledNotificationAsync("no_share_24h");
+  } catch (_) {}
+
+  const now = new Date();
+  const sendAt = new Date(now.getTime() + 24 * 3600 * 1000);
+  const h = sendAt.getHours();
+  if (h < 9) {
+    sendAt.setHours(9, 0, 0, 0);
+  } else if (h >= 22) {
+    sendAt.setDate(sendAt.getDate() + 1);
+    sendAt.setHours(9, 0, 0, 0);
+  }
+
+  const secondsUntil = Math.floor((sendAt.getTime() - now.getTime()) / 1000);
+  if (secondsUntil <= 0) return;
+  try {
+    await Notifications.scheduleNotificationAsync({
+      identifier: "no_share_24h",
+      content: {
+        title: "Tu dors ?",
+        body: "24H que tu n'as rien partagé",
+        data: { type: "new_photo" },
+        channelId: "default",
+      },
+      trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: secondsUntil },
+    });
+  } catch (e) {
+    console.warn("scheduleNoShareReminder error:", e);
+  }
 }
 
 // ── Motivational Notifications ──

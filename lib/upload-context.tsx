@@ -3,7 +3,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { manipulateAsync, FlipType, SaveFormat } from "expo-image-manipulator";
 import { supabase } from "./supabase";
 import { r2Storage } from "./r2";
-import { notifyNewPhoto } from "./notifications";
+import { notifyNewPhoto, scheduleNoShareReminder } from "./notifications";
 
 type UploadStatus = "uploading" | "success" | "error";
 
@@ -209,6 +209,10 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
 
         if (error) throw error;
         setUploads(prev => prev.map(u => u.id === id ? { ...u, status: "success", progress: 100 } : u));
+
+        // Re-arm the "Tu dors ?" reminder: it now fires 24h from THIS share (i.e. only if the
+        // user stays silent for a full day).
+        scheduleNoShareReminder().catch(() => {});
 
         // Notify the OTHER group members that a moment was just shared. This call used to live in
         // the capture flow but was dropped during the snapshot-preview refactor — restoring it

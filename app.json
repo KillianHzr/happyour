@@ -18,7 +18,7 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "26"
+      "buildNumber": "34"
     },
     "android": {
       "package": "com.happyour.app",
@@ -100,7 +100,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "65222b8e-774d-4367-b67b-4f7c9799cac1"
+        "projectId": "052d2842-8a82-4715-a029-68b0a3264e93"
       }
     }
   }
