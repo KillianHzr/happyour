@@ -18,7 +18,7 @@ interface SeamlessRecorderProps {
   facing?: 'front' | 'back';
   /** Photo flash mode. */
   flash?: 'off' | 'on' | 'auto';
-  /** Normalized zoom level 0–1. */
+  /** Absolute display zoom factor: 0.5 = ultra-wide (back lens only), 1 = 1x, 2, 5… Clamped to lens capability natively. */
   zoom?: number;
   /** Video torch / flashlight. */
   torch?: boolean;
@@ -28,7 +28,7 @@ interface SeamlessRecorderProps {
 }
 
 const SeamlessRecorder = forwardRef<SeamlessRecorderRef, SeamlessRecorderProps>(
-  ({ facing = 'back', flash = 'off', zoom = 0, torch = false, videoMode = false, style }, ref) => {
+  ({ facing = 'back', flash = 'off', zoom = 1, torch = false, videoMode = false, style }, ref) => {
     const nativeRef = useRef<React.ElementRef<typeof NativeView>>(null);
 
     const getTag = () => {

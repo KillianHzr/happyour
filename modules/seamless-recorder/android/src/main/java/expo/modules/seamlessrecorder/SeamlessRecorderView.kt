@@ -132,10 +132,21 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
     }
   }
 
+  // `zoom` = facteur d'affichage absolu (0.5 = ultra grand-angle si dispo, 1 = 1x, …).
+  // On utilise setZoomRatio + clamp sur la plage de l'objectif : sur les téléphones dont
+  // la caméra logique inclut l'ultra grand-angle, minZoomRatio < 1 → le 0.5x fonctionne ;
+  // sinon le 0.5x est ramené au min (1x) sans crash.
   fun setZoom(zoom: Double) {
-    val z = zoom.toFloat().coerceIn(0f, 1f)
+    val factor = zoom.toFloat()
     val c = camera
-    if (c != null) c.cameraControl.setLinearZoom(z) else pendingZoom = z
+    if (c != null) applyZoomRatio(c, factor) else pendingZoom = factor
+  }
+
+  private fun applyZoomRatio(c: androidx.camera.core.Camera, factor: Float) {
+    val zs = c.cameraInfo.zoomState.value
+    val min = zs?.minZoomRatio ?: 1f
+    val max = zs?.maxZoomRatio ?: 1f
+    c.cameraControl.setZoomRatio(factor.coerceIn(min, max))
   }
 
   fun setTorch(on: Boolean) {
@@ -232,7 +243,7 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
         videoCapture = null
       }
       Log.d("SeamlessRecorder", "bindCamera OK mode=${if (isVideoMode) "video" else "photo"}")
-      pendingZoom?.let { camera?.cameraControl?.setLinearZoom(it); pendingZoom = null }
+      pendingZoom?.let { f -> camera?.let { applyZoomRatio(it, f) }; pendingZoom = null }
       pendingTorch?.let { camera?.cameraControl?.enableTorch(it); pendingTorch = null }
     } catch (e: Exception) {
       Log.e("SeamlessRecorder", "bindCamera failed: ${e.message}")

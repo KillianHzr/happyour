@@ -57,15 +57,21 @@ const CHALLENGE_GAP = 16;
 const BLUR_METHOD = Platform.OS === "ios" ? ("dimezisBlurView" as const) : ("none" as const);
 // Zone du sélecteur de mode : 80% de l'écran, plafonnée à cette largeur max.
 const MODE_SELECTOR_MAX_WIDTH = 320;
-// Paliers de zoom accessibles via le bouton cyclique.
-// x0.5/x1 → zoom=0 (min), x2 → 0.25, x5 → 1.0 (max).
-const ZOOM_PRESETS = [
-  { label: "x0.5", value: 0 },
-  { label: "x1",   value: 0 },
-  { label: "x2",   value: 0.25 },
-  { label: "x5",   value: 1.0 },
-] as const;
-type ZoomPresetIdx = 0 | 1 | 2 | 3;
+// ── Zoom : facteur d'affichage absolu (et non plus normalisé 0–1) ──
+// La prop `zoom` envoyée au module natif est désormais le facteur affiché à
+// l'utilisateur : 0.5 = ultra grand-angle, 1 = grand-angle, etc. Le natif clamp
+// selon les capacités de l'objectif (l'avant n'a pas d'ultra grand-angle).
+const MAX_ZOOM = 5;          // facteur max (x5)
+const MIN_ZOOM_BACK = 0.5;   // ultra grand-angle dispo sur la caméra arrière
+const MIN_ZOOM_FRONT = 1;    // pas d'ultra grand-angle en façade → min 1x
+const PINCH_ZOOM_SPEED = 0.012; // sensibilité du pinch (en facteur/px)
+const minZoomFor = (f: CameraType) => (f === "front" ? MIN_ZOOM_FRONT : MIN_ZOOM_BACK);
+// Paliers cycliques du bouton zoom (l'avant démarre à 1x faute d'ultra grand-angle).
+const zoomPresetsFor = (f: CameraType): number[] =>
+  f === "front" ? [1, 2, 5] : [0.5, 1, 2, 5];
+const formatZoom = (z: number) => `x${Number.isInteger(z) ? z : z.toFixed(1)}`;
+const nearestPreset = (z: number, presets: number[]) =>
+  presets.reduce((a, b) => (Math.abs(b - z) < Math.abs(a - z) ? b : a), presets[0]);
 // Palette de couleurs du dessin (2 lignes de 7). Défaut = #FF561A.
 const DRAWING_COLORS: string[][] = [
   ["#FFFFFF", "#F23F3A", "#FE76B4", "#FFC548", "#00B487", "#6DD0F0", "#7659FF"],
@@ -203,7 +209,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   useEffect(() => { onScrollLockRef.current = onScrollLock; }, [onScrollLock]);
 
   // Pinch-to-zoom + double-tap refs
-  const savedZoomRef = useRef(0);
+  const savedZoomRef = useRef(1);
   const prevPinchDistRef = useRef<number | null>(null);
   const isPinchingLocalRef = useRef(false);
   const pinchRafRef = useRef<number | null>(null);
@@ -284,8 +290,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [facing, setFacing] = useState<CameraType>("back");
   const [flash, setFlash] = useState<FlashMode>("off");
-  const [zoom, setZoom] = useState(0);
-  const [zoomPresetIdx, setZoomPresetIdx] = useState<ZoomPresetIdx>(1);
+  const [zoom, setZoom] = useState(1); // facteur d'affichage (1 = 1x)
   const [torch, setTorch] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isVideoProcessing, setIsVideoProcessing] = useState(false);
@@ -771,8 +776,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     setShowColorPalette(false);
     setActiveChallenge(null);
     previewMarginBottomAnim.setValue(0);
-    setZoom(0);
-    savedZoomRef.current = 0;
+    setZoom(1);
+    savedZoomRef.current = 1;
     if (isEditingCaptionRef.current) {
       isEditingCaptionRef.current = false;
       setIsEditingCaption(false);
@@ -837,7 +842,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const handleTouchMove = (e: any) => {
     if (!isRecording || startTouchY.current === null) return;
     const diff = startTouchY.current - e.nativeEvent.pageY;
-    setZoom(Math.min(Math.max(diff / 300, 0), 1));
+    const minZ = minZoomFor(facing);
+    const t = Math.min(Math.max(diff / 300, 0), 1);
+    setZoom(minZ + t * (MAX_ZOOM - minZ));
   };
 
   const startVideoRecording = async () => {
@@ -883,9 +890,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   stopVideoRecordingRef.current = stopVideoRecording;
 
   const handleFlipCamera = () => {
-    setZoom(0);
-    savedZoomRef.current = 0;
-    setZoomPresetIdx(1);
+    setZoom(1);
+    savedZoomRef.current = 1;
     // Le flip reconfigure l'AVCaptureSession → la session audio peut se réinitialiser et
     // émettre un événement volume parasite. On arme la suppression pour l'ignorer ~2s.
     armVolumeSuppressionRef.current();
@@ -894,11 +900,11 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   };
 
   const handleZoomPreset = () => {
-    const nextIdx = ((zoomPresetIdx + 1) % ZOOM_PRESETS.length) as ZoomPresetIdx;
-    setZoomPresetIdx(nextIdx);
-    const newZoom = ZOOM_PRESETS[nextIdx].value;
-    setZoom(newZoom);
-    savedZoomRef.current = newZoom;
+    const presets = zoomPresetsFor(facing);
+    // Prochain palier strictement supérieur au zoom courant, sinon on boucle au min.
+    const next = presets.find((p) => p > zoom + 0.01) ?? presets[0];
+    setZoom(next);
+    savedZoomRef.current = next;
   };
 
   const handleFlipCameraRef = useRef(handleFlipCamera);
@@ -920,7 +926,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     const dist = Math.sqrt(dx * dx + dy * dy);
     if (prevPinchDistRef.current !== null) {
       const delta = dist - prevPinchDistRef.current;
-      const next = Math.max(0, Math.min(1, savedZoomRef.current + delta * 0.003));
+      const minZ = minZoomFor(facing);
+      const next = Math.max(minZ, Math.min(MAX_ZOOM, savedZoomRef.current + delta * PINCH_ZOOM_SPEED));
       savedZoomRef.current = next;
       if (pinchRafRef.current === null) {
         pinchRafRef.current = requestAnimationFrame(() => {
@@ -940,8 +947,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       const z = savedZoomRef.current;
       setZoom(z);
       setIsPinching(false);
-      // Sync bouton zoom au palier le plus proche
-      setZoomPresetIdx(z < 0.125 ? 1 : z < 0.625 ? 2 : 3);
+      // Le label du bouton zoom est dérivé de `zoom` (palier le plus proche).
     }
   };
   const handleCamTerminate = () => {
@@ -1679,7 +1685,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                     }}
                   />
                   <CameraControlButton icon="rotate" onPress={handleFlipCamera} />
-                  <ZoomPresetButton label={ZOOM_PRESETS[zoomPresetIdx].label} onPress={handleZoomPreset} />
+                  <ZoomPresetButton label={formatZoom(nearestPreset(zoom, zoomPresetsFor(facing)))} onPress={handleZoomPreset} />
                 </View>
               )}
             </View>

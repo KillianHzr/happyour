@@ -30,6 +30,15 @@ public class SeamlessRecorderView: ExpoView {
   private var pendingPhotoPromise: Promise?
   private var currentFlashMode: AVCaptureDevice.FlashMode = .off
 
+  // MARK: - Zoom
+  // Facteur de zoom "device" correspondant au 1x affiché. Sur un objectif virtuel
+  // (dual/triple), 1x = la première valeur de virtualDeviceSwitchOverVideoZoomFactors
+  // (le passage ultra-grand-angle → grand-angle) ; videoZoomFactor=1.0 = ultra-wide
+  // = 0.5x affiché. Sur un objectif simple, ce facteur vaut 1.0 (pas de 0.5x).
+  private var oneXZoomFactor: CGFloat = 1.0
+  // Dernier facteur d'affichage demandé par le JS (réappliqué après un switch).
+  private var requestedDisplayZoom: CGFloat = 1.0
+
   // MARK: - Preview
   private let previewLayer = AVCaptureVideoPreviewLayer()
 
@@ -97,8 +106,9 @@ public class SeamlessRecorderView: ExpoView {
       self.addAudioInput()
       self.addOutputs()
       self.session.commitConfiguration()
-      // Orientation MUST be set after commitConfiguration — connections are fully established here.
+      // Orientation + zoom MUST be set after commitConfiguration — connections/device are ready.
       self.setPortraitOrientation(on: self.videoOutput.connection(with: .video))
+      self.applyCurrentZoom()
       self.session.startRunning()
     }
   }
@@ -110,6 +120,7 @@ public class SeamlessRecorderView: ExpoView {
       session.addInput(input)
       videoDeviceInput = input
       currentCameraPosition = position
+      updateOneXZoomFactor(for: device)
     }
   }
 
@@ -140,9 +151,50 @@ public class SeamlessRecorderView: ExpoView {
   }
 
   private func bestCamera(for position: AVCaptureDevice.Position) -> AVCaptureDevice? {
-    AVCaptureDevice.DiscoverySession(
-      deviceTypes: [.builtInWideAngleCamera], mediaType: .video, position: position
-    ).devices.first
+    // À l'arrière, on privilégie un objectif virtuel multi-cam (triple puis dual-wide)
+    // qui inclut l'ultra-grand-angle → permet le 0.5x avec transitions automatiques.
+    // À défaut (ou en façade), on retombe sur le grand-angle simple (pas de 0.5x).
+    let preferred: [AVCaptureDevice.DeviceType]
+    if position == .back {
+      preferred = [.builtInTripleCamera, .builtInDualWideCamera, .builtInWideAngleCamera]
+    } else {
+      preferred = [.builtInWideAngleCamera]
+    }
+    let discovered = AVCaptureDevice.DiscoverySession(
+      deviceTypes: preferred, mediaType: .video, position: position
+    ).devices
+    // Respecter l'ordre de préférence (la DiscoverySession ne le garantit pas).
+    for type in preferred {
+      if let match = discovered.first(where: { $0.deviceType == type }) { return match }
+    }
+    return discovered.first
+  }
+
+  // Calcule le facteur "1x" du device. À appeler dans le bloc begin/commitConfiguration
+  // (lecture seule, ne verrouille pas le device).
+  private func updateOneXZoomFactor(for device: AVCaptureDevice) {
+    if let switchOver = device.virtualDeviceSwitchOverVideoZoomFactors.first {
+      oneXZoomFactor = CGFloat(truncating: switchOver)
+    } else {
+      oneXZoomFactor = 1.0
+    }
+  }
+
+  // Applique le zoom d'affichage courant. À appeler APRÈS commitConfiguration
+  // (verrouille le device).
+  private func applyCurrentZoom() {
+    guard let device = videoDeviceInput?.device else { return }
+    applyZoom(device: device, displayFactor: requestedDisplayZoom)
+  }
+
+  // displayFactor: 0.5 = ultra grand-angle, 1 = grand-angle, 2, 5… (clampé device).
+  private func applyZoom(device: AVCaptureDevice, displayFactor: CGFloat) {
+    let target = displayFactor * oneXZoomFactor
+    let minF = device.minAvailableVideoZoomFactor
+    let maxF = min(device.maxAvailableVideoZoomFactor, 5.0 * oneXZoomFactor)
+    try? device.lockForConfiguration()
+    device.videoZoomFactor = max(minF, min(maxF, target))
+    device.unlockForConfiguration()
   }
 
   // MARK: - Public API (called from Module)
@@ -157,15 +209,13 @@ public class SeamlessRecorderView: ExpoView {
     currentFlashMode = flash == "on" ? .on : flash == "auto" ? .auto : .off
   }
 
+  // `zoom` = facteur d'affichage absolu (0.5 = ultra grand-angle, 1 = 1x, …).
   func setZoom(_ zoom: Double) {
+    requestedDisplayZoom = CGFloat(zoom)
     guard let device = videoDeviceInput?.device else { return }
-    sessionQueue.async {
-      let minF = device.minAvailableVideoZoomFactor
-      let maxF = min(device.maxAvailableVideoZoomFactor, 8.0)
-      let factor = minF + CGFloat(zoom) * (maxF - minF)
-      try? device.lockForConfiguration()
-      device.videoZoomFactor = max(minF, min(maxF, factor))
-      device.unlockForConfiguration()
+    sessionQueue.async { [weak self] in
+      guard let self else { return }
+      self.applyZoom(device: device, displayFactor: self.requestedDisplayZoom)
     }
   }
 
@@ -242,10 +292,12 @@ public class SeamlessRecorderView: ExpoView {
       session.addInput(newInput)
       videoDeviceInput = newInput
       currentCameraPosition = position
+      updateOneXZoomFactor(for: device)
     }
     session.commitConfiguration()
-    // Apply orientation AFTER commit — same reason as setupSession.
+    // Apply orientation + zoom AFTER commit — same reason as setupSession.
     setPortraitOrientation(on: videoOutput.connection(with: .video))
+    applyCurrentZoom()
   }
 
   // MARK: - Writer
