@@ -27,6 +27,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Svg, Path } from "react-native-svg";
 
 import CommentModal from "./CommentModal";
+import { r2Storage } from "../lib/r2";
 import { type ChallengeWithData } from "../lib/challenges";
 import ChallengeVotePage from "./groups/ChallengeVotePage";
 
@@ -190,7 +191,10 @@ const PhotoFeedContent = forwardRef(({
   });
   const [visibleIndex, setVisibleIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
-  const [videoCache, setVideoCache] = useState<Record<string, string>>({});
+  // Map of remote URL → downloaded local file. Kept in a ref (not state): writing it must NOT
+  // re-render the feed mid-scroll. A clip already on-screen has locked its source anyway (see
+  // VideoMoment); newly mounted items read the current ref value when renderItem runs for them.
+  const videoCacheRef = useRef<Record<string, string>>({});
   
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [commentModalMode, setCommentModalMode] = useState<"comment" | "sticker">("comment");
@@ -378,19 +382,48 @@ const PhotoFeedContent = forwardRef(({
     if (disableVideoCache) return;   // lecture directe (read-only) → pas de switch URL distant→local
     const videos = photos.filter((p) => p.url && p.image_path.endsWith(".mp4") && p.url.startsWith("http"));
     let cancelled = false;
-    videos.forEach(async (p) => {
-      const filename = "reveal_" + p.image_path.replace(/\//g, "_");
-      const localUri = `${FileSystem.cacheDirectory}${filename}`;
-      try {
-        const info = await FileSystem.getInfoAsync(localUri);
-        if (!info.exists) await FileSystem.downloadAsync(p.url!, localUri);
-        if (!cancelled) setVideoCache(prev => ({ ...prev, [p.url!]: localUri }));
-      } catch {
-        if (!cancelled) setVideoCache(prev => ({ ...prev, [p.url!]: p.url! }));
+    // Download SEQUENTIALLY, not in parallel. Parallel downloads saturate the connection and
+    // starve the clip that's currently streaming → it re-buffers and stutters (worst on a
+    // return visit, when the downloads are still running). One at a time leaves bandwidth for
+    // playback while still warming every clip's local cache for instant, smooth replays.
+    (async () => {
+      for (const p of videos) {
+        if (cancelled) return;
+        const filename = "reveal_" + p.image_path.replace(/\//g, "_");
+        const localUri = `${FileSystem.cacheDirectory}${filename}`;
+        try {
+          const info = await FileSystem.getInfoAsync(localUri);
+          if (!info.exists) await FileSystem.downloadAsync(p.url!, localUri);
+          if (!cancelled) {
+            videoCacheRef.current[p.url!] = localUri;
+            console.log(`[FEED] video cached LOCAL: ${p.image_path.slice(0, 16)} (was ${info.exists ? "already on disk" : "downloaded"})`);
+          }
+        } catch (e) {
+          if (!cancelled) {
+            videoCacheRef.current[p.url!] = p.url!;
+            console.log(`[FEED] video cache FAILED, staying remote: ${p.image_path.slice(0, 16)}`, e);
+          }
+        }
       }
-    });
+    })();
     return () => { cancelled = true; };
   }, [photos, disableVideoCache]);
+
+  // Warm expo-image's disk cache for every still (photo + drawing, and the swap target), so
+  // scrolling onto one is instant instead of a network fetch + decode happening mid-scroll
+  // (the drawing jank). Videos/audio/text are skipped (handled elsewhere / no media).
+  useEffect(() => {
+    const isStill = (path?: string | null) =>
+      !!path && path !== "text_mode" && !path.endsWith(".mp4") && !path.endsWith(".m4a");
+    const urls: string[] = [];
+    for (const p of photos) {
+      if (isStill(p.image_path) && p.url) urls.push(p.url);
+      if (isStill(p.second_image_path)) {
+        try { urls.push(r2Storage.getPublicUrl(p.second_image_path!)); } catch {}
+      }
+    }
+    if (urls.length) Image.prefetch(urls, { cachePolicy: "disk" }).catch(() => {});
+  }, [photos]);
 
   const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     if (viewableItems.length > 0 && viewableItems[0].index != null) {
@@ -554,7 +587,7 @@ const PhotoFeedContent = forwardRef(({
             isVisible={index === visibleIndex} 
             currentUserId={currentUserId} 
             crownWinnerId={crownWinnerId} 
-            cachedUrl={videoCache[moment.url] ?? moment.url} 
+            cachedUrl={videoCacheRef.current[moment.url] ?? moment.url}
             onOpenPicker={readOnly ? undefined : onOpenPicker} 
             onOpenComments={(pid, oid) => { openComments(pid, oid); onOpenComments?.(pid, oid); }} 
             isShrunken={commentModalVisible}

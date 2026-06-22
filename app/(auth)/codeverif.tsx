@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -30,8 +30,21 @@ export default function CodeVerifScreen() {
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
+  // Cooldown anti-spam : Supabase impose ~60s entre deux envois de code pour
+  // la même adresse. On démarre le compte à rebours dès l'arrivée sur l'écran
+  // (un code vient d'être envoyé) puis après chaque renvoi.
+  const [cooldown, setCooldown] = useState(60);
 
   const isOtpEntered = otp.trim().length === 8;
+  const canResend = cooldown === 0 && !loading;
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setInterval(() => {
+      setCooldown((c) => (c <= 1 ? 0 : c - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [cooldown]);
 
   const handleDevBypass = async (isExisting: boolean) => {
     try {
@@ -73,10 +86,11 @@ export default function CodeVerifScreen() {
   };
 
   const handleResendOtp = async () => {
-    if (!email) return;
+    if (!email || !canResend) return;
     setLoading(true);
     try {
       await sendOtp(email);
+      setCooldown(60);
       showToast("Un nouveau code de vérification a été envoyé.", undefined, "success");
     } catch (e: any) {
       showToast(translateError(e.message), undefined, "error");
@@ -136,12 +150,15 @@ export default function CodeVerifScreen() {
               onBlur={() => setIsFocused(false)}
             />
 
-            <TouchableOpacity 
-              onPress={handleResendOtp} 
-              disabled={loading}
+            <TouchableOpacity
+              onPress={handleResendOtp}
+              disabled={!canResend}
               style={styles.resendBtn}
+              activeOpacity={0.7}
             >
-              <Text style={styles.resendText}>Renvoyer le code</Text>
+              <Text style={[styles.resendText, !canResend && styles.resendTextDisabled]}>
+                {cooldown > 0 ? `Renvoyer le code (${cooldown}s)` : "Renvoyer le code"}
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -305,6 +322,9 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     ...textStyles.singleLineBodyBaseStrong,
     color: colors.text,
     textAlign: "center",
+  },
+  resendTextDisabled: {
+    color: colors.secondary,
   },
   changeEmailBtn: {
     paddingVertical: 6,

@@ -31,6 +31,10 @@ interface VideoMomentProps {
 
 const NAVBAR_HEIGHT = 100;
 
+// DEBUG helper: classify a URL as local file vs remote, without dumping the full string.
+const kindOf = (u?: string | null) =>
+  !u ? "none" : u.startsWith("file://") || u.includes("/cache/") || u.includes("Caches") ? "LOCAL" : "remote";
+
 
 export const VideoMoment = ({
   moment,
@@ -51,6 +55,23 @@ export const VideoMoment = ({
   const [swapped, setSwapped] = useState(false);
   const isOwn = moment.user_id === currentUserId;
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // DEBUG INSTRUMENTATION (remove once the freeze is understood)
+  // Each mounted instance gets a stable short id so we can tell a REMOUNT (new id)
+  // apart from a source swap on the SAME instance.
+  const dbgId = useRef(Math.random().toString(36).slice(2, 7)).current;
+  const dbgClip = (moment.image_path || "").slice(0, 16);
+  const dlog = (...args: any[]) =>
+    console.log(`[VID ${dbgId} ${dbgClip}]`, ...args);
+  const tMount = useRef(Date.now());
+  useEffect(() => {
+    dlog("MOUNT", { isVisible, cachedUrl: kindOf(cachedUrl) });
+    return () => dlog("UNMOUNT after", Date.now() - tMount.current, "ms");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  dlog("render", { isVisible, isPaused, swapped, src: kindOf(cachedUrl) });
+  // ──────────────────────────────────────────────────────────────────────────
+
   const uiOpacity = useSharedValue(1);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -65,9 +86,29 @@ export const VideoMoment = ({
   }));
 
   const hasSecond = !!moment.second_image_path;
-  const player = useVideoPlayer((!swapped && cachedUrl) ? cachedUrl : null, (p) => {
+
+  // The source fed to useVideoPlayer is the player's identity: expo-video keys the player on the
+  // source string, so ANY change releases the current player and creates a new one — a heavy
+  // reload that restarts the clip from 0 with a ~1s buffering freeze. We therefore only ever
+  // change the source while the clip is OFF-SCREEN (the reload is then invisible) and freeze it
+  // while visible. Bonus: a clip that first mounted on the remote URL (download not finished yet)
+  // silently upgrades to the local file once it's ready and the user scrolls away — so the next
+  // visit plays the smooth local file instead of re-streaming it (the "play 1s, freeze, replay
+  // on return" glitch).
+  const [sourceUrl, setSourceUrl] = useState<string | null>(cachedUrl || null);
+  useEffect(() => {
+    if (cachedUrl && cachedUrl !== sourceUrl && !isVisible) {
+      dlog("SOURCE UPGRADE (off-screen)", kindOf(sourceUrl), "->", kindOf(cachedUrl));
+      setSourceUrl(cachedUrl);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cachedUrl, isVisible, sourceUrl]);
+
+  const player = useVideoPlayer((!swapped && sourceUrl) ? sourceUrl : null, (p) => {
+    dlog("⚙️ NEW PLAYER created with source =", kindOf((!swapped && sourceUrl) ? sourceUrl : null));
     p.loop = true;
     p.muted = false;
+    p.timeUpdateEventInterval = 0.5; // DEBUG: emit timeUpdate every 0.5s so we can see the freeze
   });
 
   const isVisibleRef = useRef(isVisible ?? false);
@@ -79,8 +120,10 @@ export const VideoMoment = ({
     isVisibleRef.current = isVisible ?? false;
     isPausedRef.current = isPaused;
     if (isVisible && !isPaused) {
+      dlog("▶️ play() [visibility effect]");
       playerRef.current.play();
     } else {
+      dlog("⏸️ pause() [visibility effect]", { isVisible, isPaused });
       playerRef.current.pause();
     }
   }, [isVisible, isPaused]);
@@ -88,19 +131,31 @@ export const VideoMoment = ({
   useEffect(() => {
     if (!player) return;
     let stallTimer: ReturnType<typeof setTimeout> | null = null;
-    const subscription = player.addListener("playingChange", ({ isPlaying }) => {
+    const playingSub = player.addListener("playingChange", ({ isPlaying }) => {
+      dlog("playingChange ->", isPlaying, "@", player.currentTime?.toFixed?.(2));
       if (!isPlaying && isVisibleRef.current && !isPausedRef.current) {
         if (stallTimer) clearTimeout(stallTimer);
         stallTimer = setTimeout(() => {
           stallTimer = null;
-          if (isVisibleRef.current && !isPausedRef.current) player.play();
+          if (isVisibleRef.current && !isPausedRef.current && !playerRef.current?.playing) {
+            dlog("🔁 stall-recovery play()");
+            playerRef.current.play();
+          }
         }, 200);
       }
+    });
+    const statusSub = player.addListener("statusChange", ({ status, oldStatus, error }: any) => {
+      dlog("statusChange", oldStatus, "->", status, "@", player.currentTime?.toFixed?.(2), error ? `ERR:${error}` : "");
+    });
+    const timeSub = player.addListener("timeUpdate", ({ currentTime }: any) => {
+      dlog("⏱", currentTime?.toFixed?.(2), "playing=", player.playing, "buffered=", (player as any).bufferedPosition?.toFixed?.(2));
     });
     if (isVisibleRef.current && !isPausedRef.current) player.play();
     return () => {
       if (stallTimer) clearTimeout(stallTimer);
-      subscription.remove();
+      playingSub.remove();
+      statusSub.remove();
+      timeSub.remove();
     };
   }, [player]);
 

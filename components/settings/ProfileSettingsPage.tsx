@@ -204,15 +204,22 @@ export default function ProfileSettingsPage({ username, avatarUrl, email, onUser
           <TextInput
             style={[styles.inputText, { color: colors.text }]}
             value={localUsername}
-            onChangeText={t => setLocalUsername(t.slice(0, USERNAME_MAX))}
+            // No native `maxLength`: a legacy name longer than the cap (created back when
+            // onboarding allowed more) must stay editable. We allow shortening an over-limit
+            // value char by char, but never let it grow past USERNAME_MAX — so the cap holds
+            // for normal input while long names can be fixed instead of being stuck.
+            onChangeText={t => {
+              if (t.length <= USERNAME_MAX || t.length < localUsername.length) {
+                setLocalUsername(t);
+              }
+            }}
             placeholder="ex. Cam"
             placeholderTextColor={colors.textSecondary}
-            maxLength={USERNAME_MAX}
             returnKeyType="done"
             onFocus={() => setFocusedField("username")}
             onBlur={() => setFocusedField(null)}
           />
-          <Text style={[styles.counter, { color: colors.textSecondary }]}>
+          <Text style={[styles.counter, { color: localUsername.length > USERNAME_MAX ? colors.textDanger : colors.textSecondary }]}>
             {localUsername.length}/{USERNAME_MAX}
           </Text>
         </View>

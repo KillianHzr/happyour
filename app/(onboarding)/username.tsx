@@ -122,7 +122,7 @@ export default function OnboardingUsernameScreen() {
               autoCorrect={false}
               value={username}
               onChangeText={setUsername}
-              maxLength={20}
+              maxLength={10}
               editable={!loading}
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
