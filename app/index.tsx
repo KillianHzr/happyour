@@ -3,7 +3,7 @@ import { View, StyleSheet } from "react-native";
 import { useRouter, Redirect } from "expo-router";
 import { useAuth } from "../lib/auth-context";
 import { supabase } from "../lib/supabase";
-import Loader from "../components/Loader";
+import AppLoader from "../components/AppLoader";
 import { type ThemeColors } from "../lib/theme";
 import { useThemedStyles } from "../lib/theme-context";
 
@@ -47,7 +47,7 @@ export default function Index() {
   if (authLoading || checkingGroup || profileComplete === null) {
     return (
       <View style={styles.container}>
-        <Loader size={40} />
+        <AppLoader />
       </View>
     );
   }
