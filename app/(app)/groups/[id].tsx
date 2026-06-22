@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Image } from "expo-image";
 import { View, Text, StyleSheet, ScrollView, Dimensions, Animated, Easing, TouchableOpacity, Alert, TextInput, AppState, Modal, KeyboardAvoidingView, Platform, Pressable, BackHandler } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import BlurView from "../../../components/atoms/BlurView";
 import { RightSlideModal } from "../../../components/atoms/RightSlideModal";
 import { supabase } from "../../../lib/supabase";
@@ -1787,11 +1788,19 @@ export default function MainPagerScreen() {
             onRequestClose={() => setShowNotificationsModal(false)}
           >
             <ForceTheme mode="Dark">
-              <ActivityView
-                onClose={() => setShowNotificationsModal(false)}
-                activitiesList={activitiesList}
-                handleActivityClick={handleActivityClick}
-              />
+              {/* GestureHandlerRootView requis pour que le swipe-back fonctionne dans un Modal RN */}
+              <GestureHandlerRootView style={{ flex: 1 }}>
+                <EdgeSwipeBack
+                  style={{ flex: 1 }}
+                  onBack={() => setShowNotificationsModal(false)}
+                >
+                  <ActivityView
+                    onClose={() => setShowNotificationsModal(false)}
+                    activitiesList={activitiesList}
+                    handleActivityClick={handleActivityClick}
+                  />
+                </EdgeSwipeBack>
+              </GestureHandlerRootView>
             </ForceTheme>
           </RightSlideModal>
 

@@ -89,8 +89,9 @@ export function ActivityView({
       </View>
 
       {/* Content */}
-      <ScrollView contentContainerStyle={activitiesList.length > 0 ? styles.notifListContent : styles.notifContent} showsVerticalScrollIndicator={false}>
-        {activitiesList.length > 0 ? (
+      {activitiesList.length > 0 ? (
+        // alwaysBounceVertical={false} : pas de rebond si le contenu tient dans l'écran.
+        <ScrollView contentContainerStyle={styles.notifListContent} showsVerticalScrollIndicator={false} alwaysBounceVertical={false}>
           <View style={styles.activitySections}>
             {groupActivitiesByAge(activitiesList).map((section) => (
               <View key={section.label ?? "recent"} style={styles.activitySection}>
@@ -131,13 +132,18 @@ export function ActivityView({
               </View>
             ))}
           </View>
-        ) : (
+        </ScrollView>
+      ) : (
+        // État vide : centré sur l'écran entier (absolu) plutôt que dans la zone sous le
+        // header, sinon il apparaît plus bas que le centre. pointerEvents="none" laisse le
+        // bouton retour du header cliquable. Pas de ScrollView : aucun scroll/rebond inutile.
+        <View style={styles.notifEmptyAbsolute} pointerEvents="none">
           <View style={styles.notifEmptyState}>
             <Text style={styles.notifEmptyTitle}>Aucune activité</Text>
             <Text style={styles.notifEmptySub}>Tu seras notifié dès qu’un de tes proches réagit à tes moments.</Text>
           </View>
-        )}
-      </ScrollView>
+        </View>
+      )}
     </View>
   );
 }
@@ -168,8 +174,8 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     ...textStyles.subtitleStrong,
     color: colors.textNeutral,
   },
-  notifContent: {
-    flexGrow: 1,
+  notifEmptyAbsolute: {
+    ...StyleSheet.absoluteFillObject,
     justifyContent: "center",
     alignItems: "center",
   },
