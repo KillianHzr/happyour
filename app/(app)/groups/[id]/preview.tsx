@@ -25,7 +25,6 @@ import { useAuth } from "../../../../lib/auth-context";
 import { useToast } from "../../../../lib/toast-context";
 import { translateError } from "../../../../lib/error-messages";
 import { getCaptureData, clearCaptureData, type CaptureType } from "../../../../lib/capture-store";
-import { notifyNewPhoto } from "../../../../lib/notifications";
 import { useUpload } from "../../../../lib/upload-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";

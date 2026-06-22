@@ -3,6 +3,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { manipulateAsync, FlipType, SaveFormat } from "expo-image-manipulator";
 import { supabase } from "./supabase";
 import { r2Storage } from "./r2";
+import { notifyNewPhoto } from "./notifications";
 
 type UploadStatus = "uploading" | "success" | "error";
 
@@ -208,6 +209,31 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
 
         if (error) throw error;
         setUploads(prev => prev.map(u => u.id === id ? { ...u, status: "success", progress: 100 } : u));
+
+        // Notify the OTHER group members that a moment was just shared. This call used to live in
+        // the capture flow but was dropped during the snapshot-preview refactor — restoring it
+        // here means every capture path (photo/video/audio/text/drawing, single or double) fires
+        // it. Fire-and-forget: a push failure must never flip the upload to "error".
+        const groupId = dbData?.group_id;
+        const senderId = dbData?.user_id;
+        if (groupId && senderId) {
+          (async () => {
+            try {
+              const [{ data: prof }, { data: grp }] = await Promise.all([
+                supabase.from("profiles").select("username").eq("id", senderId).single(),
+                supabase.from("groups").select("name").eq("id", groupId).single(),
+              ]);
+              await notifyNewPhoto(
+                groupId,
+                grp?.name ?? "Ton groupe",
+                prof?.username ?? "Quelqu'un",
+                senderId,
+              );
+            } catch (e) {
+              console.warn("[Upload] notifyNewPhoto failed:", e);
+            }
+          })();
+        }
       } catch (error) {
         console.error("[Upload Error]", error);
         setUploads(prev => prev.map(u => u.id === id ? { ...u, status: "error" } : u));
