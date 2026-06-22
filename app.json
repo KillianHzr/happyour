@@ -18,7 +18,7 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "26"
+      "buildNumber": "28"
     },
     "android": {
       "package": "com.happyour.app",
@@ -44,7 +44,7 @@
         "android.permission.READ_MEDIA_VIDEO",
         "android.permission.READ_MEDIA_AUDIO"
       ],
-      "versionCode": 45
+      "versionCode": 47
     },
     "androidNavigationBar": {
       "visible": "sticky-immersive"

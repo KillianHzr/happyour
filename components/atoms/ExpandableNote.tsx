@@ -7,9 +7,11 @@ interface ExpandableNoteProps {
   text: string;
   maxLines: number;
   onToggleExpand?: (expanded: boolean) => void;
+  /** Dims the text to 0.5 opacity — used for the "Aucune description" placeholder. */
+  faded?: boolean;
 }
 
-export const ExpandableNote = ({ text, maxLines, onToggleExpand }: ExpandableNoteProps) => {
+export const ExpandableNote = ({ text, maxLines, onToggleExpand, faded }: ExpandableNoteProps) => {
   const styles = useThemedStyles(makeStyles);
   const [expanded, setExpanded] = useState(false);
   const [isTruncated, setIsTruncated] = useState(false);
@@ -32,7 +34,7 @@ export const ExpandableNote = ({ text, maxLines, onToggleExpand }: ExpandableNot
           {text}
         </Text>
       </View>
-      <Text style={styles.momentNote} numberOfLines={expanded ? undefined : maxLines}>
+      <Text style={[styles.momentNote, faded && { opacity: 0.5 }]} numberOfLines={expanded ? undefined : maxLines}>
         {text}
       </Text>
       {isTruncated && (

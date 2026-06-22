@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet, Animated } from "react-native";
+import { Text, StyleSheet, Animated, Pressable } from "react-native";
 import Svg, { Path } from "react-native-svg";
 import { radii, spacing, textStyles, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
@@ -8,24 +8,22 @@ interface StickerToastProps {
   message: string;
   animValue: Animated.Value;
   topInset: number;
+  /** Tapping the X dismisses the toast. When omitted, the X is hidden. */
+  onClose?: () => void;
 }
 
-const CheckIcon = () => (
-  <Svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <Path d="M20 6L9 17l-5-5" />
+const CloseIcon = ({ color }: { color: string }) => (
+  <Svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+    <Path
+      d="M14.2929 4.29289C14.6834 3.90237 15.3159 3.90237 15.7065 4.29289C16.097 4.68342 16.097 5.31594 15.7065 5.70647L11.4133 9.99968L15.7065 14.2929C16.097 14.6834 16.097 15.3159 15.7065 15.7065C15.3159 16.097 14.6834 16.097 14.2929 15.7065L9.99968 11.4133L5.70647 15.7065C5.31594 16.097 4.68342 16.097 4.29289 15.7065C3.90237 15.3159 3.90237 14.6834 4.29289 14.2929L8.58611 9.99968L4.29289 5.70647C3.90237 5.31594 3.90237 4.68342 4.29289 4.29289C4.68342 3.90237 5.31594 3.90237 5.70647 4.29289L9.99968 8.58611L14.2929 4.29289Z"
+      fill={color}
+    />
   </Svg>
 );
 
-const TrashIcon = () => (
-  <Svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <Path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
-  </Svg>
-);
-
-export function StickerToast({ message, animValue, topInset }: StickerToastProps) {
+export function StickerToast({ message, animValue, topInset, onClose }: StickerToastProps) {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
-  const isDelete = message.includes("supprimé");
 
   const translateY = animValue.interpolate({
     inputRange: [0, 1],
@@ -43,12 +41,22 @@ export function StickerToast({ message, animValue, topInset }: StickerToastProps
           transform: [{ translateY }],
         },
       ]}
-      pointerEvents="none"
+      // box-none so the toast itself doesn't intercept touches, but the close
+      // button below still receives them.
+      pointerEvents="box-none"
     >
-      <View style={[styles.iconWrapper, { backgroundColor: isDelete ? "rgba(220,38,38,0.08)" : "rgba(22,163,74,0.08)" }]}>
-        {isDelete ? <TrashIcon /> : <CheckIcon />}
-      </View>
       <Text style={[styles.title, { color: colors.text }]}>{message}</Text>
+      {onClose && (
+        <Pressable
+          onPress={onClose}
+          hitSlop={10}
+          style={styles.closeButton}
+          accessibilityRole="button"
+          accessibilityLabel="Fermer"
+        >
+          <CloseIcon color={colors.icon} />
+        </Pressable>
+      )}
     </Animated.View>
   );
 }
@@ -73,16 +81,13 @@ const makeStyles = (colors: ThemeColors) =>
       shadowRadius: 16,
       elevation: 8,
     },
-    iconWrapper: {
-      width: 34,
-      height: 34,
-      borderRadius: radii.lg,
-      justifyContent: "center",
-      alignItems: "center",
-      marginRight: 12,
-    },
     title: {
       ...textStyles.bodyStrong,
       flex: 1,
+    },
+    closeButton: {
+      marginLeft: spacing.md,
+      justifyContent: "center",
+      alignItems: "center",
     },
   });

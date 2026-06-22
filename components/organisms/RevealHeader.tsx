@@ -50,7 +50,6 @@ export const RevealHeader = ({
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
 
-  const isLowTime = revealMsLeft < 4 * 3600000;
   const visibleParticipants = participants.slice(0, 3);
   const remainingCount = participants.length - 3;
 
@@ -88,9 +87,9 @@ export const RevealHeader = ({
 
         {/* 2. Timer Pill */}
         {!archive && countdownText !== "" && (
-          <View style={[styles.timerPill, isLowTime && styles.timerPillRed]}>
-            {!isLowTime && <GlassBackground radius={radii.sm} />}
-            <Text style={[styles.timerText, isLowTime && styles.timerTextRed]}>
+          <View style={styles.timerPill}>
+            <GlassBackground radius={radii.sm} />
+            <Text style={styles.timerText}>
               {countdownText}
             </Text>
           </View>
@@ -211,16 +210,10 @@ const makeStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.cr
     ...textStyles.singleLineBodySmall,
     color: colors.textSecondary,
   },
-  timerPillRed: {
-    backgroundColor: "#EC221F",
-  },
   timerText: {
     ...textStyles.singleLineBodyBaseStrong,
     color: colors.text,
     fontVariant: ["tabular-nums"], // equal-width digits so the countdown doesn't shift
-  },
-  timerTextRed: {
-    color: "#FFFFFF",
   },
   avatarsRow: {
     flexDirection: "row",
