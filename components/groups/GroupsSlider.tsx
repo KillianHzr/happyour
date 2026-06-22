@@ -13,8 +13,10 @@ import { NameTag } from "../atoms/NameTag";
 import Shape, { type ShapeName } from "../Shape";
 import Icon from "../Icon";
 
-// Hauteur de la zone pagination : marginTop + paddingVertical*2 + dot + (gap + compteur ~16)
-const DOTS_AREA_HEIGHT = 16 + spacing.sm * 2 + 6 + spacing.xxs + 16; // ~56
+// Hauteur réservée sous le slider pour la pagination. On n'affiche plus qu'UN élément à la fois
+// (les pastilles OU le compteur x/x), donc on budgète juste : marginTop + paddingVertical*2 +
+// hauteur du contenu (~16, le compteur étant le plus haut). Évite l'excès d'espace sous le slider.
+const DOTS_AREA_HEIGHT = spacing.sm + spacing.xs * 2 + 16; // ~32
 
 export type GroupCard = {
   id: string;
@@ -30,6 +32,7 @@ export type GroupCard = {
   challengeLabel?: string | null;   // surnom cible du défi en cours
   challengeShape?: ShapeName | null;// shape du type de média du défi
   postedThisWeek?: boolean;         // l'utilisateur a posté cette semaine dans ce groupe
+  unlocked: boolean;                // reveal accessible pour CE groupe (par-groupe, pas global)
 };
 
 type Props = {
@@ -37,7 +40,6 @@ type Props = {
   revealDate: Date;
   onSelect: (groupId: string) => void;
   showActiveBorder?: boolean; // masqué quand une page groupe est ouverte
-  unlocked?: boolean;         // reveal disponible → countdown 0j + cadenas ouvert
 };
 
 /** Formate un délai en ms → "Xj HH:MM:SS" (le "0j" est masqué s'il reste moins d'un jour). */
@@ -169,7 +171,7 @@ const SliderCard = memo(function SliderCard({
   );
 });
 
-export default function GroupsSlider({ cards, revealDate, onSelect, showActiveBorder = true, unlocked = false }: Props) {
+export default function GroupsSlider({ cards, revealDate, onSelect, showActiveBorder = true }: Props) {
   const sliderStyles = useThemedStyles(makeSliderStyles);
   const { width: screenWidth } = useWindowDimensions();
 
@@ -182,35 +184,19 @@ export default function GroupsSlider({ cards, revealDate, onSelect, showActiveBo
   const [availableHeight, setAvailableHeight] = useState(0);
 
   const count = cards.length;
-  const needsLoop = count > 1;
+  const hasMultiple = count > 1;
+  // ≤5 groupes → pastilles de pagination ; >5 groupes → seulement le compteur x/x.
+  const showDots = hasMultiple && count <= 5;
   const cardHeight = availableHeight > 0
-    ? availableHeight - (needsLoop ? DOTS_AREA_HEIGHT : 0)
+    ? availableHeight - (hasMultiple ? DOTS_AREA_HEIGHT : 0)
     : 0;
 
   const [activeIndex, setActiveIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
 
-  // 20 copies → "infiniment" scrollable (même technique que le slider des défis)
-  const LOOP_COUNT = 20;
-  const startIdx = needsLoop && count > 0 ? Math.floor(LOOP_COUNT / 2) * count : 0;
-
-  const displayItems = useMemo(() => {
-    if (!needsLoop || count === 0) return cards;
-    return Array.from({ length: LOOP_COUNT * count }, (_, i) => cards[i % count]);
-  }, [cards, needsLoop, count]);
-
-  // Scroll vers le milieu au premier rendu
-  useEffect(() => {
-    if (count === 0 || availableHeight === 0 || !needsLoop) return;
-    // Initialise scrollX sur l'offset de départ, sinon la bordure de la carte centrée
-    // (pilotée par scrollX) reste à 0 tant qu'on n'a pas scrollé manuellement.
-    scrollX.setValue(startIdx * snapInterval);
-    const t = setTimeout(() => {
-      scrollRef.current?.scrollTo({ x: startIdx * snapInterval, animated: false });
-    }, 30);
-    return () => clearTimeout(t);
-  }, [count, availableHeight, snapInterval, needsLoop, startIdx]);
+  // Pas de loop : on rend les cartes une seule fois.
+  const displayItems = cards;
 
   // Bordure de sélection animée par carte : opacité 1 quand centrée, fondu vers 0
   // en s'éloignant. Nœuds stables (useMemo) pour ne pas casser le memo de SliderCard.
@@ -234,7 +220,7 @@ export default function GroupsSlider({ cards, revealDate, onSelect, showActiveBo
         if (count === 0 || snapInterval === 0) return;
         const x = e.nativeEvent.contentOffset.x;
         const idx = Math.round(x / snapInterval);
-        setActiveIndex(((idx % count) + count) % count);
+        setActiveIndex(Math.max(0, Math.min(count - 1, idx)));
       },
     }
   );
@@ -243,7 +229,7 @@ export default function GroupsSlider({ cards, revealDate, onSelect, showActiveBo
     if (count === 0 || snapInterval === 0) return;
     const x = e.nativeEvent.contentOffset.x;
     const idx = Math.round(x / snapInterval);
-    setActiveIndex(((idx % count) + count) % count);
+    setActiveIndex(Math.max(0, Math.min(count - 1, idx)));
   };
 
   return (
@@ -266,27 +252,32 @@ export default function GroupsSlider({ cards, revealDate, onSelect, showActiveBo
             >
               {displayItems.map((card, idx) => (
                 <SliderCard
-                  key={idx}
+                  key={card.id}
                   card={card}
                   width={cardWidth}
                   height={cardHeight}
                   marginRight={gap}
                   revealDate={revealDate}
-                  unlocked={unlocked}
+                  unlocked={card.unlocked}
                   onSelect={onSelect}
                   borderOpacity={showActiveBorder ? borderOpacities[idx] : undefined}
                 />
               ))}
             </Animated.ScrollView>
 
-            {needsLoop && (
+            {hasMultiple && (
               <View style={sliderStyles.paginationWrap}>
-                <View style={sliderStyles.dotsRow}>
-                  {cards.map((_, idx) => (
-                    <View key={idx} style={[sliderStyles.dot, idx === activeIndex && sliderStyles.dotActive]} />
-                  ))}
-                </View>
-                <Text style={sliderStyles.pageCounter}>{`${activeIndex + 1}/${count}`}</Text>
+                {showDots ? (
+                  // ≤5 groupes : pastilles uniquement (pas de compteur).
+                  <View style={sliderStyles.dotsRow}>
+                    {cards.map((_, idx) => (
+                      <View key={idx} style={[sliderStyles.dot, idx === activeIndex && sliderStyles.dotActive]} />
+                    ))}
+                  </View>
+                ) : (
+                  // >5 groupes : compteur x/x uniquement (pas de pastilles).
+                  <Text style={sliderStyles.pageCounter}>{`${activeIndex + 1}/${count}`}</Text>
+                )}
               </View>
             )}
           </>
@@ -367,8 +358,8 @@ const makeSliderStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   paginationWrap: {
     alignItems: "center",
-    paddingVertical: spacing.sm,
-    marginTop: 16,
+    paddingVertical: spacing.xs,
+    marginTop: spacing.sm,
   },
   dotsRow: {
     flexDirection: "row",
