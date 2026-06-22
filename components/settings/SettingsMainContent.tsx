@@ -17,7 +17,6 @@ import { NamePill } from "../atoms/NamePill";
 import ProfileSettingsPage from "./ProfileSettingsPage";
 import NotificationsSettingsPage from "./NotificationsSettingsPage";
 import ThemeSettingsPage from "./ThemeSettingsPage";
-import AccessibilitySettingsPage from "./AccessibilitySettingsPage";
 import PrivacySettingsPage from "./PrivacySettingsPage";
 import HelpSettingsPage from "./HelpSettingsPage";
 import AboutSettingsPage from "./AboutSettingsPage";
@@ -96,6 +95,7 @@ export default function SettingsMainContent({ username, avatarUrl, onUsernameUpd
         style={{ flex: 1 }}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]}
         showsVerticalScrollIndicator={false}
+        alwaysBounceVertical={false}
       >
         {/* ── Profile link ── */}
         <TouchableOpacity
@@ -108,7 +108,7 @@ export default function SettingsMainContent({ username, avatarUrl, onUsernameUpd
           activeOpacity={0.7}
         >
           <View style={styles.profileInfo}>
-            <View style={[styles.avatar, { backgroundColor: colors.accentMuted }]}>
+            <View style={[styles.avatar, { backgroundColor: colors.card }]}>
               {avatarUrl
                 ? <Image source={{ uri: avatarUrl }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
                 : <Text style={[styles.avatarInitial, { color: colors.text }]}>{(username?.[0] ?? "?").toUpperCase()}</Text>
@@ -133,7 +133,7 @@ export default function SettingsMainContent({ username, avatarUrl, onUsernameUpd
             items={[
               { label: "Notifications", icon: "bell", onPress: () => push({ title: "Notifications", content: <NotificationsSettingsPage /> }) },
               { label: "Thème", icon: "moon", onPress: () => push({ title: "Thème", content: <ThemeSettingsPage /> }) },
-              { label: "Accessibilité", icon: "eye", onPress: () => push({ title: "Accessibilité", content: <AccessibilitySettingsPage /> }) },
+              { label: "Accessibilité", icon: "eye", disabled: true, onPress: () => {} },
             ]}
           />
           <SettingsSection
@@ -245,6 +245,7 @@ type ItemConfig = {
   icon: IconName;
   trailingText?: string;
   danger?: boolean;
+  disabled?: boolean;
   onPress: () => void;
 };
 
@@ -288,7 +289,13 @@ function SettingsSection({ title, trailingButton, items }: SectionProps) {
           const iconColor = item.danger ? colors.iconDangerTertiary : colors.icon;
           const textColor = item.danger ? colors.textDangerTertiary : colors.text;
           return (
-            <TouchableOpacity key={i} style={styles.item} onPress={item.onPress} activeOpacity={0.7}>
+            <TouchableOpacity
+              key={i}
+              style={[styles.item, item.disabled && { opacity: 0.4 }]}
+              onPress={item.onPress}
+              activeOpacity={0.7}
+              disabled={item.disabled}
+            >
               <View style={styles.itemText}>
                 <Icon name={item.icon} size={20} color={iconColor} />
                 <Text style={[styles.itemLabel, { color: textColor }]}>{item.label}</Text>

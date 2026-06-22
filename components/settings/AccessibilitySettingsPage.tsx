@@ -202,6 +202,7 @@ export default function AccessibilitySettingsPage() {
         style={{ flex: 1 }}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]}
         showsVerticalScrollIndicator={false}
+        alwaysBounceVertical={false}
       >
         <View style={styles.section}>
           <SectionHeader title="Sous-titre" />

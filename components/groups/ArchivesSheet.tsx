@@ -433,24 +433,6 @@ function MonthAccordion({
   );
 }
 
-// ─── Loader en rotation continue ("En cours") ─────────────────────────────────
-function SpinningLoader({ color }: { color: string }) {
-  const rot = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const anim = Animated.loop(
-      Animated.timing(rot, { toValue: 1, duration: 2000, easing: Easing.linear, useNativeDriver: true })
-    );
-    anim.start();
-    return () => anim.stop();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const rotate = rot.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
-  return (
-    <Animated.View style={{ transform: [{ rotate }] }}>
-      <Icon name="loader" size={16} color={color} />
-    </Animated.View>
-  );
-}
-
 // ─── Une archive de reveal ─────────────────────────────────────────────────────
 function ArchiveRevealItem({ reveal, styles, onPress }: { reveal: Reveal; styles: any; onPress: (r: Reveal) => void }) {
   const isCurrent = reveal.status === "current";
@@ -498,7 +480,7 @@ function ArchiveRevealItem({ reveal, styles, onPress }: { reveal: Reveal; styles
           {(isCurrent || isLocked) && (
             <View style={[styles.statusBadge, { backgroundColor: isCurrent ? darkColors.card : darkColors.brand }]}>
               {isCurrent
-                ? <SpinningLoader color={darkColors.icon} />
+                ? <Icon name="loader" size={16} color={darkColors.icon} />
                 : <Icon name="lock-border" size={16} color={darkColors.iconBrandOnBrand} />}
             </View>
           )}

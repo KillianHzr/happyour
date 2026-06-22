@@ -305,7 +305,7 @@ function RoomCard({ card, revealDate, unlocked, onCapture, onOpenChallenge, lott
                 {card.crownAvatarUrl ? (
                   <Image source={{ uri: card.crownAvatarUrl }} style={s.avatarImg as any} contentFit="cover" />
                 ) : (
-                  <View style={[s.avatarImg, { backgroundColor: colors.bgNeutralTertiary }]} />
+                  <View style={[s.avatarImg, { backgroundColor: colors.card }]} />
                 )}
                 <View style={s.crownWrap} pointerEvents="none">
                   <Icon name="crown" size={20} color={colors.icon} />

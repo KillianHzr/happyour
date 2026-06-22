@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import {
   Animated, PanResponder, StyleSheet, Modal,
-  Pressable, View, Easing, KeyboardAvoidingView, Platform,
+  View, Easing, KeyboardAvoidingView, Platform, Keyboard,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { radii, spacing, blur, blurIntensity, buildColors, type ThemeColors } from "../lib/theme";
@@ -49,6 +49,8 @@ export default function BottomSheet({ visible, onClose, children }: Props) {
   }, [overlayAnim, translateY]);
 
   const handleClose = useCallback(() => {
+    // Ferme le clavier en même temps que la modal (sinon 1er tap = clavier, 2e = modal).
+    Keyboard.dismiss();
     animateOut(() => {
       setMounted(false);
       onClose();
@@ -122,7 +124,13 @@ export default function BottomSheet({ visible, onClose, children }: Props) {
             style={StyleSheet.absoluteFill}
           />
           <View style={[StyleSheet.absoluteFillObject, { backgroundColor: darkColors.opacityLight }]} />
-          <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
+          {/* Backdrop : on revendique le toucher dès `onStart` pour qu'il ne soit pas
+              « mangé » par la fermeture du clavier — le tap ferme clavier + modal d'un coup. */}
+          <View
+            style={StyleSheet.absoluteFill}
+            onStartShouldSetResponder={() => true}
+            onResponderRelease={handleClose}
+          />
         </Animated.View>
 
         {/* Sheet */}

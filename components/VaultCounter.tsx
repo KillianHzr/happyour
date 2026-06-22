@@ -119,8 +119,8 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   lastPosterWrap: { alignItems: "center", marginBottom: 24 },
   crownWrap: { marginBottom: -8, zIndex: 1 },
   lastPosterAvatar: { width: 56, height: 56, borderRadius: radii.full, borderWidth: 2, borderColor: "rgba(255,215,0,0.7)" },
-  lastPosterAvatarFallback: { backgroundColor: colors.text, justifyContent: "center", alignItems: "center" },
-  lastPosterInitial: { fontFamily: typography.family.bold, fontSize: typography.size.xl, color: colors.bg },
+  lastPosterAvatarFallback: { backgroundColor: colors.card, justifyContent: "center", alignItems: "center" },
+  lastPosterInitial: { fontFamily: typography.family.bold, fontSize: typography.size.xl, color: colors.text },
   lastPosterName: { fontFamily: typography.family.semibold, fontSize: typography.size.xs, color: colors.secondary, marginTop: 8 },
   lastPosterHint: { fontFamily: typography.family.regular, fontSize: typography.size.xs, color: colors.textTertiary, marginTop: 4, textAlign: "center" },
   statsRow: {

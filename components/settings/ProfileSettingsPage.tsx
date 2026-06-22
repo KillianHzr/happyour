@@ -175,12 +175,13 @@ export default function ProfileSettingsPage({ username, avatarUrl, email, onUser
       style={{ flex: 1 }}
       contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]}
       showsVerticalScrollIndicator={false}
+      alwaysBounceVertical={false}
       keyboardShouldPersistTaps="handled"
     >
       {/* ── I. Avatar ── */}
       <View style={styles.inputField}>
         <View style={styles.containerEdit}>
-          <View style={[styles.avatar, { backgroundColor: colors.accentMuted }]}>
+          <View style={[styles.avatar, { backgroundColor: colors.card }]}>
             {displayAvatar
               ? <Image source={{ uri: displayAvatar }} style={StyleSheet.absoluteFill} contentFit="cover" />
               : <Text style={[textStyles.subtitleStrong, { color: colors.text }]}>

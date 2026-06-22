@@ -15,6 +15,7 @@ export default function EURegulationPage() {
       style={{ flex: 1 }}
       contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xxl }]}
       showsVerticalScrollIndicator={false}
+      alwaysBounceVertical={false}
     >
       <P>Dernière mise à jour : 09/06/2026. Ce document présente les mesures de conformité de Disclose au regard des réglementations européennes applicables.</P>
 

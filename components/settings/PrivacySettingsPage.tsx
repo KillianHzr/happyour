@@ -16,6 +16,7 @@ export default function PrivacySettingsPage() {
       style={{ flex: 1 }}
       contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xxl }]}
       showsVerticalScrollIndicator={false}
+      alwaysBounceVertical={false}
     >
       {/* 1. */}
       <P>Mise à jour le 09/06/2026. Ce document explique comment Disclose traite vos données personnelles.</P>

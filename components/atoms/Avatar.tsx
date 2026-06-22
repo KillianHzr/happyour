@@ -18,8 +18,8 @@ export const UserAvatar = ({ avatar_url, username, size = 28, borderRadius, styl
   const { colors } = useTheme();
   const r = borderRadius ?? (size / 2);
   return (
-    <View style={[{ width: size, height: size, borderRadius: r, backgroundColor: colors.text, justifyContent: "center", alignItems: "center", overflow: "hidden" }, style]}>
-      <Text style={{ color: colors.bg, fontFamily: typography.family.bold, fontSize: Math.round(size * 0.42) }}>
+    <View style={[{ width: size, height: size, borderRadius: r, backgroundColor: colors.card, justifyContent: "center", alignItems: "center", overflow: "hidden" }, style]}>
+      <Text style={{ color: colors.text, fontFamily: typography.family.bold, fontSize: Math.round(size * 0.42) }}>
         {username[0]?.toUpperCase() ?? "?"}
       </Text>
       {avatar_url ? (

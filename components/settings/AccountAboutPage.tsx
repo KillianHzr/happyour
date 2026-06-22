@@ -26,6 +26,7 @@ export default function AccountAboutPage() {
       style={{ flex: 1 }}
       contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xxl }]}
       showsVerticalScrollIndicator={false}
+      alwaysBounceVertical={false}
     >
       {/* ── Carte compte ── */}
       <Card>

@@ -210,9 +210,14 @@ function FrequencySlider({ value, onChange, disabled }: { value: number; onChang
         handleAnim.stopAnimation(v => { startXRef.current = v; });
       },
       onPanResponderMove: (_, gs) => {
-        const newPos = Math.max(0, Math.min(maxPos(), startXRef.current + gs.dx));
-        handleAnim.setValue(newPos);
-        const newCount = countFromPos(newPos);
+        const max = maxPos();
+        const rawPos = Math.max(0, Math.min(max, startXRef.current + gs.dx));
+        const newCount = countFromPos(rawPos);
+        // Crans invisibles : le handle se cale sur la position discrète du palier
+        // courant pendant le drag, pour avancer de 1 en 1 plutôt qu'en continu.
+        const step = max / 10;
+        const snappedPos = step > 0 ? newCount * step : 0;
+        handleAnim.setValue(snappedPos);
         if (newCount !== currentCountRef.current) {
           currentCountRef.current = newCount;
           onChange(newCount);
@@ -372,6 +377,7 @@ export default function NotificationsSettingsPage() {
       style={{ flex: 1 }}
       contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]}
       showsVerticalScrollIndicator={false}
+      alwaysBounceVertical={false}
     >
       {/* ── I. Pause globale ── */}
       <View style={styles.section}>

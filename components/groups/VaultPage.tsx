@@ -948,7 +948,7 @@ const makeVcStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: radii.lg,
   },
   avatarFallback: {
-    backgroundColor: colors.accentMuted,
+    backgroundColor: colors.card,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -1184,7 +1184,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   // Participants
   sectionTitle: { fontFamily: typography.family.bold, fontSize: typography.size.md, color: colors.text, marginBottom: 14, marginTop: 4 },
   participantsRow: { flexDirection: "row", gap: 14, marginBottom: 28, alignItems: "flex-start" },
-  avatarWrap: { backgroundColor: colors.accentMuted, justifyContent: "center", alignItems: "center", overflow: "hidden" },
+  avatarWrap: { backgroundColor: colors.card, justifyContent: "center", alignItems: "center", overflow: "hidden" },
   avatarAdmin: { borderWidth: 2, borderColor: "#FF3B30" },
   crownWrap: { position: "absolute", top: -8, left: 0, right: 0, alignItems: "center", zIndex: 1 },
   memberLabel: { fontFamily: typography.family.regular, fontSize: typography.size.xs, color: colors.secondary, textAlign: "center" },

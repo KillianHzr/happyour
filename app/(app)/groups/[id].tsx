@@ -187,6 +187,8 @@ export default function MainPagerScreen() {
   const [showAddGroupModal, setShowAddGroupModal] = useState(false);
   // Quand le flow d'ajout se termine : ouvrir la vue du nouveau groupe dans GroupsPage
   const [enterGroupId, setEnterGroupId] = useState<string | null>(null);
+  // Incrémenté au tap sur l'onglet "Groupes" → demande à GroupsPage de revenir à la liste
+  const [closeGroupSignal, setCloseGroupSignal] = useState(0);
   const [showNotifOnboarding, setShowNotifOnboarding] = useState(false);
   const [addGroupView, setAddGroupView] = useState<null | "create" | "join">(null);
   const [newGroupName, setNewGroupName] = useState("");
@@ -1295,6 +1297,14 @@ export default function MainPagerScreen() {
     commitPage(page);
   };
 
+  // Tap sur l'onglet "Groupes" : en plus d'aller à la page 0, on demande à GroupsPage de
+  // refermer la vue d'un groupe ouvert (retour à la liste, comme le chevron). Le signal
+  // s'incrémente même si on est déjà sur la page 0 (où jumpTo serait un no-op).
+  const handleTabJump = (page: number) => {
+    if (page === 0) setCloseGroupSignal((s) => s + 1);
+    jumpTo(page);
+  };
+
   // Fondu natif entre le menu "capture" (sombre, page 1) et le menu "app" (pages 0 et 2)
   const captureMenuOpacity = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [0, 1, 0], extrapolate: 'clamp' });
   const appMenuOpacity = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [1, 0, 1], extrapolate: 'clamp' });
@@ -1486,6 +1496,7 @@ export default function MainPagerScreen() {
       userId={user?.id ?? ""}
       enterGroupId={enterGroupId}
       onEnteredGroup={() => setEnterGroupId(null)}
+      closeGroupSignal={closeGroupSignal}
       onSelectGroup={handleSwitchGroup}
       onAddGroup={() => setShowAddGroupModal(true)}
       onGoToCapture={() => jumpTo(1)}
@@ -1500,7 +1511,7 @@ export default function MainPagerScreen() {
       onDebugNamePress={() => setShowDebugMenu(true)}
       debugUnlocked={debugUnlocked}
     />
-  ), [allGroups, groupData, revealConfig, activePage === 0, user?.id, enterGroupId, handleSwitchGroup, debugUnlocked, handleRevealStart, handleGroupRoomUnlock, handleCardFrame, handleLottieFrame]);
+  ), [allGroups, groupData, revealConfig, activePage === 0, user?.id, enterGroupId, closeGroupSignal, handleSwitchGroup, debugUnlocked, handleRevealStart, handleGroupRoomUnlock, handleCardFrame, handleLottieFrame]);
 
   // Page initiale de la feuille de réglages du groupe (titre "Paramètres" porté par SettingsSheet)
   const groupSettingsInitialPage = useMemo(() => ({
@@ -1612,7 +1623,7 @@ export default function MainPagerScreen() {
             backgroundColor={colors.card}
             opacity={appMenuOpacity}
             pointerEvents={currentPage === 1 ? "none" : "auto"}
-            onJump={jumpTo}
+            onJump={handleTabJump}
           />
           {/* Menu de la capture (sombre) — caché pendant une capture active */}
           {!cameraHideMenu && (
@@ -1622,7 +1633,7 @@ export default function MainPagerScreen() {
               backgroundColor={darkColors.bg}
               opacity={captureMenuOpacity}
               pointerEvents={currentPage === 1 ? "auto" : "none"}
-              onJump={jumpTo}
+              onJump={handleTabJump}
             />
           )}
         </Animated.View>

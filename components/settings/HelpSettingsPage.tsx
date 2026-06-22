@@ -130,6 +130,7 @@ export default function HelpSettingsPage() {
         style={{ flex: 1 }}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xl, flexGrow: 1 }]}
         showsVerticalScrollIndicator={false}
+        alwaysBounceVertical={false}
         keyboardShouldPersistTaps="handled"
       >
         {/* ── Sujet (select) ── */}

@@ -52,6 +52,7 @@ type Props = {
   userId: string;
   enterGroupId?: string | null;        // ouvrir directement la vue de ce groupe (après ajout)
   onEnteredGroup?: () => void;         // consommé → réinitialise enterGroupId côté parent
+  closeGroupSignal?: number;           // incrémenté par le parent (onglet Groupes) → revenir à la liste
   onSelectGroup: (groupId: string) => void;
   onAddGroup: () => void;
   onGoToCapture: () => void;           // ouvrir la vue capture
@@ -102,7 +103,7 @@ function computeNextRevealDate(revealDayOfWeek: number, revealHour: number): Dat
   return reveal;
 }
 
-export default function GroupsPage({ allGroups, groupData, revealConfig, isActive, userId, enterGroupId, onEnteredGroup, onSelectGroup, onAddGroup, onGoToCapture, onOpenChallenge, onOpenReveal, onRevealStart, onCardFrame, onLottieFrame, onOpenSettings, onOpenArchives, onScrollLock, onDebugNamePress, debugUnlocked }: Props) {
+export default function GroupsPage({ allGroups, groupData, revealConfig, isActive, userId, enterGroupId, onEnteredGroup, closeGroupSignal, onSelectGroup, onAddGroup, onGoToCapture, onOpenChallenge, onOpenReveal, onRevealStart, onCardFrame, onLottieFrame, onOpenSettings, onOpenArchives, onScrollLock, onDebugNamePress, debugUnlocked }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -286,6 +287,13 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
     });
   }, [slideAnim]);
 
+  // Onglet "Groupes" du menu : revenir à la liste si une vue groupe est ouverte
+  // (même comportement que le chevron retour). Déclenché par incrément du signal parent.
+  useEffect(() => {
+    if (closeGroupSignal && viewingGroupId) closeGroup();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [closeGroupSignal]);
+
   // Bouton retour matériel (Android) : ferme la page groupe → liste, au lieu de quitter l'app
   useEffect(() => {
     const onBack = () => {
@@ -337,9 +345,11 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
         <View style={[styles.headerRow, { justifyContent: "space-between" }]}>
           <Text style={styles.title}>Groupes</Text>
           <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.addBtn} onPress={() => setShowSearch(true)} activeOpacity={0.8}>
-              <Icon name="search" size={20} color={colors.iconNeutral} />
-            </TouchableOpacity>
+            {allGroups.length > 3 && (
+              <TouchableOpacity style={styles.addBtn} onPress={() => setShowSearch(true)} activeOpacity={0.8}>
+                <Icon name="search" size={20} color={colors.iconNeutral} />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={styles.addBtn} onPress={onAddGroup} activeOpacity={0.8}>
               <Icon name="plus" size={20} color={colors.iconNeutral} />
             </TouchableOpacity>

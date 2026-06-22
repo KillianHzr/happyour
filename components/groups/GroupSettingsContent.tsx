@@ -545,7 +545,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     height: 56,
     borderRadius: radii.md,       // radius/300 = 12px
     overflow: "hidden",
-    backgroundColor: colors.accentMuted,
+    backgroundColor: colors.card,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -604,7 +604,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     aspectRatio: 1,
     borderRadius: radii.xl,          // radius/600
     overflow: "hidden",
-    backgroundColor: colors.accentMuted,
+    backgroundColor: colors.card,
     justifyContent: "center",
     alignItems: "center",
   },

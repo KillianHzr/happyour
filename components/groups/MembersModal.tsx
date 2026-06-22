@@ -91,7 +91,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   closeText: { color: colors.secondary, fontFamily: typography.family.semibold },
   avatarImg: { width: "100%", height: "100%" },
   memberItem: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16, backgroundColor: colors.card, padding: 14, borderRadius: radii.lg },
-  memberAvatar: { width: 44, height: 44, borderRadius: radii.xl, backgroundColor: colors.accentMuted, justifyContent: "center", alignItems: "center", overflow: "hidden" },
+  memberAvatar: { width: 44, height: 44, borderRadius: radii.xl, backgroundColor: colors.card, justifyContent: "center", alignItems: "center", overflow: "hidden" },
   memberAvatarText: { color: colors.text, fontFamily: typography.family.bold },
   memberName: { color: colors.text, fontFamily: typography.family.semibold, fontSize: typography.size.md, flex: 1 },
   removeBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: radii.sm, backgroundColor: "rgba(255,60,60,0.15)" },

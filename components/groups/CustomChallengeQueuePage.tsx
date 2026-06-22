@@ -489,7 +489,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     borderRadius: radii.md,
   },
   avatarFallback: {
-    backgroundColor: colors.accentMuted,
+    backgroundColor: colors.card,
     justifyContent: "center",
     alignItems: "center",
   },

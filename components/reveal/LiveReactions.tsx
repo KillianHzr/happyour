@@ -530,7 +530,7 @@ const makeStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.cr
     borderColor: colors.borderSecondary,
   },
   avatarFallback: {
-    backgroundColor: "#6D28D9",
+    backgroundColor: colors.card,
     justifyContent: "center",
     alignItems: "center",
   },

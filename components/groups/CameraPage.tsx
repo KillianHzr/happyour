@@ -1466,9 +1466,11 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       <View ref={rootViewRef} style={{ flex: 1 }}>
       {/* ── Camera / capture views ── */}
       {isCapturing && (
-        cameraMode === "TEXTE" ? (
+        <>
+        {/* Overlay TEXTE — la caméra reste montée dessous (0 lag à la sortie) */}
+        {cameraMode === "TEXTE" && (
           <KeyboardAvoidingView
-            style={[styles.textModeContainer, { paddingTop: Math.max(insets.top, 12) + 48 }]}
+            style={[StyleSheet.absoluteFill, styles.textModeContainer, { paddingTop: Math.max(insets.top, 12) + 48, zIndex: 1 }]}
             behavior={Platform.OS === "ios" ? "padding" : "height"}
             keyboardVerticalOffset={0}
           >
@@ -1487,8 +1489,10 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               />
             </Pressable>
           </KeyboardAvoidingView>
-        ) : cameraMode === "DESSIN" ? (
-          <View style={[styles.cameraPageContainer, { justifyContent: "flex-end", paddingBottom: activeChallenge !== null ? 0 : NAVBAR_HEIGHT, paddingHorizontal: 0 }]}>
+        )}
+        {/* Overlay DESSIN — la caméra reste montée dessous (0 lag à la sortie) */}
+        {cameraMode === "DESSIN" && (
+          <View style={[StyleSheet.absoluteFill, styles.cameraPageContainer, { justifyContent: "flex-end", paddingBottom: activeChallenge !== null ? 0 : NAVBAR_HEIGHT, paddingHorizontal: 0, zIndex: 1 }]}>
             {activeChallenge && (
               <View style={{ position: "absolute", top: 0, left: 0, right: 0, paddingTop: insets.top, paddingHorizontal: spacing.lg }} pointerEvents="box-none">
                 <View style={challengeStyles.inlineHeaderRow}>
@@ -1570,8 +1574,10 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               </View>
             </View>
           </View>
-        ) : cameraMode === "AUDIO" ? (
-          <View style={styles.audioModeContainer}>
+        )}
+        {/* Overlay AUDIO — caméra démontée pour libérer le micro */}
+        {cameraMode === "AUDIO" && (
+          <View style={[StyleSheet.absoluteFill, styles.audioModeContainer, { zIndex: 1 }]}>
             <TouchableOpacity
               style={styles.audioIdleTouchable}
               onPressIn={handleAudioPressIn}
@@ -1604,11 +1610,12 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               )}
             </TouchableOpacity>
           </View>
-        ) : (
-          <View style={[styles.cameraPageContainer, { 
-            justifyContent: "flex-end", 
-            paddingBottom: NAVBAR_HEIGHT, 
-            paddingHorizontal: 0 
+        )}
+        {/* Base caméra — montée en permanence (sauf AUDIO) pour des transitions sans lag */}
+          <View style={[styles.cameraPageContainer, {
+            justifyContent: "flex-end",
+            paddingBottom: NAVBAR_HEIGHT,
+            paddingHorizontal: 0
           }]}>
             {activeChallenge && (
               <View style={{ position: "absolute", top: 0, left: 0, right: 0, paddingTop: insets.top, paddingHorizontal: spacing.lg }} pointerEvents="box-none">
@@ -1634,7 +1641,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 {/* Camera view clipped to rounded rect — permanently mounted for 0-lag transitions 
                     like Snapchat. Unmounts after 5s of inactivity to save battery. */}
                 <View style={[StyleSheet.absoluteFillObject, { borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, overflow: "hidden" }]}>
-                  {shouldMountCamera && (cameraPermission?.granted ?? Platform.OS === "ios") && (
+                  {shouldMountCamera && cameraMode !== "AUDIO" && (cameraPermission?.granted ?? Platform.OS === "ios") && (
                     <SeamlessRecorder
                       ref={seamlessRecorderRef}
                       facing={facing}
@@ -1677,13 +1684,13 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
               )}
             </View>
           </View>
-        )
+        </>
       )}
 
 
       {/* ── Camera UI overlay ── */}
       {isCapturing && (
-        <View style={styles.fill} pointerEvents="box-none">
+        <View style={[styles.fill, { zIndex: 2 }]} pointerEvents="box-none">
           {/* Challenge top area is hidden when activeChallenge is present because we use the custom header */}
           {!capturingSecond && !isRecording && !(cameraMode === "DESSIN" && canUndo) && !showColorPalette && (
             activeChallenge === null ? (

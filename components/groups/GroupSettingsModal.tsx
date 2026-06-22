@@ -93,6 +93,7 @@ export default function GroupSettingsModal({
     <ScrollView
       style={styles.scroll}
       contentContainerStyle={{ paddingTop: insets.top + 60, paddingBottom: insets.bottom + 40 }}
+      alwaysBounceVertical={false}
     >
       <View style={styles.header}>
         <Text style={styles.title}>Paramètres du groupe</Text>
@@ -297,7 +298,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   divider: { height: 1, backgroundColor: colors.cardBorder },
 
   memberRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12 },
-  memberAvatar: { width: 36, height: 36, borderRadius: radii.lg, backgroundColor: colors.accentMuted, justifyContent: "center", alignItems: "center", overflow: "hidden" },
+  memberAvatar: { width: 36, height: 36, borderRadius: radii.lg, backgroundColor: colors.card, justifyContent: "center", alignItems: "center", overflow: "hidden" },
   avatarImg: { width: "100%", height: "100%" },
   memberInitial: { color: colors.text, fontFamily: typography.family.bold, fontSize: typography.size.sm },
   memberName: { color: colors.text, fontFamily: typography.family.semibold, fontSize: typography.size.sm },

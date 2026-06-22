@@ -11,6 +11,8 @@ interface TextStickerProps {
   padY?: number;
   /** Force le texte en majuscules (true pour les réactions, false pour un nom de groupe). */
   uppercase?: boolean;
+  /** Autorise le retour à la ligne (au lieu de tronquer avec "…"). */
+  multiline?: boolean;
 }
 
 export const TextSticker = ({
@@ -20,6 +22,7 @@ export const TextSticker = ({
   isPostSticker = false,
   padY = spacing.xs2,
   uppercase = true,
+  multiline = false,
 }: TextStickerProps) => {
   const { colors } = useTheme();
   const bg = backgroundColor ?? colors.brand;
@@ -126,7 +129,7 @@ export const TextSticker = ({
             color: textColor,
           },
         ]}
-        numberOfLines={1}
+        numberOfLines={multiline ? undefined : 1}
       >
         {displayValue}
       </Text>

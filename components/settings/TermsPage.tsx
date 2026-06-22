@@ -15,6 +15,7 @@ export default function TermsPage() {
       style={{ flex: 1 }}
       contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xxl }]}
       showsVerticalScrollIndicator={false}
+      alwaysBounceVertical={false}
     >
       <P>Dernière mise à jour : 09/06/2026. En utilisant Disclose, vous acceptez les présentes conditions. Veuillez les lire attentivement.</P>
 

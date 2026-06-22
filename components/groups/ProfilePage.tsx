@@ -618,7 +618,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   newContent: {
     flexDirection: "column",
     alignItems: "flex-start",
-    gap: spacing.xl,
+    gap: spacing.xxl,
     paddingHorizontal: 20,
     marginTop: 32,
     alignSelf: "stretch",
@@ -642,7 +642,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     width: 80, height: 80,
     borderRadius: radii.xl,
     overflow: "hidden",
-    backgroundColor: colors.accentMuted,
+    backgroundColor: colors.card,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -659,7 +659,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   newWeekCountRow: {
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "baseline",
     gap: spacing.xs,
   },
   newWeekCountNum: {
