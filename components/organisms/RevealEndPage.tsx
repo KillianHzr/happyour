@@ -71,46 +71,59 @@ export const RevealEndPage = ({
   const totalReactionsCount = commentsCount + stickersCount;
 
   return (
-    <View style={styles.fullscreenPage}>
-      {firstPhotoUrl ? (
-        <View style={StyleSheet.absoluteFill}>
-          <Image
-            source={{ uri: firstPhotoUrl }}
-            style={StyleSheet.absoluteFill}
-            contentFit="cover"
-          />
-          <BlurView intensity={75} tint="dark" style={StyleSheet.absoluteFill} />
-        </View>
-      ) : null}
+    <View style={[styles.fullscreenPage, { paddingTop: insets.top }]}>
+      <View style={styles.momentWrapper}>
+        {firstPhotoUrl ? (
+          <View style={StyleSheet.absoluteFill}>
+            <Image
+              source={{ uri: firstPhotoUrl }}
+              style={StyleSheet.absoluteFill}
+              contentFit="cover"
+            />
+            <BlurView intensity={75} tint="dark" style={StyleSheet.absoluteFill} />
+          </View>
+        ) : null}
 
-      <Animated.View style={[styles.middleContainer, { opacity, transform: [{ scale }] }]}>
-        <View style={styles.shapebandContainer}>
-          <ShapebandIcon width={180} height={56} />
-        </View>
+        <Animated.View style={[styles.middleContainer, { opacity, transform: [{ scale }] }]}>
+          <View style={styles.shapebandContainer}>
+            <ShapebandIcon width={180} height={56} />
+          </View>
 
-        <View style={styles.titlesContainer}>
-          <Text style={styles.mainTitle}>REVEAL</Text>
-          <Text style={styles.subtitle}>de la semaine</Text>
-        </View>
+          <View style={styles.titlesContainer}>
+            <Text style={styles.mainTitle}>REVEAL</Text>
+            <Text style={styles.subtitle}>de la semaine</Text>
+          </View>
 
-        <View style={styles.momentsBadge}>
-          <Text style={styles.momentsBadgeText}>
-            ( {totalReactionsCount} réactions )
-          </Text>
-        </View>
-      </Animated.View>
+          <View style={styles.momentsBadge}>
+            <Text style={styles.momentsBadgeText}>
+              {totalReactionsCount} réactions
+            </Text>
+          </View>
+        </Animated.View>
+      </View>
     </View>
   );
 };
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   fullscreenPage: {
-    flex: 1,
     width: "100%",
     height: "100%",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: colors.bg
+    backgroundColor: colors.bg,
+  },
+  momentWrapper: {
+    flex: 1,
+    width: "100%",
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    overflow: "hidden",
+    backgroundColor: "transparent",
+    justifyContent: "center",
+    alignItems: "center",
   },
   middleContainer: {
     alignItems: "center",
@@ -139,6 +152,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     lineHeight: typography.size.xxl * 1.20,
     color: colors.text,
     textAlign: "center",
+    marginTop: spacing.negSm,
   },
   momentsBadge: {
     borderRadius: radii.sm,

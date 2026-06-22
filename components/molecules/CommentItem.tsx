@@ -230,7 +230,7 @@ const makeStyles = (colors: ThemeColors) =>
     textContainer: {
       flex: 1,
       flexDirection: "column",
-      gap: 2,
+      gap: 0,
     },
     topRow: {
       flexDirection: "row",
@@ -254,5 +254,6 @@ const makeStyles = (colors: ThemeColors) =>
       fontSize: typography.size.sm,
       lineHeight: typography.size.sm * 1.4,
       color: colors.text,
+      marginTop: -1,
     },
   });

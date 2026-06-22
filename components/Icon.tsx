@@ -11,7 +11,7 @@ import { useTheme } from "../lib/theme-context";
  * design system. On peut la surcharger via `color`, mais jamais via la couleur
  * d'origine du SVG.
  */
-export type IconName = "flash" | "flash-on" | "rotate" | "zoom" | "rollback" | "trash" | "lock" | "lock-filled" | "user" | "user-filled" | "circle" | "circle-filled" | "check" | "x" | "mic" | "play" | "chevron-left" | "chevron-right" | "more-vertical" | "menu" | "droplet" | "bell" | "moon" | "eye" | "plus" | "shield" | "life-buoy" | "info" | "log-out" | "key" | "search" | "copy" | "archive" | "settings" | "crown" | "unlock" | "arrow-right" | "smiley" | "edit" | "award" | "calendar" | "loader" | "lock-border" | "shuffle";
+export type IconName = "flash" | "flash-on" | "rotate" | "zoom" | "rollback" | "trash" | "lock" | "lock-filled" | "user" | "user-filled" | "circle" | "circle-filled" | "check" | "x" | "mic" | "play" | "pause" | "chevron-left" | "chevron-right" | "more-vertical" | "menu" | "droplet" | "bell" | "moon" | "eye" | "plus" | "shield" | "life-buoy" | "info" | "log-out" | "key" | "search" | "copy" | "archive" | "settings" | "crown" | "unlock" | "arrow-right" | "smiley" | "edit" | "award" | "calendar" | "loader" | "lock-border" | "shuffle";
 
 type IconDef = { viewBox: string; paths: string[]; stroke?: boolean; strokeWidth?: number };
 
@@ -112,6 +112,10 @@ const ICONS: Record<IconName, IconDef> = {
   play: {
     viewBox: "0 0 20 20",
     paths: ["M3.68848 1.62203C4.00955 1.44674 4.40128 1.46133 4.70898 1.65914L16.375 9.15914C16.6612 9.34314 16.835 9.6597 16.835 9.99996C16.835 10.3402 16.6612 10.6568 16.375 10.8408L4.70898 18.3408C4.40128 18.5386 4.00955 18.5532 3.68848 18.3779C3.36749 18.2026 3.16797 17.8657 3.16797 17.5V2.49996C3.16797 2.13421 3.36749 1.79734 3.68848 1.62203Z"],
+  },
+  pause: {
+    viewBox: "0 0 20 20",
+    paths: ["M8.33301 2.33398C8.88529 2.33398 9.33301 2.7817 9.33301 3.33398V16.667C9.33301 17.2193 8.88529 17.667 8.33301 17.667H5C4.44772 17.667 4 17.2193 4 16.667V3.33398C4 2.7817 4.44772 2.33398 5 2.33398H8.33301ZM15 2.33398C15.5523 2.33398 16 2.7817 16 3.33398V16.667C16 17.2193 15.5523 17.667 15 17.667H11.667C11.1147 17.667 10.667 17.2193 10.667 16.667V3.33398C10.667 2.7817 11.1147 2.33398 11.667 2.33398H15Z"],
   },
   mic: {
     viewBox: "0 0 20 20",

@@ -12,6 +12,8 @@ type Props = {
   opacity: Animated.AnimatedInterpolation<number>;
   pointerEvents: "auto" | "none";
   onJump: (page: number) => void;
+  /** Page actuellement affichée : son onglet n'a pas d'effet de press (on y est déjà). */
+  currentPage: number;
 };
 
 /**
@@ -22,7 +24,7 @@ type Props = {
  * On en rend deux superposées : une sombre (capture) et une au thème de l'app (reste),
  * qui se croisent en fondu selon la position de scroll.
  */
-export default function PagerTabBar({ scrollX, colors, backgroundColor, opacity, pointerEvents, onJump }: Props) {
+export default function PagerTabBar({ scrollX, colors, backgroundColor, opacity, pointerEvents, onJump, currentPage }: Props) {
   const styles = makeStyles(colors);
 
   const tab0Active = scrollX.interpolate({ inputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH], outputRange: [0, 1, 0], extrapolate: "clamp" });
@@ -36,7 +38,7 @@ export default function PagerTabBar({ scrollX, colors, backgroundColor, opacity,
     <Animated.View style={[styles.container, { backgroundColor, opacity }]} pointerEvents={pointerEvents}>
       <View style={styles.content}>
         {/* Groupes */}
-        <TouchableOpacity style={styles.tab} onPress={() => onJump(0)}>
+        <TouchableOpacity style={styles.tab} onPress={() => onJump(0)} activeOpacity={currentPage === 0 ? 1 : 0.2}>
           <Animated.View style={[styles.tabStack, { opacity: tab0Inactive }]}>
             <FlowerIcon size={24} color={colors.iconSecondary} filled={false} />
             <Text style={[styles.tabLabel, { color: colors.textSecondary }]}>Groupes</Text>
@@ -52,7 +54,7 @@ export default function PagerTabBar({ scrollX, colors, backgroundColor, opacity,
         </TouchableOpacity>
 
         {/* Capture */}
-        <TouchableOpacity style={styles.tab} onPress={() => onJump(1)}>
+        <TouchableOpacity style={styles.tab} onPress={() => onJump(1)} activeOpacity={currentPage === 1 ? 1 : 0.2}>
           <Animated.View style={[styles.tabStack, { opacity: tab1Inactive }]}>
             <Icon name="circle" size={24} color={colors.iconSecondary} />
             <Text style={[styles.tabLabel, { color: colors.textSecondary }]}>Capture</Text>
@@ -68,7 +70,7 @@ export default function PagerTabBar({ scrollX, colors, backgroundColor, opacity,
         </TouchableOpacity>
 
         {/* Profil */}
-        <TouchableOpacity style={styles.tab} onPress={() => onJump(2)}>
+        <TouchableOpacity style={styles.tab} onPress={() => onJump(2)} activeOpacity={currentPage === 2 ? 1 : 0.2}>
           <Animated.View style={[styles.tabStack, { opacity: tab2Inactive }]}>
             <Icon name="user" size={24} color={colors.iconSecondary} />
             <Text style={[styles.tabLabel, { color: colors.textSecondary }]}>Profil</Text>

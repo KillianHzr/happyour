@@ -144,7 +144,7 @@ export default function CommentModal(props: CommentModalProps) {
         style={[
           style,
           {
-            backgroundColor: colors.card,
+            backgroundColor: colors.bg, // background/default/default (#FFFFFF en Light)
             borderTopLeftRadius: themeRadii.xl,
             borderTopRightRadius: themeRadii.xl,
             overflow: "hidden",
@@ -628,7 +628,7 @@ function CommentModalContent({
     if (submitting || !user) return;
 
     if (mode === "sticker") {
-      const text = content.trim().toUpperCase();
+      const text = content.trim();
       const isDelete = !text;
       if (isDelete) {
         supabase
@@ -745,7 +745,7 @@ function CommentModalContent({
 
   const handleContentChange = (val: string) => {
     if (mode === "sticker") {
-      setContent(val.replace(emojiRegex, "").slice(0, 8).toUpperCase());
+      setContent(val.replace(emojiRegex, "").slice(0, 8));
     } else {
       setContent(val);
     }
@@ -1029,7 +1029,7 @@ function CommentModalBody({
         <View style={{ paddingBottom }}>
           {mode === "sticker" && (
             <View style={styles.stickerPreviewContainer}>
-              <TextSticker text={content.trim().toUpperCase() || " "} fontSize={36} />
+              <TextSticker text={content.trim() || " "} fontSize={36} />
             </View>
           )}
           {mode !== "sticker" && (
@@ -1046,7 +1046,7 @@ function CommentModalBody({
             submitting={submitting}
             maxLength={mode === "sticker" ? 8 : undefined}
             placeholder={mode === "sticker" ? "Ton message..." : undefined}
-            autoCapitalize={mode === "sticker" ? "characters" : undefined}
+            autoCapitalize={mode === "sticker" ? "none" : undefined}
             isStickerMode={mode === "sticker"}
             onStickerToggle={onStickerToggle}
             onMentionSearch={setMentionKeyword}
@@ -1127,7 +1127,7 @@ const makeStyles = (colors: ThemeColors) =>
       left: 0,
       right: 0,
       bottom: -SCREEN_HEIGHT,
-      backgroundColor: colors.card,
+      backgroundColor: colors.bg, // background/default/default (#FFFFFF en Light)
       borderTopLeftRadius: themeRadii.xl,
       borderTopRightRadius: themeRadii.xl,
       overflow: "hidden",

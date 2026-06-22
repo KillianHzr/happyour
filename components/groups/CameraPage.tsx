@@ -1945,7 +1945,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
 
                 {slot1!.captionAudioUri ? (
                   <View style={{ flex: 1 }}>
-                    <AudioCaptionPlayer player={captionAudioPlayer} status={captionAudioStatus} showVocalLabel onRemove={() => setSlot1(prev => prev ? { ...prev, captionAudioUri: null } : prev)} waveform={slot1!.captionWaveform} />
+                    <AudioCaptionPlayer player={captionAudioPlayer} status={captionAudioStatus} showVocalLabel onRemove={() => setSlot1(prev => prev ? { ...prev, captionAudioUri: null } : prev)} waveform={slot1!.captionWaveform} playBtnBackgroundColor={colors.opacityLight} waveColor={colors.text} />
                   </View>
                 ) : isCaptionRecording ? (
                   <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm }}>

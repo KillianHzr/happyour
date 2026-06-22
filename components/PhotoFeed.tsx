@@ -582,14 +582,7 @@ const PhotoFeedContent = forwardRef(({
 
   return (
     <View style={styles.list}>
-      {/* Fond plein écran de l'intro (derrière la FlatList et le BottomActionBar) */}
-      {currentItem?.type === "intro" && introBgUrl ? (
-        <View style={StyleSheet.absoluteFill} pointerEvents="none">
-          <Image source={{ uri: introBgUrl }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} cachePolicy="memory-disk" blurRadius={38} />
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.45)" }]} />
-        </View>
-      ) : null}
-      <Reanimated.View style={[styles.contentWrapper, animatedContentStyle, currentItem?.type === "intro" && { backgroundColor: "transparent" }]}>
+      <Reanimated.View style={[styles.contentWrapper, animatedContentStyle]}>
         {/* Fixed full height so the cropped (shorter) contentWrapper clips it from the
             bottom instead of the FlatList re-fitting the image. */}
         <View style={{ height: FEED_HEIGHT, width: "100%" }}>
@@ -615,7 +608,7 @@ const PhotoFeedContent = forwardRef(({
             initialNumToRender={2}
             removeClippedSubviews={Platform.OS === "android"}
             overScrollMode="never"
-            style={[styles.list, currentItem?.type === "intro" && { backgroundColor: "transparent" }]}
+            style={styles.list}
             scrollEnabled={!commentModalVisible}
             keyboardShouldPersistTaps="always"
           />
@@ -689,12 +682,36 @@ const PhotoFeedContent = forwardRef(({
                     }
                     // Custom shared name (the share sheet shows the file's
                     // basename). Keep the source extension for media-type detection.
+                    // Drawings are stored as PNG bytes under a "_draw.jpg" name, so the
+                    // share file must be .png/image-png or the OS can't build a preview.
+                    const isDrawing = (moment?.image_path ?? "").includes("_draw");
                     const ext = url.split('?')[0].split('.').pop()?.toLowerCase();
-                    const safeExt = ext && ext.length <= 5 ? ext : 'jpg';
+                    const safeExt = isDrawing ? 'png' : (ext && ext.length <= 5 ? ext : 'jpg');
+                    const shareMimeType = isDrawing ? 'image/png' : undefined;
+                    const shareUTI = isDrawing ? 'public.png' : undefined;
                     const filename = `Disclose - You've never been this close!.${safeExt}`;
                     const localUri = FileSystem.cacheDirectory + filename;
-                    const { uri } = await FileSystem.downloadAsync(url, localUri);
-                    await Sharing.shareAsync(uri);
+
+                    // The media is already on the device from being displayed, so prefer a
+                    // local copy over re-downloading it from R2 (the slow part). Photos live
+                    // in expo-image's disk cache; videos/audio are already local file:// URIs.
+                    let sourceUri: string | null = url.startsWith("file://") ? url : null;
+                    if (!sourceUri) {
+                      try {
+                        const cached = await Image.getCachePathAsync(url);
+                        if (cached) sourceUri = cached.startsWith("file://") ? cached : "file://" + cached;
+                      } catch {}
+                    }
+
+                    // The friendly-named file is reused as the share basename for every
+                    // moment, so always overwrite it with the current item's media.
+                    await FileSystem.deleteAsync(localUri, { idempotent: true });
+                    if (sourceUri) {
+                      await FileSystem.copyAsync({ from: sourceUri, to: localUri });
+                    } else {
+                      await FileSystem.downloadAsync(url, localUri);
+                    }
+                    await Sharing.shareAsync(localUri, { mimeType: shareMimeType, UTI: shareUTI });
                   } catch (e) {
                     console.error("Share error:", e);
                     Share.share({ url, message: url });
@@ -711,9 +728,14 @@ const PhotoFeedContent = forwardRef(({
           : item.type === "challenge_vote" ? "Voir les réponses"
           : "Participer au vote";
 
+        // Défi sans aucune réponse → bouton "Voir les réponses" grisé et non cliquable.
+        const challengeHasNoResponses =
+          item.type === "challenge_vote" && item.challenge.responses.length === 0;
+
         return (
           <BottomActionBar
             primaryLabel={primaryLabel}
+            primaryDisabled={challengeHasNoResponses}
             onPrimaryPress={() => {
               if (item.type === "intro" || item.type === "crown") {
                 try {

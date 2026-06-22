@@ -14,6 +14,7 @@ import { AuthorInfo } from "../molecules/AuthorInfo";
 import { ReactionsRow } from "../molecules/ReactionsRow";
 import { AudioPlayerView } from "../molecules/AudioPlayerView";
 import { PostCountBadge } from "../molecules/PostCountBadge";
+import { MomentDateTime } from "../molecules/MomentDateTime";
 import { r2Storage } from "../../lib/r2";
 import { PhotoEntry } from "../../lib/feed-types";
 
@@ -31,18 +32,6 @@ interface AudioMomentProps {
 
 const NAVBAR_HEIGHT = 100;
 
-const getDayText = (dateStr: string) => {
-  const d = new Date(dateStr);
-  const day = d.toLocaleDateString("fr-FR", { weekday: "long" });
-  return day.charAt(0).toUpperCase() + day.slice(1);
-};
-
-const getTimeText = (dateStr: string) => {
-  const d = new Date(dateStr);
-  const hours = String(d.getHours()).padStart(2, "0");
-  const minutes = String(d.getMinutes()).padStart(2, "0");
-  return `${hours}:${minutes}`;
-};
 
 export const AudioMoment = ({
   moment,
@@ -192,17 +181,14 @@ export const AudioMoment = ({
               />
               <View style={styles.detailsContainer} pointerEvents="box-none">
                 <View style={styles.topInfoRow} pointerEvents="none">
-                  <View style={styles.topLeftInfo}>
-                    <Text style={styles.dayText}>{getDayText(moment.created_at)}</Text>
-                    <Text style={styles.timeText}>{getTimeText(moment.created_at)}</Text>
-                  </View>
+                  <MomentDateTime created_at={moment.created_at} />
                   <PostCountBadge text={postCountText} />
                 </View>
                 <AuthorInfo
                   avatar_url={moment.avatar_url}
                   username={moment.username}
                   created_at={moment.created_at}
-                  note={overlayNote}
+                  note={overlayNote ?? ""}
                   audioPlayer={showAudioPlayerInOverlay ? player : undefined}
                   audioStatus={showAudioPlayerInOverlay ? status : undefined}
                   onScrollLock={showAudioPlayerInOverlay ? onScrollLock : undefined}
@@ -304,22 +290,5 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     width: "100%",
-  },
-  topLeftInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  dayText: {
-    color: colors.text,
-    fontFamily: typography.family.semibold,
-    fontSize: typography.size.md,
-    lineHeight: typography.size.md * 1.4,
-  },
-  timeText: {
-    color: colors.textSecondary,
-    fontFamily: typography.family.regular,
-    fontSize: typography.size.sm,
-    lineHeight: typography.size.sm * 1.4,
   },
 });

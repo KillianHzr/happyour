@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { CrownedAvatar } from "../atoms/Avatar";
 import { ExpandableNote } from "../atoms/ExpandableNote";
@@ -49,10 +49,12 @@ export const AuthorInfo = ({
 }: AuthorInfoProps) => {
   const styles = useThemedStyles(makeStyles);
   const hasAudio = !!(audioPlayer && audioStatus);
+  // Légende dépliée (longue) → l'avatar se cale en haut ; sinon toute la rangée est centrée.
+  const [noteExpanded, setNoteExpanded] = useState(false);
 
   return (
-    <View style={styles.authorInfo}>
-      <CrownedAvatar 
+    <View style={[styles.authorInfo, noteExpanded && styles.authorInfoTop]}>
+      <CrownedAvatar
         avatar_url={avatar_url} 
         username={username} 
         size={48} 
@@ -73,7 +75,7 @@ export const AuthorInfo = ({
             <AudioCaptionPlayer player={audioPlayer!} status={audioStatus!} onScrollLock={onScrollLock} waveform={captionWaveform} />
           </View>
         ) : (
-          note !== null && <ExpandableNote text={note || "Sans description"} maxLines={2} />
+          note !== null && <ExpandableNote text={note || "Aucune description"} maxLines={2} onToggleExpand={setNoteExpanded} />
         )}
       </View>
     </View>
@@ -83,12 +85,14 @@ export const AuthorInfo = ({
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   authorInfo: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: spacing.md
+  },
+  authorInfoTop: {
+    alignItems: "flex-start",
   },
   textSection: {
     flex: 1,
-    gap: 4,
   },
   usernameLine: {
     flexDirection: "row",

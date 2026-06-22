@@ -141,7 +141,7 @@ export const CommentInput = ({
       if (isStickerMode) {
         const emojiRegex =
           /[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FEFF}\u{200D}\u{20E3}]/gu;
-        setContent(text.replace(emojiRegex, "").slice(0, 8).toUpperCase());
+        setContent(text.replace(emojiRegex, "").slice(0, 8));
       } else {
         setContent(text);
       }
@@ -173,6 +173,8 @@ export const CommentInput = ({
           multiline={maxLength === undefined}
           textAlignVertical="center"
           autoCapitalize={autoCapitalize || "sentences"}
+          autoCorrect={!isStickerMode}
+          spellCheck={!isStickerMode}
           blurOnSubmit={!isStickerMode}
           onFocus={() => {
             Animated.timing(borderOpacity, { toValue: 1, duration: 150, useNativeDriver: true }).start();
@@ -311,6 +313,7 @@ const makeStyles = (colors: ThemeColors) =>
       paddingTop: themeSpacing.lg,
       paddingBottom: themeSpacing.lg,
       gap: themeSpacing.md,
+      backgroundColor: "#FFFFFF",
     },
     // Border top visible uniquement au focus (animée) : 1px (stroke/025), border/default/default
     focusBorder: {
@@ -329,6 +332,7 @@ const makeStyles = (colors: ThemeColors) =>
       paddingTop: 8,
       paddingBottom: 8,
       gap: themeSpacing.lg,
+
     },
     input: {
       flex: 1,

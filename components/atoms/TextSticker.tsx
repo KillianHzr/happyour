@@ -20,7 +20,7 @@ export const TextSticker = ({
 }: TextStickerProps) => {
   const { colors } = useTheme();
   const bg = backgroundColor ?? colors.brand;
-  const displayValue = (text || "—").toUpperCase();
+  const displayValue = text || "—";
 
   // var(--sds-size-space-150) horizontal padding = 6px (spacing.xs2)
   const padX = spacing.xs2;

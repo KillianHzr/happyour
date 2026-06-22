@@ -4,7 +4,6 @@ import { Image } from "expo-image";
 import { View, Text, StyleSheet, ScrollView, Dimensions, Animated, Easing, TouchableOpacity, Alert, TextInput, AppState, Modal, KeyboardAvoidingView, Platform, Pressable, BackHandler } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import BlurView from "../../../components/atoms/BlurView";
-import { SvgCutout } from "../../../components/atoms/SvgCutout";
 import { RightSlideModal } from "../../../components/atoms/RightSlideModal";
 import { supabase } from "../../../lib/supabase";
 import { r2Storage } from "../../../lib/r2";
@@ -42,6 +41,7 @@ import CustomChallengeQueuePage from "../../../components/groups/CustomChallenge
 import BottomSheet from "../../../components/BottomSheet";
 import LiveReactions from "../../../components/reveal/LiveReactions";
 import { RevealHeader, type Participant } from "../../../components/organisms/RevealHeader";
+import { ActivityView } from "../../../components/organisms/ActivityView";
 import MotivationalNotificationsModal from "../../../components/MotivationalNotificationsModal";
 import { scheduleImmediateLocalNotification, scheduleFirstMomentReminder, notifyReaction } from "../../../lib/notifications";
 import { radii, spacing, typography, textStyles, buildColors, type ThemeColors } from "../../../lib/theme";
@@ -112,18 +112,6 @@ function getWeekBounds(revealDayOfWeek = 0, revealHour = 20) {
   const prevRevealDate = new Date(revealDate);
   prevRevealDate.setDate(revealDate.getDate() - 7);
   return { monday, revealDate, prevRevealDate };
-}
-
-function formatRelativeTime(dateInput: Date | string): string {
-  const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
-  const diffMs = Date.now() - date.getTime();
-  if (diffMs < 60000) return "1m";
-  const diffMins = Math.floor(diffMs / 60000);
-  if (diffMins < 60) return `${diffMins}min`;
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h`;
-  const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays}j`;
 }
 
 export default function MainPagerScreen() {
@@ -1022,7 +1010,7 @@ export default function MainPagerScreen() {
   };
 
   const handleCustomTextSubmit = () => {
-    const trimmed = customReactionText.trim().toUpperCase();
+    const trimmed = customReactionText.trim();
     if (trimmed) {
       handleEmojiReact(trimmed);
       const newHistory = [trimmed, ...customReactionHistory.filter(h => h !== trimmed)].slice(0, 3);
@@ -1346,25 +1334,11 @@ export default function MainPagerScreen() {
     scrollRef.current?.setNativeProps({ scrollEnabled });
   };
 
-  const handleCommentSeen = useCallback(async (photoId: string) => {
+  // Fetch view statuses + latest comment times for the active group and
+  // recompute each photo's unseen-comment count. One-off fetch (no realtime),
+  // shared by handleCommentSeen and the reveal-open effect below.
+  const syncUnseenCommentCounts = useCallback(async () => {
     if (!user || !activeGroupId) return;
-    
-    // 1. Optimistic local update (immediate feedback)
-    setGroupData(prev => {
-      const next = { ...prev };
-      const g = next[activeGroupId];
-      if (!g) return prev;
-      const pIdx = g.photos.findIndex(p => p.id === photoId);
-      if (pIdx !== -1 && g.photos[pIdx].hasNewComments) {
-        const newPhotos = [...g.photos];
-        newPhotos[pIdx] = { ...newPhotos[pIdx], hasNewComments: false, newCommentsCount: 0 };
-        next[activeGroupId] = { ...g, photos: newPhotos };
-        return next;
-      }
-      return prev;
-    });
-
-    // 2. Global Sync: Fetch all view statuses and latest comment times for this group
     try {
       const currentPhotos = groupData[activeGroupId]?.photos || [];
       const photoIds = currentPhotos.map(p => p.id);
@@ -1401,13 +1375,45 @@ export default function MainPagerScreen() {
         };
       });
     } catch (e) {
-      console.error("[DB FETCH] handleCommentSeen Sync Error:", e);
+      console.error("[DB FETCH] syncUnseenCommentCounts Error:", e);
     }
+  }, [user, activeGroupId, groupData]);
+
+  const syncUnseenCommentCountsRef = useRef(syncUnseenCommentCounts);
+  syncUnseenCommentCountsRef.current = syncUnseenCommentCounts;
+
+  const handleCommentSeen = useCallback(async (photoId: string) => {
+    if (!user || !activeGroupId) return;
+
+    // 1. Optimistic local update (immediate feedback)
+    setGroupData(prev => {
+      const next = { ...prev };
+      const g = next[activeGroupId];
+      if (!g) return prev;
+      const pIdx = g.photos.findIndex(p => p.id === photoId);
+      if (pIdx !== -1 && g.photos[pIdx].hasNewComments) {
+        const newPhotos = [...g.photos];
+        newPhotos[pIdx] = { ...newPhotos[pIdx], hasNewComments: false, newCommentsCount: 0 };
+        next[activeGroupId] = { ...g, photos: newPhotos };
+        return next;
+      }
+      return prev;
+    });
+
+    // 2. Global Sync: Fetch all view statuses and latest comment times for this group
+    await syncUnseenCommentCounts();
 
     // Rafraîchit aussi le feed Activité (commentaires + réactions de l'autre) à chaque
     // ouverture de commentaire. Sans force : le cooldown de 45s évite les syncs en rafale.
     fetchAllDataRef.current();
-  }, [user, activeGroupId, groupData]);
+  }, [user, activeGroupId, syncUnseenCommentCounts]);
+
+  // First-ever reveal entry: users have no comment_views rows yet, so their
+  // unseen-comment badges are never populated until they open a post. Fetch
+  // comments once when the reveal opens so the counters are correct on arrival.
+  useEffect(() => {
+    if (showReveal) syncUnseenCommentCountsRef.current();
+  }, [showReveal]);
 
   const memoizedVaultPage = useMemo(() => (
     <VaultPage
@@ -1611,6 +1617,7 @@ export default function MainPagerScreen() {
             opacity={appMenuOpacity}
             pointerEvents={currentPage === 1 ? "none" : "auto"}
             onJump={jumpTo}
+            currentPage={currentPage}
           />
           {/* Menu de la capture (sombre) — caché pendant une capture active */}
           {!cameraHideMenu && (
@@ -1621,6 +1628,7 @@ export default function MainPagerScreen() {
               opacity={captureMenuOpacity}
               pointerEvents={currentPage === 1 ? "auto" : "none"}
               onJump={jumpTo}
+              currentPage={currentPage}
             />
           )}
         </Animated.View>
@@ -1763,7 +1771,7 @@ export default function MainPagerScreen() {
             onRequestClose={() => setShowNotificationsModal(false)}
           >
             <ForceTheme mode="Dark">
-              <NotificationsModalContent
+              <ActivityView
                 onClose={() => setShowNotificationsModal(false)}
                 activitiesList={activitiesList}
                 handleActivityClick={handleActivityClick}
@@ -1808,8 +1816,10 @@ export default function MainPagerScreen() {
                         }
                       }}
                       maxLength={10}
-                      autoCapitalize="characters"
-                      keyboardType="visible-password"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      spellCheck={false}
+                      keyboardType="default"
                       autoFocus
                       returnKeyType="done"
                       onSubmitEditing={handleCustomTextSubmit}
@@ -2108,199 +2118,5 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   historyChip: { backgroundColor: colors.accentMuted, borderRadius: radii.lg, paddingHorizontal: 14, paddingVertical: 7 },
   historyChipText: { color: colors.text, fontFamily: typography.family.bold, fontSize: typography.size.xs },
 
-  // Notifications View
-  notifContainer: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  notifHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    gap: spacing.sm, // gap-200 (8px)
-  },
-  notifBackButton: {
-    width: 40,
-    height: 40,
-    borderRadius: radii.md, // radius/300 (12px)
-    backgroundColor: colors.opacityLight, // background/default/default-opacity
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  notifTitle: {
-    ...textStyles.subtitleStrong,
-    color: colors.textNeutral,
-  },
-  notifContent: {
-    flexGrow: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 24,
-  },
-  notifListContent: {
-    flexGrow: 1,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-  },
-  activitiesList: {
-    flexDirection: "column",
-    gap: spacing.lg, // space/400 (16px)
-    width: "100%",
-  },
-  activityItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    width: "100%",
-  },
-  activityAvatarWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: radii.md, // radius/300 (12px)
-    backgroundColor: colors.accentMuted,
-    justifyContent: "center",
-    alignItems: "center",
-    overflow: "hidden",
-  },
-  activityAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: radii.md,
-  },
-  activityAvatarFallbackText: {
-    color: colors.textNeutral,
-    fontFamily: typography.family.bold,
-    fontSize: 18,
-  },
-  activityDetails: {
-    flex: 1,
-    flexDirection: "column",
-    marginLeft: spacing.md, // size-space-300 (12px)
-  },
-  activityMetaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 2,
-  },
-  activityUsername: {
-    ...textStyles.bodySmallStrong,
-    color: colors.textNeutral,
-    maxWidth: "70%",
-  },
-  activityTimeDot: {
-    marginHorizontal: 6,
-    color: colors.textNeutralTertiary,
-    fontSize: 10,
-  },
-  activityTime: {
-    ...textStyles.bodySmall,
-    color: colors.textNeutralTertiary,
-  },
-  activityContext: {
-    ...textStyles.bodyBase,
-    color: colors.textNeutral,
-  },
-  activityCutoutWrap: {
-    marginLeft: spacing.xl, // space-600 (24px)
-  },
-  notifEmptyState: {
-    alignItems: "center",
-    gap: 12,
-  },
-  notifEmptyEmoji: {
-    fontSize: 48,
-    marginBottom: 8,
-  },
-  notifEmptyTitle: {
-    fontFamily: typography.family.bold,
-    fontSize: typography.size.md,
-    color: colors.textNeutral,
-    textAlign: "center",
-  },
-  notifEmptySub: {
-    fontFamily: typography.family.regular,
-    fontSize: typography.size.sm,
-    color: colors.textNeutral,
-    textAlign: "center",
-    lineHeight: 20,
-  },
 });
 
-interface NotificationsModalContentProps {
-  onClose: () => void;
-  activitiesList: any[];
-  handleActivityClick: (item: any) => void;
-}
-
-function NotificationsModalContent({
-  onClose,
-  activitiesList,
-  handleActivityClick,
-}: NotificationsModalContentProps) {
-  const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
-  const styles = useThemedStyles(makeStyles);
-
-  return (
-    <View style={styles.notifContainer}>
-      <StatusBar style="light" />
-      {/* Header */}
-      <View style={[styles.notifHeader, { paddingTop: insets.top + 16 }]}>
-        <TouchableOpacity style={styles.notifBackButton} onPress={onClose} activeOpacity={0.7}>
-          <Svg width="7" height="12" viewBox="0 0 7 12" fill="none">
-            <Path
-              d="M5.29289 0.292893C5.68342 -0.0976311 6.31643 -0.0976311 6.70696 0.292893C7.09748 0.683417 7.09748 1.31643 6.70696 1.70696L2.41399 5.99992L6.70696 10.2929C7.09748 10.6834 7.09748 11.3164 6.70696 11.707C6.31643 12.0975 5.68342 12.0975 5.29289 11.707L0.292893 6.70696C-0.0976311 6.31643 -0.0976311 5.68342 0.292893 5.29289L5.29289 0.292893Z"
-              fill={colors.textNeutral}
-            />
-          </Svg>
-        </TouchableOpacity>
-        <Text style={styles.notifTitle}>Activités</Text>
-      </View>
-
-      {/* Content */}
-      <ScrollView contentContainerStyle={activitiesList.length > 0 ? styles.notifListContent : styles.notifContent} showsVerticalScrollIndicator={false}>
-        {activitiesList.length > 0 ? (
-          <View style={styles.activitiesList}>
-            {activitiesList.map((item) => (
-              <TouchableOpacity key={item.id} style={styles.activityItem} onPress={() => handleActivityClick(item)} activeOpacity={0.7}>
-                {/* Profile pic (rounded square of 48px and radius/300) */}
-                <View style={styles.activityAvatarWrap}>
-                  {item.avatarUrl ? (
-                    <Image source={{ uri: item.avatarUrl }} style={styles.activityAvatar} />
-                  ) : (
-                    <Text style={styles.activityAvatarFallbackText}>
-                      {item.username[0]?.toUpperCase() ?? "?"}
-                    </Text>
-                  )}
-                </View>
-
-                {/* Details */}
-                <View style={styles.activityDetails}>
-                  <View style={styles.activityMetaRow}>
-                    <Text style={styles.activityUsername} numberOfLines={1}>{item.username}</Text>
-                    <Text style={styles.activityTimeDot}>•</Text>
-                    <Text style={styles.activityTime}>{formatRelativeTime(item.created_at)}</Text>
-                  </View>
-                  <Text style={styles.activityContext}>{item.context}</Text>
-                </View>
-
-                {/* Photo Cutout on the right */}
-                {item.photoUrl ? (
-                  <View style={styles.activityCutoutWrap}>
-                    <SvgCutout uri={item.photoUrl} size={56} />
-                  </View>
-                ) : null}
-              </TouchableOpacity>
-            ))}
-          </View>
-        ) : (
-          <View style={styles.notifEmptyState}>
-            <Text style={styles.notifEmptyEmoji}>🔔</Text>
-            <Text style={styles.notifEmptyTitle}>Aucune activité</Text>
-            <Text style={styles.notifEmptySub}>Vous serez notifié quand vos amis réagiront ou commenteront vos moments.</Text>
-          </View>
-        )}
-      </ScrollView>
-    </View>
-  );
-}

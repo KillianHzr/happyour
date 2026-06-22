@@ -1,6 +1,5 @@
 import React, { useRef, useEffect } from "react";
 import { View, StyleSheet, TouchableOpacity, PanResponder, Text } from "react-native";
-import { Svg, Path } from "react-native-svg";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { colors, radii, typography } from "../../lib/theme";
 import Icon from "../Icon";
@@ -17,9 +16,12 @@ interface AudioCaptionPlayerProps {
   iconColor?: string;
   /** Waveform bar color (played = full opacity, unplayed = faded). Defaults to bgNeutral. */
   waveColor?: string;
+  /** Optional square-rounded background behind the play/pause button (e.g. opacityLight in the
+   *  capture preview, to match the recording confirm button). Defaults to transparent. */
+  playBtnBackgroundColor?: string;
 }
 
-export const AudioCaptionPlayer = ({ player, status, onRemove, showVocalLabel, onScrollLock, waveform, iconColor = colors.white, waveColor = colors.bgNeutral }: AudioCaptionPlayerProps) => {
+export const AudioCaptionPlayer = ({ player, status, onRemove, showVocalLabel, onScrollLock, waveform, iconColor = colors.white, waveColor = colors.bgNeutral, playBtnBackgroundColor }: AudioCaptionPlayerProps) => {
   const waveWidthRef = useRef(1);
   const waveOriginXRef = useRef(0);
   const isDraggingRef = useRef(false);
@@ -76,11 +78,9 @@ export const AudioCaptionPlayer = ({ player, status, onRemove, showVocalLabel, o
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity onPress={togglePlay} style={styles.playBtn}>
+      <TouchableOpacity onPress={togglePlay} style={[styles.playBtn, playBtnBackgroundColor ? { backgroundColor: playBtnBackgroundColor } : null]}>
         {status.playing ? (
-          <Svg width="18" height="18" viewBox="0 0 24 24" fill={iconColor}>
-            <Path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-          </Svg>
+          <Icon name="pause" size={18} color={iconColor} />
         ) : (
           <Icon name="play" size={18} color={iconColor} />
         )}
@@ -99,7 +99,7 @@ export const AudioCaptionPlayer = ({ player, status, onRemove, showVocalLabel, o
           color={waveColor}
           heightScale={80 / 3}
           barWidth={2}
-          minHeight={2}
+          minHeight={1}
         />
       </View>
 
@@ -116,13 +116,13 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 8,
     flex: 1,
-    height: 32,
+    height: 22,
   },
   playBtn: {
-    width: 32,
-    height: 32,
+    width: 20,
+    height: 20,
     borderRadius: radii.sm, // var(--sds-size-radius-200) -> 8
     justifyContent: "center",
     alignItems: "center",
