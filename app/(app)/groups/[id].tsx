@@ -1280,9 +1280,9 @@ export default function MainPagerScreen() {
 
   const jumpTo = (page: number) => {
     if (page === currentPage) return;
-    // Scroll natif (thread UI) → fluide comme le swipe ; scrollX suit via onScroll donc le
-    // fondu du menu reste synchronisé (pas de flash). Le re-render JS d'activation ne le bloque pas.
-    scrollRef.current?.scrollTo({ x: page * SCREEN_WIDTH, animated: true });
+    // Changement de page instantané (pas d'animation de slide) : on saute directement à
+    // l'offset. scrollX suit via onScroll, donc le menu se met à jour sans transition.
+    scrollRef.current?.scrollTo({ x: page * SCREEN_WIDTH, animated: false });
     commitPage(page);
   };
 
@@ -1316,15 +1316,17 @@ export default function MainPagerScreen() {
   const cameraScale = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [0.9, 1, 0.9] });
   const cameraOpacity = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [0.4, 1, 0.4] });
 
-  const scrollEnabled = !cameraScrollLocked && !groupsPagerLocked;
+  // Le swipe entre les pages (Groupes ← Capture → Profil) est désactivé : la navigation
+  // se fait uniquement via le menu du bas. groupsPagerLocked/cameraScrollLocked restent
+  // calculés (utilisés ailleurs) mais n'autorisent plus le swipe du pager.
+  const scrollEnabled = false;
 
   // Palette sombre fixe pour le menu de la vue capture
   const darkColors = useMemo(() => buildColors("Dark"), []);
 
-  const lockScrollDirect = useCallback((locked: boolean) => {
-    if (!locked && cameraScrollLocked) return;
-    scrollRef.current?.setNativeProps({ scrollEnabled: !locked });
-  }, [cameraScrollLocked]);
+  // Le pager n'est jamais swipable (navigation au menu uniquement) : verrouiller/déverrouiller
+  // le scroll horizontal n'a plus d'effet. On garde le callback pour compat des enfants.
+  const lockScrollDirect = useCallback((_locked: boolean) => {}, []);
 
   const handlePagerTouchStart = (e: any) => {
     pagerTouchRef.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY, decided: false };
@@ -1554,7 +1556,7 @@ export default function MainPagerScreen() {
         allGroups={allGroups}
         pendingChallenge={pendingChallenge}
         onPendingChallengeConsumed={() => setPendingChallenge(null)}
-        onScrollLock={(v) => { setCameraScrollLocked(v); scrollRef.current?.setNativeProps({ scrollEnabled: !v }); }}
+        onScrollLock={(v) => { setCameraScrollLocked(v); }}
         onHideMenu={setCameraHideMenu}
         onCaptureSent={(info) => { setProfileRefreshKey(k => k + 1); showCaptureToast(info); }}
       />

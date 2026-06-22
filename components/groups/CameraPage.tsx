@@ -2386,8 +2386,27 @@ function ModeSelector({ selected, onSelect }: { selected: CameraMode; onSelect: 
   const animating = useRef(false);
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
+  const onSelectRef = useRef(onSelect);
+  onSelectRef.current = onSelect;
   const slotWidthRef = useRef(slotWidth);
   slotWidthRef.current = slotWidth;
+
+  // Swipe horizontal sur le sélecteur → passe au mode suivant/précédent. Les taps
+  // (sans déplacement) restent gérés par les TouchableOpacity des items.
+  const swipeResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponderCapture: (_, g) =>
+        Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+      onPanResponderRelease: (_, g) => {
+        if (Math.abs(g.dx) < 20) return;
+        const curIdx = Math.max(0, MODE_ORDER.findIndex((m) => m.mode === selectedRef.current));
+        // Swipe vers la gauche (dx<0) → mode suivant ; vers la droite → précédent.
+        const dir = g.dx < 0 ? 1 : -1;
+        const next = MODE_ORDER[mod(curIdx + dir, MODE_ORDER.length)];
+        if (next.mode !== selectedRef.current) onSelectRef.current(next.mode);
+      },
+    })
+  ).current;
 
   // Fait rouler le carrousel d'un cran vers le mode sélectionné, puis se relance
   // (gère les taps rapides : on draine les changements en attente à chaque fin).
@@ -2421,7 +2440,7 @@ function ModeSelector({ selected, onSelect }: { selected: CameraMode; onSelect: 
   for (let v = centerV - 2; v <= centerV + 2; v++) items.push(v);
 
   return (
-    <View style={[styles.modeSlider, { width: pillWidth }]}>
+    <View style={[styles.modeSlider, { width: pillWidth }]} {...swipeResponder.panHandlers}>
       <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
       <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
       <View style={{ width: "100%", height: MODE_ITEM_HEIGHT }}>
