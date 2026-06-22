@@ -720,11 +720,14 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   }, [isActive]);
 
   useEffect(() => {
-    const base = slot1 !== null || isPinching || isZoomDragging || isRecording || showChallengesInline || activeChallenge !== null;
+    const base = slot1 !== null || isRecording || showChallengesInline || activeChallenge !== null;
     // Verrou du pager + masquage du menu UNIQUEMENT quand on est réellement sur la capture
     // (isActive), et réappliqués à l'arrivée — sinon revenir en mode DESSIN depuis une autre
     // page laisse le pager déverrouillé et le swipe annule le dessin.
-    onScrollLock(isActive && (base || cameraMode === "DESSIN"));
+    // Le pinch/drag de zoom verrouille le pager (évite de changer de page pendant le geste)
+    // mais NE masque PAS le menu — sinon il disparaît le temps du zoom, ce qui est déroutant.
+    const zooming = isPinching || isZoomDragging;
+    onScrollLock(isActive && (base || zooming || cameraMode === "DESSIN"));
     onHideMenu?.(isActive && (base || (cameraMode === "DESSIN" && canUndo)));
   }, [isActive, slot1, isPinching, cameraMode, canUndo, isZoomDragging, isRecording, showChallengesInline, activeChallenge]);
 
