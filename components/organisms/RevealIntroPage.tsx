@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Animated } from "react-native";
 import { Svg, Path } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Image } from "expo-image";
 import { TextSticker } from "../atoms/TextSticker";
 import { spacing, typography, radii, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
@@ -59,57 +60,82 @@ export const RevealIntroPage = ({
   }, [isVisible]);
 
   return (
-    <View style={styles.fullscreenPage}>
-      {/* Le fond (image floutée plein écran) est rendu par PhotoFeed, derrière la FlatList,
-          pour passer vraiment derrière la zone du bouton "Démarrer". */}
-      <Animated.View style={[styles.middleContainer, { opacity, transform: [{ scale }] }]}>
-        <View style={styles.stickerWrapper}>
-          <TextSticker
-            text={groupName || "—"}
-            fontSize={typography.size.titleSm}
-            padY={spacing.md}
-            uppercase={false}
-          />
-        </View>
-
-        <View style={styles.titlesContainer}>
-          <Text style={styles.mainTitle}>{customTitle ?? "REVEAL"}</Text>
-          <Text style={styles.subtitle}>{customSubtitle ?? "de la semaine"}</Text>
-        </View>
-
-        {momentsCount > 0 ? (
-          <View style={styles.momentsBadge}>
-            <Text style={styles.momentsBadgeText}>
-              {momentsCount} {momentsCount > 1 ? "moments" : "moment"}
-            </Text>
+    <View style={[styles.fullscreenPage, { paddingTop: insets.top }]}>
+      <View style={styles.momentWrapper}>
+        {firstPhotoUrl ? (
+          <View style={StyleSheet.absoluteFill}>
+            <Image
+              source={{ uri: firstPhotoUrl }}
+              style={StyleSheet.absoluteFill}
+              contentFit="cover"
+              transition={0}
+              cachePolicy="memory-disk"
+              blurRadius={38}
+            />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.45)" }]} />
           </View>
         ) : null}
-      </Animated.View>
 
-      <Animated.View
-        style={[
-          styles.revealIntroHint,
-          {
-            bottom: insets.bottom,
-            opacity: hintOpacity,
-            transform: [{ translateY: hintY }]
-          }
-        ]}
-      >
-        <Text style={styles.revealIntroHintText}>Swipe vers le bas</Text>
-      </Animated.View>
+        <Animated.View style={[styles.middleContainer, { opacity, transform: [{ scale }] }]}>
+          <View style={styles.stickerWrapper}>
+            <TextSticker
+              text={groupName || "—"}
+              fontSize={typography.size.titleSm}
+              padY={spacing.md}
+              uppercase={false}
+            />
+          </View>
+
+          <View style={styles.titlesContainer}>
+            <Text style={styles.mainTitle}>{customTitle ?? "REVEAL"}</Text>
+            <Text style={styles.subtitle}>{customSubtitle ?? "de la semaine"}</Text>
+          </View>
+
+          {momentsCount > 0 ? (
+            <View style={styles.momentsBadge}>
+              <Text style={styles.momentsBadgeText}>
+                {momentsCount} {momentsCount > 1 ? "moments" : "moment"}
+              </Text>
+            </View>
+          ) : null}
+        </Animated.View>
+
+        <Animated.View
+          style={[
+            styles.revealIntroHint,
+            {
+              bottom: spacing.lg,
+              opacity: hintOpacity,
+              transform: [{ translateY: hintY }]
+            }
+          ]}
+        >
+          <Text style={styles.revealIntroHintText}>Swipe vers le bas</Text>
+        </Animated.View>
+      </View>
     </View>
   );
 };
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   fullscreenPage: {
-    flex: 1,
     width: "100%",
     height: "100%",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "transparent", // le fond plein écran est rendu par PhotoFeed (derrière)
+    backgroundColor: colors.bg,
+  },
+  momentWrapper: {
+    flex: 1,
+    width: "100%",
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    overflow: "hidden",
+    backgroundColor: "transparent",
+    justifyContent: "center",
+    alignItems: "center",
   },
   middleContainer: {
     alignItems: "center",
@@ -138,6 +164,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     lineHeight: typography.size.xxl * 1.20,
     color: colors.text,
     textAlign: "center",
+    marginTop: spacing.negSm,
   },
   momentsBadge: {
     borderRadius: radii.sm,
@@ -159,7 +186,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   revealIntroHintText: {
     fontFamily: typography.family.semibold, // body/font-weight-strong SemiBold
     fontSize: typography.size.md, // body/size-medium (16px)
-    lineHeight: typography.size.md * 1.0, // line height 100%
+    lineHeight: typography.size.md * 1.2, // line height 100%
     color: colors.textSecondary,
   },
 });

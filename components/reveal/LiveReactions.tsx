@@ -193,7 +193,7 @@ function BigWave({
       ) : (
         // Personne d'autre connecté au reveal au moment du shake.
         <View style={styles.wavedToContainer}>
-          <Text style={styles.wavedToText}>Tu ne salues personne</Text>
+          <Text style={styles.wavedToText}>Personne n’est là</Text>
         </View>
       )}
     </Animated.View>

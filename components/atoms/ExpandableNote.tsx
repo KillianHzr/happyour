@@ -48,13 +48,13 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: typography.family.regular,
     fontSize: typography.size.md,
     lineHeight: typography.size.md * 1.4,
-    marginTop: 3
+    letterSpacing: 0,
   },
   noteExpand: {
     color: colors.textSecondary,
     fontFamily: typography.family.regular,
     fontSize: typography.size.xxs,
     lineHeight: typography.size.xxs * 1.4,
-    marginTop: 2
+    letterSpacing: 0,
   },
 });

@@ -63,10 +63,10 @@ const FOCUS_RING_TRANSITION = {
   transitionTimingFunction: "ease-out",
 } as any;
 
-// function getSecondUrl(r: ChallengeResponse): string | null {
-//   if (!r.second_image_path || r.second_image_path === "text_mode") return null;
-//   return r2Storage.getPublicUrl(r.second_image_path);
-// }
+function getSecondUrl(r: ChallengeResponse): string | null {
+  if (!r.second_image_path || r.second_image_path === "text_mode") return null;
+  return r2Storage.getPublicUrl(r.second_image_path);
+}
 
 function mediaType(path: string | null): "text" | "audio" | "drawing" | "video" | "photo" {
   if (!path || path === "text_mode") return "text";
@@ -347,6 +347,10 @@ export default function ChallengeVotePage({
   const [commentModalMode, setCommentModalMode] = useState<"comment" | "sticker">("comment");
   const [commentActiveResponse, setCommentActiveResponse] = useState<ChallengeResponse | null>(null);
   const [reactionsMap, setReactionsMap] = useState<Record<string, Reaction[]>>({});
+  // Per-response count of comments from *others* added since the user last opened that
+  // response's comments. Drives the unseen-comments badge on the "Réactions" button,
+  // mirroring the reveal (see [id].tsx newCommentsCountMap / BottomActionBar badge).
+  const [unseenMap, setUnseenMap] = useState<Record<string, number>>({});
 
   useEffect(() => {
     onCommentModalChange?.(commentModalVisible);
@@ -407,6 +411,56 @@ export default function ChallengeVotePage({
       supabase.removeChannel(channel);
     };
   }, [challenge.responses, members]);
+
+  // Count, per response, comments from *others* added since the user last opened that
+  // response's comments (its comment_views.last_viewed_at). Own comments never count as
+  // unseen. Challenge-response comments are stored under photo_id = response.id, same as
+  // the reveal, so this reuses the comments / comment_views tables directly.
+  const fetchUnseenComments = async () => {
+    if (!currentUserId || challenge.responses.length === 0) return;
+    const responseIds = challenge.responses.map(r => r.id);
+    try {
+      const [viewsRes, commentsRes] = await Promise.all([
+        supabase.from("comment_views").select("photo_id, last_viewed_at").eq("user_id", currentUserId).in("photo_id", responseIds),
+        supabase.from("comments").select("photo_id, user_id, created_at").in("photo_id", responseIds),
+      ]);
+
+      const viewsMap = Object.fromEntries((viewsRes.data ?? []).map((v: any) => [v.photo_id, v.last_viewed_at]));
+      const counts: Record<string, number> = {};
+      for (const c of commentsRes.data ?? []) {
+        if (c.user_id === currentUserId) continue;
+        const lastViewedAt = viewsMap[c.photo_id];
+        if (!lastViewedAt || new Date(c.created_at) > new Date(lastViewedAt)) {
+          counts[c.photo_id] = (counts[c.photo_id] || 0) + 1;
+        }
+      }
+      setUnseenMap(counts);
+    } catch (err) {
+      console.error("Error fetching challenge unseen comments:", err);
+    }
+  };
+
+  // Fetch unseen-comment counts and keep them live as comments arrive.
+  useEffect(() => {
+    fetchUnseenComments();
+
+    const channel = supabase
+      .channel(`challenge-comments-${challenge.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "comments" }, () => {
+        fetchUnseenComments();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [challenge.responses, currentUserId]);
+
+  // Recompute when the responses modal opens, so the badge is correct on arrival
+  // (mirrors the reveal-open sync in [id].tsx).
+  useEffect(() => {
+    if (showResponsesModal) fetchUnseenComments();
+  }, [showResponsesModal]);
 
   // Reset indices on modal close/open
   useEffect(() => {
@@ -488,12 +542,12 @@ export default function ChallengeVotePage({
       avatar_url: currentUserAvatarUrl ?? me?.avatar_url ?? null,
       sticker_id: text,
     } as Reaction);
-    showReactionToast("Réaction Ajouté");
+    showReactionToast("Réaction ajoutée");
   }, [members, currentUserId, currentUsername, currentUserAvatarUrl, showReactionToast]);
 
   const handleStickerDeleted = useCallback(() => {
     if (currentUserId) setRemovingReactionUserId(currentUserId);
-    showReactionToast("Réaction supprimé");
+    showReactionToast("Réaction supprimée");
   }, [currentUserId, showReactionToast]);
 
   useEffect(() => () => { if (reactionToastTimer.current) clearTimeout(reactionToastTimer.current); }, []);
@@ -717,7 +771,7 @@ export default function ChallengeVotePage({
                   shift when the question wraps to 1 vs 2 lines — keeps the gap above
                   the preview constant. */}
               <View style={cvStyles.modalQuestionContainer}>
-                <Text style={cvStyles.modalQuestionText} numberOfLines={2}>
+                <Text style={[cvStyles.modalQuestionText, commentModalVisible ? cvStyles.modalQuestionTextCentered : cvStyles.modalQuestionTextLeft]} numberOfLines={2}>
                   Si{" "}
                   <Text style={cvStyles.orangeText}>{challenge.target_username}</Text>
                   {" était un"}{"aeiouyAEIOUY".includes(challenge.theme.label?.[0] ?? "") ? "" : "·e"}{" "}
@@ -826,16 +880,23 @@ export default function ChallengeVotePage({
               style={[cvStyles.modalFooter, animatedModalFooterStyle]}
               pointerEvents={commentModalVisible ? "none" : "auto"}
             >
-              <TouchableOpacity 
-                style={cvStyles.modalReactionsBtn} 
+              <TouchableOpacity
+                style={cvStyles.modalReactionsBtn}
                 onPress={() => {
                   setCommentActiveResponse(activeResponse);
                   setCommentModalMode("comment");
                   setCommentModalVisible(true);
+                  // Optimistically clear the badge — CommentModal marks it seen in DB on open.
+                  setUnseenMap((prev) => ({ ...prev, [activeResponse.id]: 0 }));
                 }}
                 activeOpacity={0.85}
               >
                 <Text style={cvStyles.modalReactionsBtnText}>Réactions</Text>
+                {(unseenMap[activeResponse.id] ?? 0) > 0 && (
+                  <View style={cvStyles.reactionsBtnBadge}>
+                    <Text style={cvStyles.reactionsBtnBadgeText}>{unseenMap[activeResponse.id]}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
               <TouchableOpacity 
                 style={cvStyles.placeholderBtn} 
@@ -849,15 +910,39 @@ export default function ChallengeVotePage({
                       Share.share({ url, message: url });
                       return;
                     }
-                    // Download to cache before sharing, with a custom shared name
-                    // (the share sheet shows the file's basename). Keep the source
-                    // extension so the OS still detects the media type.
+                    // Share with a custom shared name (the share sheet shows the file's
+                    // basename). Keep the source extension so the OS detects the media type.
+                    // Drawings are stored as PNG bytes under a "_draw.jpg" name, so the
+                    // share file must be .png/image-png or the OS can't build a preview.
+                    const sharePath = swapped ? (activeResponse.second_image_path ?? activeResponse.image_path) : activeResponse.image_path;
+                    const isDrawing = (sharePath ?? "").includes("_draw");
                     const ext = url.split('?')[0].split('.').pop()?.toLowerCase();
-                    const safeExt = ext && ext.length <= 5 ? ext : 'jpg';
+                    const safeExt = isDrawing ? 'png' : (ext && ext.length <= 5 ? ext : 'jpg');
+                    const shareMimeType = isDrawing ? 'image/png' : undefined;
+                    const shareUTI = isDrawing ? 'public.png' : undefined;
                     const filename = `Disclose - You've never been this close!.${safeExt}`;
                     const localUri = FileSystem.cacheDirectory + filename;
-                    const { uri } = await FileSystem.downloadAsync(url, localUri);
-                    await Sharing.shareAsync(uri);
+
+                    // The media is already on the device from being displayed, so prefer a
+                    // local copy over re-downloading it from R2 (the slow part). Photos live
+                    // in expo-image's disk cache; videos/audio are already local file:// URIs.
+                    let sourceUri: string | null = url.startsWith("file://") ? url : null;
+                    if (!sourceUri) {
+                      try {
+                        const cached = await Image.getCachePathAsync(url);
+                        if (cached) sourceUri = cached.startsWith("file://") ? cached : "file://" + cached;
+                      } catch {}
+                    }
+
+                    // The friendly-named file is reused as the share basename for every
+                    // item, so always overwrite it with the current item's media.
+                    await FileSystem.deleteAsync(localUri, { idempotent: true });
+                    if (sourceUri) {
+                      await FileSystem.copyAsync({ from: sourceUri, to: localUri });
+                    } else {
+                      await FileSystem.downloadAsync(url, localUri);
+                    }
+                    await Sharing.shareAsync(localUri, { mimeType: shareMimeType, UTI: shareUTI });
                   } catch (e) {
                     console.error("Share error:", e);
                     Share.share({ url, message: url });
@@ -889,6 +974,12 @@ export default function ChallengeVotePage({
               drawerCoverageShared={drawerCoverage}
               onKeyboardActiveChange={setKeyboardActive}
               onModeChange={(m) => setActiveModalMode(m)}
+              onSeen={() => {
+                // CommentModal calls this after writing comment_views (last_viewed_at) to
+                // the DB on open. Re-fetch every response's comments + views to recompute
+                // all badges — same as the reveal's syncUnseenCommentCounts on open.
+                fetchUnseenComments();
+              }}
               onStickerPosted={handleStickerPosted}
               onStickerDeleted={handleStickerDeleted}
               photoId={commentActiveResponse.id}
@@ -899,13 +990,15 @@ export default function ChallengeVotePage({
               groupMembers={members}
             />
           )}
+
+          {/* Reaction add/delete toast. Rendered INSIDE the responses modal (and last, so
+              it sits above the CommentModal) — placing it on the main screen would draw it
+              behind this full-screen RightSlideModal, where it's never visible. */}
+          {reactionToast !== null && (
+            <StickerToast message={reactionToast} animValue={reactionToastAnim} topInset={insets.top} />
+          )}
         </View>
       </RightSlideModal>
-
-      {/* Reaction add/delete toast, on the main screen */}
-      {reactionToast !== null && (
-        <StickerToast message={reactionToast} animValue={reactionToastAnim} topInset={insets.top} />
-      )}
     </View>
   );
 }
@@ -1009,6 +1102,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   // onLayout → headerHeightSV) is identical for 1- and 2-line questions, keeping the
   // preview's top position — and the gap above it — constant.
   modalQuestionContainer: {
+    width: "100%",
     height: 12 + textStyles.subheading.lineHeight * 2, // paddingTop + 2 lines
     paddingTop: 12,
     paddingHorizontal: 16,
@@ -1017,7 +1111,17 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   modalQuestionText: {
     ...textStyles.subheading,
     color: colors.text,
+  },
+  // Vue défi classique : question alignée à gauche.
+  modalQuestionTextLeft: {
+    textAlign: "left",
+    paddingLeft: 10,
+  },
+  // Commentaires ouverts : question recentrée.
+  modalQuestionTextCentered: {
     textAlign: "center",
+    paddingRight: 16,
+    paddingLeft: 16,
   },
   orangeText: {
     color: colors.brand,
@@ -1173,6 +1277,23 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     fontFamily: typography.family.bold,
     fontSize: typography.size.md,
     color: colors.textBrandOnBrandSecondary,
+  },
+  reactionsBtnBadge: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    minWidth: 24,
+    height: 24,
+    paddingHorizontal: 6,
+    borderRadius: radii.full,
+    backgroundColor: colors.bgInverse,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  reactionsBtnBadgeText: {
+    ...textStyles.bodySmall,
+    color: colors.textBrandTertiary,
+    textAlign: "center",
   },
 
   emptyContainer: {

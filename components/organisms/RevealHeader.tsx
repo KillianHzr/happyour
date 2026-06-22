@@ -5,6 +5,7 @@ import Reanimated, { FadeInRight, FadeOutRight, LinearTransition, LayoutAnimatio
 import Svg, { Path } from "react-native-svg";
 import { UserAvatar } from "../atoms/Avatar";
 import { BellIcon } from "../atoms/BellIcon";
+import { GlassBackground } from "../atoms/GlassBackground";
 import { spacing, typography, radii, stroke, textStyles, type ThemeColors, type ThemeShadows } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
 
@@ -62,6 +63,7 @@ export const RevealHeader = ({
       <View style={[styles.headerContainer, { paddingTop: insets.top + 16 }]}>
       {/* 1. Leave Button */}
       <TouchableOpacity style={styles.iconButton} onPress={onClose} activeOpacity={0.7}>
+        <GlassBackground radius={radii.md} />
         <Svg width="7" height="12" viewBox="0 0 7 12" fill="none">
           <Path
             d="M5.29289 0.292893C5.68342 -0.0976311 6.31643 -0.0976311 6.70696 0.292893C7.09748 0.683417 7.09748 1.31643 6.70696 1.70696L2.41399 5.99992L6.70696 10.2929C7.09748 10.6834 7.09748 11.3164 6.70696 11.707C6.31643 12.0975 5.68342 12.0975 5.29289 11.707L0.292893 6.70696C-0.0976311 6.31643 -0.0976311 5.68342 0.292893 5.29289L5.29289 0.292893Z"
@@ -78,6 +80,7 @@ export const RevealHeader = ({
         {/* Mode archive : "Reveal XX" + plage de dates (ni timer ni présence) */}
         {archive && (
           <View style={styles.archiveChip}>
+            <GlassBackground radius={radii.sm} />
             <Text style={styles.archiveNumber}>{archive.numberLabel}</Text>
             <Text style={styles.archiveDate}>{archive.dateLabel}</Text>
           </View>
@@ -86,6 +89,7 @@ export const RevealHeader = ({
         {/* 2. Timer Pill */}
         {!archive && countdownText !== "" && (
           <View style={[styles.timerPill, isLowTime && styles.timerPillRed]}>
+            {!isLowTime && <GlassBackground radius={radii.sm} />}
             <Text style={[styles.timerText, isLowTime && styles.timerTextRed]}>
               {countdownText}
             </Text>
@@ -95,6 +99,7 @@ export const RevealHeader = ({
         {/* 3. Connected Users Row */}
         {!archive && participants.length > 0 && (
           <Reanimated.View style={styles.avatarsRow} layout={presenceTransitions.layout}>
+            <GlassBackground radius={radii.sm} />
             {/* Green Connected Status Dot */}
             <View style={styles.statusDot} />
 
@@ -104,7 +109,11 @@ export const RevealHeader = ({
                 entering={presenceTransitions.avatarEnter}
                 exiting={presenceTransitions.avatarExit}
                 layout={presenceTransitions.layout}
-                style={index > 0 && { marginLeft: spacing.negSm }}
+                // zIndex croissant : l'avatar le plus à droite (le dernier
+                // entrant) reste au-dessus, sinon Reanimated empile les wrappers
+                // dans l'autre sens et la bordure gauche de l'avatar entrant est
+                // recouverte par son voisin de gauche.
+                style={[{ zIndex: index }, index > 0 && { marginLeft: spacing.negSm }]}
               >
                 <UserAvatar
                   avatar_url={p.avatarUrl}
@@ -121,7 +130,7 @@ export const RevealHeader = ({
                 entering={presenceTransitions.avatarEnter}
                 exiting={presenceTransitions.avatarExit}
                 layout={presenceTransitions.layout}
-                style={[styles.avatar, styles.avatarMore, { marginLeft: spacing.negSm }]}
+                style={[styles.avatar, styles.avatarMore, { marginLeft: spacing.negSm, zIndex: visibleParticipants.length }]}
               >
                 <Text style={styles.avatarMoreText}>+{remainingCount}</Text>
               </Reanimated.View>
@@ -132,6 +141,7 @@ export const RevealHeader = ({
 
       {/* 4. Notifications Button */}
       <TouchableOpacity style={styles.iconButton} onPress={onNotificationPress} activeOpacity={0.7}>
+        <GlassBackground radius={radii.md} />
         <BellIcon size={22} color={colors.text} />
         {/* Pastille "nouvelle activité" — coin haut-droite, couleur brand (#FF561A). */}
         {hasUnseenActivity && <View style={styles.activityDot} />}
@@ -163,7 +173,6 @@ const makeStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.cr
     width: 40,
     height: 40,
     borderRadius: radii.md, // radius/300 (12px)
-    backgroundColor: colors.opacityLight, // background/default/default-opacity
     justifyContent: "center",
     alignItems: "center",
   },
@@ -182,8 +191,8 @@ const makeStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.cr
     justifyContent: "center", // center the countdown within the fixed width
     alignSelf: "stretch", // fill the 40px header height
     width: 98, // fixed so the pill doesn't resize as digits change
-    backgroundColor: colors.opacityLight,
     borderRadius: radii.sm,        // radius/200 (8px)
+    overflow: "hidden",            // garde le glass dans les coins arrondis
   },
   archiveChip: {
     flexDirection: "row",
@@ -192,7 +201,6 @@ const makeStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.cr
     alignSelf: "stretch",          // 40px header height
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
-    backgroundColor: colors.opacityLight,
     borderRadius: radii.sm,
   },
   archiveNumber: {
@@ -218,22 +226,22 @@ const makeStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.cr
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "stretch", // fill middleGroup's height to match the timer pill
-    backgroundColor: colors.opacityLight,
     paddingHorizontal: 6,
     paddingVertical: 4,
-    borderRadius: radii.sm, // radius/200 (8px)
+    borderRadius: 8, // radius/200 (8px)
   },
   statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 100,
     backgroundColor: colors.textPositiveSecondary, // text/positive/secondary
-    marginRight: spacing.sm, // gap to first avatar
-    marginLeft: 4,
+    marginRight: 4,
+    marginLeft: 6,
   },
   avatar: {
     borderWidth: stroke.sm, // stroke/025
     borderColor: colors.cardBorder, // Color/border/default/default
+    borderRadius: radii.sm, // radius/200 (8px)
     ...shadows.shadow200, // drop-shadow/200
   },
   avatarMore: {

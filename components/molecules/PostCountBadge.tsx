@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { radii, spacing, typography, type ThemeColors } from "../../lib/theme";
 import { useThemedStyles } from "../../lib/theme-context";
+import { GlassBackground } from "../atoms/GlassBackground";
 
 interface PostCountBadgeProps {
   /** e.g. "2/5". When empty/undefined the badge renders nothing. */
@@ -13,6 +14,7 @@ export const PostCountBadge = ({ text }: PostCountBadgeProps) => {
   if (!text) return null;
   return (
     <View style={styles.badge}>
+      <GlassBackground radius={radii.md} />
       <Text style={styles.text}>{text}</Text>
     </View>
   );
@@ -20,7 +22,6 @@ export const PostCountBadge = ({ text }: PostCountBadgeProps) => {
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   badge: {
-    backgroundColor: colors.opacityLight,
     borderRadius: radii.md,
     paddingTop: spacing.xs,
     paddingRight: spacing.sm,

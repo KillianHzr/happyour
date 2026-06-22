@@ -31,6 +31,8 @@ interface BottomActionBarProps {
   /** When non-null, shows a count badge on the primary button. */
   badgeCount?: number | null;
   secondary?: BottomActionSecondary | null;
+  /** Grise le bouton principal et bloque l'appui (ex: défi sans réponse). */
+  primaryDisabled?: boolean;
 }
 
 export const BottomActionBar = ({
@@ -38,6 +40,7 @@ export const BottomActionBar = ({
   onPrimaryPress,
   badgeCount,
   secondary,
+  primaryDisabled = false,
 }: BottomActionBarProps) => {
   const styles = useThemedStyles(makeStyles);
 
@@ -46,11 +49,12 @@ export const BottomActionBar = ({
       <AnimatedTouchableOpacity
         key="orange-btn"
         layout={transitions.layout}
-        style={styles.reactionsBtn}
+        style={[styles.reactionsBtn, primaryDisabled && styles.reactionsBtnDisabled]}
         onPress={onPrimaryPress}
+        disabled={primaryDisabled}
         activeOpacity={0.85}
       >
-        <Text style={styles.reactionsBtnText}>{primaryLabel}</Text>
+        <Text style={[styles.reactionsBtnText, primaryDisabled && styles.reactionsBtnTextDisabled]}>{primaryLabel}</Text>
         {badgeCount != null && (
           <View style={styles.reactionsBtnBadge}>
             <Text style={styles.reactionsBtnBadgeText}>{badgeCount}</Text>
@@ -98,10 +102,16 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  reactionsBtnDisabled: {
+    backgroundColor: colors.bgDisabled, // background/disabled/default
+  },
   reactionsBtnText: {
     fontFamily: typography.family.bold,
     fontSize: typography.size.md,
     color: colors.textBrandOnBrandSecondary,
+  },
+  reactionsBtnTextDisabled: {
+    color: colors.textOnDisabled, // text/disabled/on-disabled
   },
   reactionsBtnBadge: {
     position: "absolute",
