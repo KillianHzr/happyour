@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Share } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { supabase } from "../../lib/supabase";
+import { notifyGroupJoin } from "../../lib/notifications";
 import { spacing, radii, textStyles, typography, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import BottomSheet from "../BottomSheet";
@@ -98,6 +99,7 @@ export default function AddGroupFlow({ visible, userId, onClose, onGroupsChanged
         .from("group_members")
         .insert({ group_id: g.id, user_id: userId });
       if (joinErr) throw joinErr;
+      notifyGroupJoin(g.id, g.name, userId).catch(() => {}); // notify existing members
       setGroup({ id: g.id, name: g.name, invite_code: g.invite_code });
       await onGroupsChanged();
       setStep("joinedSuccess");

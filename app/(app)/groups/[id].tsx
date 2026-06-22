@@ -43,7 +43,7 @@ import LiveReactions from "../../../components/reveal/LiveReactions";
 import { RevealHeader, type Participant } from "../../../components/organisms/RevealHeader";
 import { ActivityView } from "../../../components/organisms/ActivityView";
 import MotivationalNotificationsModal from "../../../components/MotivationalNotificationsModal";
-import { scheduleImmediateLocalNotification, scheduleFirstMomentReminder, notifyReaction } from "../../../lib/notifications";
+import { scheduleImmediateLocalNotification, scheduleFirstMomentReminder, notifyReaction, notifyGroupJoin } from "../../../lib/notifications";
 import { radii, spacing, typography, textStyles, buildColors, type ThemeColors } from "../../../lib/theme";
 import { StatusBar } from "expo-status-bar";
 import Icon from "../../../components/Icon";
@@ -1248,8 +1248,9 @@ export default function MainPagerScreen() {
         .from("group_members")
         .insert({ group_id: group.id, user_id: user.id });
       if (joinErr) throw joinErr;
-      
+
       showToast("Succès", `Tu as rejoint "${group.name}" !`, "success");
+      notifyGroupJoin(group.id, group.name, user.id).catch(() => {}); // notify existing members
       const isFirstGroup = allGroups.length === 0;
       closeAddGroupModal();
       await fetchAllData();

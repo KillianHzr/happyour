@@ -425,6 +425,25 @@ export async function notifyNewPhoto(
   await sendPushToTokens(tokens, groupName, `${senderName} a partage un moment !`, { type: "new_photo", groupId });
 }
 
+// Notify the EXISTING members when someone joins their group. The joiner has already been
+// inserted into group_members, so getGroupMemberTokens(..., joinerId) correctly returns everyone
+// except them. joinerName is optional — fetched here if not supplied, so call sites stay minimal.
+export async function notifyGroupJoin(
+  groupId: string,
+  groupName: string,
+  joinerId: string,
+  joinerName?: string
+) {
+  const tokens = await getGroupMemberTokens(groupId, joinerId);
+  if (tokens.length === 0) return;
+  let name = joinerName;
+  if (!name) {
+    const { data } = await supabase.from("profiles").select("username").eq("id", joinerId).single();
+    name = data?.username ?? "Quelqu'un";
+  }
+  await sendPushToTokens(tokens, groupName, `${name} a rejoint le groupe !`, { type: "group_join", groupId });
+}
+
 export async function notifyGroupInvite(
   invitedUserId: string,
   groupName: string

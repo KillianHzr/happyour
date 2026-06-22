@@ -5,7 +5,7 @@ import { supabase } from "../../../lib/supabase";
 import { useAuth } from "../../../lib/auth-context";
 import { useToast } from "../../../lib/toast-context";
 import { translateError } from "../../../lib/error-messages";
-import { scheduleFirstMomentReminder } from "../../../lib/notifications";
+import { scheduleFirstMomentReminder, notifyGroupJoin } from "../../../lib/notifications";
 import { typography, type ThemeColors } from "../../../lib/theme";
 import { useTheme, useThemedStyles } from "../../../lib/theme-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -60,6 +60,7 @@ export default function JoinGroupScreen() {
       } else {
         showToast("Succès", `Tu as rejoint "${group.name}" !`, "success");
         scheduleFirstMomentReminder(group.id, group.name);
+        notifyGroupJoin(group.id, group.name, user.id).catch(() => {}); // notify existing members
         router.replace(`/(app)/groups/${group.id}?onboarding=true`);
       }
     } catch (e: any) {
