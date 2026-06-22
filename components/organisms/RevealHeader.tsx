@@ -224,15 +224,15 @@ const makeStyles = (colors: ThemeColors, shadows: ThemeShadows) => StyleSheet.cr
     borderRadius: 8, // radius/200 (8px)
   },
   statusDot: {
-    width: 10,
-    height: 10,
+    width: 12,
+    height: 12,
     borderRadius: 100,
     backgroundColor: colors.textPositiveSecondary, // text/positive/secondary
     marginRight: 4,
-    marginLeft: 6,
   },
   avatar: {
     borderWidth: stroke.sm, // stroke/025
+    borderStyle: "solid",
     borderColor: colors.cardBorder, // Color/border/default/default
     borderRadius: radii.sm, // radius/200 (8px)
     ...shadows.shadow200, // drop-shadow/200

@@ -789,7 +789,7 @@ export default function ChallengeVotePage({
                   <Text style={cvStyles.orangeText}>{challenge.target_username}</Text>
                   {" était un"}{"aeiouyAEIOUY".includes(challenge.theme.label?.[0] ?? "") ? "" : "·e"}{" "}
                   <Text style={cvStyles.orangeText}>{challenge.theme.label}</Text>
-                  {", ça serait..."}
+                  {", ce serait..."}
                 </Text>
               </View>
             </Reanimated.View>

@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, Animated, Easing, LayoutAnimation, TouchableOpacity,
   Alert, Keyboard, KeyboardAvoidingView, Platform, TextInput, Modal, Pressable, PanResponder, UIManager, useWindowDimensions, AppState,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { type CameraType, type FlashMode, useCameraPermissions } from "expo-camera";
@@ -163,6 +164,10 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   // Action de fin (toast + reset) déclenchée à la fin du Lottie.
   const finishSendRef = useRef<(() => void) | null>(null);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
+  // Derniers groupes auxquels l'utilisateur a partagé un moment : sélection par défaut
+  // du GroupPicker à la prochaine capture. Persisté pour survivre aux redémarrages.
+  const lastSharedGroupIdsRef = useRef<string[] | null>(null);
+  const lastSharedStorageKey = `last_shared_groups_${userId}`;
   const [showChallengesInline, setShowChallengesInline] = useState(false);
   const [activeChallenge, setActiveChallenge] = useState<ActiveChallenge | null>(null);
   const challengeChooseRef = useRef<(() => void) | null>(null);
@@ -1223,6 +1228,17 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     }
   };
 
+  // Charge les derniers groupes partagés (persistés) au montage.
+  useEffect(() => {
+    AsyncStorage.getItem(lastSharedStorageKey)
+      .then((raw) => {
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) lastSharedGroupIdsRef.current = parsed.filter((x) => typeof x === "string");
+      })
+      .catch(() => {});
+  }, [lastSharedStorageKey]);
+
   const toggleGroup = (gId: string) => {
     setSelectedGroupIds(prev => prev.includes(gId) ? prev.filter(g => g !== gId) : [...prev, gId]);
   };
@@ -1230,7 +1246,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const openGroupPicker = () => {
     if (activeChallenge !== null) { confirmUpload([activeChallenge.groupId]); return; }
     if (allGroups.length <= 1) { confirmUpload([allGroups[0]?.id ?? groupId]); return; }
-    setSelectedGroupIds([groupId]);
+    // Défaut = derniers groupes partagés (filtrés à ceux encore existants) ; sinon, groupe courant.
+    const lastShared = (lastSharedGroupIdsRef.current ?? []).filter(id => allGroups.some(g => g.id === id));
+    setSelectedGroupIds(lastShared.length > 0 ? lastShared : [groupId]);
     setShowGroupPicker(true);
   };
 
@@ -1361,6 +1379,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const confirmUpload = (groupIds: string[], fromModal = false) => {
     if (!slot1 || groupIds.length === 0) return;
     setShowGroupPicker(false);
+    // Mémorise les groupes de ce moment : ils deviendront la sélection par défaut au prochain partage.
+    lastSharedGroupIdsRef.current = groupIds;
+    AsyncStorage.setItem(lastSharedStorageKey, JSON.stringify(groupIds)).catch(() => {});
     const ts = Date.now();
 
     groupIds.forEach((gId, i) => {

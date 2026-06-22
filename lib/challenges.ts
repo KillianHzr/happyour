@@ -365,7 +365,7 @@ export async function fetchChallengeData(
 export function getChallengePrompt(targetUsername: string, themeLabel: string): string {
   const vowels = "aeiouyAEIOUY";
   const startsWithVowel = vowels.includes(themeLabel[0] ?? "");
-  return `Si ${targetUsername} était un${startsWithVowel ? "" : "·e"} ${themeLabel}, ça serait...`;
+  return `Si ${targetUsername} était un${startsWithVowel ? "" : "·e"} ${themeLabel}, ce serait...`;
 }
 
 // Compute winning response ids (most votes; ties = all tied ids)

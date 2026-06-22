@@ -82,7 +82,7 @@ export function ChallengePromptText({
       <Text style={{ color: accent }}>{targetUsername}</Text>
       {" était "}
       <Text style={{ color: accent }}>{themeLabel}</Text>
-      {", ça serait..."}
+      {", ce serait..."}
     </Text>
   );
 }

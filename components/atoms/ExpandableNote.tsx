@@ -7,7 +7,7 @@ interface ExpandableNoteProps {
   text: string;
   maxLines: number;
   onToggleExpand?: (expanded: boolean) => void;
-  /** Dims the text to 0.5 opacity — used for the "Aucune description" placeholder. */
+  /** Colors the text with text/disabled/default — used for the "Aucune description" placeholder. */
   faded?: boolean;
 }
 
@@ -34,7 +34,7 @@ export const ExpandableNote = ({ text, maxLines, onToggleExpand, faded }: Expand
           {text}
         </Text>
       </View>
-      <Text style={[styles.momentNote, faded && { opacity: 0.5 }]} numberOfLines={expanded ? undefined : maxLines}>
+      <Text style={[styles.momentNote, faded && styles.momentNoteFaded]} numberOfLines={expanded ? undefined : maxLines}>
         {text}
       </Text>
       {isTruncated && (
@@ -51,6 +51,9 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     fontSize: typography.size.md,
     lineHeight: typography.size.md * 1.4,
     letterSpacing: 0,
+  },
+  momentNoteFaded: {
+    color: colors.textDisabled,
   },
   noteExpand: {
     color: colors.textSecondary,
