@@ -445,7 +445,7 @@ export default function ProfilePage({
               {!isMember && (
               <View style={styles.coffreTitle}>
                 <Text style={styles.cofreTitleText} numberOfLines={1}>
-                  {(sortedCoffreGroups[coffreGroupIndex]?.name ?? "").toUpperCase()}
+                  {sortedCoffreGroups[coffreGroupIndex]?.name ?? ""}
                 </Text>
                 {sortedCoffreGroups.length > 1 && (
                   <View style={styles.cofrePagination}>
@@ -735,7 +735,6 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     ...textStyles.heading,
     color: colors.text,
     flex: 1,
-    textTransform: "uppercase",
   },
   cofrePagination: {
     flexDirection: "row",

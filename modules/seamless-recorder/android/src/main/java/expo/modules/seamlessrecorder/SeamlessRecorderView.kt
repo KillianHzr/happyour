@@ -154,25 +154,6 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
     imageCapture?.flashMode = flashMode
   }
 
-  // Gel de preview : encode la frame actuellement affichée en JPEG et renvoie son URI.
-  // previewView.bitmap renvoie l'image telle qu'affichée (déjà orientée + miroir si façade).
-  fun snapshotPreview(promise: Promise) {
-    mainHandler.post {
-      val bmp = previewView.bitmap
-      if (bmp == null) {
-        promise.reject("SNAPSHOT_ERROR", "No frame available", null)
-        return@post
-      }
-      try {
-        val file = File(context.cacheDir, "snap_${System.currentTimeMillis()}.jpg")
-        file.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, it) }
-        promise.resolve("file://${file.absolutePath}")
-      } catch (e: Exception) {
-        promise.reject("SNAPSHOT_ERROR", e.message ?: "Encode failed", null)
-      }
-    }
-  }
-
   fun capturePhoto(promise: Promise) {
     mainHandler.post {
       val ic = imageCapture ?: run {

@@ -39,17 +39,6 @@ class SeamlessRecorderModule : Module() {
       }
     }
 
-    AsyncFunction("snapshotPreview") { viewTag: Int, promise: Promise ->
-      Handler(Looper.getMainLooper()).post {
-        val view = appContext.findView<SeamlessRecorderView>(viewTag)
-        if (view == null) {
-          promise.reject("VIEW_NOT_FOUND", "SeamlessRecorderView not found for tag $viewTag", null)
-          return@post
-        }
-        view.snapshotPreview(promise)
-      }
-    }
-
     AsyncFunction("startRecording") { viewTag: Int, promise: Promise ->
       Handler(Looper.getMainLooper()).post {
         val view = appContext.findView<SeamlessRecorderView>(viewTag)

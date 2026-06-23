@@ -1,18 +1,15 @@
 import React, { forwardRef, useImperativeHandle, useRef } from 'react';
 import { findNodeHandle, ViewStyle } from 'react-native';
 import { requireNativeModule, requireNativeViewManager } from 'expo-modules-core';
-import { concatVideos } from 'video-concat';
-
 const NativeView = requireNativeViewManager('SeamlessRecorder');
 const NativeModule = requireNativeModule('SeamlessRecorder');
 
 export interface SeamlessRecorderRef {
-  /** iOS: single session, zero post-processing. Android: restarts clip per switch, concats at end. */
+  /** iOS: single session, zero post-processing. Android: restarts clip per switch. */
   capturePhoto(): Promise<string>;
-  /** Gel de preview : URI d'un JPEG de la frame courante (quasi instantané). */
-  snapshotPreview(): Promise<string>;
   startRecording(): Promise<void>;
-  stopRecording(): Promise<string>;
+  /** Segments bruts (iOS: 1 ; Android: 1 par segment caméra). Concat différée à l'envoi. */
+  stopRecording(): Promise<string[]>;
   switchCamera(): Promise<void>;
 }
 
@@ -44,21 +41,16 @@ const SeamlessRecorder = forwardRef<SeamlessRecorderRef, SeamlessRecorderProps>(
         return NativeModule.capturePhoto(getTag());
       },
 
-      snapshotPreview: async (): Promise<string> => {
-        return NativeModule.snapshotPreview(getTag());
-      },
-
       startRecording: async () => {
         return NativeModule.startRecording(getTag());
       },
 
-      stopRecording: async (): Promise<string> => {
-        // iOS returns a single string URI.
-        // Android returns an array of clip URIs (one per camera segment).
+      stopRecording: async (): Promise<string[]> => {
+        // Retourne les segments BRUTS sans concaténer : iOS = 1 fichier, Android = 1 clip
+        // par segment caméra. La concaténation (coûteuse) est différée à l'envoi pour ne
+        // pas bloquer l'affichage de la preview.
         const result: string | string[] = await NativeModule.stopRecording(getTag());
-        const uris = Array.isArray(result) ? result : [result];
-        if (uris.length === 1) return uris[0];
-        return concatVideos(uris);
+        return Array.isArray(result) ? result : [result];
       },
 
       switchCamera: async () => {

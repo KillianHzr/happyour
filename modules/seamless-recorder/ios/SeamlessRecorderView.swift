@@ -1,7 +1,5 @@
 import ExpoModulesCore
 import AVFoundation
-import CoreImage
-import UIKit
 
 public class SeamlessRecorderView: ExpoView {
   // MARK: - Session
@@ -31,12 +29,6 @@ public class SeamlessRecorderView: ExpoView {
   // MARK: - Photo
   private var pendingPhotoPromise: Promise?
   private var currentFlashMode: AVCaptureDevice.FlashMode = .off
-
-  // MARK: - Snapshot (gel de preview)
-  // Dernière frame vidéo reçue, pour produire un "gel" instantané de la preview.
-  private var latestVideoBuffer: CMSampleBuffer?
-  private let snapshotLock = NSLock()
-  private lazy var snapshotContext = CIContext()
 
   // MARK: - Preview
   private let previewLayer = AVCaptureVideoPreviewLayer()
@@ -145,6 +137,13 @@ public class SeamlessRecorderView: ExpoView {
     } else {
       if connection.isVideoOrientationSupported { connection.videoOrientation = .portrait }
     }
+    // La caméra avant ne doit PAS être enregistrée en miroir : le fichier doit être "vrai"
+    // (texte lisible), comme en relecture standard. La preview live, elle, reste en miroir
+    // via l'AVCaptureVideoPreviewLayer (réglage indépendant).
+    if connection.isVideoMirroringSupported {
+      connection.automaticallyAdjustsVideoMirroring = false
+      connection.isVideoMirrored = false
+    }
   }
 
   private func bestCamera(for position: AVCaptureDevice.Position) -> AVCaptureDevice? {
@@ -183,47 +182,6 @@ public class SeamlessRecorderView: ExpoView {
       try? device.lockForConfiguration()
       device.torchMode = on ? .on : .off
       device.unlockForConfiguration()
-    }
-  }
-
-  // Gel de preview : encode la dernière frame vidéo en JPEG et renvoie son URI.
-  // Quasi instantané (pas de capture photo haute résolution) → sert à figer l'écran
-  // à l'appui, avant que la vraie photo soit prête.
-  func snapshotPreview(promise: Promise) {
-    snapshotLock.lock()
-    let buffer = latestVideoBuffer
-    snapshotLock.unlock()
-    guard let buffer, let pixelBuffer = CMSampleBufferGetImageBuffer(buffer) else {
-      promise.reject("SNAPSHOT_ERROR", "No frame available"); return
-    }
-    var ci = CIImage(cvPixelBuffer: pixelBuffer)
-    // Filet anti-rotation : l'app est en portrait, donc les frames doivent être portrait
-    // (hauteur > largeur). Si une frame "paysage" arrive (race d'orientation au démarrage
-    // ou après un switch), on la redresse pour éviter le gel tourné à 90°.
-    if ci.extent.width > ci.extent.height {
-      ci = ci.oriented(currentCameraPosition == .front ? .left : .right)
-    }
-    // La preview est en miroir pour la caméra avant, mais pas les buffers → on miroir ici
-    // pour que le gel corresponde exactement à ce que voit l'utilisateur.
-    if currentCameraPosition == .front {
-      let w = ci.extent.width
-      ci = ci.transformed(by: CGAffineTransform(scaleX: -1, y: 1))
-      ci = ci.transformed(by: CGAffineTransform(translationX: w, y: 0))
-    }
-    guard let cg = snapshotContext.createCGImage(ci, from: ci.extent) else {
-      promise.reject("SNAPSHOT_ERROR", "Render failed"); return
-    }
-    let image = UIImage(cgImage: cg)
-    guard let data = image.jpegData(compressionQuality: 0.85) else {
-      promise.reject("SNAPSHOT_ERROR", "Encode failed"); return
-    }
-    let url = URL(fileURLWithPath: NSTemporaryDirectory())
-      .appendingPathComponent("snap_\(Int(Date().timeIntervalSince1970 * 1000)).jpg")
-    do {
-      try data.write(to: url)
-      promise.resolve(url.absoluteString)
-    } catch {
-      promise.reject("SNAPSHOT_ERROR", error.localizedDescription)
     }
   }
 
@@ -379,12 +337,6 @@ extension SeamlessRecorderView: AVCaptureVideoDataOutputSampleBufferDelegate,
                              didOutput sampleBuffer: CMSampleBuffer,
                              from connection: AVCaptureConnection) {
     let isVideo = output is AVCaptureVideoDataOutput
-    // Mémorise la dernière frame vidéo pour le gel de preview (snapshotPreview), uniquement
-    // hors enregistrement : le gel ne sert qu'en mode PHOTO, et on évite ainsi de retenir un
-    // buffer du pool pendant le hot path d'enregistrement.
-    if isVideo && !isWriting {
-      snapshotLock.lock(); latestVideoBuffer = sampleBuffer; snapshotLock.unlock()
-    }
     guard isWriting, let writer = assetWriter else { return }
     guard let normalised = normalise(sampleBuffer, isVideo: isVideo) else { return }
     let pts = CMSampleBufferGetPresentationTimeStamp(normalised)

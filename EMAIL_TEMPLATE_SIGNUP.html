@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="fr" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="color-scheme" content="dark" />
+  <meta name="supported-color-schemes" content="dark" />
+  <title>Ton code de connexion</title>
+
+  <!--[if mso]>
+  <noscript>
+    <xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml>
+  </noscript>
+  <![endif]-->
+
+  <!-- Police du design system (Parkinsans) — fallback sans-serif si le client mail la bloque -->
+  <link href="https://fonts.googleapis.com/css2?family=Parkinsans:wght@400;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    /* Réduit le padding démesuré (space/2400 = 96px) sur petits écrans */
+    @media only screen and (max-width: 600px) {
+      .card-pad { padding: 32px 24px !important; }
+      .stack-gap { height: 48px !important; }
+      .code-box { padding: 24px 28px !important; }
+      .title-page { font-size: 32px !important; line-height: 38px !important; }
+      .title-hero { font-size: 48px !important; line-height: 58px !important; letter-spacing: 6px !important; }
+      .heading { font-size: 18px !important; line-height: 24px !important; }
+    }
+  </style>
+</head>
+
+<body style="margin:0;padding:0;background-color:#FF3F05;font-family:'Parkinsans',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+
+  <!-- ░░ Fond : image backgroundorange.png en plein écran ░░ -->
+  <table role="presentation" width="100%" height="100%" cellpadding="0" cellspacing="0" border="0"
+         background="https://pub-c3c80a82b60448dba090aef503e3931b.r2.dev/email/backgroundorange%20(1).png"
+         style="background-color:#FF3F05;background-image:url('https://pub-c3c80a82b60448dba090aef503e3931b.r2.dev/email/backgroundorange%20(1).png');background-position:center top;background-size:cover;background-repeat:no-repeat;min-height:100vh;">
+    <tr>
+      <td align="center" valign="middle" style="padding:48px 16px;">
+
+        <!--[if gte mso 9]>
+        <v:rect xmlns:v="urn:schemas-microsoft-com:vml" fill="true" stroke="false" style="width:600px;">
+          <v:fill type="frame" src="https://pub-c3c80a82b60448dba090aef503e3931b.r2.dev/email/backgroundorange%20(1).png" color="#FF3F05" />
+          <v:textbox inset="0,0,0,0"><div>
+        <![endif]-->
+
+        <!-- ░░ Carte centrale ░░
+             padding space/2400 (96) · gap space/800 (32) · radius/1000 (40) · bg background/default/default (#1E1E1E) -->
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;">
+          <tr>
+            <td class="card-pad" align="center"
+                style="background-color:#1E1E1E;border-radius:40px;padding:96px;">
+
+              <!-- ░ content : gap space/2400 (96), align center, stretch ░ -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+
+                <!-- Logo (version emails) -->
+                <tr>
+                  <td align="center" style="padding:0;">
+                    <img src="https://pub-c3c80a82b60448dba090aef503e3931b.r2.dev/email/logo-disclose.png"
+                         alt="Disclose" width="160" height="auto"
+                         style="display:block;border:0;outline:none;text-decoration:none;width:160px;max-width:60%;height:auto;" />
+                  </td>
+                </tr>
+
+                <!-- espace : gap space/2400 (96) entre le logo et le bloc groupe -->
+                <tr><td class="stack-gap" style="font-size:0;line-height:0;height:96px;">&nbsp;</td></tr>
+
+                <!-- ░ groupe (gap space/2400) ░ -->
+                <tr>
+                  <td style="padding:0;">
+
+                    <!-- 1. groupe titres : centré, gap space/600 (24), stretch -->
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td align="center" style="padding:0;">
+                          <!-- a. title-page · #FFFFFF -->
+                          <p class="title-page" style="margin:0;font-family:'Parkinsans',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:48px;line-height:58px;font-weight:700;color:#FFFFFF;text-align:center;">
+                            Ton code de connexion
+                          </p>
+                        </td>
+                      </tr>
+                      <!-- espace : gap space/600 (24) -->
+                      <tr><td style="font-size:0;line-height:0;height:24px;">&nbsp;</td></tr>
+                      <tr>
+                        <td align="center" style="padding:0;">
+                          <!-- b. heading (weight forcé regular) · text/default/tertiary -->
+                          <p class="heading" style="margin:0;font-family:'Parkinsans',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:24px;line-height:29px;font-weight:400;color:rgba(255,255,255,0.4);text-align:center;">
+                            Entre ce code dans l'application pour te connecter à Disclose
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- espace : gap space/2400 (96) entre les titres et le code -->
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr><td class="stack-gap" style="font-size:0;line-height:0;height:96px;">&nbsp;</td></tr>
+                    </table>
+
+                    <!-- 2. boîte code :
+                         padding space/800 space/1600 (32 64) · radius/600 (24)
+                         border 1px border/brand/tertiary (#FF3F05) · bg background/default/secondary (#2C2C2C) -->
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td align="center" class="code-box"
+                            style="background-color:#2C2C2C;border:1px solid #FF3F05;border-radius:24px;padding:32px 64px;">
+                          <!-- code · title-hero · #FFFFFF -->
+                          <p class="title-hero" style="margin:0;font-family:'Parkinsans',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:72px;line-height:86px;font-weight:700;color:#FFFFFF;letter-spacing:8px;white-space:nowrap;">
+                            {{ .Token }}
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+
+                  </td>
+                </tr>
+
+              </table>
+              <!-- /content -->
+
+              <!-- espace : gap space/800 (32) entre content et le texte d'expiration -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr><td style="font-size:0;line-height:0;height:32px;">&nbsp;</td></tr>
+              </table>
+
+              <!-- texte expiration · body-base · text/default/tertiary ("5 minutes" en text/default/default) -->
+              <p style="margin:0;font-family:'Parkinsans',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:16px;line-height:22px;font-weight:400;color:rgba(255,255,255,0.4);text-align:center;">
+                Ce code expire dans <span style="color:#FFFFFF;">5 minutes</span>
+              </p>
+
+            </td>
+          </tr>
+        </table>
+        <!-- /Carte -->
+
+        <!--[if gte mso 9]>
+          </div></v:textbox>
+        </v:rect>
+        <![endif]-->
+
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>

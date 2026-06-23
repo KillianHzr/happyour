@@ -19,7 +19,7 @@
         "ITSAppUsesNonExemptEncryption": false,
         "UIViewEdgeAntialiasing": true
       },
-      "buildNumber": "38"
+      "buildNumber": "42"
     },
     "android": {
       "package": "com.happyour.app",

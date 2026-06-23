@@ -77,13 +77,13 @@ function imagePathToShape(path: string): ShapeName {
   return "photo";
 }
 
-/** Vrai si l'image_path est une vraie photo (ni texte, ni vidéo, ni audio, ni dessin). */
-function isPhotoPath(path: string): boolean {
+/** Vrai si l'image_path peut servir de fond de card : photo OU dessin (on saute uniquement
+ *  les vidéos, ainsi que texte/audio qui n'ont pas d'image affichable). */
+function isBackgroundPath(path: string): boolean {
   return (
     path !== "text_mode" &&
     !path.endsWith(".mp4") &&
-    !path.endsWith(".m4a") &&
-    !path.includes("_draw")
+    !path.endsWith(".m4a")
   );
 }
 
@@ -128,11 +128,12 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
       const lastMoment = photos.length ? photos[photos.length - 1] : undefined; // triées croissant
       const momentCount = gd?.photoCount ?? 0; // moments depuis le dernier reveal
 
-      // Fond : dernière vraie photo (sinon avatar du chef). Aucun moment → null = fond dark.
+      // Fond : dernier moment photo OU dessin (on saute les vidéos) ; sinon avatar du chef.
+      // Aucun moment → null = fond dark.
       let bgUrl: string | null = null;
       if (momentCount > 0) {
         for (let i = photos.length - 1; i >= 0; i--) {
-          if (isPhotoPath(photos[i].image_path) && photos[i].url) { bgUrl = photos[i].url; break; }
+          if (isBackgroundPath(photos[i].image_path) && photos[i].url) { bgUrl = photos[i].url; break; }
         }
         if (!bgUrl) {
           const admin = gd?.members?.find((m) => m.role === "admin");
@@ -204,7 +205,7 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
           return t >= windowStart && t < windowEnd;
         });
         const last = windowed[0] as any | undefined;
-        const lastPhoto = windowed.find((p: any) => isPhotoPath(p.image_path)) as any | undefined;
+        const lastPhoto = windowed.find((p: any) => isBackgroundPath(p.image_path)) as any | undefined;
         const admin = (membersRes.data ?? []).find((m: any) => m.role === "admin");
         const chiefAvatar = (admin as any)?.profiles?.avatar_url ?? null;
         const momentCount = windowed.length;

@@ -25,6 +25,8 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    // Fond orange de marque : fallback si l'image dégradé ne charge pas (jamais d'écran nu).
+    backgroundColor: "#FF561A",
   },
   studio: {
     ...textStyles.bodySmallStrong,
