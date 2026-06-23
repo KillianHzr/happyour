@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Redirect } from "expo-router";
+import { useRouter, Redirect } from "expo-router";
 import { useAuth } from "../lib/auth-context";
 import { supabase } from "../lib/supabase";
 import LoadingScreen from "../components/LoadingScreen";

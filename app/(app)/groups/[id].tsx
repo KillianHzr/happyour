@@ -3,6 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Image } from "expo-image";
 import { View, Text, StyleSheet, ScrollView, Dimensions, Animated, Easing, TouchableOpacity, Alert, TextInput, AppState, Modal, KeyboardAvoidingView, Platform, Pressable, BackHandler } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import BlurView from "../../../components/atoms/BlurView";
 import { RightSlideModal } from "../../../components/atoms/RightSlideModal";
 import { supabase } from "../../../lib/supabase";
@@ -19,7 +20,7 @@ import Svg, { Path } from "react-native-svg";
 import PhotoFeed, { type PhotoEntry, type Reaction } from "../../../components/PhotoFeed";
 import { TextSticker } from "../../../components/atoms/TextSticker";
 import { fetchChallengeData, getChallengeWeekStart, getChallengePrompt, type ChallengeWithData, type ActiveChallenge } from "../../../lib/challenges";
-import Loader from "../../../components/Loader";
+import LoadingScreen from "../../../components/LoadingScreen";
 import { ProfileIcon, VaultIcon, MomentIcon, FlowerIcon } from "../../../components/icons";
 import { CloseIcon } from "../../../components/groups/GroupIcons";
 
@@ -43,7 +44,8 @@ import LiveReactions from "../../../components/reveal/LiveReactions";
 import { RevealHeader, type Participant } from "../../../components/organisms/RevealHeader";
 import { ActivityView } from "../../../components/organisms/ActivityView";
 import MotivationalNotificationsModal from "../../../components/MotivationalNotificationsModal";
-import { scheduleImmediateLocalNotification, scheduleFirstMomentReminder, notifyReaction } from "../../../lib/notifications";
+import { scheduleImmediateLocalNotification, scheduleFirstMomentReminder, notifyReaction, notifyGroupJoin } from "../../../lib/notifications";
+import { hapticReveal } from "../../../lib/haptics";
 import { radii, spacing, typography, textStyles, buildColors, type ThemeColors } from "../../../lib/theme";
 import { StatusBar } from "expo-status-bar";
 import Icon from "../../../components/Icon";
@@ -429,6 +431,7 @@ export default function MainPagerScreen() {
   // Déclenché à la fin du Lottie (slide) : lance la transition filmstrip → reveal.
   // Fin de l'aspiration du chrome (GroupRoom) : ACTIVE l'anim (déjà montée au slide) → reveal.
   const handleGroupRoomUnlock = useCallback(() => {
+    hapticReveal(); // vibration au déverrouillage du reveal
     // On peut voir les moments des proches même sans avoir posté soi-même.
     // Pas de frame mesurée ou pas d'images → reveal direct (jamais bloqué).
     if (!cardFrameRef.current || revealStripUrls.length === 0) { setShowReveal(true); return; }
@@ -1248,8 +1251,9 @@ export default function MainPagerScreen() {
         .from("group_members")
         .insert({ group_id: group.id, user_id: user.id });
       if (joinErr) throw joinErr;
-      
+
       showToast("Succès", `Tu as rejoint "${group.name}" !`, "success");
+      notifyGroupJoin(group.id, group.name, user.id).catch(() => {}); // notify existing members
       const isFirstGroup = allGroups.length === 0;
       closeAddGroupModal();
       await fetchAllData();
@@ -1279,9 +1283,9 @@ export default function MainPagerScreen() {
 
   const jumpTo = (page: number) => {
     if (page === currentPage) return;
-    // Scroll natif (thread UI) → fluide comme le swipe ; scrollX suit via onScroll donc le
-    // fondu du menu reste synchronisé (pas de flash). Le re-render JS d'activation ne le bloque pas.
-    scrollRef.current?.scrollTo({ x: page * SCREEN_WIDTH, animated: true });
+    // Changement de page instantané (pas d'animation de slide) : on saute directement à
+    // l'offset. scrollX suit via onScroll, donc le menu se met à jour sans transition.
+    scrollRef.current?.scrollTo({ x: page * SCREEN_WIDTH, animated: false });
     commitPage(page);
   };
 
@@ -1315,15 +1319,17 @@ export default function MainPagerScreen() {
   const cameraScale = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [0.9, 1, 0.9] });
   const cameraOpacity = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [0.4, 1, 0.4] });
 
-  const scrollEnabled = !cameraScrollLocked && !groupsPagerLocked;
+  // Le swipe entre les pages (Groupes ← Capture → Profil) est désactivé : la navigation
+  // se fait uniquement via le menu du bas. groupsPagerLocked/cameraScrollLocked restent
+  // calculés (utilisés ailleurs) mais n'autorisent plus le swipe du pager.
+  const scrollEnabled = false;
 
   // Palette sombre fixe pour le menu de la vue capture
   const darkColors = useMemo(() => buildColors("Dark"), []);
 
-  const lockScrollDirect = useCallback((locked: boolean) => {
-    if (!locked && cameraScrollLocked) return;
-    scrollRef.current?.setNativeProps({ scrollEnabled: !locked });
-  }, [cameraScrollLocked]);
+  // Le pager n'est jamais swipable (navigation au menu uniquement) : verrouiller/déverrouiller
+  // le scroll horizontal n'a plus d'effet. On garde le callback pour compat des enfants.
+  const lockScrollDirect = useCallback((_locked: boolean) => {}, []);
 
   const handlePagerTouchStart = (e: any) => {
     pagerTouchRef.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY, decided: false };
@@ -1444,7 +1450,7 @@ export default function MainPagerScreen() {
       revealEndDate={unlocked ? activeRevealEndDate : undefined}
       unlocked={unlocked}
       currentUserPostedThisWeek={currentUserPostedThisWeek}
-      onOpenReveal={() => { if (currentUserPostedThisWeek) setShowReveal(true); }}
+      onOpenReveal={() => { if (currentUserPostedThisWeek) { hapticReveal(); setShowReveal(true); } }}
       onOpenSettings={() => setShowGroupSettings(true)}
       onLeaveGroup={() => setShowLeaveConfirm(true)}
       onRemoveMember={async (memberId) => {
@@ -1553,7 +1559,7 @@ export default function MainPagerScreen() {
         allGroups={allGroups}
         pendingChallenge={pendingChallenge}
         onPendingChallengeConsumed={() => setPendingChallenge(null)}
-        onScrollLock={(v) => { setCameraScrollLocked(v); scrollRef.current?.setNativeProps({ scrollEnabled: !v }); }}
+        onScrollLock={(v) => { setCameraScrollLocked(v); }}
         onHideMenu={setCameraHideMenu}
         onCaptureSent={(info) => { setProfileRefreshKey(k => k + 1); showCaptureToast(info); }}
       />
@@ -1578,7 +1584,7 @@ export default function MainPagerScreen() {
     />
   ), [user?.id, username, avatarUrl, email, groupName, allGroups, revealConfig, profileRefreshKey, activePage === 2]);
 
-  if (!dataLoaded) return <View style={styles.loaderWrap}><Loader size={48} /></View>;
+  if (!dataLoaded) return <LoadingScreen />;
 
   return (
     <View
@@ -1784,11 +1790,19 @@ export default function MainPagerScreen() {
             onRequestClose={() => setShowNotificationsModal(false)}
           >
             <ForceTheme mode="Dark">
-              <ActivityView
-                onClose={() => setShowNotificationsModal(false)}
-                activitiesList={activitiesList}
-                handleActivityClick={handleActivityClick}
-              />
+              {/* GestureHandlerRootView requis pour que le swipe-back fonctionne dans un Modal RN */}
+              <GestureHandlerRootView style={{ flex: 1 }}>
+                <EdgeSwipeBack
+                  style={{ flex: 1 }}
+                  onBack={() => setShowNotificationsModal(false)}
+                >
+                  <ActivityView
+                    onClose={() => setShowNotificationsModal(false)}
+                    activitiesList={activitiesList}
+                    handleActivityClick={handleActivityClick}
+                  />
+                </EdgeSwipeBack>
+              </GestureHandlerRootView>
             </ForceTheme>
           </RightSlideModal>
 

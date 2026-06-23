@@ -537,7 +537,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   avatarBlock: {
     flexDirection: "column",
     justifyContent: "center",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: spacing.xs2,             // space/150 = 6px
   },
   proAvatar: {
@@ -556,8 +556,6 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   proName: {
     ...textStyles.bodySmall,
     color: colors.text,
-    width: 56,            // = largeur de l'avatar : le nom ne dépasse pas
-    textAlign: "center",  // centré sous l'avatar, tronqué par "…" si trop long
   },
 
   // ── Dernière section : temporalité reveal + quitter/supprimer ──

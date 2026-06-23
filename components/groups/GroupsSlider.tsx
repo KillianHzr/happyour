@@ -99,7 +99,7 @@ const SliderCard = memo(function SliderCard({
             contentFit="cover"
             transition={0}
             cachePolicy="memory-disk"
-            blurRadius={80}
+            blurRadius={38}
           />
           <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.45)" }]} pointerEvents="none" />
         </>
@@ -109,8 +109,8 @@ const SliderCard = memo(function SliderCard({
       )}
 
       <View style={s.cardContent}>
-        {/* Nom du groupe (texte text/default sur fond brand/default) — max 2 lignes puis "…" */}
-        <NameTag text={card.name} maxLines={2} />
+        {/* Nom du groupe (texte text/default sur fond brand/default) */}
+        <NameTag text={card.name} />
 
         {/* Bloc data : shape du dernier moment + nombre de moments */}
         <View style={s.dataBlock}>
@@ -301,9 +301,9 @@ const makeSliderStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   cardContent: {
     flex: 1,
-    justifyContent: "space-between",
+    justifyContent: "center",
     alignItems: "center",
-    paddingVertical: 65,
+    paddingVertical: spacing.xl6, // space/2400 = 96
     paddingHorizontal: spacing.xl, // space/600 = 24
     gap: spacing.xl3, // 48
   },
@@ -338,7 +338,7 @@ const makeSliderStyles = (colors: ThemeColors) => StyleSheet.create({
     textAlign: "center",
   },
   countdown: {
-    height: 72, // max-height 72px
+    height: 80,
     padding: spacing.xs, // space/100
     flexDirection: "row",
     justifyContent: "center",

@@ -54,15 +54,6 @@ const HEADER_SHIFT = 52; // How many pixels the header translates upward when co
 const DRAWING_DETAIL_COLOR = buildColors("Light").textNeutral; // #303030 · --sds-color-text-neutral-default
 const DRAWING_WAVE_COLOR = buildColors("Dark").bg;             // #1E1E1E · --sds-color-background-default-default (black)
 
-// Reanimated 4 CSS transition for the focus ring: opacity fades smoothly whenever it
-// changes (swipe to another card, or comments opening/closing). Kept out of StyleSheet
-// because these props aren't in RN's ViewStyle type — Reanimated reads them at runtime.
-const FOCUS_RING_TRANSITION = {
-  transitionProperty: "opacity",
-  transitionDuration: 250,
-  transitionTimingFunction: "ease-out",
-} as any;
-
 function getSecondUrl(r: ChallengeResponse): string | null {
   if (!r.second_image_path || r.second_image_path === "text_mode") return null;
   return r2Storage.getPublicUrl(r.second_image_path);
@@ -191,6 +182,7 @@ const ChallengeResponseSlide = React.memo(function ChallengeResponseSlide({
   index,
   activeIndex,
   progress,
+  scrollProgress,
   swapped,
   commentsOpen,
   cvStyles,
@@ -199,6 +191,7 @@ const ChallengeResponseSlide = React.memo(function ChallengeResponseSlide({
   index: number;
   activeIndex: number;
   progress: SharedValue<number>;
+  scrollProgress: SharedValue<number>;
   swapped: boolean;
   commentsOpen: boolean;
   cvStyles: any;
@@ -214,6 +207,20 @@ const ChallengeResponseSlide = React.memo(function ChallengeResponseSlide({
     return {
       opacity: 1 - progress.value,
     };
+  });
+
+  // Focus ring opacity fades gradually with the scroll (mirrors GroupsSlider): full when
+  // this card is centered (progress === index), fading linearly to 0 one card away. So the
+  // current card's border fades out while the next card's fades in during a swipe.
+  // `commentsFactor` smoothly fades the ring out (timed) when comments open, independent of scroll.
+  const commentsFactor = useSharedValue(commentsOpen ? 0 : 1);
+  useEffect(() => {
+    commentsFactor.value = withTiming(commentsOpen ? 0 : 1, { duration: 250 });
+  }, [commentsOpen]);
+
+  const focusRingStyle = useAnimatedStyle(() => {
+    const proximity = Math.max(0, 1 - Math.abs(scrollProgress.value - index));
+    return { opacity: proximity * commentsFactor.value };
   });
 
   const slideImagePath = swapped ? (item.second_image_path ?? item.image_path) : item.image_path;
@@ -298,15 +305,13 @@ const ChallengeResponseSlide = React.memo(function ChallengeResponseSlide({
           media (a real borderWidth shrinks the content box → layout shift).
           Rendered LAST so it sits above the bottom shadow gradient — otherwise the
           gradient darkens the lower part of the border.
-          Always mounted; only opacity changes so the CSS transition (transitionProperty
-          on slideFocusRing) can fade it out on swipe-away / when comments open, and fade
-          it in on the newly centered card. */}
+          Always mounted; its opacity (focusRingStyle) fades gradually with the carousel
+          scroll — out on the card you swipe away from, in on the one you swipe toward. */}
       <Reanimated.View
         pointerEvents="none"
         style={[
           cvStyles.slideFocusRing,
-          FOCUS_RING_TRANSITION,
-          { opacity: index === activeIndex && !commentsOpen ? 1 : 0 },
+          focusRingStyle,
         ]}
       />
       </Pressable>
@@ -512,15 +517,22 @@ export default function ChallengeVotePage({
     reactionToastAnim.setValue(0);
     RNAnimated.spring(reactionToastAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 10 }).start();
     reactionToastTimer.current = setTimeout(() => {
-      RNAnimated.timing(reactionToastAnim, {
-        toValue: 0,
-        duration: 250,
-        useNativeDriver: true,
-        easing: RNEasing.in(RNEasing.quad),
-      }).start(({ finished }) => {
-        if (finished) setReactionToast(null);
-      });
+      hideReactionToast();
     }, 2200);
+  }, [reactionToastAnim]);
+
+  // Animates the reaction toast out + clears it. Reused by the auto-dismiss timer
+  // and the toast's X close button.
+  const hideReactionToast = useCallback(() => {
+    if (reactionToastTimer.current) clearTimeout(reactionToastTimer.current);
+    RNAnimated.timing(reactionToastAnim, {
+      toValue: 0,
+      duration: 250,
+      useNativeDriver: true,
+      easing: RNEasing.in(RNEasing.quad),
+    }).start(({ finished }) => {
+      if (finished) setReactionToast(null);
+    });
   }, [reactionToastAnim]);
 
   // On close: hide the stickers (no lingering) and reset the delete state.
@@ -687,12 +699,13 @@ export default function ChallengeVotePage({
         index={index}
         activeIndex={activeIndex}
         progress={progress}
+        scrollProgress={carouselProgress}
         swapped={swapped}
         commentsOpen={commentModalVisible}
         cvStyles={cvStyles}
       />
     );
-  }, [activeIndex, progress, swapped, commentModalVisible, cvStyles]);
+  }, [activeIndex, progress, carouselProgress, swapped, commentModalVisible, cvStyles]);
 
   return (
     <View style={cvStyles.container}>
@@ -776,7 +789,7 @@ export default function ChallengeVotePage({
                   <Text style={cvStyles.orangeText}>{challenge.target_username}</Text>
                   {" était un"}{"aeiouyAEIOUY".includes(challenge.theme.label?.[0] ?? "") ? "" : "·e"}{" "}
                   <Text style={cvStyles.orangeText}>{challenge.theme.label}</Text>
-                  {", ça serait..."}
+                  {", ce serait..."}
                 </Text>
               </View>
             </Reanimated.View>
@@ -982,6 +995,7 @@ export default function ChallengeVotePage({
               }}
               onStickerPosted={handleStickerPosted}
               onStickerDeleted={handleStickerDeleted}
+              onToast={showReactionToast}
               photoId={commentActiveResponse.id}
               photoOwnerId={commentActiveResponse.user_id}
               groupId={challenge.group_id}
@@ -995,7 +1009,7 @@ export default function ChallengeVotePage({
               it sits above the CommentModal) — placing it on the main screen would draw it
               behind this full-screen RightSlideModal, where it's never visible. */}
           {reactionToast !== null && (
-            <StickerToast message={reactionToast} animValue={reactionToastAnim} topInset={insets.top} />
+            <StickerToast message={reactionToast} animValue={reactionToastAnim} topInset={insets.top} onClose={hideReactionToast} />
           )}
         </View>
       </RightSlideModal>

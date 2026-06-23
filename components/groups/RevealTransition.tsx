@@ -18,7 +18,7 @@ const { width: SW, height: SH } = Dimensions.get("window");
 const TARGET_H = SH;
 const GROW_MS = 420;
 const STRIP_MS = 1100;
-const BLUR_RADIUS = 80;
+const BLUR_RADIUS = 38;
 // = durée de l'aspiration du chrome (GroupRoom) : la transition (et donc CE composant) monte
 // à la fin de l'aspiration → le Lottie reprend ici, exactement où la card en était.
 const EXIT_MS = 700;

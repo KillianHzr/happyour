@@ -132,10 +132,21 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
     }
   }
 
+  // `zoom` = facteur d'affichage absolu (0.5 = ultra grand-angle si dispo, 1 = 1x, …).
+  // On utilise setZoomRatio + clamp sur la plage de l'objectif : sur les téléphones dont
+  // la caméra logique inclut l'ultra grand-angle, minZoomRatio < 1 → le 0.5x fonctionne ;
+  // sinon le 0.5x est ramené au min (1x) sans crash.
   fun setZoom(zoom: Double) {
-    val z = zoom.toFloat().coerceIn(0f, 1f)
+    val factor = zoom.toFloat()
     val c = camera
-    if (c != null) c.cameraControl.setLinearZoom(z) else pendingZoom = z
+    if (c != null) applyZoomRatio(c, factor) else pendingZoom = factor
+  }
+
+  private fun applyZoomRatio(c: androidx.camera.core.Camera, factor: Float) {
+    val zs = c.cameraInfo.zoomState.value
+    val min = zs?.minZoomRatio ?: 1f
+    val max = zs?.maxZoomRatio ?: 1f
+    c.cameraControl.setZoomRatio(factor.coerceIn(min, max))
   }
 
   fun setTorch(on: Boolean) {
@@ -152,6 +163,25 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
       else -> ImageCapture.FLASH_MODE_OFF
     }
     imageCapture?.flashMode = flashMode
+  }
+
+  // Gel de preview : encode la frame actuellement affichée en JPEG et renvoie son URI.
+  // previewView.bitmap renvoie l'image telle qu'affichée (déjà orientée + miroir si façade).
+  fun snapshotPreview(promise: Promise) {
+    mainHandler.post {
+      val bmp = previewView.bitmap
+      if (bmp == null) {
+        promise.reject("SNAPSHOT_ERROR", "No frame available", null)
+        return@post
+      }
+      try {
+        val file = File(context.cacheDir, "snap_${System.currentTimeMillis()}.jpg")
+        file.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, it) }
+        promise.resolve("file://${file.absolutePath}")
+      } catch (e: Exception) {
+        promise.reject("SNAPSHOT_ERROR", e.message ?: "Encode failed", null)
+      }
+    }
   }
 
   fun capturePhoto(promise: Promise) {
@@ -232,7 +262,7 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
         videoCapture = null
       }
       Log.d("SeamlessRecorder", "bindCamera OK mode=${if (isVideoMode) "video" else "photo"}")
-      pendingZoom?.let { camera?.cameraControl?.setLinearZoom(it); pendingZoom = null }
+      pendingZoom?.let { f -> camera?.let { applyZoomRatio(it, f) }; pendingZoom = null }
       pendingTorch?.let { camera?.cameraControl?.enableTorch(it); pendingTorch = null }
     } catch (e: Exception) {
       Log.e("SeamlessRecorder", "bindCamera failed: ${e.message}")
