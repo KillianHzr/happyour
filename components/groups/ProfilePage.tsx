@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, RefreshControl, Dimensions, Animated, Easing, PanResponder,
+  ActivityIndicator, RefreshControl, Dimensions, Animated, Easing,
 } from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -147,11 +147,6 @@ export default function ProfilePage({
   const [streakWeeks, setStreakWeeks] = useState<Set<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
 
-  // Scroll activé uniquement si le contenu dépasse la zone visible → pas de bounce iOS inutile.
-  const [scrollViewportH, setScrollViewportH] = useState(0);
-  const [scrollContentH, setScrollContentH] = useState(0);
-  const isScrollable = scrollContentH > scrollViewportH + 1;
-
   // ── Container coffre ──
   const [coffreGroupIndex, setCoffreGroupIndex] = useState(() => {
     const idx = allGroups.findIndex(g => g.name === groupName);
@@ -202,52 +197,6 @@ export default function ProfilePage({
   }, [allGroups, photoTimestamps]);
 
   const coffreGroup = sortedCoffreGroups[coffreGroupIndex] ?? null;
-
-  // Swipe horizontal sur tout le bloc coffre (groupe + stats) pour changer de groupe, comme
-  // les flèches de pagination. Détection horizontale stricte pour ne pas voler le scroll vertical.
-  const coffreIndexRef = useRef(coffreGroupIndex);
-  coffreIndexRef.current = coffreGroupIndex;
-  const coffreLenRef = useRef(sortedCoffreGroups.length);
-  coffreLenRef.current = sortedCoffreGroups.length;
-
-  // Animation de slide : le bloc sort dans le sens du swipe, l'index change, puis le nouveau
-  // bloc entre depuis le côté opposé. coffreAnimating évite les changements concurrents.
-  const coffreSlide = useRef(new Animated.Value(0)).current;
-  const coffreAnimating = useRef(false);
-  const changeCoffreGroup = useCallback((delta: number) => {
-    if (coffreAnimating.current) return;
-    const len = coffreLenRef.current;
-    const target = coffreIndexRef.current + delta;
-    if (target < 0 || target >= len) return;
-    const W = Dimensions.get("window").width;
-    coffreAnimating.current = true;
-    Animated.timing(coffreSlide, {
-      toValue: -delta * W,
-      duration: 150,
-      easing: Easing.in(Easing.cubic),
-      useNativeDriver: true,
-    }).start(() => {
-      setCoffreGroupIndex(target);
-      coffreSlide.setValue(delta * W); // le nouveau bloc démarre hors écran du côté d'entrée
-      Animated.timing(coffreSlide, {
-        toValue: 0,
-        duration: 200,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start(() => { coffreAnimating.current = false; });
-    });
-  }, [coffreSlide]);
-
-  const coffreSwipe = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_e, g) =>
-        Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy) * 1.4,
-      onPanResponderRelease: (_e, g) => {
-        if (g.dx <= -40) changeCoffreGroup(1);
-        else if (g.dx >= 40) changeCoffreGroup(-1);
-      },
-    })
-  ).current;
 
   const coffreMomentsCount = useMemo(() => {
     if (!coffreGroup) return 0;
@@ -409,19 +358,12 @@ export default function ProfilePage({
         style={styles.scroll}
         contentContainerStyle={{ paddingBottom: insets.bottom + 120 }}
         showsVerticalScrollIndicator={false}
-        alwaysBounceVertical={false}
-        // Désactive le scroll/bounce quand tout tient à l'écran (sinon RefreshControl force le bounce iOS).
-        scrollEnabled={isScrollable}
-        onLayout={(e) => setScrollViewportH(e.nativeEvent.layout.height)}
-        onContentSizeChange={(_w, h) => setScrollContentH(h)}
         refreshControl={
-          isScrollable ? (
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => loadData(true)}
-              tintColor={colors.textTertiary}
-            />
-          ) : undefined
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => loadData(true)}
+            tintColor={colors.textTertiary}
+          />
         }
       >
         {/* ── Top header (masqué en mode membre : le pseudo est dans le header des réglages) ── */}
@@ -498,20 +440,18 @@ export default function ProfilePage({
 
           {/* container-coffre */}
           {sortedCoffreGroups.length > 0 && (
-            <View style={styles.containerCoffre} {...coffreSwipe.panHandlers}>
+            <View style={styles.containerCoffre}>
               {/* title (masqué en mode membre : pas de sélecteur de groupe, données déjà restreintes) */}
               {!isMember && (
               <View style={styles.coffreTitle}>
-                <Animated.View style={[styles.cofreTitleSlide, { transform: [{ translateX: coffreSlide }] }]}>
-                  <Text style={styles.cofreTitleText} numberOfLines={1}>
-                    {sortedCoffreGroups[coffreGroupIndex]?.name ?? ""}
-                  </Text>
-                </Animated.View>
+                <Text style={styles.cofreTitleText} numberOfLines={1}>
+                  {(sortedCoffreGroups[coffreGroupIndex]?.name ?? "").toUpperCase()}
+                </Text>
                 {sortedCoffreGroups.length > 1 && (
                   <View style={styles.cofrePagination}>
                     <TouchableOpacity
                       disabled={coffreGroupIndex === 0}
-                      onPress={() => changeCoffreGroup(-1)}
+                      onPress={() => setCoffreGroupIndex(i => i - 1)}
                       activeOpacity={0.7}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
@@ -522,7 +462,7 @@ export default function ProfilePage({
                     <Text style={styles.cofrePaginText}>{coffreGroupIndex + 1}/{sortedCoffreGroups.length}</Text>
                     <TouchableOpacity
                       disabled={coffreGroupIndex === sortedCoffreGroups.length - 1}
-                      onPress={() => changeCoffreGroup(1)}
+                      onPress={() => setCoffreGroupIndex(i => i + 1)}
                       activeOpacity={0.7}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
@@ -533,8 +473,7 @@ export default function ProfilePage({
               </View>
               )}
 
-              {/* bento (slide animé au changement de groupe) */}
-              <Animated.View style={[styles.cofreBentoSlide, { transform: [{ translateX: coffreSlide }] }]}>
+              {/* bento */}
               <View style={styles.cofreBento}>
                 <View style={styles.cofreBentoRow}>
                   <View style={[styles.cofreBentoItem, { flex: 1 }]}>
@@ -581,7 +520,6 @@ export default function ProfilePage({
                   </View>
                 )}
               </View>
-              </Animated.View>
             </View>
           )}
         </View>
@@ -786,14 +724,6 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: "flex-start",
     gap: spacing.md,
     alignSelf: "stretch",
-    overflow: "hidden", // clippe le slide horizontal des blocs au changement de groupe
-  },
-  cofreTitleSlide: {
-    flex: 1,
-    overflow: "hidden", // le nom slide sans déborder sur la pagination
-  },
-  cofreBentoSlide: {
-    alignSelf: "stretch",
   },
   coffreTitle: {
     flexDirection: "row",
@@ -805,6 +735,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     ...textStyles.heading,
     color: colors.text,
     flex: 1,
+    textTransform: "uppercase",
   },
   cofrePagination: {
     flexDirection: "row",

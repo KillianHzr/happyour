@@ -3,7 +3,6 @@ import {
   View, Text, StyleSheet, Animated, Easing, LayoutAnimation, TouchableOpacity,
   Alert, Keyboard, KeyboardAvoidingView, Platform, TextInput, Modal, Pressable, PanResponder, UIManager, useWindowDimensions, AppState,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Image } from "expo-image";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { type CameraType, type FlashMode, useCameraPermissions } from "expo-camera";
@@ -13,7 +12,6 @@ import Svg, { Path, Circle } from "react-native-svg";
 import { useAudioRecorder, AudioModule, RecordingPresets, useAudioPlayer, useAudioPlayerStatus, useAudioRecorderState } from "expo-audio";
 import { SeamlessRecorder, type SeamlessRecorderRef } from "seamless-recorder";
 import { setCaptureData } from "../../lib/capture-store";
-import { hapticSend } from "../../lib/haptics";
 import { useUpload } from "../../lib/upload-context";
 import DrawingCanvas, { type DrawingCanvasRef } from "../DrawingCanvas";
 import { SendIcon, FeatherIcon, FlipIcon, CloseIcon, FlashIcon } from "./GroupIcons";
@@ -59,21 +57,15 @@ const CHALLENGE_GAP = 16;
 const BLUR_METHOD = Platform.OS === "ios" ? ("dimezisBlurView" as const) : ("none" as const);
 // Zone du sélecteur de mode : 80% de l'écran, plafonnée à cette largeur max.
 const MODE_SELECTOR_MAX_WIDTH = 320;
-// ── Zoom : facteur d'affichage absolu (et non plus normalisé 0–1) ──
-// La prop `zoom` envoyée au module natif est désormais le facteur affiché à
-// l'utilisateur : 0.5 = ultra grand-angle, 1 = grand-angle, etc. Le natif clamp
-// selon les capacités de l'objectif (l'avant n'a pas d'ultra grand-angle).
-const MAX_ZOOM = 5;          // facteur max (x5)
-const MIN_ZOOM_BACK = 0.5;   // ultra grand-angle dispo sur la caméra arrière
-const MIN_ZOOM_FRONT = 1;    // pas d'ultra grand-angle en façade → min 1x
-const PINCH_ZOOM_SPEED = 0.012; // sensibilité du pinch (en facteur/px)
-const minZoomFor = (f: CameraType) => (f === "front" ? MIN_ZOOM_FRONT : MIN_ZOOM_BACK);
-// Paliers cycliques du bouton zoom (l'avant démarre à 1x faute d'ultra grand-angle).
-const zoomPresetsFor = (f: CameraType): number[] =>
-  f === "front" ? [1, 2, 5] : [0.5, 1, 2, 5];
-const formatZoom = (z: number) => `x${Number.isInteger(z) ? z : z.toFixed(1)}`;
-const nearestPreset = (z: number, presets: number[]) =>
-  presets.reduce((a, b) => (Math.abs(b - z) < Math.abs(a - z) ? b : a), presets[0]);
+// Paliers de zoom accessibles via le bouton cyclique.
+// x0.5/x1 → zoom=0 (min), x2 → 0.25, x5 → 1.0 (max).
+const ZOOM_PRESETS = [
+  { label: "x0.5", value: 0 },
+  { label: "x1",   value: 0 },
+  { label: "x2",   value: 0.25 },
+  { label: "x5",   value: 1.0 },
+] as const;
+type ZoomPresetIdx = 0 | 1 | 2 | 3;
 // Palette de couleurs du dessin (2 lignes de 7). Défaut = #FF561A.
 const DRAWING_COLORS: string[][] = [
   ["#FFFFFF", "#F23F3A", "#FE76B4", "#FFC548", "#00B487", "#6DD0F0", "#7659FF"],
@@ -165,10 +157,6 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   // Action de fin (toast + reset) déclenchée à la fin du Lottie.
   const finishSendRef = useRef<(() => void) | null>(null);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
-  // Derniers groupes auxquels l'utilisateur a partagé un moment : sélection par défaut
-  // du GroupPicker à la prochaine capture. Persisté pour survivre aux redémarrages.
-  const lastSharedGroupIdsRef = useRef<string[] | null>(null);
-  const lastSharedStorageKey = `last_shared_groups_${userId}`;
   const [showChallengesInline, setShowChallengesInline] = useState(false);
   const [activeChallenge, setActiveChallenge] = useState<ActiveChallenge | null>(null);
   const challengeChooseRef = useRef<(() => void) | null>(null);
@@ -215,7 +203,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   useEffect(() => { onScrollLockRef.current = onScrollLock; }, [onScrollLock]);
 
   // Pinch-to-zoom + double-tap refs
-  const savedZoomRef = useRef(1);
+  const savedZoomRef = useRef(0);
   const prevPinchDistRef = useRef<number | null>(null);
   const isPinchingLocalRef = useRef(false);
   const pinchRafRef = useRef<number | null>(null);
@@ -248,17 +236,6 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const stylePhotoVideo = useAnimatedStyle(() => ({ opacity: activeLottieIndex.value === 0 ? 1 : 0 }));
   const stylePhotoDraw = useAnimatedStyle(() => ({ opacity: activeLottieIndex.value === 1 ? 1 : 0 }));
   const styleVideoDraw = useAnimatedStyle(() => ({ opacity: activeLottieIndex.value === 2 ? 1 : 0 }));
-
-  // Intro "INSTANT → PHOTO" jouée une fois à l'arrivée sur l'app, par-dessus les lotties de
-  // transition. Reste sur sa dernière frame (= icône photo) jusqu'au 1er changement de mode,
-  // après quoi on la masque et les lotties de transition prennent le relais.
-  const introRef = useRef<LottieView>(null);
-  const introPlayed = useRef(false);
-  const introOpacity = useSharedValue(1);
-  const styleIntro = useAnimatedStyle(() => ({ opacity: introOpacity.value }));
-  // Tant que l'intro est affichée, on cache complètement les lotties de transition pour ne
-  // voir QUE l'intro (sinon l'icône photo du dessous transparaît).
-  const styleTransitions = useAnimatedStyle(() => ({ opacity: introOpacity.value === 0 ? 1 : 0 }));
 
   const handleSelectMode = (m: CameraMode) => {
     if (cameraMode === m) return;
@@ -300,22 +277,6 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     setCameraMode(m);
   };
 
-  // Joue l'intro une seule fois, dès que la page caméra est visible (après le splash).
-  useEffect(() => {
-    if (!isActive || introPlayed.current) return;
-    introPlayed.current = true;
-    introRef.current?.reset();
-    introRef.current?.play();
-  }, [isActive]);
-
-  // Au 1er changement de mode, on masque l'intro : sa dernière frame (icône photo) coïncide
-  // avec l'état de départ des lotties de transition, donc le passage est invisible.
-  const introModeFirstRender = useRef(true);
-  useEffect(() => {
-    if (introModeFirstRender.current) { introModeFirstRender.current = false; return; }
-    introOpacity.value = 0;
-  }, [cameraMode]);
-
   const [drawingColor, setDrawingColor] = useState("#FF561A");
   const [drawingStrokeWidth, setDrawingStrokeWidth] = useState(6);
   const [isDrawingActive, setIsDrawingActive] = useState(false);
@@ -323,7 +284,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [facing, setFacing] = useState<CameraType>("back");
   const [flash, setFlash] = useState<FlashMode>("off");
-  const [zoom, setZoom] = useState(1); // facteur d'affichage (1 = 1x)
+  const [zoom, setZoom] = useState(0);
+  const [zoomPresetIdx, setZoomPresetIdx] = useState<ZoomPresetIdx>(1);
   const [torch, setTorch] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isVideoProcessing, setIsVideoProcessing] = useState(false);
@@ -815,8 +777,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     setShowColorPalette(false);
     setActiveChallenge(null);
     previewMarginBottomAnim.setValue(0);
-    setZoom(1);
-    savedZoomRef.current = 1;
+    setZoom(0);
+    savedZoomRef.current = 0;
     if (isEditingCaptionRef.current) {
       isEditingCaptionRef.current = false;
       setIsEditingCaption(false);
@@ -881,9 +843,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const handleTouchMove = (e: any) => {
     if (!isRecording || startTouchY.current === null) return;
     const diff = startTouchY.current - e.nativeEvent.pageY;
-    const minZ = minZoomFor(facing);
-    const t = Math.min(Math.max(diff / 300, 0), 1);
-    setZoom(minZ + t * (MAX_ZOOM - minZ));
+    setZoom(Math.min(Math.max(diff / 300, 0), 1));
   };
 
   const startVideoRecording = async () => {
@@ -929,8 +889,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   stopVideoRecordingRef.current = stopVideoRecording;
 
   const handleFlipCamera = () => {
-    setZoom(1);
-    savedZoomRef.current = 1;
+    setZoom(0);
+    savedZoomRef.current = 0;
+    setZoomPresetIdx(1);
     // Le flip reconfigure l'AVCaptureSession → la session audio peut se réinitialiser et
     // émettre un événement volume parasite. On arme la suppression pour l'ignorer ~2s.
     armVolumeSuppressionRef.current();
@@ -939,11 +900,11 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   };
 
   const handleZoomPreset = () => {
-    const presets = zoomPresetsFor(facing);
-    // Prochain palier strictement supérieur au zoom courant, sinon on boucle au min.
-    const next = presets.find((p) => p > zoom + 0.01) ?? presets[0];
-    setZoom(next);
-    savedZoomRef.current = next;
+    const nextIdx = ((zoomPresetIdx + 1) % ZOOM_PRESETS.length) as ZoomPresetIdx;
+    setZoomPresetIdx(nextIdx);
+    const newZoom = ZOOM_PRESETS[nextIdx].value;
+    setZoom(newZoom);
+    savedZoomRef.current = newZoom;
   };
 
   const handleFlipCameraRef = useRef(handleFlipCamera);
@@ -965,8 +926,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     const dist = Math.sqrt(dx * dx + dy * dy);
     if (prevPinchDistRef.current !== null) {
       const delta = dist - prevPinchDistRef.current;
-      const minZ = minZoomFor(facing);
-      const next = Math.max(minZ, Math.min(MAX_ZOOM, savedZoomRef.current + delta * PINCH_ZOOM_SPEED));
+      const next = Math.max(0, Math.min(1, savedZoomRef.current + delta * 0.003));
       savedZoomRef.current = next;
       if (pinchRafRef.current === null) {
         pinchRafRef.current = requestAnimationFrame(() => {
@@ -986,7 +946,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       const z = savedZoomRef.current;
       setZoom(z);
       setIsPinching(false);
-      // Le label du bouton zoom est dérivé de `zoom` (palier le plus proche).
+      // Sync bouton zoom au palier le plus proche
+      setZoomPresetIdx(z < 0.125 ? 1 : z < 0.625 ? 2 : 3);
     }
   };
   const handleCamTerminate = () => {
@@ -1256,17 +1217,6 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     }
   };
 
-  // Charge les derniers groupes partagés (persistés) au montage.
-  useEffect(() => {
-    AsyncStorage.getItem(lastSharedStorageKey)
-      .then((raw) => {
-        if (!raw) return;
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) lastSharedGroupIdsRef.current = parsed.filter((x) => typeof x === "string");
-      })
-      .catch(() => {});
-  }, [lastSharedStorageKey]);
-
   const toggleGroup = (gId: string) => {
     setSelectedGroupIds(prev => prev.includes(gId) ? prev.filter(g => g !== gId) : [...prev, gId]);
   };
@@ -1274,9 +1224,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const openGroupPicker = () => {
     if (activeChallenge !== null) { confirmUpload([activeChallenge.groupId]); return; }
     if (allGroups.length <= 1) { confirmUpload([allGroups[0]?.id ?? groupId]); return; }
-    // Défaut = derniers groupes partagés (filtrés à ceux encore existants) ; sinon, groupe courant.
-    const lastShared = (lastSharedGroupIdsRef.current ?? []).filter(id => allGroups.some(g => g.id === id));
-    setSelectedGroupIds(lastShared.length > 0 ? lastShared : [groupId]);
+    setSelectedGroupIds([groupId]);
     setShowGroupPicker(true);
   };
 
@@ -1407,9 +1355,6 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const confirmUpload = (groupIds: string[], fromModal = false) => {
     if (!slot1 || groupIds.length === 0) return;
     setShowGroupPicker(false);
-    // Mémorise les groupes de ce moment : ils deviendront la sélection par défaut au prochain partage.
-    lastSharedGroupIdsRef.current = groupIds;
-    AsyncStorage.setItem(lastSharedStorageKey, JSON.stringify(groupIds)).catch(() => {});
     const ts = Date.now();
 
     groupIds.forEach((gId, i) => {
@@ -1491,7 +1436,6 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       };
       setSendFrame(defaultFrame);
       setSendAnimType(animType);
-      hapticSend(); // vibration synchrone avec l'anim Lottie d'envoi
       // Affinage best-effort (marges exactes + mode défi) — n'impacte plus le déclenchement.
       const node = previewFrameRef.current;
       const rel = rootViewRef.current;
@@ -1576,7 +1520,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         )}
         {/* Overlay DESSIN — la caméra reste montée dessous (0 lag à la sortie) */}
         {cameraMode === "DESSIN" && (
-          <View style={[StyleSheet.absoluteFill, styles.cameraPageContainer, { justifyContent: "flex-end", paddingBottom: NAVBAR_HEIGHT, paddingHorizontal: 0, zIndex: 1 }]}>
+          <View style={[StyleSheet.absoluteFill, styles.cameraPageContainer, { justifyContent: "flex-end", paddingBottom: activeChallenge !== null ? 0 : NAVBAR_HEIGHT, paddingHorizontal: 0, zIndex: 1 }]}>
             {activeChallenge && (
               <View style={{ position: "absolute", top: 0, left: 0, right: 0, paddingTop: insets.top, paddingHorizontal: spacing.lg }} pointerEvents="box-none">
                 <View style={challengeStyles.inlineHeaderRow}>
@@ -1737,15 +1681,14 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                     />
                   )}
                   {/* Gel à l'appui photo : la frame capturée (snapshotPreview) est affichée FIGÉE
-                      et nette, et le flou monte progressivement par-dessus (200ms). La caméra
-                      live tourne dessous mais est masquée par ce gel → plus aucun mouvement visible. */}
+                      et nette, et le flou (sans aucun voile sombre) monte progressivement
+                      par-dessus (200ms). La caméra live tourne dessous mais est masquée par le
+                      gel → plus aucun mouvement visible. */}
                   {frozenUri && (
                     <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
                       <Image source={{ uri: frozenUri }} style={StyleSheet.absoluteFill} contentFit="cover" transition={0} cachePolicy="memory-disk" />
                       <Animated.View style={[StyleSheet.absoluteFill, { opacity: freezeBlurAnim }]}>
-                        <BlurView intensity={60} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} />
-                        {/* Android n'a pas le flou (blurMethod "none") → voile plus marqué pour garder l'effet flouté. */}
-                        <View style={[StyleSheet.absoluteFill, { backgroundColor: Platform.OS === "ios" ? "rgba(0,0,0,0.15)" : "rgba(0,0,0,0.4)" }]} />
+                        <BlurView intensity={70} tint="default" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} />
                       </Animated.View>
                     </View>
                   )}
@@ -1776,7 +1719,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                     }}
                   />
                   <CameraControlButton icon="rotate" onPress={handleFlipCamera} />
-                  <ZoomPresetButton label={formatZoom(nearestPreset(zoom, zoomPresetsFor(facing)))} onPress={handleZoomPreset} />
+                  <ZoomPresetButton label={ZOOM_PRESETS[zoomPresetIdx].label} onPress={handleZoomPreset} />
                 </View>
               )}
             </View>
@@ -1855,39 +1798,27 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                   <Shape name="stop" size={40} color={colors.brand} />
                 ) : (
                   <View style={{ width: 80, height: 80 }}>
-                    <Reanimated.View style={[StyleSheet.absoluteFillObject, styleTransitions]}>
-                      <ReanimatedLottieView
-                        source={require("../../assets/animations/photo - video.json")}
-                        autoPlay={false}
-                        loop={false}
-                        animatedProps={propsPhotoVideo}
-                        style={[StyleSheet.absoluteFillObject, stylePhotoVideo]}
-                      />
-                      <ReanimatedLottieView
-                        source={require("../../assets/animations/photo - draw.json")}
-                        autoPlay={false}
-                        loop={false}
-                        animatedProps={propsPhotoDraw}
-                        style={[StyleSheet.absoluteFillObject, stylePhotoDraw]}
-                      />
-                      <ReanimatedLottieView
-                        source={require("../../assets/animations/video - draw.json")}
-                        autoPlay={false}
-                        loop={false}
-                        animatedProps={propsVideoDraw}
-                        style={[StyleSheet.absoluteFillObject, styleVideoDraw]}
-                      />
-                    </Reanimated.View>
-                    {/* Intro jouée à l'arrivée, par-dessus les transitions, masquée au 1er changement de mode */}
-                    <Reanimated.View style={[StyleSheet.absoluteFillObject, styleIntro]} pointerEvents="none">
-                      <LottieView
-                        ref={introRef}
-                        source={require("../../assets/lotties/INSTANTtoPHOTO.json")}
-                        autoPlay={false}
-                        loop={false}
-                        style={StyleSheet.absoluteFillObject}
-                      />
-                    </Reanimated.View>
+                    <ReanimatedLottieView
+                      source={require("../../assets/animations/photo - video.json")}
+                      autoPlay={false}
+                      loop={false}
+                      animatedProps={propsPhotoVideo}
+                      style={[StyleSheet.absoluteFillObject, stylePhotoVideo]}
+                    />
+                    <ReanimatedLottieView
+                      source={require("../../assets/animations/photo - draw.json")}
+                      autoPlay={false}
+                      loop={false}
+                      animatedProps={propsPhotoDraw}
+                      style={[StyleSheet.absoluteFillObject, stylePhotoDraw]}
+                    />
+                    <ReanimatedLottieView
+                      source={require("../../assets/animations/video - draw.json")}
+                      autoPlay={false}
+                      loop={false}
+                      animatedProps={propsVideoDraw}
+                      style={[StyleSheet.absoluteFillObject, styleVideoDraw]}
+                    />
                   </View>
                 )}
               </TouchableOpacity>}
@@ -1895,9 +1826,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
             </View>
           </View>
           {/* Bouton Participer désactivé — visible aussi pendant la capture (mode défi),
-               activé seulement une fois le moment capturé (preview). PHOTO/VIDEO/DESSIN
-               réservent tous la bande basse (NAVBAR_HEIGHT) sous la frame. */}
-          {activeChallenge !== null && (cameraMode === "PHOTO" || cameraMode === "VIDEO" || cameraMode === "DESSIN") && !isRecording && (
+               activé seulement une fois le moment capturé (preview). Limité aux modes
+               PHOTO/VIDEO qui réservent la bande basse (NAVBAR_HEIGHT) sous la frame. */}
+          {activeChallenge !== null && (cameraMode === "PHOTO" || cameraMode === "VIDEO") && !isRecording && (
             <View style={[styles.previewSendArea, { position: "absolute", left: 0, right: 0, bottom: 0 }]} pointerEvents="none">
               <PrimaryButton label="Participer" onPress={() => {}} disabled />
             </View>
@@ -2448,27 +2379,8 @@ function ModeSelector({ selected, onSelect }: { selected: CameraMode; onSelect: 
   const animating = useRef(false);
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
-  const onSelectRef = useRef(onSelect);
-  onSelectRef.current = onSelect;
   const slotWidthRef = useRef(slotWidth);
   slotWidthRef.current = slotWidth;
-
-  // Swipe horizontal sur le sélecteur → passe au mode suivant/précédent. Les taps
-  // (sans déplacement) restent gérés par les TouchableOpacity des items.
-  const swipeResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponderCapture: (_, g) =>
-        Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
-      onPanResponderRelease: (_, g) => {
-        if (Math.abs(g.dx) < 20) return;
-        const curIdx = Math.max(0, MODE_ORDER.findIndex((m) => m.mode === selectedRef.current));
-        // Swipe vers la gauche (dx<0) → mode suivant ; vers la droite → précédent.
-        const dir = g.dx < 0 ? 1 : -1;
-        const next = MODE_ORDER[mod(curIdx + dir, MODE_ORDER.length)];
-        if (next.mode !== selectedRef.current) onSelectRef.current(next.mode);
-      },
-    })
-  ).current;
 
   // Fait rouler le carrousel d'un cran vers le mode sélectionné, puis se relance
   // (gère les taps rapides : on draine les changements en attente à chaque fin).
@@ -2502,7 +2414,7 @@ function ModeSelector({ selected, onSelect }: { selected: CameraMode; onSelect: 
   for (let v = centerV - 2; v <= centerV + 2; v++) items.push(v);
 
   return (
-    <View style={[styles.modeSlider, { width: pillWidth }]} {...swipeResponder.panHandlers}>
+    <View style={[styles.modeSlider, { width: pillWidth }]}>
       <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
       <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
       <View style={{ width: "100%", height: MODE_ITEM_HEIGHT }}>
@@ -2866,7 +2778,7 @@ const makeChallengeStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: spacing.sm,
   },
   challengeBtnText: {
-    color: colors.textFix, // text/default/default-fix
+    color: colors.textBrandOnBrandSecondary,
     ...textStyles.singleLineBodyBaseStrong,
   },
   bannerRow: {

@@ -144,7 +144,7 @@ export default function InviteScreen() {
 
   const handleShareCode = async () => {
     try {
-      const message = `Rejoins mon cercle privé sur Disclose !\n\nCode d'invitation : ${inviteCode}\n\nTélécharge l'app ici : https://happyour.killianherzer.fr/`;
+      const message = `Rejoins mon cercle privé sur Disclose !\n\nCode d'invitation : ${inviteCode}\n\nTélécharge l'app ici : https://disclose-app.com/`;
       await Share.share({ message });
     } catch (e: any) {
       Alert.alert("Erreur", e.message);

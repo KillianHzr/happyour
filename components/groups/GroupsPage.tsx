@@ -103,13 +103,6 @@ function computeNextRevealDate(revealDayOfWeek: number, revealHour: number): Dat
   return reveal;
 }
 
-/** Premier minuit (00:00) qui suit un timestamp (ex: reveal dim 20h → lun 00:00). */
-function midnightAfter(ts: number): number {
-  const d = new Date(ts);
-  d.setHours(24, 0, 0, 0); // 24h → bascule au 00:00 du jour suivant
-  return d.getTime();
-}
-
 export default function GroupsPage({ allGroups, groupData, revealConfig, isActive, userId, enterGroupId, onEnteredGroup, closeGroupSignal, onSelectGroup, onAddGroup, onGoToCapture, onOpenChallenge, onOpenReveal, onRevealStart, onCardFrame, onLottieFrame, onOpenSettings, onOpenArchives, onScrollLock, onDebugNamePress, debugUnlocked }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -123,13 +116,8 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
   );
   const allGroupsKey = allGroups.map((g) => g.id).join(",");
 
-  // État reveal global (par défaut, avant le fetch par groupe). Le `refresh` calcule ensuite
-  // un état PAR GROUPE (un reveal vide se referme à minuit) qui prend le relais via les overrides.
-  const lastRevealTs = revealDate.getTime() - WEEK_MS;
-  const unlockedDefault = (Date.now() - lastRevealTs < DAY_MS) || !!debugUnlocked;
-
   // Champs dynamiques rafraîchis par le fetch à l'arrivée (uniquement ce qui change)
-  type CardOverride = { momentCount: number; shape: ShapeName | null; bgUrl: string | null; unlocked: boolean };
+  type CardOverride = { momentCount: number; shape: ShapeName | null; bgUrl: string | null };
   const [overrides, setOverrides] = useState<Record<string, CardOverride>>({});
 
   // Base instantanée dérivée des données déjà chargées par [id].tsx (aucune attente).
@@ -183,30 +171,27 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
         challengeLabel,
         challengeShape,
         postedThisWeek,
-        unlocked: unlockedDefault,
       };
     });
     // Ordre (groupe au moment le plus récent en premier) figé sur la base → pas de saut au refresh
     built.sort((a, b) => b.lastMomentAt - a.lastMomentAt);
-    // On applique les champs rafraîchis (fond, nombre de moments, shape, état reveal) sans réordonner
+    // On applique les champs rafraîchis (fond, nombre de moments, shape) sans réordonner
     return built.map((c) => {
       const o = overrides[c.id];
-      return o ? { ...c, momentCount: o.momentCount, shape: o.shape, bgUrl: o.bgUrl, unlocked: o.unlocked } : c;
+      return o ? { ...c, momentCount: o.momentCount, shape: o.shape, bgUrl: o.bgUrl } : c;
     });
-  }, [allGroups, groupData, overrides, unlockedDefault]);
+  }, [allGroups, groupData, overrides]);
 
   // Fetch à l'arrivée sur la liste : met à jour fond / nombre de moments / shape
   const refresh = useCallback(async () => {
     if (allGroups.length === 0) return;
     // Dernier reveal passé = prochain reveal − 1 semaine.
     const lastReveal = computeNextRevealDate(revealConfig.day, revealConfig.hour).getTime() - WEEK_MS;
-    const now = Date.now();
-    // Pendant les 24h qui suivent le reveal, on garde par défaut les moments de la période
-    // RÉVÉLÉE (celle qui vient de se terminer), pas ceux de la nouvelle semaine de collecte.
-    const inRevealWindow = now - lastReveal < DAY_MS;
-    // Minuit suivant le reveal (reveal dim 20h → lun 00:00).
-    const midnightAfterReveal = midnightAfter(lastReveal);
-    const revealedWeekStart = lastReveal - WEEK_MS;
+    // Pendant les 24h qui suivent le reveal, on garde les moments de la période RÉVÉLÉE
+    // (celle qui vient de se terminer), pas ceux de la nouvelle semaine de collecte.
+    const inRevealWindow = Date.now() - lastReveal < DAY_MS;
+    const windowStart = inRevealWindow ? lastReveal - WEEK_MS : lastReveal;
+    const windowEnd = inRevealWindow ? lastReveal : Infinity;
     await Promise.all(
       allGroups.map(async (g) => {
         const [photosRes, membersRes] = await Promise.all([
@@ -214,21 +199,6 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
           supabase.from("group_members").select("role, profiles:user_id(avatar_url)").eq("group_id", g.id),
         ]);
         const photos = photosRes.data ?? [];
-
-        // Nb de moments de la SEMAINE RÉVÉLÉE (celle qui vient de se terminer).
-        const revealedCount = photos.filter((p: any) => {
-          const t = new Date(p.created_at).getTime();
-          return t >= revealedWeekStart && t < lastReveal;
-        }).length;
-
-        // Règle : un reveal VIDE (0 moment) n'est plus visible passé minuit → on bascule
-        // ce groupe sur la nouvelle semaine de collecte (moments depuis le reveal). Un reveal
-        // qui a des moments reste visible toute la fenêtre de 24h.
-        const emptyRevealCollapsed = inRevealWindow && revealedCount === 0 && now >= midnightAfterReveal;
-        const showRevealed = inRevealWindow && !emptyRevealCollapsed;
-
-        const windowStart = showRevealed ? revealedWeekStart : lastReveal;
-        const windowEnd = showRevealed ? lastReveal : Infinity;
         const windowed = photos.filter((p: any) => {
           const t = new Date(p.created_at).getTime();
           return t >= windowStart && t < windowEnd;
@@ -240,20 +210,17 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
         const momentCount = windowed.length;
         // Aucun moment → pas de fond (null = background/default/secondary dark)
         const bgUrl = momentCount > 0 ? (lastPhoto ? r2Storage.getPublicUrl(lastPhoto.image_path) : chiefAvatar) : null;
-        // Reveal accessible pour CE groupe uniquement tant qu'on affiche une vraie fenêtre reveal.
-        const unlocked = showRevealed || !!debugUnlocked;
         setOverrides((prev) => ({
           ...prev,
           [g.id]: {
             momentCount,
             shape: last ? imagePathToShape(last.image_path) : null,
             bgUrl,
-            unlocked,
           },
         }));
       })
     );
-  }, [allGroupsKey, revealConfig.day, revealConfig.hour, debugUnlocked]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [allGroupsKey, revealConfig.day, revealConfig.hour]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (isActive) refresh();
@@ -261,6 +228,11 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
 
   const singleGroup = cards.length === 1;
   const selectionShown = !singleGroup && !viewingGroupId;
+
+  // Reveal disponible : on est dans les 24h qui suivent le dernier reveal.
+  // En DEV, le menu debug (clic sur le nom du groupe) peut forcer l'état déverrouillé.
+  const lastReveal = revealDate.getTime() - WEEK_MS;
+  const unlocked = (Date.now() - lastReveal < DAY_MS) || (__DEV__ && !!debugUnlocked);
 
   // Bloque totalement le swipe du pager tant qu'on affiche la sélection de groupe
   useEffect(() => {
@@ -346,7 +318,7 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
       <GroupRoom
         card={cards[0]}
         revealDate={revealDate}
-        unlocked={cards[0].unlocked}
+        unlocked={unlocked}
         showBack={false}
         showAddButton
         topInset={insets.top}
@@ -373,7 +345,7 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
         <View style={[styles.headerRow, { justifyContent: "space-between" }]}>
           <Text style={styles.title}>Groupes</Text>
           <View style={styles.headerActions}>
-            {allGroups.length > 5 && (
+            {allGroups.length > 3 && (
               <TouchableOpacity style={styles.addBtn} onPress={() => setShowSearch(true)} activeOpacity={0.8}>
                 <Icon name="search" size={20} color={colors.iconNeutral} />
               </TouchableOpacity>
@@ -386,7 +358,7 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
       </View>
 
       <View style={{ flex: 1, marginTop: spacing.xl, paddingBottom: TABBAR_SPACE }}>
-        <GroupsSlider cards={cards} revealDate={revealDate} onSelect={openGroup} showActiveBorder={!viewingGroupId} />
+        <GroupsSlider cards={cards} revealDate={revealDate} onSelect={openGroup} showActiveBorder={!viewingGroupId} unlocked={unlocked} />
       </View>
 
       {/* Single du groupe — slide à l'entrée + retour par glissement depuis le bord gauche */}
@@ -399,7 +371,7 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
             <GroupRoom
               card={openedGroup}
               revealDate={revealDate}
-              unlocked={openedGroup.unlocked}
+              unlocked={unlocked}
               showBack
               showAddButton={false}
               topInset={insets.top}

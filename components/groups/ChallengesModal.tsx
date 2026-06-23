@@ -82,7 +82,7 @@ export function ChallengePromptText({
       <Text style={{ color: accent }}>{targetUsername}</Text>
       {" était "}
       <Text style={{ color: accent }}>{themeLabel}</Text>
-      {", ce serait..."}
+      {", ça serait..."}
     </Text>
   );
 }
@@ -234,9 +234,9 @@ export function ChallengesSlider({
   const [availableHeight, setAvailableHeight] = useState(0);
 
   const count = groupChallenges.length;
-  const showDots = count > 1;
+  const needsLoop = count > 1;
   const cardHeight = availableHeight > 0
-    ? availableHeight - (showDots ? DOTS_AREA_HEIGHT : 0)
+    ? availableHeight - (needsLoop ? DOTS_AREA_HEIGHT : 0)
     : 0;
 
   const [activeIndex, setActiveIndex] = useState(0);
@@ -265,8 +265,26 @@ export function ChallengesSlider({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupChallenges]);
 
-  // Pas de loop : on rend les défis une seule fois.
-  const displayItems = groupChallenges;
+  // 20 copies → "infiniment" scrollable, et largement supporté par un ScrollView classique (évite bug FlatList)
+  const LOOP_COUNT = 20;
+  const startIdx = needsLoop && count > 0 ? Math.floor(LOOP_COUNT / 2) * count : 0;
+
+  const displayItems = useMemo(() => {
+    if (!needsLoop || count === 0) return groupChallenges;
+    return Array.from({ length: LOOP_COUNT * count }, (_, i) => groupChallenges[i % count]);
+  }, [groupChallenges, needsLoop, count]);
+
+  // Scroll vers le milieu au premier rendu (dès que la hauteur est disponible)
+  useEffect(() => {
+    if (count === 0 || availableHeight === 0 || !needsLoop) return;
+    // Initialise scrollX sur l'offset de départ, sinon la bordure de la carte centrée
+    // (pilotée par scrollX) reste à 0 tant qu'on n'a pas scrollé manuellement.
+    scrollX.setValue(startIdx * snapInterval);
+    const t = setTimeout(() => {
+      scrollRef.current?.scrollTo({ x: startIdx * snapInterval, animated: false });
+    }, 30);
+    return () => clearTimeout(t);
+  }, [count, availableHeight, snapInterval, needsLoop, startIdx]);
 
   // Listener ULTRA-léger : il ne fait QUE reportActive (calcul d'index + compare booléenne
   // dédupliquée → ne re-render le parent qu'au flip). Surtout PAS de setActiveIndex ici :
@@ -280,7 +298,7 @@ export function ChallengesSlider({
       listener: (e: any) => {
         if (count === 0 || snapInterval === 0) return;
         const x = e.nativeEvent.contentOffset.x;
-        const realIdx = Math.max(0, Math.min(count - 1, Math.round(x / snapInterval)));
+        const realIdx = ((Math.round(x / snapInterval) % count) + count) % count;
         reportActive(realIdx);
       },
     }
@@ -291,7 +309,7 @@ export function ChallengesSlider({
   const handleScrollSettle = (e: any) => {
     if (count === 0 || snapInterval === 0) return;
     const x = e.nativeEvent.contentOffset.x;
-    const realIdx = Math.max(0, Math.min(count - 1, Math.round(x / snapInterval)));
+    const realIdx = ((Math.round(x / snapInterval) % count) + count) % count;
     setActiveIndex(realIdx);
     reportActive(realIdx);
   };
@@ -410,7 +428,7 @@ export function ChallengesSlider({
               >
                 {displayItems.map((gc, idx) => renderCard(gc, idx))}
               </Animated.ScrollView>
-              {showDots && (
+              {needsLoop && (
                 <View style={sliderStyles.dotsContainer}>
                   {groupChallenges.map((_, idx) => (
                     <View key={idx} style={[sliderStyles.dot, idx === activeIndex && sliderStyles.dotActive]} />

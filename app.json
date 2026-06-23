@@ -16,9 +16,10 @@
       "bundleIdentifier": "com.jeanmiduntm.HappyOur",
       "icon": "./assets/icon.png",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIViewEdgeAntialiasing": true
       },
-      "buildNumber": "35"
+      "buildNumber": "38"
     },
     "android": {
       "package": "com.happyour.app",
