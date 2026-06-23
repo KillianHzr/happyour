@@ -13,6 +13,8 @@ interface TextStickerProps {
   uppercase?: boolean;
   /** Autorise le retour à la ligne (au lieu de tronquer avec "…"). */
   multiline?: boolean;
+  /** Style subtitle-strong (ParkinsansBold / 700) au lieu du SemiBold par défaut (nom de groupe). */
+  bold?: boolean;
 }
 
 export const TextSticker = ({
@@ -23,11 +25,16 @@ export const TextSticker = ({
   padY = spacing.xs2,
   uppercase = true,
   multiline = false,
+  bold = false,
 }: TextStickerProps) => {
   const { colors } = useTheme();
   const bg = backgroundColor ?? colors.brand;
   const raw = text || "—";
   const displayValue = uppercase ? raw.toUpperCase() : raw;
+  // Police du texte : subtitle/font-family + font-weight-strong (Bold 700) si `bold`,
+  // sinon SemiBold 600 (réactions).
+  const stickerFontFamily = bold ? typography.family.bold : typography.family.semibold;
+  const stickerFontWeight = bold ? "700" : "600";
 
   // var(--sds-size-space-150) horizontal padding = 6px (spacing.xs2)
   const padX = spacing.xs2;
@@ -127,6 +134,8 @@ export const TextSticker = ({
             marginTop,
             marginBottom,
             color: textColor,
+            fontFamily: stickerFontFamily,
+            fontWeight: stickerFontWeight,
           },
         ]}
         numberOfLines={multiline ? undefined : 1}

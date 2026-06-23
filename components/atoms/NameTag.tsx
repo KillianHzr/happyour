@@ -12,7 +12,7 @@ export function NameTag({ text, fontSize = 32 }: { text: string; fontSize?: numb
   const display = text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
   return (
     <View style={{ transform: [{ rotate: "2deg" }] }}>
-      <TextSticker text={display} fontSize={fontSize} uppercase={false} multiline />
+      <TextSticker text={display} fontSize={fontSize} uppercase={false} multiline bold />
     </View>
   );
 }

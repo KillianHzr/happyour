@@ -99,7 +99,7 @@ const SliderCard = memo(function SliderCard({
             contentFit="cover"
             transition={0}
             cachePolicy="memory-disk"
-            blurRadius={38}
+            blurRadius={90}
           />
           <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.45)" }]} pointerEvents="none" />
         </>
@@ -301,11 +301,11 @@ const makeSliderStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   cardContent: {
     flex: 1,
-    justifyContent: "center",
+    justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: spacing.xl6, // space/2400 = 96
+    paddingVertical: spacing.xl4, // space/1600 = 64
     paddingHorizontal: spacing.xl, // space/600 = 24
-    gap: spacing.xl3, // 48
+    gap: spacing.xl3, // 48 (min entre éléments ; space-between répartit le reste)
   },
   dataBlock: {
     flexDirection: "column",
@@ -338,7 +338,7 @@ const makeSliderStyles = (colors: ThemeColors) => StyleSheet.create({
     textAlign: "center",
   },
   countdown: {
-    height: 80,
+    height: 72,
     padding: spacing.xs, // space/100
     flexDirection: "row",
     justifyContent: "center",

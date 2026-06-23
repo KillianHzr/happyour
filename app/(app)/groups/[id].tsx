@@ -1289,11 +1289,11 @@ export default function MainPagerScreen() {
     commitPage(page);
   };
 
-  // Tap sur l'onglet "Groupes" : en plus d'aller à la page 0, on demande à GroupsPage de
-  // refermer la vue d'un groupe ouvert (retour à la liste, comme le chevron). Le signal
-  // s'incrémente même si on est déjà sur la page 0 (où jumpTo serait un no-op).
+  // Tap sur l'onglet "Groupes" : on va à la page 0. On ne referme la single (retour à la
+  // liste) QUE si on est DÉJÀ sur la page groupe (currentPage === 0). Depuis capture/profil,
+  // le tap doit seulement ramener à la single ouverte, sans la fermer.
   const handleTabJump = (page: number) => {
-    if (page === 0) setCloseGroupSignal((s) => s + 1);
+    if (page === 0 && currentPage === 0) setCloseGroupSignal((s) => s + 1);
     jumpTo(page);
   };
 
@@ -1491,7 +1491,7 @@ export default function MainPagerScreen() {
       } : undefined}
       onDebugOpenCreateCustom={__DEV__ ? () => setShowCustomChallengeCreate(true) : undefined}
       onDebugOpenQueueCustom={__DEV__ ? () => setShowCustomChallengeQueue(true) : undefined}
-      onDebugGroupNamePress={__DEV__ ? () => setShowDebugMenu(true) : undefined}
+      onDebugGroupNamePress={() => setShowDebugMenu(true)}
       onGoToCamera={() => jumpTo(1)}
     />
   ), [

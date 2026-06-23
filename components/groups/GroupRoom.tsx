@@ -271,7 +271,7 @@ function RoomCard({ card, revealDate, unlocked, onCapture, onOpenChallenge, lott
         <>
           {/* Flou STATIQUE (blurRadius) + voile sombre — léger (pas de BlurView live) et
               identique au filmstrip → raccord card↔transition propre. */}
-          <Image source={{ uri: card.bgUrl }} style={StyleSheet.absoluteFillObject as any} contentFit="cover" transition={0} cachePolicy="memory-disk" blurRadius={38} />
+          <Image source={{ uri: card.bgUrl }} style={StyleSheet.absoluteFillObject as any} contentFit="cover" transition={0} cachePolicy="memory-disk" blurRadius={90} />
           <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.45)" }]} pointerEvents="none" />
         </>
       ) : (
