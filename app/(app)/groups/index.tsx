@@ -7,7 +7,7 @@ import { useAuth } from "../../../lib/auth-context";
 import { radii, typography, type ThemeColors } from "../../../lib/theme";
 import { useTheme, useThemedStyles } from "../../../lib/theme-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Loader from "../../../components/Loader";
+import LoadingScreen from "../../../components/LoadingScreen";
 import Svg, { Path } from "react-native-svg";
 
 const LogoutIcon = () => (
@@ -73,11 +73,7 @@ export default function GroupsHomeScreen() {
   }, [user]));
 
   if (loading) {
-    return (
-      <View style={[styles.container, { justifyContent: "center", alignItems: "center" }]}>
-        <Loader size={48} />
-      </View>
-    );
+    return <LoadingScreen />;
   }
 
   return (

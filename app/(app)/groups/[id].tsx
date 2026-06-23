@@ -20,7 +20,7 @@ import Svg, { Path } from "react-native-svg";
 import PhotoFeed, { type PhotoEntry, type Reaction } from "../../../components/PhotoFeed";
 import { TextSticker } from "../../../components/atoms/TextSticker";
 import { fetchChallengeData, getChallengeWeekStart, getChallengePrompt, type ChallengeWithData, type ActiveChallenge } from "../../../lib/challenges";
-import Loader from "../../../components/Loader";
+import LoadingScreen from "../../../components/LoadingScreen";
 import { ProfileIcon, VaultIcon, MomentIcon, FlowerIcon } from "../../../components/icons";
 import { CloseIcon } from "../../../components/groups/GroupIcons";
 
@@ -45,6 +45,7 @@ import { RevealHeader, type Participant } from "../../../components/organisms/Re
 import { ActivityView } from "../../../components/organisms/ActivityView";
 import MotivationalNotificationsModal from "../../../components/MotivationalNotificationsModal";
 import { scheduleImmediateLocalNotification, scheduleFirstMomentReminder, notifyReaction, notifyGroupJoin } from "../../../lib/notifications";
+import { hapticReveal } from "../../../lib/haptics";
 import { radii, spacing, typography, textStyles, buildColors, type ThemeColors } from "../../../lib/theme";
 import { StatusBar } from "expo-status-bar";
 import Icon from "../../../components/Icon";
@@ -430,6 +431,7 @@ export default function MainPagerScreen() {
   // Déclenché à la fin du Lottie (slide) : lance la transition filmstrip → reveal.
   // Fin de l'aspiration du chrome (GroupRoom) : ACTIVE l'anim (déjà montée au slide) → reveal.
   const handleGroupRoomUnlock = useCallback(() => {
+    hapticReveal(); // vibration au déverrouillage du reveal
     // On peut voir les moments des proches même sans avoir posté soi-même.
     // Pas de frame mesurée ou pas d'images → reveal direct (jamais bloqué).
     if (!cardFrameRef.current || revealStripUrls.length === 0) { setShowReveal(true); return; }
@@ -1448,7 +1450,7 @@ export default function MainPagerScreen() {
       revealEndDate={unlocked ? activeRevealEndDate : undefined}
       unlocked={unlocked}
       currentUserPostedThisWeek={currentUserPostedThisWeek}
-      onOpenReveal={() => { if (currentUserPostedThisWeek) setShowReveal(true); }}
+      onOpenReveal={() => { if (currentUserPostedThisWeek) { hapticReveal(); setShowReveal(true); } }}
       onOpenSettings={() => setShowGroupSettings(true)}
       onLeaveGroup={() => setShowLeaveConfirm(true)}
       onRemoveMember={async (memberId) => {
@@ -1582,7 +1584,7 @@ export default function MainPagerScreen() {
     />
   ), [user?.id, username, avatarUrl, email, groupName, allGroups, revealConfig, profileRefreshKey, activePage === 2]);
 
-  if (!dataLoaded) return <View style={styles.loaderWrap}><Loader size={48} /></View>;
+  if (!dataLoaded) return <LoadingScreen />;
 
   return (
     <View

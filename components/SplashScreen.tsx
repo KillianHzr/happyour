@@ -3,7 +3,6 @@ import { Text, StyleSheet, Animated, Easing } from "react-native";
 import { Image } from "expo-image";
 import { GRADIENT_ORANGE } from "../lib/assets";
 import { textStyles } from "../lib/theme";
-import Shape from "./Shape";
 import Logo from "../assets/logo.svg";
 
 interface SplashScreenProps {
@@ -11,70 +10,40 @@ interface SplashScreenProps {
   ready: boolean;
 }
 
-// Durée minimale d'affichage du logo (phase 1) avant de passer au loader (phase 2).
-const LOGO_MS = 900;
-// Durée minimale du loader (phase 2) une fois l'app prête, avant le fondu de sortie.
-const LOADER_MIN_MS = 500;
+// Durée minimale d'affichage du logo avant le fondu de sortie.
+const MIN_DISPLAY_MS = 900;
 
 export default function SplashScreen({ onFinish, ready }: SplashScreenProps) {
-  const [phase, setPhase] = useState<"logo" | "loader">("logo");
+  const [minElapsed, setMinElapsed] = useState(false);
 
-  const logoOpacity = useRef(new Animated.Value(0)).current;   // entrée + cross-fade sortie
-  const shapeOpacity = useRef(new Animated.Value(0)).current;  // cross-fade entrée loader
-  const shapePulse = useRef(new Animated.Value(1)).current;    // pulsation du loader
-  const fadeOut = useRef(new Animated.Value(1)).current;       // fondu final
+  const logoOpacity = useRef(new Animated.Value(0)).current; // entrée du logo
+  const fadeOut = useRef(new Animated.Value(1)).current;     // fondu final
 
-  // Phase 1 : apparition du logo, puis bascule vers le loader après LOGO_MS.
+  // Apparition du logo + temps minimum d'affichage.
   useEffect(() => {
     Animated.timing(logoOpacity, { toValue: 1, duration: 350, useNativeDriver: true }).start();
-    const t = setTimeout(() => setPhase("loader"), LOGO_MS);
+    const t = setTimeout(() => setMinElapsed(true), MIN_DISPLAY_MS);
     return () => clearTimeout(t);
   }, []);
 
-  // Phase 2 : cross-fade logo → shape photo + pulsation en boucle.
+  // Sortie : une fois l'app prête ET le temps minimum écoulé, fondu puis onFinish.
   useEffect(() => {
-    if (phase !== "loader") return;
-    Animated.parallel([
-      Animated.timing(logoOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
-      Animated.timing(shapeOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
-    ]).start();
-
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(shapePulse, { toValue: 1.12, duration: 650, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(shapePulse, { toValue: 1, duration: 650, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-      ])
-    );
-    pulse.start();
-    return () => pulse.stop();
-  }, [phase]);
-
-  // Sortie : une fois l'app prête ET le loader affiché un minimum, fondu puis onFinish.
-  useEffect(() => {
-    if (!ready || phase !== "loader") return;
-    const t = setTimeout(() => {
-      Animated.timing(fadeOut, {
-        toValue: 0,
-        duration: 400,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
-      }).start(() => onFinish());
-    }, LOADER_MIN_MS);
-    return () => clearTimeout(t);
-  }, [ready, phase]);
+    if (!ready || !minElapsed) return;
+    Animated.timing(fadeOut, {
+      toValue: 0,
+      duration: 400,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: true,
+    }).start(() => onFinish());
+  }, [ready, minElapsed]);
 
   return (
     <Animated.View style={[styles.container, { opacity: fadeOut }]}>
       <Image source={GRADIENT_ORANGE} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" />
 
-      {/* Marque centrale : logo (phase 1) puis shape photo (phase 2), cross-fade */}
+      {/* Logo central */}
       <Animated.View style={[styles.center, { opacity: logoOpacity }]} pointerEvents="none">
-        <Logo width={120} height={48} />
-      </Animated.View>
-      <Animated.View style={[styles.center, { opacity: shapeOpacity }]} pointerEvents="none">
-        <Animated.View style={{ transform: [{ scale: shapePulse }] }}>
-          <Shape name="photo" size={70} color="#FFFFFF" />
-        </Animated.View>
+        <Logo width={199.161} height={80} />
       </Animated.View>
 
       <Text style={styles.studio}>Source STUDIO</Text>

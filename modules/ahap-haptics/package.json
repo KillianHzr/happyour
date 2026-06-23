@@ -1,0 +1,7 @@
+{
+  "name": "ahap-haptics",
+  "version": "1.0.0",
+  "description": "Play custom AHAP Core Haptics patterns for HappyOur",
+  "main": "src/index",
+  "private": true
+}

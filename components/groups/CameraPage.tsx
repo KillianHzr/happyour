@@ -13,6 +13,7 @@ import Svg, { Path, Circle } from "react-native-svg";
 import { useAudioRecorder, AudioModule, RecordingPresets, useAudioPlayer, useAudioPlayerStatus, useAudioRecorderState } from "expo-audio";
 import { SeamlessRecorder, type SeamlessRecorderRef } from "seamless-recorder";
 import { setCaptureData } from "../../lib/capture-store";
+import { hapticSend } from "../../lib/haptics";
 import { useUpload } from "../../lib/upload-context";
 import DrawingCanvas, { type DrawingCanvasRef } from "../DrawingCanvas";
 import { SendIcon, FeatherIcon, FlipIcon, CloseIcon, FlashIcon } from "./GroupIcons";
@@ -248,6 +249,17 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const stylePhotoDraw = useAnimatedStyle(() => ({ opacity: activeLottieIndex.value === 1 ? 1 : 0 }));
   const styleVideoDraw = useAnimatedStyle(() => ({ opacity: activeLottieIndex.value === 2 ? 1 : 0 }));
 
+  // Intro "INSTANT → PHOTO" jouée une fois à l'arrivée sur l'app, par-dessus les lotties de
+  // transition. Reste sur sa dernière frame (= icône photo) jusqu'au 1er changement de mode,
+  // après quoi on la masque et les lotties de transition prennent le relais.
+  const introRef = useRef<LottieView>(null);
+  const introPlayed = useRef(false);
+  const introOpacity = useSharedValue(1);
+  const styleIntro = useAnimatedStyle(() => ({ opacity: introOpacity.value }));
+  // Tant que l'intro est affichée, on cache complètement les lotties de transition pour ne
+  // voir QUE l'intro (sinon l'icône photo du dessous transparaît).
+  const styleTransitions = useAnimatedStyle(() => ({ opacity: introOpacity.value === 0 ? 1 : 0 }));
+
   const handleSelectMode = (m: CameraMode) => {
     if (cameraMode === m) return;
     
@@ -287,6 +299,22 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     
     setCameraMode(m);
   };
+
+  // Joue l'intro une seule fois, dès que la page caméra est visible (après le splash).
+  useEffect(() => {
+    if (!isActive || introPlayed.current) return;
+    introPlayed.current = true;
+    introRef.current?.reset();
+    introRef.current?.play();
+  }, [isActive]);
+
+  // Au 1er changement de mode, on masque l'intro : sa dernière frame (icône photo) coïncide
+  // avec l'état de départ des lotties de transition, donc le passage est invisible.
+  const introModeFirstRender = useRef(true);
+  useEffect(() => {
+    if (introModeFirstRender.current) { introModeFirstRender.current = false; return; }
+    introOpacity.value = 0;
+  }, [cameraMode]);
 
   const [drawingColor, setDrawingColor] = useState("#FF561A");
   const [drawingStrokeWidth, setDrawingStrokeWidth] = useState(6);
@@ -1463,6 +1491,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       };
       setSendFrame(defaultFrame);
       setSendAnimType(animType);
+      hapticSend(); // vibration synchrone avec l'anim Lottie d'envoi
       // Affinage best-effort (marges exactes + mode défi) — n'impacte plus le déclenchement.
       const node = previewFrameRef.current;
       const rel = rootViewRef.current;
@@ -1547,7 +1576,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         )}
         {/* Overlay DESSIN — la caméra reste montée dessous (0 lag à la sortie) */}
         {cameraMode === "DESSIN" && (
-          <View style={[StyleSheet.absoluteFill, styles.cameraPageContainer, { justifyContent: "flex-end", paddingBottom: activeChallenge !== null ? 0 : NAVBAR_HEIGHT, paddingHorizontal: 0, zIndex: 1 }]}>
+          <View style={[StyleSheet.absoluteFill, styles.cameraPageContainer, { justifyContent: "flex-end", paddingBottom: NAVBAR_HEIGHT, paddingHorizontal: 0, zIndex: 1 }]}>
             {activeChallenge && (
               <View style={{ position: "absolute", top: 0, left: 0, right: 0, paddingTop: insets.top, paddingHorizontal: spacing.lg }} pointerEvents="box-none">
                 <View style={challengeStyles.inlineHeaderRow}>
@@ -1826,27 +1855,39 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                   <Shape name="stop" size={40} color={colors.brand} />
                 ) : (
                   <View style={{ width: 80, height: 80 }}>
-                    <ReanimatedLottieView
-                      source={require("../../assets/animations/photo - video.json")}
-                      autoPlay={false}
-                      loop={false}
-                      animatedProps={propsPhotoVideo}
-                      style={[StyleSheet.absoluteFillObject, stylePhotoVideo]}
-                    />
-                    <ReanimatedLottieView
-                      source={require("../../assets/animations/photo - draw.json")}
-                      autoPlay={false}
-                      loop={false}
-                      animatedProps={propsPhotoDraw}
-                      style={[StyleSheet.absoluteFillObject, stylePhotoDraw]}
-                    />
-                    <ReanimatedLottieView
-                      source={require("../../assets/animations/video - draw.json")}
-                      autoPlay={false}
-                      loop={false}
-                      animatedProps={propsVideoDraw}
-                      style={[StyleSheet.absoluteFillObject, styleVideoDraw]}
-                    />
+                    <Reanimated.View style={[StyleSheet.absoluteFillObject, styleTransitions]}>
+                      <ReanimatedLottieView
+                        source={require("../../assets/animations/photo - video.json")}
+                        autoPlay={false}
+                        loop={false}
+                        animatedProps={propsPhotoVideo}
+                        style={[StyleSheet.absoluteFillObject, stylePhotoVideo]}
+                      />
+                      <ReanimatedLottieView
+                        source={require("../../assets/animations/photo - draw.json")}
+                        autoPlay={false}
+                        loop={false}
+                        animatedProps={propsPhotoDraw}
+                        style={[StyleSheet.absoluteFillObject, stylePhotoDraw]}
+                      />
+                      <ReanimatedLottieView
+                        source={require("../../assets/animations/video - draw.json")}
+                        autoPlay={false}
+                        loop={false}
+                        animatedProps={propsVideoDraw}
+                        style={[StyleSheet.absoluteFillObject, styleVideoDraw]}
+                      />
+                    </Reanimated.View>
+                    {/* Intro jouée à l'arrivée, par-dessus les transitions, masquée au 1er changement de mode */}
+                    <Reanimated.View style={[StyleSheet.absoluteFillObject, styleIntro]} pointerEvents="none">
+                      <LottieView
+                        ref={introRef}
+                        source={require("../../assets/lotties/INSTANTtoPHOTO.json")}
+                        autoPlay={false}
+                        loop={false}
+                        style={StyleSheet.absoluteFillObject}
+                      />
+                    </Reanimated.View>
                   </View>
                 )}
               </TouchableOpacity>}
@@ -1854,9 +1895,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
             </View>
           </View>
           {/* Bouton Participer désactivé — visible aussi pendant la capture (mode défi),
-               activé seulement une fois le moment capturé (preview). Limité aux modes
-               PHOTO/VIDEO qui réservent la bande basse (NAVBAR_HEIGHT) sous la frame. */}
-          {activeChallenge !== null && (cameraMode === "PHOTO" || cameraMode === "VIDEO") && !isRecording && (
+               activé seulement une fois le moment capturé (preview). PHOTO/VIDEO/DESSIN
+               réservent tous la bande basse (NAVBAR_HEIGHT) sous la frame. */}
+          {activeChallenge !== null && (cameraMode === "PHOTO" || cameraMode === "VIDEO" || cameraMode === "DESSIN") && !isRecording && (
             <View style={[styles.previewSendArea, { position: "absolute", left: 0, right: 0, bottom: 0 }]} pointerEvents="none">
               <PrimaryButton label="Participer" onPress={() => {}} disabled />
             </View>

@@ -12,6 +12,9 @@ export async function registerForPushNotifications(userId: string) {
 
   try {
     if (Platform.OS === "android") {
+      // Sur Android le son d'une notif est porté par le channel (pas par le contenu).
+      // Channel "default" → son basique pour toutes les notifs ; "reveal" → son du reveal.
+      // NB: les noms de fichiers sont sans extension (ressource res/raw).
       await Notifications.setNotificationChannelAsync("default", {
         name: "default",
         importance: Notifications.AndroidImportance.MAX,
@@ -19,6 +22,16 @@ export async function registerForPushNotifications(userId: string) {
         lightColor: "#FF231F7C",
         enableVibrate: true,
         showBadge: true,
+        sound: "basic_notification.wav",
+      });
+      await Notifications.setNotificationChannelAsync("reveal", {
+        name: "reveal",
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: "#FF231F7C",
+        enableVibrate: true,
+        showBadge: true,
+        sound: "reveal_notification.wav",
       });
     }
 
@@ -54,17 +67,23 @@ export async function sendPushToTokens(
   tokens: string[],
   title: string,
   body: string,
-  data?: Record<string, unknown>
+  data?: Record<string, unknown>,
+  // Son custom : iOS lit `sound` (nom de fichier), Android lit le son du `channelId`.
+  // Par défaut : son basique. Pour le reveal, passer "reveal".
+  variant: "basic" | "reveal" = "basic"
 ) {
   if (tokens.length === 0) return;
+
+  const sound = variant === "reveal" ? "reveal_notification.wav" : "basic_notification.wav";
+  const channelId = variant === "reveal" ? "reveal" : "default";
 
   const messages = tokens.map((to) => ({
     to,
     title,
     body,
-    sound: "default" as const,
+    sound,
     data,
-    channelId: "default",
+    channelId,
     priority: "high",
     vibrate: true,
   }));
@@ -152,6 +171,7 @@ export async function scheduleRecapNotification(
         title: "Le coffre est ouvert !",
         body: `Les moments de "${groupName}" sont disponibles`,
         data: { type: "recap", groupId },
+        sound: "basic_notification.wav",
         channelId: "default",
       },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: secondsUntil },
@@ -201,6 +221,7 @@ export async function scheduleChallenge24hReminder(
         title: "Tic, tac...",
         body: "Plus que 24H pour participer au défi !",
         data: { type: "new_photo", groupId },
+        sound: "basic_notification.wav",
         channelId: "default",
       },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: secondsUntil },
@@ -227,6 +248,7 @@ export async function scheduleChallenge4hReminder(
         title: "Tic, tac...",
         body: "Plus que 4H pour participer au défi !",
         data: { type: "new_photo", groupId },
+        sound: "basic_notification.wav",
         channelId: "default",
       },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: secondsUntil },
@@ -256,6 +278,7 @@ export async function scheduleReactionsReminder(
         title: groupName,
         body: "Venez voir les réactions de vos potes 👀",
         data: { type: "recap", groupId },
+        sound: "basic_notification.wav",
         channelId: "default",
       },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: secondsUntil },
@@ -282,6 +305,7 @@ export async function scheduleCountdownNotification(
         title: "Le coffre ouvre bientôt 🔓",
         body: `Plus que 6h avant de découvrir les moments de "${groupName}"`,
         data: { type: "recap", groupId },
+        sound: "basic_notification.wav",
         channelId: "default",
       },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: secondsUntil },
@@ -297,10 +321,11 @@ export async function scheduleCountdownNotification(
 export async function scheduleRevealNotifications(revealDate: Date) {
   if (!Notifications) return;
   const now = new Date();
-  const milestones: { id: string; offsetMs: number; title: string; body: string }[] = [
+  const milestones: { id: string; offsetMs: number; title: string; body: string; reveal?: boolean }[] = [
     { id: "reveal_24h", offsetMs: 24 * 3600 * 1000, title: "L'attente touche à sa fin", body: "Plus que 24H avant le reveal" },
     { id: "reveal_4h", offsetMs: 4 * 3600 * 1000, title: "L'attente touche à sa fin", body: "Plus que 4H avant le reveal" },
-    { id: "reveal_available", offsetMs: 0, title: "LE REVEAL EST DISPO !", body: "Découvre le quotidien de tes proches :)" },
+    // Reveal disponible → son dédié.
+    { id: "reveal_available", offsetMs: 0, title: "LE REVEAL EST DISPO !", body: "Découvre le quotidien de tes proches :)", reveal: true },
   ];
   for (const m of milestones) {
     const sendAt = new Date(revealDate.getTime() - m.offsetMs);
@@ -313,7 +338,8 @@ export async function scheduleRevealNotifications(revealDate: Date) {
           title: m.title,
           body: m.body,
           data: { type: "recap" },
-          channelId: "default",
+          sound: m.reveal ? "reveal_notification.wav" : "basic_notification.wav",
+          channelId: m.reveal ? "reveal" : "default",
         },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: secondsUntil },
       });
@@ -353,6 +379,7 @@ export async function scheduleNewChallengeNotifications(revealDate: Date) {
           title: "L'heure de juger tes potes",
           body: "Un nouveau défi t'attend, viens !",
           data: { type: "new_photo" },
+          sound: "basic_notification.wav",
           channelId: "default",
         },
         trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: secondsUntil },
@@ -381,6 +408,7 @@ export async function schedulePostReminderNotification(
         title: groupName,
         body: "Poste un moment pour déverrouiller le reveal de fin de semaine !",
         data: { type: "new_photo", groupId },
+        sound: "basic_notification.wav",
         channelId: "default",
       },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: secondsUntil },
@@ -605,6 +633,7 @@ export async function scheduleFirstMomentReminder(groupId: string, groupName: st
         title: groupName,
         body: "Partage ton premier souvenir avec le groupe !",
         data: { type: "new_photo", groupId },
+        sound: "basic_notification.wav",
         channelId: "default",
       },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: secondsUntil },
@@ -648,6 +677,7 @@ export async function scheduleNoShareReminder() {
         title: "Tu dors ?",
         body: "24H que tu n'as rien partagé",
         data: { type: "new_photo" },
+        sound: "basic_notification.wav",
         channelId: "default",
       },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: secondsUntil },
@@ -754,7 +784,7 @@ export async function scheduleMotivationalNotifications(count: number, periods: 
           content: {
             title: "Disclose",
             body: chosen.message,
-            sound: "default",
+            sound: "basic_notification.wav",
             channelId: "default",
           },
           trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: secondsUntil },
@@ -784,7 +814,7 @@ export async function scheduleImmediateLocalNotification(title: string, body: st
   if (!Notifications) return;
   try {
     await Notifications.scheduleNotificationAsync({
-      content: { title, body, data, channelId: "default" },
+      content: { title, body, data, sound: "basic_notification.wav", channelId: "default" },
       trigger: null,
     });
   } catch (e) {

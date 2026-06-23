@@ -1,15 +1,11 @@
 import { useEffect, useState } from "react";
-import { View, StyleSheet } from "react-native";
 import { useRouter, Redirect } from "expo-router";
 import { useAuth } from "../lib/auth-context";
 import { supabase } from "../lib/supabase";
-import AppLoader from "../components/AppLoader";
-import { type ThemeColors } from "../lib/theme";
-import { useThemedStyles } from "../lib/theme-context";
+import LoadingScreen from "../components/LoadingScreen";
 
 export default function Index() {
   const { session, loading: authLoading, profileComplete } = useAuth();
-  const styles = useThemedStyles(makeStyles);
   const [checkingGroup, setCheckingGroup] = useState(true);
   const [targetGroupId, setTargetGroupId] = useState<string | null>(null);
 
@@ -45,11 +41,7 @@ export default function Index() {
   }, [session, authLoading]);
 
   if (authLoading || checkingGroup || profileComplete === null) {
-    return (
-      <View style={styles.container}>
-        <AppLoader />
-      </View>
-    );
+    return <LoadingScreen />;
   }
 
   if (!session) {
@@ -68,12 +60,3 @@ export default function Index() {
   // Sinon, on va sur l'écran de création/rejoindre
   return <Redirect href="/(app)/groups" />;
 }
-
-const makeStyles = (colors: ThemeColors) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-});

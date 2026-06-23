@@ -1,0 +1,155 @@
+{
+  "Version" : 1,
+  "Pattern" : [
+    {
+      "Event" : {
+        "EventParameters" : [
+          {
+            "ParameterID" : "HapticIntensity",
+            "ParameterValue" : 1
+          },
+          {
+            "ParameterValue" : 1,
+            "ParameterID" : "HapticSharpness"
+          }
+        ],
+        "EventType" : "HapticTransient",
+        "Time" : 0
+      }
+    },
+    {
+      "Event" : {
+        "Time" : 0,
+        "EventType" : "HapticTransient",
+        "EventParameters" : [
+          {
+            "ParameterValue" : 1,
+            "ParameterID" : "HapticIntensity"
+          },
+          {
+            "ParameterID" : "HapticSharpness",
+            "ParameterValue" : 1
+          }
+        ]
+      }
+    },
+    {
+      "Event" : {
+        "EventType" : "HapticTransient",
+        "Time" : 0.076923076923076927,
+        "EventParameters" : [
+          {
+            "ParameterValue" : 0.79999995231628418,
+            "ParameterID" : "HapticIntensity"
+          },
+          {
+            "ParameterID" : "HapticSharpness",
+            "ParameterValue" : 1
+          }
+        ]
+      }
+    },
+    {
+      "Event" : {
+        "EventParameters" : [
+          {
+            "ParameterValue" : 0.69999998807907104,
+            "ParameterID" : "HapticIntensity"
+          },
+          {
+            "ParameterValue" : 1,
+            "ParameterID" : "HapticSharpness"
+          }
+        ],
+        "EventType" : "HapticTransient",
+        "Time" : 0.1575091575091575
+      }
+    },
+    {
+      "Event" : {
+        "EventParameters" : [
+          {
+            "ParameterValue" : 0.59999996423721313,
+            "ParameterID" : "HapticIntensity"
+          },
+          {
+            "ParameterID" : "HapticSharpness",
+            "ParameterValue" : 1
+          },
+          {
+            "ParameterValue" : 0.39999997615814209,
+            "ParameterID" : "AttackTime"
+          },
+          {
+            "ParameterID" : "DecayTime",
+            "ParameterValue" : 0
+          },
+          {
+            "ParameterID" : "ReleaseTime",
+            "ParameterValue" : 0.70999997854232788
+          },
+          {
+            "ParameterID" : "Sustained",
+            "ParameterValue" : 1
+          }
+        ],
+        "Time" : 0.24542124542124541,
+        "EventType" : "HapticContinuous",
+        "EventDuration" : 0.5
+      }
+    },
+    {
+      "Event" : {
+        "Time" : 0.26739926739926739,
+        "EventType" : "HapticTransient",
+        "EventParameters" : [
+          {
+            "ParameterValue" : 0.5899999737739563,
+            "ParameterID" : "HapticIntensity"
+          },
+          {
+            "ParameterValue" : 1,
+            "ParameterID" : "HapticSharpness"
+          }
+        ]
+      }
+    },
+    {
+      "Event" : {
+        "Time" : 0.59706959706959706,
+        "EventType" : "HapticTransient",
+        "EventParameters" : [
+          {
+            "ParameterID" : "HapticIntensity",
+            "ParameterValue" : 0.39999997615814209
+          },
+          {
+            "ParameterID" : "HapticSharpness",
+            "ParameterValue" : 1
+          }
+        ]
+      }
+    },
+    {
+      "Event" : {
+        "EventParameters" : [
+          {
+            "ParameterID" : "HapticIntensity",
+            "ParameterValue" : 0.19999998807907104
+          },
+          {
+            "ParameterValue" : 1,
+            "ParameterID" : "HapticSharpness"
+          }
+        ],
+        "Time" : 0.67765567765567769,
+        "EventType" : "HapticTransient"
+      }
+    }
+  ],
+  "Metadata" : {
+    "Created" : "2026-06-22T19:34:14Z",
+    "Description" : "Custom haptic pattern created with HapticSync",
+    "Project" : "HapticSync"
+  }
+}
