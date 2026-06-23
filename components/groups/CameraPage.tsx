@@ -2866,7 +2866,7 @@ const makeChallengeStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: spacing.sm,
   },
   challengeBtnText: {
-    color: colors.textBrandOnBrandSecondary,
+    color: colors.textFix, // text/default/default-fix
     ...textStyles.singleLineBodyBaseStrong,
   },
   bannerRow: {

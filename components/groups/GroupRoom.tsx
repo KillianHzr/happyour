@@ -312,7 +312,7 @@ function RoomCard({ card, revealDate, unlocked, onCapture, onOpenChallenge, lott
                 </View>
               </View>
               <View style={s.queenKingTexts}>
-                <Text style={s.queenKingName}>{card.crownUsername ?? "—"}</Text>
+                <Text style={s.queenKingName} numberOfLines={1} ellipsizeMode="tail">{card.crownUsername ?? "—"}</Text>
                 <Text style={s.queenKingLabel}>Couronne</Text>
               </View>
             </View>
@@ -417,7 +417,11 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   // ── masques de sortie ("aspiré derrière un mur") : clippent le chrome de la carte
   //    pendant la transition reveal. paddingTop/marginTop sur topInfos pour ne pas
   //    rogner la couronne (qui dépasse en haut) au repos.
-  topInfosMask: { overflow: "hidden", paddingTop: 20, marginTop: -20 },
+  // Masque de sortie (clippe le chrome pendant la transition reveal). Le padding/-margin (haut
+  // ET côtés) crée une zone non-rognée pour la couronne, qui déborde de l'avatar (top:-13,
+  // left:-9.5) → elle ne doit JAMAIS être croppée. alignSelf stretch : le masque prend toute la
+  // largeur, donc la rangée (centrée) garde la couronne loin du bord même avec un pseudo long.
+  topInfosMask: { alignSelf: "stretch", overflow: "hidden", paddingTop: 20, marginTop: -20, paddingHorizontal: 16, marginHorizontal: -16 },
   countMask: { overflow: "hidden" },
   bottomMask: { alignSelf: "stretch", overflow: "hidden" },
   // ── top-infos ──
@@ -427,14 +431,14 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: spacing.sm, borderRadius: radii.sm, overflow: "hidden",
   },
   challengeText: { ...textStyles.singleLineBodyBaseStrong, color: colors.text },
-  tagQueenKing: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: spacing.sm },
+  tagQueenKing: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: spacing.sm, maxWidth: "100%" },
   avatar: {
     width: 48, height: 48, alignItems: "center", borderRadius: radii.md,
     borderWidth: stroke.md, borderColor: colors.icon, overflow: "visible",
   },
   avatarImg: { width: "100%", height: "100%", borderRadius: radii.md },
   crownWrap: { position: "absolute", left: -9.5, top: -13 },
-  queenKingTexts: { flexDirection: "column", justifyContent: "center", alignItems: "flex-start" },
+  queenKingTexts: { flexDirection: "column", justifyContent: "center", alignItems: "flex-start", flexShrink: 1 },
   queenKingName: { ...textStyles.heading, color: colors.text, lineHeight: undefined },
   // gap: space/neg-100 entre le user et le label — via marginTop négatif car RN clampe le gap négatif à 0.
   queenKingLabel: { ...textStyles.bodySmall, color: colors.text, lineHeight: undefined, marginTop: spacing.negXs },

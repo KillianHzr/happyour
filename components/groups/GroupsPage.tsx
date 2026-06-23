@@ -126,7 +126,7 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
   // État reveal global (par défaut, avant le fetch par groupe). Le `refresh` calcule ensuite
   // un état PAR GROUPE (un reveal vide se referme à minuit) qui prend le relais via les overrides.
   const lastRevealTs = revealDate.getTime() - WEEK_MS;
-  const unlockedDefault = (Date.now() - lastRevealTs < DAY_MS) || (__DEV__ && !!debugUnlocked);
+  const unlockedDefault = (Date.now() - lastRevealTs < DAY_MS) || !!debugUnlocked;
 
   // Champs dynamiques rafraîchis par le fetch à l'arrivée (uniquement ce qui change)
   type CardOverride = { momentCount: number; shape: ShapeName | null; bgUrl: string | null; unlocked: boolean };
@@ -241,7 +241,7 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
         // Aucun moment → pas de fond (null = background/default/secondary dark)
         const bgUrl = momentCount > 0 ? (lastPhoto ? r2Storage.getPublicUrl(lastPhoto.image_path) : chiefAvatar) : null;
         // Reveal accessible pour CE groupe uniquement tant qu'on affiche une vraie fenêtre reveal.
-        const unlocked = showRevealed || (__DEV__ && !!debugUnlocked);
+        const unlocked = showRevealed || !!debugUnlocked;
         setOverrides((prev) => ({
           ...prev,
           [g.id]: {

@@ -556,7 +556,7 @@ export async function notifyNewPhoto(
 ) {
   const tokens = await getGroupMemberTokens(groupId, senderId);
   if (tokens.length === 0) return;
-  await sendPushToTokens(tokens, `${senderName} a parlé !`, `Un nouveau moment dans ${groupName}`, { type: "new_photo", groupId });
+  await sendPushToTokens(tokens, `${senderName} a partagé !`, `Un nouveau moment dans ${groupName}`, { type: "new_photo", groupId });
 }
 
 // Notify the EXISTING members when someone joins their group. The joiner has already been
