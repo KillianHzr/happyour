@@ -36,15 +36,31 @@ async function sendPush(tokens: string[], title: string, body: string, data: Rec
     priority: "high",
     vibrate: true,
   }));
-  // Expo accepte des lots ; on découpe par 100 par sécurité.
+  const post = async (batch: typeof messages) => {
+    const r = await fetch("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(batch),
+    });
+    return await r.json();
+  };
+
+  // Expo accepte des lots, MAIS refuse de mélanger des tokens de projets Expo différents
+  // (PUSH_TOO_MANY_EXPERIENCE_IDS). On tente le lot ; en cas de conflit, on renvoie chaque
+  // message individuellement (chaque message = 1 token = 1 seul projet).
   for (let i = 0; i < messages.length; i += 100) {
     const batch = messages.slice(i, i + 100);
     try {
-      await fetch("https://exp.host/--/api/v2/push/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(batch),
-      });
+      const res = await post(batch);
+      const mixed = Array.isArray(res?.errors) && res.errors.some((e: any) => e.code === "PUSH_TOO_MANY_EXPERIENCE_IDS");
+      if (mixed) {
+        console.log(`[push] lot mixte (projets Expo multiples) → renvoi individuel de ${batch.length} messages`);
+        for (const m of batch) {
+          try { await post([m]); } catch (e) { console.error("[push] envoi individuel échoué:", e); }
+        }
+      } else {
+        console.log(`[push] ${batch.length} envoyés — réponse Expo:`, JSON.stringify(res).slice(0, 400));
+      }
     } catch (e) {
       console.error("[share-notify] push batch failed:", e);
     }
@@ -53,29 +69,36 @@ async function sendPush(tokens: string[], title: string, body: string, data: Rec
 
 // Traite UN groupe : décide d'envoyer (leading/digest) ou d'accumuler.
 async function processGroup(groupId: string) {
-  const { data: g } = await sb.from("groups").select("id, name, notify_last_at").eq("id", groupId).single();
-  if (!g) return;
+  const { data: g, error: gErr } = await sb.from("groups").select("id, name, notify_last_at").eq("id", groupId).single();
+  if (gErr) { console.error(`[pg] ${groupId} SELECT groups error:`, gErr.message); return; }
+  if (!g) { console.log(`[pg] ${groupId} group introuvable`); return; }
 
   const oldLast: string | null = g.notify_last_at;
   const now = Date.now();
   const cooldownOver = !oldLast || (now - new Date(oldLast).getTime()) >= COOLDOWN_MS;
-  if (!cooldownOver) return; // encore dans la fenêtre → on accumule (le cron enverra le trailing)
+  console.log(`[pg] ${groupId} oldLast=${oldLast} cooldownOver=${cooldownOver}`);
+  if (!cooldownOver) { console.log(`[pg] ${groupId} SKIP cooldown actif`); return; }
 
-  const sinceIso = oldLast ?? "1970-01-01T00:00:00Z";
+  // Borne : depuis la dernière notif ; si jamais notifié (null), on ne regarde QUE la fenêtre
+  // récente (pas tout l'historique du groupe, sinon "tout le monde a posté" → 0 destinataire).
+  const sinceIso = oldLast ?? new Date(now - COOLDOWN_MS).toISOString();
   const { data: newPhotos } = await sb
     .from("photos")
     .select("user_id, created_at")
     .eq("group_id", groupId)
     .gt("created_at", sinceIso)
     .order("created_at", { ascending: true });
+  console.log(`[pg] ${groupId} newPhotos=${newPhotos?.length ?? 0}`);
   if (!newPhotos || newPhotos.length === 0) return; // rien de nouveau
 
   // ── Réservation atomique : on ne poursuit que si notify_last_at n'a pas bougé entre-temps
   //    (sinon un autre invocateur — client ou cron — a déjà envoyé) ──
   let claim = sb.from("groups").update({ notify_last_at: new Date(now).toISOString() }).eq("id", groupId);
   claim = oldLast === null ? claim.is("notify_last_at", null) : claim.eq("notify_last_at", oldLast);
-  const { data: claimed } = await claim.select("id");
-  if (!claimed || claimed.length === 0) return; // course perdue → quelqu'un d'autre notifie
+  const { data: claimed, error: claimErr } = await claim.select("id");
+  if (claimErr) console.error(`[pg] ${groupId} claim error:`, claimErr.message);
+  console.log(`[pg] ${groupId} claimed=${claimed?.length ?? 0}`);
+  if (!claimed || claimed.length === 0) { console.log(`[pg] ${groupId} SKIP claim perdu`); return; }
 
   const contributorIds = [...new Set(newPhotos.map((p: any) => p.user_id))];
 
@@ -83,15 +106,20 @@ async function processGroup(groupId: string) {
   const nameById = new Map((profs ?? []).map((p: any) => [p.id, p.username ?? "Quelqu'un"]));
   const names = contributorIds.map((id) => nameById.get(id) ?? "Quelqu'un");
 
-  // Destinataires = membres du groupe SAUF les contributeurs de ce lot.
+  // Destinataires :
+  //  - leading (1 seul auteur) → tout le monde SAUF lui (on ne se notifie pas soi-même).
+  //  - digest (plusieurs auteurs) → TOUT LE MONDE, y compris les auteurs : poster un moment
+  //    ne doit pas priver quelqu'un des notifs des autres.
+  const excluded = contributorIds.length === 1 ? contributorIds : [];
   const { data: members } = await sb
     .from("group_members")
     .select("user_id, profiles:user_id(expo_push_token)")
     .eq("group_id", groupId);
   const tokens = (members ?? [])
-    .filter((m: any) => !contributorIds.includes(m.user_id))
+    .filter((m: any) => !excluded.includes(m.user_id))
     .map((m: any) => m.profiles?.expo_push_token)
     .filter(Boolean) as string[];
+  console.log(`[pg] ${groupId} contributors=${contributorIds.length} recipients=${tokens.length}`);
   if (tokens.length === 0) return;
 
   let title: string;
@@ -108,6 +136,7 @@ async function processGroup(groupId: string) {
     title = `Nouveaux moments dans ${g.name}`;
   }
 
+  console.log(`[pg] ${groupId} ENVOI à ${tokens.length} tokens — "${title}" / "${bodyText}"`);
   await sendPush(tokens, title, bodyText, { type: "new_photo", groupId });
 }
 
@@ -130,8 +159,10 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { /* corps vide (cron) */ }
 
   if (body?.group_id) {
+    console.log(`[req] mode=group group_id=${body.group_id}`);
     await processGroup(String(body.group_id));
   } else {
+    console.log(`[req] mode=flush (cron)`);
     await flushAll();
   }
   return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json" } });
