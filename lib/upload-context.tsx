@@ -3,7 +3,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import { manipulateAsync, FlipType, SaveFormat } from "expo-image-manipulator";
 import { supabase } from "./supabase";
 import { r2Storage } from "./r2";
-import { notifyNewPhoto, scheduleNoShareReminder } from "./notifications";
+import { scheduleNoShareReminder } from "./notifications";
 
 type UploadStatus = "uploading" | "success" | "error";
 
@@ -214,30 +214,10 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
         // user stays silent for a full day).
         scheduleNoShareReminder().catch(() => {});
 
-        // Notify the OTHER group members that a moment was just shared. This call used to live in
-        // the capture flow but was dropped during the snapshot-preview refactor — restoring it
-        // here means every capture path (photo/video/audio/text/drawing, single or double) fires
-        // it. Fire-and-forget: a push failure must never flip the upload to "error".
-        const groupId = dbData?.group_id;
-        const senderId = dbData?.user_id;
-        if (groupId && senderId) {
-          (async () => {
-            try {
-              const [{ data: prof }, { data: grp }] = await Promise.all([
-                supabase.from("profiles").select("username").eq("id", senderId).single(),
-                supabase.from("groups").select("name").eq("id", groupId).single(),
-              ]);
-              await notifyNewPhoto(
-                groupId,
-                grp?.name ?? "Ton groupe",
-                prof?.username ?? "Quelqu'un",
-                senderId,
-              );
-            } catch (e) {
-              console.warn("[Upload] notifyNewPhoto failed:", e);
-            }
-          })();
-        }
+        // Notification de partage : gérée désormais CÔTÉ SERVEUR (trigger AFTER INSERT sur
+        // `photos` → Edge Function `share-notify`), avec digest "leading + trailing" (1 notif
+        // immédiate, puis regroupement par fenêtre de 30 min). Le client n'envoie plus de push
+        // ici pour éviter le spam dans les grands groupes (et les doublons avec le backend).
       } catch (error) {
         console.error("[Upload Error]", error);
         setUploads(prev => prev.map(u => u.id === id ? { ...u, status: "error" } : u));
