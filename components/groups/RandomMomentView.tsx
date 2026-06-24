@@ -24,6 +24,9 @@ type Props = {
   visible: boolean;
   onClose: () => void;
   groupId: string;
+  /** Timestamp (ms) : on ne pioche que les moments créés AVANT (anciens reveals déjà passés).
+   *  Le reveal en cours, non encore révélé, est ainsi exclu. */
+  accessibleBefore?: number;
   members: Member[];
   currentUserId?: string;
   currentUsername?: string;
@@ -39,7 +42,7 @@ function pickDifferent(current: number, n: number): number {
 }
 
 export default function RandomMomentView({
-  visible, onClose, groupId, members, currentUserId, currentUsername, currentUserAvatarUrl, groupName,
+  visible, onClose, groupId, accessibleBefore, members, currentUserId, currentUsername, currentUserAvatarUrl, groupName,
 }: Props) {
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => makeStyles(darkColors), []);
@@ -90,7 +93,12 @@ export default function RandomMomentView({
         .eq("group_id", groupId)
         .order("created_at", { ascending: true });
 
-      const rows = photosRes ?? [];
+      // On exclut les moments du reveal en cours (non encore révélé) : seuls ceux créés
+      // avant la borne (anciens reveals déjà passés) sont accessibles.
+      const allRows = photosRes ?? [];
+      const rows = accessibleBefore != null
+        ? allRows.filter((p: any) => new Date(p.created_at).getTime() < accessibleBefore)
+        : allRows;
       const photoIds = rows.map((p: any) => p.id);
 
       const reactionsByPhoto: Record<string, Reaction[]> = {};
@@ -146,7 +154,7 @@ export default function RandomMomentView({
       }
     })();
     return () => { cancelled = true; };
-  }, [visible, groupId, members]);
+  }, [visible, groupId, members, accessibleBefore]);
 
   const applyNext = (next: number) => {
     setIdx(next);

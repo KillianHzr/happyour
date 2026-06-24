@@ -112,6 +112,19 @@ export default function ArchivesSheet({
     return reveals.filter((r) => r.start.getTime() < rangeEnd && r.end.getTime() > rangeStart);
   }, [reveals, selStart, selEnd]);
 
+  // Moment aléatoire : on ne pioche QUE dans les anciens reveals (déjà passés). Le reveal
+  // "en cours" (non encore révélé) est exclu → borne = début de ce reveal courant.
+  const accessibleBefore = useMemo(() => {
+    const current = reveals.find((r) => r.status === "current");
+    return current ? current.start.getTime() : Date.now();
+  }, [reveals]);
+  // Y a-t-il au moins un ancien reveal contenant des moments ? (sinon : premier reveal en
+  // cours → pas d'archives → bouton "Moment aléatoire" masqué).
+  const hasArchivedMoments = useMemo(
+    () => reveals.some((r) => r.status !== "current" && !r.empty),
+    [reveals]
+  );
+
   // Clic sur une archive : disponible → ouvre le reveal archivé ; ancienne → premium ; en cours → rien.
   const handleRevealPress = (r: Reveal) => {
     if (r.status === "available") {
@@ -285,13 +298,17 @@ export default function ArchivesSheet({
               })}
             </ScrollView>
 
-            {/* ── Bouton fixe "Moment aléatoire" (35px au-dessus du bas) ── */}
-            <View style={styles.randomBtnWrap} pointerEvents="box-none">
-              <TouchableOpacity style={styles.randomBtn} onPress={() => setShowRandom(true)} activeOpacity={0.85}>
-                <Text style={styles.randomBtnText}>Moment aléatoire</Text>
-                <Icon name="shuffle" size={20} color={colors.icon} />
-              </TouchableOpacity>
-            </View>
+            {/* ── Bouton fixe "Moment aléatoire" (35px au-dessus du bas) ──
+                Masqué tant qu'il n'y a aucun ancien reveal avec des moments (ex: premier
+                reveal en cours) : on ne propose pas de piocher dans du contenu verrouillé. */}
+            {hasArchivedMoments && (
+              <View style={styles.randomBtnWrap} pointerEvents="box-none">
+                <TouchableOpacity style={styles.randomBtn} onPress={() => setShowRandom(true)} activeOpacity={0.85}>
+                  <Text style={styles.randomBtnText}>Moment aléatoire</Text>
+                  <Icon name="shuffle" size={20} color={colors.icon} />
+                </TouchableOpacity>
+              </View>
+            )}
 
             {/* ── Modal : abonnement premium (bientôt disponible) ── */}
             <BottomSheet visible={showComingSoon} onClose={() => setShowComingSoon(false)}>
@@ -360,6 +377,7 @@ export default function ArchivesSheet({
         visible={showRandom}
         onClose={() => setShowRandom(false)}
         groupId={groupId ?? ""}
+        accessibleBefore={accessibleBefore}
         members={members}
         currentUserId={currentUserId}
         currentUsername={currentUsername}
