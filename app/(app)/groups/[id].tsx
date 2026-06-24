@@ -1467,7 +1467,7 @@ export default function MainPagerScreen() {
         setRefreshing(false);
       }}
       onSimulateReveal={__DEV__ ? () => setDebugUnlocked(true) : undefined}
-      onDebugNotifReveal={__DEV__ ? () => scheduleImmediateLocalNotification("Le coffre est ouvert !", `Les moments de "${groupName}" sont disponibles`, { type: "recap", groupId: activeGroupId }) : undefined}
+      onDebugNotifReveal={__DEV__ ? () => scheduleImmediateLocalNotification("Le Reveal est disponible !", `Les moments de "${groupName}" sont disponibles`, { type: "recap", groupId: activeGroupId }) : undefined}
       onDebugNotifPhoto={__DEV__ ? () => scheduleImmediateLocalNotification(groupName || "Groupe", "Un ami a partagé un moment !", { type: "new_photo", groupId: activeGroupId }) : undefined}
       onDebugNotifInvite={__DEV__ ? () => scheduleImmediateLocalNotification("Nouvelle invitation !", `Tu as été invité à rejoindre "${groupName}"`, { type: "invite", groupName: groupName || "Groupe" }) : undefined}
       onDebugResetChallenges={__DEV__ ? async () => {

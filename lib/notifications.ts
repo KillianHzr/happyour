@@ -168,7 +168,7 @@ export async function scheduleRecapNotification(
     await Notifications.scheduleNotificationAsync({
       identifier: `recap_${groupId}`,
       content: {
-        title: "Le coffre est ouvert !",
+        title: "Le Reveal est disponible !",
         body: `Les moments de "${groupName}" sont disponibles`,
         data: { type: "recap", groupId },
         sound: "basic_notification.wav",
@@ -302,7 +302,7 @@ export async function scheduleCountdownNotification(
     await Notifications.scheduleNotificationAsync({
       identifier: `countdown_${groupId}`,
       content: {
-        title: "Le coffre ouvre bientôt 🔓",
+        title: "Le Reveal est disponible !",
         body: `Plus que 6h avant de découvrir les moments de "${groupName}"`,
         data: { type: "recap", groupId },
         sound: "basic_notification.wav",
