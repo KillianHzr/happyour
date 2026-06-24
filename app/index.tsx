@@ -1,13 +1,32 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, Redirect } from "expo-router";
+import { useNetworkState } from "expo-network";
 import { useAuth } from "../lib/auth-context";
 import { supabase } from "../lib/supabase";
 import LoadingScreen from "../components/LoadingScreen";
+import NoConnectionScreen from "../components/NoConnectionScreen";
 
 export default function Index() {
-  const { session, loading: authLoading, profileComplete } = useAuth();
+  const { session, loading: authLoading, profileComplete, checkProfileStatus } = useAuth();
+  const networkState = useNetworkState();
+  // ⚠️ TEST DEV : passe à true pour voir l'écran "pas de connexion" SANS couper le wifi
+  // (utile en dev build connecté à Metro). Remettre à false avant de commit/build.
+  const FORCE_OFFLINE = __DEV__ && false;
+  // Hors-ligne : isConnected=false (aucun réseau) ou isInternetReachable=false (wifi sans
+  // internet). On ignore les valeurs encore indéterminées (undefined/null) au 1er render.
+  const offline = FORCE_OFFLINE || networkState.isConnected === false || networkState.isInternetReachable === false;
   const [checkingGroup, setCheckingGroup] = useState(true);
   const [targetGroupId, setTargetGroupId] = useState<string | null>(null);
+
+  // Au retour de connexion : le check de profil initial a pu échouer hors-ligne
+  // (profileComplete=false par erreur → onboarding). On le relance pour router correctement.
+  const wasOffline = useRef(false);
+  useEffect(() => {
+    if (wasOffline.current && !offline && session?.user) {
+      checkProfileStatus(session.user.id);
+    }
+    wasOffline.current = offline;
+  }, [offline, session?.user?.id]);
 
   useEffect(() => {
     async function checkUserGroups() {
@@ -39,6 +58,12 @@ export default function Index() {
       checkUserGroups();
     }
   }, [session, authLoading]);
+
+  // Hors-ligne : on n'a pas pu résoudre l'état réel → écran "pas de connexion" plutôt que de
+  // router vers l'onboarding/login par défaut. Se met à jour seul au retour du réseau.
+  if (offline) {
+    return <NoConnectionScreen />;
+  }
 
   if (authLoading || checkingGroup || profileComplete === null) {
     return <LoadingScreen />;
