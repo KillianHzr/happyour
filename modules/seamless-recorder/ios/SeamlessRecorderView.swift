@@ -350,6 +350,7 @@ public class SeamlessRecorderView: ExpoView {
     outputURL = url
 
     guard let writer = try? AVAssetWriter(outputURL: url, fileType: .mp4) else { return }
+    writer.shouldOptimizeForNetworkUse = true
 
     let videoSettings = videoOutput.recommendedVideoSettingsForAssetWriter(writingTo: .mp4)
     let fallback: [String: Any] = [AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: 720, AVVideoHeightKey: 1280]
