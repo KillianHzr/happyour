@@ -13,7 +13,7 @@ import Svg, { Path, Circle } from "react-native-svg";
 import { useAudioRecorder, AudioModule, RecordingPresets, useAudioPlayer, useAudioPlayerStatus, useAudioRecorderState } from "expo-audio";
 import { SeamlessRecorder, type SeamlessRecorderRef } from "seamless-recorder";
 import { setCaptureData } from "../../lib/capture-store";
-import { hapticSend } from "../../lib/haptics";
+import { hapticSend, hapticLight, hapticSelection } from "../../lib/haptics";
 import { useUpload } from "../../lib/upload-context";
 import DrawingCanvas, { type DrawingCanvasRef } from "../DrawingCanvas";
 import { SendIcon, FeatherIcon, FlipIcon, CloseIcon, FlashIcon } from "./GroupIcons";
@@ -60,17 +60,16 @@ const BLUR_METHOD = Platform.OS === "ios" ? ("dimezisBlurView" as const) : ("non
 // Zone du sélecteur de mode : 80% de l'écran, plafonnée à cette largeur max.
 const MODE_SELECTOR_MAX_WIDTH = 320;
 // ── Zoom : facteur d'affichage absolu (et non plus normalisé 0–1) ──
-// La prop `zoom` envoyée au module natif est désormais le facteur affiché à
-// l'utilisateur : 0.5 = ultra grand-angle, 1 = grand-angle, etc. Le natif clamp
-// selon les capacités de l'objectif (l'avant n'a pas d'ultra grand-angle).
+// La prop `zoom` envoyée au module natif est le facteur affiché à l'utilisateur
+// (1 = grand-angle, 2, 5…). Le natif clamp selon les capacités de l'objectif.
+// Pas d'ultra grand-angle (x0.5) : la caméra virtuelle multi-objectifs faisait
+// buguer la caméra → on reste sur le grand-angle simple.
 const MAX_ZOOM = 5;          // facteur max (x5)
-const MIN_ZOOM_BACK = 0.5;   // ultra grand-angle dispo sur la caméra arrière
-const MIN_ZOOM_FRONT = 1;    // pas d'ultra grand-angle en façade → min 1x
+const MIN_ZOOM = 1;          // grand-angle = zoom mini
 const PINCH_ZOOM_SPEED = 0.012; // sensibilité du pinch (en facteur/px)
-const minZoomFor = (f: CameraType) => (f === "front" ? MIN_ZOOM_FRONT : MIN_ZOOM_BACK);
-// Paliers cycliques du bouton zoom (l'avant démarre à 1x faute d'ultra grand-angle).
-const zoomPresetsFor = (f: CameraType): number[] =>
-  f === "front" ? [1, 2, 5] : [0.5, 1, 2, 5];
+const minZoomFor = (_f: CameraType) => MIN_ZOOM;
+// Paliers cycliques du bouton zoom.
+const zoomPresetsFor = (_f: CameraType): number[] => [1, 2, 5];
 const formatZoom = (z: number) => `x${Number.isInteger(z) ? z : z.toFixed(1)}`;
 const nearestPreset = (z: number, presets: number[]) =>
   presets.reduce((a, b) => (Math.abs(b - z) < Math.abs(a - z) ? b : a), presets[0]);
@@ -262,7 +261,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
 
   const handleSelectMode = (m: CameraMode) => {
     if (cameraMode === m) return;
-    
+    hapticSelection(); // tic de sélection (comme le carousel) à chaque changement de mode
+
     setShowColorPalette(false);
 
     if (cameraMode === "PHOTO" && m === "VIDEO") {
@@ -888,6 +888,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
 
   const startVideoRecording = async () => {
     if (isRecording) return;
+    hapticLight(); // début d'enregistrement vidéo
     setIsRecording(true);
     setRecordingSeconds(0);
     recordingSecondsRef.current = 0;
@@ -913,6 +914,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
 
   const stopVideoRecording = () => {
     if (recordingTimer.current === null && recordingSecondsRef.current === 0) return;
+    hapticLight(); // fin d'enregistrement vidéo
     if (recordingTimer.current) { clearInterval(recordingTimer.current); recordingTimer.current = null; }
     setIsRecording(false);
     setIsVideoProcessing(true);
@@ -1033,6 +1035,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       }
 
       await audioRecorder.record();
+      hapticLight(); // début d'enregistrement audio
       setRecordedWaveform([]);
       setIsAudioRecording(true);
       setAudioSeconds(0);
@@ -1057,9 +1060,10 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
 
   const stopAudioRecordingDirect = async () => {
     if (!isAudioRecordingRef.current && !isAudioRecording) return;
+    hapticLight(); // fin d'enregistrement audio
     isAudioRecordingRef.current = false;
-    try { 
-      await audioRecorder.stop(); 
+    try {
+      await audioRecorder.stop();
     } catch (e) {
       console.error("Error stopping recording:", e);
     }
@@ -1101,6 +1105,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
       }
 
       await audioRecorder.record();
+      hapticLight(); // début d'enregistrement audio (légende)
       captionRecorderStarted.current = true;
       setCaptionWaveform([]);
       setIsCaptionRecording(true);
@@ -1122,6 +1127,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
 
   const stopCaptionAudioRecording = async () => {
     if (!isCaptionRecordingRef.current && !isCaptionRecording) return;
+    hapticLight(); // fin d'enregistrement audio (légende)
     isCaptionRecordingRef.current = false;
     if (captionRecorderStarted.current) {
       captionRecorderStarted.current = false;
@@ -1221,6 +1227,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     if (capturing) return;
     if (isRecording) return;
     setCapturing(true);
+    hapticLight(); // léger "déclic" de déclenchement photo
     // Gel NON BLOQUANT : on capture la frame courante en parallèle ; dès qu'elle arrive on
     // l'affiche figée et on fait monter le flou (200ms). Ça n'attend RIEN et n'impacte jamais
     // la vitesse de la photo. Le gel reste visible jusqu'à ce que la preview soit peinte
@@ -2540,7 +2547,7 @@ function CameraControlButton({ icon, onPress }: { icon: IconName; onPress: () =>
   );
 }
 
-// Bouton zoom cyclique : affiche le palier courant en texte (x0.5/x1/x2/x5).
+// Bouton zoom cyclique : affiche le palier courant en texte (x1/x2/x5).
 function ZoomPresetButton({ label, onPress }: { label: string; onPress: () => void }) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);

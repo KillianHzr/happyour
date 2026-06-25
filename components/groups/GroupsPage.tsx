@@ -12,6 +12,7 @@ import GroupsSlider, { type GroupCard } from "./GroupsSlider";
 import GroupRoom from "./GroupRoom";
 import GroupSearchSheet from "./GroupSearchSheet";
 import { type ActiveChallenge, TARGET_CHALLENGE_PROMPT, getChallengePrompt } from "../../lib/challenges";
+import { hapticImpact } from "../../lib/haptics";
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -295,6 +296,7 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
   }, [buildActiveChallenge, onOpenChallenge]);
 
   const openGroup = useCallback((groupId: string) => {
+    hapticImpact();
     onSelectGroup(groupId);
     setViewingGroupId(groupId);
     setGroupViewMounted(true);

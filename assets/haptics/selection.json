@@ -1,0 +1,18 @@
+{
+  "Version": 1,
+  "Metadata": {
+    "Description": "Tic de sélection — transient bref et net (Core Haptics, joue même pendant la caméra)."
+  },
+  "Pattern": [
+    {
+      "Event": {
+        "Time": 0,
+        "EventType": "HapticTransient",
+        "EventParameters": [
+          { "ParameterID": "HapticIntensity", "ParameterValue": 0.4 },
+          { "ParameterID": "HapticSharpness", "ParameterValue": 0.8 }
+        ]
+      }
+    }
+  ]
+}

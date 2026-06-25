@@ -39,10 +39,8 @@ public class SeamlessRecorderView: ExpoView {
   private lazy var snapshotContext = CIContext()
 
   // MARK: - Zoom
-  // Facteur de zoom "device" correspondant au 1x affiché. Sur un objectif virtuel
-  // (dual/triple), 1x = la première valeur de virtualDeviceSwitchOverVideoZoomFactors
-  // (le passage ultra-grand-angle → grand-angle) ; videoZoomFactor=1.0 = ultra-wide
-  // = 0.5x affiché. Sur un objectif simple, ce facteur vaut 1.0 (pas de 0.5x).
+  // Facteur de zoom "device" correspondant au 1x affiché. Avec le grand-angle simple
+  // (pas d'objectif virtuel multi-cam), ce facteur vaut toujours 1.0.
   private var oneXZoomFactor: CGFloat = 1.0
   // Dernier facteur d'affichage demandé par le JS (réappliqué après un switch).
   private var requestedDisplayZoom: CGFloat = 1.0
@@ -159,33 +157,18 @@ public class SeamlessRecorderView: ExpoView {
   }
 
   private func bestCamera(for position: AVCaptureDevice.Position) -> AVCaptureDevice? {
-    // À l'arrière, on privilégie un objectif virtuel multi-cam (triple puis dual-wide)
-    // qui inclut l'ultra-grand-angle → permet le 0.5x avec transitions automatiques.
-    // À défaut (ou en façade), on retombe sur le grand-angle simple (pas de 0.5x).
-    let preferred: [AVCaptureDevice.DeviceType]
-    if position == .back {
-      preferred = [.builtInTripleCamera, .builtInDualWideCamera, .builtInWideAngleCamera]
-    } else {
-      preferred = [.builtInWideAngleCamera]
-    }
+    // Grand-angle simple uniquement (avant comme arrière). On n'utilise PAS d'objectif
+    // virtuel multi-cam (triple/dual-wide) : la caméra virtuelle faisait buguer la
+    // caméra (gel, écran noir, rotation) → pas d'ultra-grand-angle / x0.5.
     let discovered = AVCaptureDevice.DiscoverySession(
-      deviceTypes: preferred, mediaType: .video, position: position
+      deviceTypes: [.builtInWideAngleCamera], mediaType: .video, position: position
     ).devices
-    // Respecter l'ordre de préférence (la DiscoverySession ne le garantit pas).
-    for type in preferred {
-      if let match = discovered.first(where: { $0.deviceType == type }) { return match }
-    }
     return discovered.first
   }
 
-  // Calcule le facteur "1x" du device. À appeler dans le bloc begin/commitConfiguration
-  // (lecture seule, ne verrouille pas le device).
+  // Grand-angle simple : le 1x correspond toujours à videoZoomFactor 1.0.
   private func updateOneXZoomFactor(for device: AVCaptureDevice) {
-    if let switchOver = device.virtualDeviceSwitchOverVideoZoomFactors.first {
-      oneXZoomFactor = CGFloat(truncating: switchOver)
-    } else {
-      oneXZoomFactor = 1.0
-    }
+    oneXZoomFactor = 1.0
   }
 
   // Applique le zoom d'affichage courant. À appeler APRÈS commitConfiguration
@@ -195,7 +178,7 @@ public class SeamlessRecorderView: ExpoView {
     applyZoom(device: device, displayFactor: requestedDisplayZoom)
   }
 
-  // displayFactor: 0.5 = ultra grand-angle, 1 = grand-angle, 2, 5… (clampé device).
+  // displayFactor: 1 = grand-angle, 2, 5… (clampé device).
   private func applyZoom(device: AVCaptureDevice, displayFactor: CGFloat) {
     let target = displayFactor * oneXZoomFactor
     let minF = device.minAvailableVideoZoomFactor
@@ -217,7 +200,7 @@ public class SeamlessRecorderView: ExpoView {
     currentFlashMode = flash == "on" ? .on : flash == "auto" ? .auto : .off
   }
 
-  // `zoom` = facteur d'affichage absolu (0.5 = ultra grand-angle, 1 = 1x, …).
+  // `zoom` = facteur d'affichage absolu (1 = 1x, 2, 5…).
   func setZoom(_ zoom: Double) {
     requestedDisplayZoom = CGFloat(zoom)
     guard let device = videoDeviceInput?.device else { return }

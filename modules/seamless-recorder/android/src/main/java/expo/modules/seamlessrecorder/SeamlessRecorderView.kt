@@ -132,10 +132,8 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
     }
   }
 
-  // `zoom` = facteur d'affichage absolu (0.5 = ultra grand-angle si dispo, 1 = 1x, …).
-  // On utilise setZoomRatio + clamp sur la plage de l'objectif : sur les téléphones dont
-  // la caméra logique inclut l'ultra grand-angle, minZoomRatio < 1 → le 0.5x fonctionne ;
-  // sinon le 0.5x est ramené au min (1x) sans crash.
+  // `zoom` = facteur d'affichage absolu (1 = 1x, 2, 5…). Pas d'ultra grand-angle (x0.5) :
+  // on plancher le zoom à 1x pour rester sur le grand-angle simple.
   fun setZoom(zoom: Double) {
     val factor = zoom.toFloat()
     val c = camera
@@ -144,7 +142,7 @@ class SeamlessRecorderView(context: Context, appContext: AppContext) : ExpoView(
 
   private fun applyZoomRatio(c: androidx.camera.core.Camera, factor: Float) {
     val zs = c.cameraInfo.zoomState.value
-    val min = zs?.minZoomRatio ?: 1f
+    val min = maxOf(1f, zs?.minZoomRatio ?: 1f)
     val max = zs?.maxZoomRatio ?: 1f
     c.cameraControl.setZoomRatio(factor.coerceIn(min, max))
   }

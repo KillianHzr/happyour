@@ -1,0 +1,18 @@
+{
+  "Version": 1,
+  "Metadata": {
+    "Description": "Impact léger — transient doux (Core Haptics, joue même pendant la caméra/lecture vidéo)."
+  },
+  "Pattern": [
+    {
+      "Event": {
+        "Time": 0,
+        "EventType": "HapticTransient",
+        "EventParameters": [
+          { "ParameterID": "HapticIntensity", "ParameterValue": 0.6 },
+          { "ParameterID": "HapticSharpness", "ParameterValue": 0.5 }
+        ]
+      }
+    }
+  ]
+}

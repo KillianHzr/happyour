@@ -33,10 +33,13 @@ import { type Reaction } from "../../lib/feed-types";
 import Reanimated, {
   useSharedValue,
   useAnimatedStyle,
+  useAnimatedReaction,
   useDerivedValue,
   withTiming,
+  runOnJS,
   type SharedValue,
 } from "react-native-reanimated";
+import { hapticSelection } from "../../lib/haptics";
 import { ReactionStickers, type ReactionDisplay } from "../molecules/ReactionStickers";
 import { StickerToast } from "../atoms/StickerToast";
 import { SHEET_BASE } from "../../lib/comment-sheet";
@@ -477,6 +480,15 @@ export default function ChallengeVotePage({
 
   const carouselRef = useRef<ICarouselInstance>(null);
   const carouselProgress = useSharedValue<number>(0);
+
+  // Tic haptique de sélection à chaque nouvelle réponse qui passe au centre du carrousel
+  // (suit la progression sur le thread UI, dédupliqué par index arrondi).
+  useAnimatedReaction(
+    () => Math.round(carouselProgress.value),
+    (curr, prev) => {
+      if (prev !== null && curr !== prev) runOnJS(hapticSelection)();
+    }
+  );
 
   const onPressPagination = (index: number) => {
     carouselRef.current?.scrollTo({

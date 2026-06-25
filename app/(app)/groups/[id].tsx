@@ -45,7 +45,7 @@ import { RevealHeader, type Participant } from "../../../components/organisms/Re
 import { ActivityView } from "../../../components/organisms/ActivityView";
 import MotivationalNotificationsModal from "../../../components/MotivationalNotificationsModal";
 import { scheduleImmediateLocalNotification, scheduleFirstMomentReminder, notifyReaction, notifyGroupJoin } from "../../../lib/notifications";
-import { hapticReveal } from "../../../lib/haptics";
+import { hapticReveal, hapticLight } from "../../../lib/haptics";
 import { radii, spacing, typography, textStyles, buildColors, type ThemeColors } from "../../../lib/theme";
 import { StatusBar } from "expo-status-bar";
 import Icon from "../../../components/Icon";
@@ -273,6 +273,17 @@ export default function MainPagerScreen() {
     }
     return out;
   }, [photos]);
+  // Fond du coucou (reveal) = exactement le fond de la card groupe : dernière vraie photo
+  // (sinon avatar du chef/admin). Flou + voile sombre appliqués côté LiveReactions.
+  const coucouBgUrl = useMemo(() => {
+    const isRealPhoto = (p: any) =>
+      p.image_path !== "text_mode" && !p.image_path.endsWith(".mp4") && !p.image_path.endsWith(".m4a") && !p.image_path.includes("_draw");
+    for (let i = photos.length - 1; i >= 0; i--) {
+      if (isRealPhoto(photos[i]) && photos[i].url) return photos[i].url as string;
+    }
+    const admin = members.find((m: any) => m.role === "admin");
+    return (admin?.avatar_url as string | null) ?? null;
+  }, [photos, members]);
   const handleCardFrame = useCallback((f: { x: number; y: number; width: number; height: number }) => {
     cardFrameRef.current = f;
   }, []);
@@ -964,6 +975,9 @@ export default function MainPagerScreen() {
       return;
     }
 
+    // Vibration légère synchrone avec l'anim du sticker qui se pose.
+    hapticLight();
+
     const reactionId = `temp-${Math.random()}`;
     const reactionObj: Reaction = {
       id: reactionId,
@@ -1520,7 +1534,9 @@ export default function MainPagerScreen() {
       onOpenSettings={() => setShowGroupSettings(true)}
       onOpenArchives={() => setShowArchives(true)}
       onScrollLock={setGroupsPagerLocked}
-      onDebugNamePress={() => setShowDebugMenu(true)}
+      // Clic sur le nom du groupe (single) : déverrouille TOUJOURS le reveal (dev/preview/prod),
+      // exactement comme le bouton "Déverrouiller le reveal" — change l'UI sans ouvrir le reveal.
+      onDebugNamePress={() => setDebugUnlocked(true)}
       debugUnlocked={debugUnlocked}
     />
   ), [allGroups, groupData, revealConfig, activePage === 0, user?.id, enterGroupId, closeGroupSignal, handleSwitchGroup, debugUnlocked, handleRevealStart, handleGroupRoomUnlock, handleCardFrame, handleLottieFrame]);
@@ -1735,6 +1751,7 @@ export default function MainPagerScreen() {
               currentAvatarUrl={avatarUrl ?? null}
               isVisible={true}
               onParticipantsChange={setConnectedParticipants}
+              backgroundUrl={coucouBgUrl}
             />
           )}
 

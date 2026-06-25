@@ -16,6 +16,7 @@ import { radii, spacing, typography, textStyles, stroke, type ThemeColors, type 
 import { useThemedStyles } from "../../lib/theme-context";
 import { UserAvatar } from "../atoms/Avatar";
 import LottieView from "lottie-react-native";
+import { hapticCoucou } from "../../lib/haptics";
 
 // ─── shake detection tunables ─────────────────────────────────────────────────
 // Strategy: count X-axis direction reversals (left→right or right→left).
@@ -113,14 +114,37 @@ function WavingHand({
 
 // ─── BigWave — centred overlay shown on the waving user's own screen ──────────
 
+/**
+ * Fond plein écran du coucou : exactement le fond des cards de groupe — image floutée
+ * (blurRadius 90) + voile sombre rgba(0,0,0,0.45). Rendu derrière l'interface du coucou.
+ */
+function WaveBackground({ url }: { url?: string | null }) {
+  if (!url) return null;
+  return (
+    <>
+      <Image
+        source={{ uri: url }}
+        style={StyleSheet.absoluteFillObject as any}
+        contentFit="cover"
+        transition={0}
+        cachePolicy="memory-disk"
+        blurRadius={90}
+      />
+      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.45)" }]} pointerEvents="none" />
+    </>
+  );
+}
+
 function BigWave({
   trigger,
   participants,
   currentUserId,
+  backgroundUrl,
 }: {
   trigger: number;
   participants: Map<string, Participant>;
   currentUserId: string;
+  backgroundUrl?: string | null;
 }) {
   const styles = useThemedStyles(makeStyles);
   const scale     = useRef(new Animated.Value(0.6)).current;
@@ -151,51 +175,49 @@ function BigWave({
   const remainingTargetsCount = targetParticipants.length - 3;
 
   return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        StyleSheet.absoluteFill,
-        styles.bigWaveContainer,
-        { opacity, transform: [{ scale }] },
-      ]}
-    >
-      {/* Lottie hand-shake — seulement sur l'écran du saluant. */}
-      <LottieView
-        ref={handRef}
-        source={require("../../assets/animations/hand - shake.json")}
-        autoPlay={false}
-        loop={false}
-        resizeMode="cover"
-        style={styles.handLottie}
-      />
+    // Couche externe : opacité seulement → le flou plein écran reste plein écran (pas de scale).
+    <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity }]}>
+      <WaveBackground url={backgroundUrl} />
+      {/* Couche interne : le contenu du coucou "pop in" (scale), au-dessus du flou. */}
+      <Animated.View style={[StyleSheet.absoluteFill, styles.bigWaveContainer, { transform: [{ scale }] }]}>
+        {/* Lottie hand-shake — seulement sur l'écran du saluant. */}
+        <LottieView
+          ref={handRef}
+          source={require("../../assets/animations/hand - shake.json")}
+          autoPlay={false}
+          loop={false}
+          resizeMode="cover"
+          style={styles.handLottie}
+        />
 
-      {targetParticipants.length > 0 ? (
-        <View style={styles.wavedToContainer}>
-          <Text style={styles.wavedToText}>Tu salues</Text>
-          <View style={styles.wavedAvatarsRow}>
-            {visibleTargets.map((p, index) => (
-              <UserAvatar
-                key={p.userId}
-                avatar_url={p.avatarUrl}
-                username={p.username}
-                size={32}
-                borderRadius={radii.sm}
-                style={[styles.wavedAvatar, index > 0 && { marginLeft: spacing.negSm }]}
-              />
-            ))}
-            {remainingTargetsCount > 0 && (
-              <View style={[styles.wavedAvatarMore, { marginLeft: spacing.negSm }]}>
-                <Text style={styles.wavedAvatarMoreText}>+{remainingTargetsCount}</Text>
-              </View>
-            )}
+        {targetParticipants.length > 0 ? (
+          <View style={styles.wavedToContainer}>
+            <Text style={styles.wavedToText}>Tu salues</Text>
+            <View style={styles.wavedAvatarsRow}>
+              {visibleTargets.map((p, index) => (
+                <UserAvatar
+                  key={p.userId}
+                  avatar_url={p.avatarUrl}
+                  username={p.username}
+                  size={32}
+                  borderRadius={radii.sm}
+                  style={[styles.wavedAvatar, index > 0 && { marginLeft: spacing.negSm }]}
+                />
+              ))}
+              {remainingTargetsCount > 0 && (
+                <View style={[styles.wavedAvatarMore, { marginLeft: spacing.negSm }]}>
+                  <Text style={styles.wavedAvatarMoreText}>+{remainingTargetsCount}</Text>
+                </View>
+              )}
+            </View>
           </View>
-        </View>
-      ) : (
-        // Personne d'autre connecté au reveal au moment du shake.
-        <View style={styles.wavedToContainer}>
-          <Text style={styles.wavedToText}>Personne n’est là</Text>
-        </View>
-      )}
+        ) : (
+          // Personne d'autre connecté au reveal au moment du shake.
+          <View style={styles.wavedToContainer}>
+            <Text style={styles.wavedToText}>Personne n’est là</Text>
+          </View>
+        )}
+      </Animated.View>
     </Animated.View>
   );
 }
@@ -210,7 +232,7 @@ type IncomingWaveState = {
   avatarUrl: string | null;
 };
 
-function IncomingWave({ wave }: { wave: IncomingWaveState | null }) {
+function IncomingWave({ wave, backgroundUrl }: { wave: IncomingWaveState | null; backgroundUrl?: string | null }) {
   const styles = useThemedStyles(makeStyles);
   const scale   = useRef(new Animated.Value(0.6)).current;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -235,25 +257,21 @@ function IncomingWave({ wave }: { wave: IncomingWaveState | null }) {
   if (!wave) return null;
 
   return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        StyleSheet.absoluteFill,
-        styles.bigWaveContainer,
-        { opacity, transform: [{ scale }] },
-      ]}
-    >
-      {/* Pas d'icône côté destinataire : seulement l'avatar du saluant + le texte. */}
-      <View style={styles.wavedToContainer}>
-        <UserAvatar
-          avatar_url={wave.avatarUrl}
-          username={wave.username}
-          size={32}
-          borderRadius={radii.sm}
-          style={styles.wavedAvatar}
-        />
-        <Text style={[styles.wavedToText, { marginLeft: spacing.sm }]}>{wave.username} te salue</Text>
-      </View>
+    <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity }]}>
+      <WaveBackground url={backgroundUrl} />
+      <Animated.View style={[StyleSheet.absoluteFill, styles.bigWaveContainer, { transform: [{ scale }] }]}>
+        {/* Pas d'icône côté destinataire : seulement l'avatar du saluant + le texte. */}
+        <View style={styles.wavedToContainer}>
+          <UserAvatar
+            avatar_url={wave.avatarUrl}
+            username={wave.username}
+            size={32}
+            borderRadius={radii.sm}
+            style={styles.wavedAvatar}
+          />
+          <Text style={[styles.wavedToText, { marginLeft: spacing.sm }]}>{wave.username} te salue</Text>
+        </View>
+      </Animated.View>
     </Animated.View>
   );
 }
@@ -274,6 +292,8 @@ type Props = {
   currentAvatarUrl: string | null;
   isVisible: boolean;
   onParticipantsChange?: (participants: any[]) => void;
+  // Fond plein écran du coucou : même image que la card du groupe (dernière photo / avatar chef).
+  backgroundUrl?: string | null;
 };
 
 // ─── LiveReactions ────────────────────────────────────────────────────────────
@@ -285,6 +305,7 @@ export default function LiveReactions({
   currentAvatarUrl,
   isVisible,
   onParticipantsChange,
+  backgroundUrl,
 }: Props) {
   const insets = useSafeAreaInsets();
   const styles = useThemedStyles(makeStyles);
@@ -340,6 +361,8 @@ export default function LiveReactions({
     const now = Date.now();
     if (now - lastWaveRef.current < WAVE_COOLDOWN_MS) return;
     lastWaveRef.current = now;
+
+    hapticCoucou(); // vibration "coucou" un peu plus longue (~400ms) à la secousse
 
     // Show big wave locally (broadcast doesn't echo back to self by default)
     setMyWaveTrigger((t) => t + 1);
@@ -500,10 +523,11 @@ export default function LiveReactions({
         trigger={myWaveTrigger}
         participants={participants}
         currentUserId={currentUserId}
+        backgroundUrl={backgroundUrl}
       />
 
       {/* Incoming wave — shown on the recipient's screen ("X te salue") */}
-      <IncomingWave wave={incomingWave} />
+      <IncomingWave wave={incomingWave} backgroundUrl={backgroundUrl} />
     </View>
   );
 }

@@ -12,6 +12,34 @@ import { useTheme, useThemedStyles, ForceThemeMode } from "../../lib/theme-conte
 import { NameTag } from "../atoms/NameTag";
 import Shape, { type ShapeName } from "../Shape";
 import Icon from "../Icon";
+import { hapticSelection } from "../../lib/haptics";
+
+/**
+ * Pastille de pagination pilotée par la valeur de scroll native (UI thread) plutôt que par
+ * un state React : la pastille active suit le scroll exactement comme le compteur x/x, sans
+ * le lag du listener JS. Fond inactif + calque actif dont l'opacité se révèle quand la carte
+ * est centrée (l'opacité est native-driver compatible).
+ */
+export const AnimatedDot = memo(function AnimatedDot({
+  scrollX, center, snapInterval, baseStyle, activeColor,
+}: {
+  scrollX: Animated.Value;
+  center: number;
+  snapInterval: number;
+  baseStyle: any;
+  activeColor: string;
+}) {
+  const opacity = scrollX.interpolate({
+    inputRange: [center - snapInterval, center, center + snapInterval],
+    outputRange: [0, 1, 0],
+    extrapolate: "clamp",
+  });
+  return (
+    <View style={baseStyle}>
+      <Animated.View style={[StyleSheet.absoluteFillObject, { borderRadius: 3, backgroundColor: activeColor, opacity }]} />
+    </View>
+  );
+});
 
 // Hauteur réservée sous le slider pour la pagination. On n'affiche plus qu'UN élément à la fois
 // (les pastilles OU le compteur x/x), donc on budgète juste : marginTop + paddingVertical*2 +
@@ -173,6 +201,7 @@ const SliderCard = memo(function SliderCard({
 
 export default function GroupsSlider({ cards, revealDate, onSelect, showActiveBorder = true }: Props) {
   const sliderStyles = useThemedStyles(makeSliderStyles);
+  const { colors } = useTheme();
   const { width: screenWidth } = useWindowDimensions();
 
   // Slider geometry — peek 1/10 sur chaque côté (identique aux défis)
@@ -212,6 +241,9 @@ export default function GroupsSlider({ cards, revealDate, onSelect, showActiveBo
     [displayItems.length, snapInterval, scrollX]
   );
 
+  // Index courant pour le tic haptique de sélection (dédupliqué : un seul tic par carte
+  // qui passe au centre, pas un par frame).
+  const hapticIdxRef = useRef(0);
   const handleScroll = Animated.event(
     [{ nativeEvent: { contentOffset: { x: scrollX } } }],
     {
@@ -219,8 +251,12 @@ export default function GroupsSlider({ cards, revealDate, onSelect, showActiveBo
       listener: (e: any) => {
         if (count === 0 || snapInterval === 0) return;
         const x = e.nativeEvent.contentOffset.x;
-        const idx = Math.round(x / snapInterval);
-        setActiveIndex(Math.max(0, Math.min(count - 1, idx)));
+        const idx = Math.max(0, Math.min(count - 1, Math.round(x / snapInterval)));
+        if (idx !== hapticIdxRef.current) {
+          hapticIdxRef.current = idx;
+          hapticSelection();
+        }
+        setActiveIndex(idx);
       },
     }
   );
@@ -271,7 +307,14 @@ export default function GroupsSlider({ cards, revealDate, onSelect, showActiveBo
                   // ≤5 groupes : pastilles uniquement (pas de compteur).
                   <View style={sliderStyles.dotsRow}>
                     {cards.map((_, idx) => (
-                      <View key={idx} style={[sliderStyles.dot, idx === activeIndex && sliderStyles.dotActive]} />
+                      <AnimatedDot
+                        key={idx}
+                        scrollX={scrollX}
+                        center={idx * snapInterval}
+                        snapInterval={snapInterval}
+                        baseStyle={sliderStyles.dot}
+                        activeColor={colors.iconBrandTertiary}
+                      />
                     ))}
                   </View>
                 ) : (

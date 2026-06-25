@@ -11,11 +11,11 @@
         "EventType" : "HapticContinuous",
         "EventParameters" : [
           {
-            "ParameterValue" : 0.64999997615814209,
+            "ParameterValue" : 1,
             "ParameterID" : "HapticIntensity"
           },
           {
-            "ParameterValue" : 1,
+            "ParameterValue" : 0.40000000596046448,
             "ParameterID" : "HapticSharpness"
           },
           {

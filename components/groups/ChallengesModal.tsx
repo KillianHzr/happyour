@@ -22,6 +22,8 @@ import BlurView from "../atoms/BlurView";
 import { BlurView as NativeBlurView } from "@sbaiahmed1/react-native-blur";
 import { NameTag } from "../atoms/NameTag";
 import Shape, { type ShapeName } from "../Shape";
+import { AnimatedDot } from "./GroupsSlider";
+import { hapticSelection } from "../../lib/haptics";
 
 // Hauteur occupée par les dots (marginTop + paddingVertical*2 + dot)
 const DOTS_AREA_HEIGHT = 16 + spacing.sm * 2 + 6; // 16 + 16 + 6 = 38
@@ -250,6 +252,7 @@ export function ChallengesSlider({
   const onActiveChangeRef = useRef(onActiveChange);
   onActiveChangeRef.current = onActiveChange;
   const activeIndexRef = useRef(0);
+  const hapticIdxRef = useRef(0);
   const lastRespondedRef = useRef<boolean | null>(null);
   const reportActive = (realIdx: number) => {
     activeIndexRef.current = realIdx;
@@ -281,6 +284,11 @@ export function ChallengesSlider({
         if (count === 0 || snapInterval === 0) return;
         const x = e.nativeEvent.contentOffset.x;
         const realIdx = Math.max(0, Math.min(count - 1, Math.round(x / snapInterval)));
+        // Tic haptique de sélection quand un nouveau défi passe au centre (dédupliqué).
+        if (realIdx !== hapticIdxRef.current) {
+          hapticIdxRef.current = realIdx;
+          hapticSelection();
+        }
         reportActive(realIdx);
       },
     }
@@ -413,7 +421,14 @@ export function ChallengesSlider({
               {showDots && (
                 <View style={sliderStyles.dotsContainer}>
                   {groupChallenges.map((_, idx) => (
-                    <View key={idx} style={[sliderStyles.dot, idx === activeIndex && sliderStyles.dotActive]} />
+                    <AnimatedDot
+                      key={idx}
+                      scrollX={scrollX}
+                      center={idx * snapInterval}
+                      snapInterval={snapInterval}
+                      baseStyle={sliderStyles.dot}
+                      activeColor={colors.icon}
+                    />
                   ))}
                 </View>
               )}
