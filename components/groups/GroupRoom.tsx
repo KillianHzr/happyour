@@ -336,6 +336,8 @@ function RoomCard({ card, revealDate, unlocked, onCapture, onOpenChallenge, lott
   const topExitStyle = useAnimatedStyle(() => { const h = Math.max(exit.value, chrome.value); return { opacity: 1 - h, transform: [{ translateY: h * 48 }] }; });   // couronne/défi ↓
   const countExitStyle = useAnimatedStyle(() => { const h = Math.max(exit.value, chrome.value); return { opacity: 1 - h, transform: [{ translateY: -h * 48 }] }; }); // nb moments ↑
   const bottomExitStyle = useAnimatedStyle(() => { const h = Math.max(exit.value, chrome.value); return { opacity: 1 - h, transform: [{ translateY: -h * 80 }] }; }); // slider ↑
+  // Lottie central : entre/sort avec le contenu (transition liste↔single) — fondu + léger scale.
+  const lottieChromeStyle = useAnimatedStyle(() => ({ opacity: 1 - chrome.value, transform: [{ scale: 1 - chrome.value * 0.18 }] }));
 
   return (
     <View ref={cardRef} style={s.card} onLayout={measureCard} collapsable={false}>
@@ -399,18 +401,22 @@ function RoomCard({ card, revealDate, unlocked, onCapture, onOpenChallenge, lott
           ) : (
             <>
               {hasMoments ? (
-                <Reanimated.View ref={lottieRef} style={[s.lottieWrap, lottieOpacityStyle]} pointerEvents="none">
-                  <ReanimatedLottie
-                    source={lottieSource}
-                    animatedProps={lottieProps}
-                    autoPlay={false}
-                    loop={false}
-                    resizeMode="contain"
-                    style={s.lottie}
-                  />
+                <Reanimated.View style={lottieChromeStyle} pointerEvents="none">
+                  <Reanimated.View ref={lottieRef} style={[s.lottieWrap, lottieOpacityStyle]} pointerEvents="none">
+                    <ReanimatedLottie
+                      source={lottieSource}
+                      animatedProps={lottieProps}
+                      autoPlay={false}
+                      loop={false}
+                      resizeMode="contain"
+                      style={s.lottie}
+                    />
+                  </Reanimated.View>
                 </Reanimated.View>
               ) : (
-                <Icon name="circle-filled" size={136} color={colors.icon} />
+                <Reanimated.View style={lottieChromeStyle} pointerEvents="none">
+                  <Icon name="circle-filled" size={136} color={colors.icon} />
+                </Reanimated.View>
               )}
               <View style={s.countMask}>
                 <Reanimated.View style={[s.dataTextRow, countExitStyle]}>

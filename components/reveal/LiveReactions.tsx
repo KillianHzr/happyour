@@ -371,7 +371,10 @@ export default function LiveReactions({
       await channelRef.current?.send({
         type: "broadcast",
         event: "wave",
-        payload: { userId: currentUserId },
+        // On embarque l'identité de l'émetteur DANS le payload : le destinataire affiche ainsi
+        // toujours le bon pseudo/avatar sans dépendre de la présence (qui peut ne pas encore
+        // contenir l'émetteur juste après l'arrivée dans le reveal → "Quelqu'un" sinon).
+        payload: { userId: currentUserId, username: identityRef.current.username, avatarUrl: identityRef.current.avatarUrl },
       });
     } catch {
       // silently ignore — wave just doesn't propagate
@@ -420,16 +423,17 @@ export default function LiveReactions({
         sync();
       })
       .on("broadcast", { event: "wave" }, ({ payload }) => {
-        const { userId } = payload as { userId: string };
+        const { userId, username, avatarUrl } = payload as { userId: string; username?: string; avatarUrl?: string | null };
         if (userId === currentUserId) return; // ignore our own wave (no self-echo anyway)
-        // Resolve the sender's identity from presence so we can show their name + avatar.
+        // Identité tirée du payload en priorité (fiable dès la 1re salutation), sinon de la
+        // présence (anciens builds qui n'envoyaient que userId), sinon repli "Quelqu'un".
         const sender = pRef.current.get(userId);
         incomingTriggerRef.current += 1;
         setIncomingWave({
           trigger: incomingTriggerRef.current,
           userId,
-          username: sender?.username ?? "Quelqu'un",
-          avatarUrl: sender?.avatarUrl ?? null,
+          username: username ?? sender?.username ?? "Quelqu'un",
+          avatarUrl: avatarUrl ?? sender?.avatarUrl ?? null,
         });
       })
       .subscribe(async (status) => {
