@@ -23,7 +23,7 @@ import Shape, { type ShapeName } from "../Shape";
 import Icon from "../Icon";
 import { getRevealLottie } from "./revealLottie";
 import type { GroupCard } from "./GroupsSlider";
-import { hapticUnlockStart, hapticUnlockUpdate, hapticUnlockStop } from "../../lib/haptics";
+import { hapticUnlockStart, hapticUnlockUpdate, hapticUnlockUpdateRaw, hapticUnlockStop } from "../../lib/haptics";
 
 const ReanimatedLottie = Reanimated.createAnimatedComponent(LottieView);
 
@@ -60,10 +60,20 @@ function UnlockSlider({ onUnlock }: { onUnlock: () => void }) {
   // utilise la largeur réelle mesurée au layout, et pas la valeur initiale (0).
   const maxWidthRef = useRef(NOB_MIN);
   const firedRef = useRef(false);
+  // Listener actif pendant le retour ressort du nob → fait redescendre l'intensité haptique
+  // en synchro avec le nob (au lieu de couper net au lâcher).
+  const releaseListenerRef = useRef<string | null>(null);
+
+  const clearReleaseRamp = () => {
+    if (releaseListenerRef.current) {
+      widthAnim.removeListener(releaseListenerRef.current);
+      releaseListenerRef.current = null;
+    }
+  };
 
   // Sécurité : si le slider se démonte alors que le doigt est encore posé (release/terminate
   // non émis), on coupe le retour haptique continu pour ne pas le laisser tourner.
-  useEffect(() => () => hapticUnlockStop(), []);
+  useEffect(() => () => { clearReleaseRamp(); hapticUnlockStop(); }, []);
 
   // Progression 0→1 du nob (pour piloter l'intensité haptique).
   const progressFor = (w: number) => {
@@ -72,12 +82,29 @@ function UnlockSlider({ onUnlock }: { onUnlock: () => void }) {
     return Math.max(0, Math.min(1, (w - NOB_MIN) / span));
   };
 
+  // Lâcher sans déverrouiller : retour rapide du nob (200ms) avec un decrescendo haptique
+  // JUSQU'À 0 vrai (intensité brute, sans plancher) en synchro avec le nob, puis coupure.
+  const releaseAndRampDown = () => {
+    clearReleaseRamp();
+    releaseListenerRef.current = widthAnim.addListener(({ value }) => hapticUnlockUpdateRaw(progressFor(value)));
+    Animated.timing(widthAnim, {
+      toValue: NOB_MIN,
+      duration: 200,
+      easing: (t) => t, // linéaire → decrescendo régulier
+      useNativeDriver: false,
+    }).start(() => {
+      clearReleaseRamp();
+      hapticUnlockStop();
+    });
+  };
+
   const pan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 2,
       onPanResponderGrant: () => {
         firedRef.current = false;
+        clearReleaseRamp(); // si on ressaisit pendant un retour en cours
         // Démarre le retour haptique continu dès la prise du nob (intensité = progression).
         hapticUnlockStart(progressFor(NOB_MIN));
       },
@@ -91,6 +118,7 @@ function UnlockSlider({ onUnlock }: { onUnlock: () => void }) {
         // retour à 0 avant que le reveal s'affiche.
         if (w >= maxW - 2) {
           firedRef.current = true;
+          clearReleaseRamp();
           widthAnim.setValue(maxW);
           hapticUnlockStop(); // le déverrouillage joue sa propre vibration (hapticReveal)
           onUnlock();
@@ -102,14 +130,12 @@ function UnlockSlider({ onUnlock }: { onUnlock: () => void }) {
         hapticUnlockUpdate(progressFor(w));
       },
       onPanResponderRelease: () => {
-        hapticUnlockStop();
         if (firedRef.current) return; // reset géré par le timeout après l'ouverture du reveal
-        Animated.spring(widthAnim, { toValue: NOB_MIN, useNativeDriver: false }).start();
+        releaseAndRampDown();
       },
       onPanResponderTerminate: () => {
-        hapticUnlockStop();
         if (firedRef.current) return;
-        Animated.spring(widthAnim, { toValue: NOB_MIN, useNativeDriver: false }).start();
+        releaseAndRampDown();
       },
     })
   ).current;

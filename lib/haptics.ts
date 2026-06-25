@@ -110,6 +110,20 @@ export function hapticUnlockUpdate(progress: number): void {
   androidPulseProgress = p;
 }
 
+/**
+ * Met à jour l'intensité SANS plancher : `level` 0–1 mappe directement l'intensité (0 = silence).
+ * Sert au relâchement pour faire un decrescendo jusqu'à 0 vrai (le plancher de unlockIntensity
+ * empêcherait sinon d'atteindre le silence).
+ */
+export function hapticUnlockUpdateRaw(level: number): void {
+  const v = Math.max(0, Math.min(1, level));
+  if (Platform.OS === "ios" && hasContinuousHaptics) {
+    updateContinuousAhap(v, unlockSharpness(v));
+    return;
+  }
+  androidPulseProgress = v;
+}
+
 /** Arrête le retour continu (doigt relâché / déverrouillage déclenché). */
 export function hapticUnlockStop(): void {
   if (Platform.OS === "ios" && hasContinuousHaptics) {

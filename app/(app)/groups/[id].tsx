@@ -1534,9 +1534,8 @@ export default function MainPagerScreen() {
       onOpenSettings={() => setShowGroupSettings(true)}
       onOpenArchives={() => setShowArchives(true)}
       onScrollLock={setGroupsPagerLocked}
-      // Clic sur le nom du groupe (single) : déverrouille TOUJOURS le reveal (dev/preview/prod),
-      // exactement comme le bouton "Déverrouiller le reveal" — change l'UI sans ouvrir le reveal.
-      onDebugNamePress={() => setDebugUnlocked(true)}
+      // Le nom du groupe n'est plus cliquable : le déverrouillage du reveal se fait via le
+      // bouton invisible dans la capture (cf. onDebugUnlock de CameraPage).
       debugUnlocked={debugUnlocked}
     />
   ), [allGroups, groupData, revealConfig, activePage === 0, user?.id, enterGroupId, closeGroupSignal, handleSwitchGroup, debugUnlocked, handleRevealStart, handleGroupRoomUnlock, handleCardFrame, handleLottieFrame]);
@@ -1578,6 +1577,7 @@ export default function MainPagerScreen() {
         onScrollLock={(v) => { setCameraScrollLocked(v); }}
         onHideMenu={setCameraHideMenu}
         onCaptureSent={(info) => { setProfileRefreshKey(k => k + 1); showCaptureToast(info); }}
+        onDebugUnlock={() => setDebugUnlocked(true)}
       />
     </ForceThemeMode>
   ), [activeGroupId, user?.id, activePage === 1, allGroups, pendingChallenge]);
