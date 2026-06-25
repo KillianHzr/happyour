@@ -63,11 +63,17 @@ export type GroupCard = {
   unlocked: boolean;                // reveal accessible pour CE groupe (par-groupe, pas global)
 };
 
+export type CardFrame = { x: number; y: number; width: number; height: number };
+
 type Props = {
   cards: GroupCard[];
   revealDate: Date;
-  onSelect: (groupId: string) => void;
+  // frame = position/taille écran de la carte tapée (pour l'anim d'agrandissement vers la single).
+  onSelect: (groupId: string, frame?: CardFrame) => void;
   showActiveBorder?: boolean; // masqué quand une page groupe est ouverte
+  // Transition d'ouverture : `morph` 0→1 ; le contenu de la card `morphingId` sort façon reveal.
+  morph?: Animated.Value;
+  morphingId?: string | null;
 };
 
 /** Formate un délai en ms → "Xj HH:MM:SS" (le "0j" est masqué s'il reste moins d'un jour). */
@@ -99,7 +105,7 @@ const RevealCountdown = memo(function RevealCountdown({ revealDate, textStyle }:
  * en mode sombre, donc `useTheme()` ici renvoie toujours les couleurs dark.
  */
 const SliderCard = memo(function SliderCard({
-  card, width, height, marginRight, revealDate, unlocked, onSelect, borderOpacity,
+  card, width, height, marginRight, revealDate, unlocked, onSelect, borderOpacity, morph, isMorphing,
 }: {
   card: GroupCard;
   width: number;
@@ -107,15 +113,38 @@ const SliderCard = memo(function SliderCard({
   marginRight: number;
   revealDate: Date;
   unlocked: boolean;
-  onSelect: (groupId: string) => void;
+  onSelect: (groupId: string, frame?: CardFrame) => void;
   borderOpacity?: Animated.AnimatedInterpolation<number>;
+  morph?: Animated.Value;
+  isMorphing?: boolean;
 }) {
   const { colors } = useTheme();
   const s = useThemedStyles(makeSliderStyles);
+  const cardRef = useRef<any>(null);
+
+  // Sortie façon reveal (le contenu est "aspiré derrière le mur" pendant que le fond grandit) :
+  // nom ↓, bloc data ↑, countdown ↑ plus loin — masqué par le borderRadius/overflow de la card.
+  // L'exit s'achève tôt (morph 0→0.4) pour laisser place à l'agrandissement du fond.
+  const exitActive = !!morph && !!isMorphing;
+  const fade = exitActive ? morph!.interpolate({ inputRange: [0, 0.4], outputRange: [1, 0], extrapolate: "clamp" }) : undefined;
+  const nameStyle = exitActive ? { opacity: fade, transform: [{ translateY: morph!.interpolate({ inputRange: [0, 0.4], outputRange: [0, 44], extrapolate: "clamp" }) }] } : null;
+  const dataStyle = exitActive ? { opacity: fade, transform: [{ translateY: morph!.interpolate({ inputRange: [0, 0.4], outputRange: [0, -44], extrapolate: "clamp" }) }] } : null;
+  const bottomStyle = exitActive ? { opacity: fade, transform: [{ translateY: morph!.interpolate({ inputRange: [0, 0.4], outputRange: [0, -72], extrapolate: "clamp" }) }] } : null;
+  const handlePress = () => {
+    const node = cardRef.current;
+    if (node?.measureInWindow) {
+      node.measureInWindow((x: number, y: number, w: number, h: number) =>
+        onSelect(card.id, w > 0 && h > 0 ? { x, y, width: w, height: h } : undefined)
+      );
+    } else {
+      onSelect(card.id);
+    }
+  };
   return (
     <TouchableOpacity
+      ref={cardRef}
       activeOpacity={0.9}
-      onPress={() => onSelect(card.id)}
+      onPress={handlePress}
       style={[s.card, { width, height, marginRight }]}
     >
       {card.bgUrl ? (
@@ -138,10 +167,12 @@ const SliderCard = memo(function SliderCard({
 
       <View style={s.cardContent}>
         {/* Nom du groupe (texte text/default sur fond brand/default) */}
-        <NameTag text={card.name} />
+        <Animated.View style={nameStyle}>
+          <NameTag text={card.name} />
+        </Animated.View>
 
         {/* Bloc data : shape du dernier moment + nombre de moments */}
-        <View style={s.dataBlock}>
+        <Animated.View style={[s.dataBlock, dataStyle]}>
           {!card.loaded ? (
             <ActivityIndicator color={colors.text} />
           ) : (
@@ -158,10 +189,10 @@ const SliderCard = memo(function SliderCard({
               </View>
             </>
           )}
-        </View>
+        </Animated.View>
 
         {/* Countdown + cadenas (ou état "reveal disponible") */}
-        <View style={s.countdownWrap}>
+        <Animated.View style={[s.countdownWrap, bottomStyle]}>
           <Text style={s.unlockHint}>
             {unlocked ? "Ouvre ton groupe pour le déverrouiller" : "Encore un peu de patience..."}
           </Text>
@@ -187,7 +218,7 @@ const SliderCard = memo(function SliderCard({
               </>
             )}
           </View>
-        </View>
+        </Animated.View>
       </View>
       {borderOpacity && (
         <Animated.View
@@ -199,7 +230,7 @@ const SliderCard = memo(function SliderCard({
   );
 });
 
-export default function GroupsSlider({ cards, revealDate, onSelect, showActiveBorder = true }: Props) {
+export default function GroupsSlider({ cards, revealDate, onSelect, showActiveBorder = true, morph, morphingId }: Props) {
   const sliderStyles = useThemedStyles(makeSliderStyles);
   const { colors } = useTheme();
   const { width: screenWidth } = useWindowDimensions();
@@ -297,6 +328,8 @@ export default function GroupsSlider({ cards, revealDate, onSelect, showActiveBo
                   unlocked={card.unlocked}
                   onSelect={onSelect}
                   borderOpacity={showActiveBorder ? borderOpacities[idx] : undefined}
+                  morph={morph}
+                  isMorphing={!!morphingId && card.id === morphingId}
                 />
               ))}
             </Animated.ScrollView>

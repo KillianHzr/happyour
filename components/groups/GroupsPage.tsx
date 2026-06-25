@@ -1,14 +1,14 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, Dimensions, BackHandler } from "react-native";
+import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
 import { r2Storage } from "../../lib/r2";
 import { radii, spacing, textStyles, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import Icon from "../Icon";
-import EdgeSwipeBack from "../EdgeSwipeBack";
 import { type ShapeName } from "../Shape";
-import GroupsSlider, { type GroupCard } from "./GroupsSlider";
+import GroupsSlider, { type GroupCard, type CardFrame } from "./GroupsSlider";
 import GroupRoom from "./GroupRoom";
 import GroupSearchSheet from "./GroupSearchSheet";
 import { type ActiveChallenge, TARGET_CHALLENGE_PROMPT, getChallengePrompt } from "../../lib/challenges";
@@ -109,6 +109,28 @@ function midnightAfter(ts: number): number {
   const d = new Date(ts);
   d.setHours(24, 0, 0, 0); // 24h → bascule au 00:00 du jour suivant
   return d.getTime();
+}
+
+/**
+ * Carte "fantôme" qui ne contient QUE le fond (image floutée + voile sombre), identique au
+ * fond des cards liste et single. Sert d'élément partagé qui s'agrandit de la taille liste à
+ * la taille single pendant l'ouverture/fermeture d'un groupe.
+ */
+function MorphCard({ bgUrl, bg }: { bgUrl: string | null; bg: string }) {
+  if (!bgUrl) return <View style={[StyleSheet.absoluteFillObject, { backgroundColor: bg }]} />;
+  return (
+    <>
+      <Image
+        source={{ uri: bgUrl }}
+        style={StyleSheet.absoluteFillObject as any}
+        contentFit="cover"
+        transition={0}
+        cachePolicy="memory-disk"
+        blurRadius={90}
+      />
+      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.45)" }]} pointerEvents="none" />
+    </>
+  );
 }
 
 export default function GroupsPage({ allGroups, groupData, revealConfig, isActive, userId, enterGroupId, onEnteredGroup, closeGroupSignal, onSelectGroup, onAddGroup, onGoToCapture, onOpenChallenge, onOpenReveal, onRevealStart, onCardFrame, onLottieFrame, onOpenSettings, onOpenArchives, onScrollLock, onDebugNamePress, debugUnlocked }: Props) {
@@ -268,9 +290,54 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
     onScrollLock?.(isActive && selectionShown);
   }, [isActive, selectionShown]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Transition d'ouverture/fermeture de la page groupe (slide depuis la droite) ──
-  const slideAnim = useRef(new Animated.Value(SCREEN_WIDTH)).current;
+  // ── Transition d'ouverture/fermeture de la page groupe (agrandissement de la card) ──
+  // La card de la liste "devient" la card de la single : une card fantôme (fond seul) grandit
+  // de la frame liste → frame single, pendant que la liste s'efface (façon reveal) puis que la
+  // single apparaît. `morph` 0 = liste, 1 = single.
+  // Phases :
+  //  opening    → contenu liste sort (reveal-style) + fond grandit ; single mesurée mais cachée.
+  //  single     → single affichée, son contenu entre (reveal-style).
+  //  closingOut → contenu single sort (reveal-style), fond single encore en place.
+  //  closingGrow→ fond rétrécit single→liste ; contenu liste rentre (reveal-style).
+  const morph = useRef(new Animated.Value(0)).current; // 0 = liste, 1 = single
   const [groupViewMounted, setGroupViewMounted] = useState(false);
+  const [phase, setPhase] = useState<"list" | "opening" | "single" | "closingOut" | "closingGrow">("list");
+  const [startFrame, setStartFrame] = useState<CardFrame | null>(null); // card liste tapée (coords écran)
+  const [singleFrame, setSingleFrame] = useState<CardFrame | null>(null); // card single (coords écran)
+  const [introKey, setIntroKey] = useState(0);   // ++ → la single fait entrer son contenu
+  const [outroKey, setOutroKey] = useState(0);   // ++ → la single fait sortir son contenu
+  const morphStartedRef = useRef(false);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const resetToList = useCallback(() => {
+    if (closeTimerRef.current) { clearTimeout(closeTimerRef.current); closeTimerRef.current = null; }
+    setViewingGroupId(null);
+    setGroupViewMounted(false);
+    setPhase("list");
+    setStartFrame(null);
+    setSingleFrame(null);
+    morph.setValue(0);
+    morphStartedRef.current = false;
+  }, [morph]);
+
+  // Frame de la card single (mesurée par GroupRoom) → cible de l'agrandissement. On relaie
+  // aussi au parent (utilisé par la transition reveal).
+  const handleSingleCardFrame = useCallback((f: CardFrame) => {
+    setSingleFrame(f);
+    onCardFrame?.(f);
+  }, [onCardFrame]);
+
+  // Démarre l'agrandissement dès qu'on a les deux frames (liste + single).
+  useEffect(() => {
+    if (phase === "opening" && startFrame && singleFrame && !morphStartedRef.current) {
+      morphStartedRef.current = true;
+      Animated.timing(morph, {
+        toValue: 1, duration: 460, easing: Easing.out(Easing.cubic), useNativeDriver: false,
+      }).start(({ finished }) => {
+        if (finished) { setPhase("single"); setIntroKey((k) => k + 1); }
+      });
+    }
+  }, [phase, startFrame, singleFrame, morph]);
 
   // Construit l'ActiveChallenge du défi en cours d'un groupe (même logique que la card),
   // pour ouvrir directement sa capture au clic sur l'encart "Défi @…".
@@ -295,27 +362,47 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
     if (challenge) onOpenChallenge?.(challenge);
   }, [buildActiveChallenge, onOpenChallenge]);
 
-  const openGroup = useCallback((groupId: string) => {
+  const openGroup = useCallback((groupId: string, frame?: CardFrame) => {
     hapticImpact();
     onSelectGroup(groupId);
     setViewingGroupId(groupId);
     setGroupViewMounted(true);
-    slideAnim.setValue(SCREEN_WIDTH);
-    requestAnimationFrame(() => {
-      Animated.timing(slideAnim, {
-        toValue: 0, duration: 300, easing: Easing.out(Easing.cubic), useNativeDriver: true,
-      }).start();
-    });
-  }, [onSelectGroup, slideAnim]);
+    setSingleFrame(null);
+    morphStartedRef.current = false;
+    if (!frame) {
+      // Pas de card source (ex: après création/recherche) → affichage direct (contenu en place).
+      setStartFrame(null);
+      morph.setValue(1);
+      setPhase("single");
+      return;
+    }
+    setStartFrame(frame);
+    morph.setValue(0);
+    setPhase("opening");
+  }, [onSelectGroup, morph]);
 
   const closeGroup = useCallback(() => {
-    Animated.timing(slideAnim, {
-      toValue: SCREEN_WIDTH, duration: 250, easing: Easing.in(Easing.quad), useNativeDriver: true,
-    }).start(() => {
-      setViewingGroupId(null);
-      setGroupViewMounted(false);
+    setPhase((cur) => {
+      if (cur === "list" || cur === "closingOut" || cur === "closingGrow") return cur;
+      if (startFrame && singleFrame) {
+        // 1) le contenu de la single sort (reveal-style)…
+        setOutroKey((k) => k + 1);
+        // 2) …puis le fond rétrécit vers la card liste, dont le contenu rentre.
+        closeTimerRef.current = setTimeout(() => {
+          setPhase("closingGrow");
+          Animated.timing(morph, {
+            toValue: 0, duration: 440, easing: Easing.inOut(Easing.cubic), useNativeDriver: false,
+          }).start(({ finished }) => { if (finished) resetToList(); });
+        }, 280);
+        return "closingOut";
+      }
+      resetToList();
+      return "list";
     });
-  }, [slideAnim]);
+  }, [morph, startFrame, singleFrame, resetToList]);
+
+  // Nettoyage du timer de fermeture au démontage.
+  useEffect(() => () => { if (closeTimerRef.current) clearTimeout(closeTimerRef.current); }, []);
 
   // Onglet "Groupes" du menu : revenir à la liste si une vue groupe est ouverte
   // (même comportement que le chevron retour). Déclenché par incrément du signal parent.
@@ -367,58 +454,106 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
     );
   }
 
-  // ── Sélection de groupe (slider) + overlay animé de la page groupe ─────────
+  // ── Sélection de groupe (slider) + agrandissement de la card vers la single ─────────
   const openedGroup = cards.find((c) => c.id === viewingGroupId);
+
+  // Header + autres cards + pagination s'effacent (fondu + léger recul) ; le contenu de la card
+  // tapée, lui, sort en reveal-style via GroupsSlider (translates par élément). L'agrandissement
+  // du fond prend le relais ensuite.
+  const listLayerStyle = {
+    opacity: morph.interpolate({ inputRange: [0, 0.4], outputRange: [1, 0], extrapolate: "clamp" }),
+    transform: [{ translateY: morph.interpolate({ inputRange: [0, 0.4], outputRange: [0, -20], extrapolate: "clamp" }) }],
+  };
+  // Card fantôme : SEUL le fond (image + flou) interpolé de la frame liste → frame single. Le
+  // même fond persiste tout du long (pas de crossfade) ; la single prend le relais à l'identique.
+  const overlayAnimStyle = (startFrame && singleFrame) ? {
+    left: morph.interpolate({ inputRange: [0, 1], outputRange: [startFrame.x, singleFrame.x] }),
+    top: morph.interpolate({ inputRange: [0, 1], outputRange: [startFrame.y, singleFrame.y] }),
+    width: morph.interpolate({ inputRange: [0, 1], outputRange: [startFrame.width, singleFrame.width] }),
+    height: morph.interpolate({ inputRange: [0, 1], outputRange: [startFrame.height, singleFrame.height] }),
+  } : null;
+  const showOverlay = (phase === "opening" || phase === "closingGrow") && !!overlayAnimStyle && !!openedGroup;
+  // La single (vraie) est montée en continu (pour mesurer son fond), mais n'est VISIBLE qu'une
+  // fois le fond agrandi → swap instantané sans crossfade (pixels identiques au fond fantôme).
+  const groupRoomVisible = phase === "single" || phase === "closingOut";
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <View style={[styles.headerRow, { justifyContent: "space-between" }]}>
-          <Text style={styles.title}>Groupes</Text>
-          <View style={styles.headerActions}>
-            {allGroups.length > 5 && (
-              <TouchableOpacity style={styles.addBtn} onPress={() => setShowSearch(true)} activeOpacity={0.8}>
-                <Icon name="search" size={20} color={colors.iconNeutral} />
+    <View style={styles.container}>
+      {/* Card fantôme (fond seul) qui s'agrandit liste → single — SOUS la liste, pour que le
+          contenu de la card tapée s'efface PAR-DESSUS le fond qui, lui, persiste et grandit. */}
+      {showOverlay && (
+        <Animated.View
+          style={[{ position: "absolute", borderRadius: radii.xl, overflow: "hidden" }, overlayAnimStyle as any]}
+          pointerEvents="none"
+        >
+          <MorphCard bgUrl={openedGroup!.bgUrl} bg={colors.bg} />
+        </Animated.View>
+      )}
+
+      {/* Liste (header + slider) — s'efface façon reveal pendant l'agrandissement */}
+      <Animated.View
+        style={[StyleSheet.absoluteFill, { paddingTop: insets.top }, listLayerStyle]}
+        pointerEvents={phase === "list" ? "auto" : "none"}
+      >
+        <View style={styles.header}>
+          <View style={[styles.headerRow, { justifyContent: "space-between" }]}>
+            <Text style={styles.title}>Groupes</Text>
+            <View style={styles.headerActions}>
+              {allGroups.length > 5 && (
+                <TouchableOpacity style={styles.addBtn} onPress={() => setShowSearch(true)} activeOpacity={0.8}>
+                  <Icon name="search" size={20} color={colors.iconNeutral} />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.addBtn} onPress={onAddGroup} activeOpacity={0.8}>
+                <Icon name="plus" size={20} color={colors.iconNeutral} />
               </TouchableOpacity>
-            )}
-            <TouchableOpacity style={styles.addBtn} onPress={onAddGroup} activeOpacity={0.8}>
-              <Icon name="plus" size={20} color={colors.iconNeutral} />
-            </TouchableOpacity>
+            </View>
           </View>
         </View>
-      </View>
 
-      <View style={{ flex: 1, marginTop: spacing.xl, paddingBottom: TABBAR_SPACE }}>
-        <GroupsSlider cards={cards} revealDate={revealDate} onSelect={openGroup} showActiveBorder={!viewingGroupId} />
-      </View>
+        <View style={{ flex: 1, marginTop: spacing.xl, paddingBottom: TABBAR_SPACE }}>
+          <GroupsSlider
+            cards={cards}
+            revealDate={revealDate}
+            onSelect={openGroup}
+            showActiveBorder={phase === "list"}
+            morph={morph}
+            morphingId={(phase === "opening" || phase === "closingGrow") ? viewingGroupId : null}
+          />
+        </View>
+      </Animated.View>
 
-      {/* Single du groupe — slide à l'entrée + retour par glissement depuis le bord gauche */}
+      {/* Single du groupe — montée en continu (mesure du fond), visible une fois la card agrandie.
+          Swap de visibilité instantané (pas d'opacité animée) → aucun crossfade ; son contenu
+          entre/sort façon reveal via introTrigger/outroTrigger. Retour par chevron/menu only. */}
       {groupViewMounted && openedGroup && (
-        <Animated.View style={[StyleSheet.absoluteFillObject, { transform: [{ translateX: slideAnim }] }]}>
-          <EdgeSwipeBack
-            style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.bg }]}
-            onBack={() => { setViewingGroupId(null); setGroupViewMounted(false); }}
-          >
-            <GroupRoom
-              card={openedGroup}
-              revealDate={revealDate}
-              unlocked={openedGroup.unlocked}
-              showBack
-              showAddButton={false}
-              topInset={insets.top}
-              onBack={closeGroup}
-              onAddGroup={onAddGroup}
-              onSettings={() => onOpenSettings?.()}
-              onArchive={() => onOpenArchives?.()}
-              onCapture={onGoToCapture}
-              onOpenChallenge={onOpenChallenge && openedGroup ? () => handleOpenChallenge(openedGroup.id) : undefined}
-              onUnlock={onOpenReveal}
-              onRevealStart={onRevealStart}
-              onCardFrame={onCardFrame}
-              onLottieFrame={onLottieFrame}
-              onDebugNamePress={onDebugNamePress}
-            />
-          </EdgeSwipeBack>
-        </Animated.View>
+        <View
+          style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.bg, opacity: groupRoomVisible ? 1 : 0 }]}
+          pointerEvents={phase === "single" ? "auto" : "none"}
+        >
+          <GroupRoom
+            card={openedGroup}
+            revealDate={revealDate}
+            unlocked={openedGroup.unlocked}
+            showBack
+            showAddButton={false}
+            topInset={insets.top}
+            onBack={closeGroup}
+            onAddGroup={onAddGroup}
+            onSettings={() => onOpenSettings?.()}
+            onArchive={() => onOpenArchives?.()}
+            onCapture={onGoToCapture}
+            onOpenChallenge={onOpenChallenge && openedGroup ? () => handleOpenChallenge(openedGroup.id) : undefined}
+            onUnlock={onOpenReveal}
+            onRevealStart={onRevealStart}
+            onCardFrame={handleSingleCardFrame}
+            onLottieFrame={onLottieFrame}
+            onDebugNamePress={onDebugNamePress}
+            introTrigger={introKey}
+            outroTrigger={outroKey}
+            startHidden={phase === "opening"}
+          />
+        </View>
       )}
 
       <GroupSearchSheet

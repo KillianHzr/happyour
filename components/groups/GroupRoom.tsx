@@ -177,12 +177,18 @@ type Props = {
   /** Frame du Lottie (coords fenêtre) — pour le re-rendre AU-DESSUS de la transition. */
   onLottieFrame?: (frame: { x: number; y: number; width: number; height: number }) => void;
   onDebugNamePress?: () => void;
+  // Transition liste↔single : déclenche l'entrée (introTrigger) / la sortie (outroTrigger)
+  // du contenu de la single, façon reveal (mêmes translates masqués).
+  introTrigger?: number;
+  outroTrigger?: number;
+  // Monte la single avec le contenu déjà caché (pendant l'agrandissement, avant l'entrée).
+  startHidden?: boolean;
 };
 
 export default function GroupRoom(props: Props) {
   const { colors } = useTheme();
   const headerStyles = useThemedStyles(makeHeaderStyles);
-  const { card, showBack, showAddButton, topInset, onBack, onAddGroup, onSettings, onArchive, onDebugNamePress, onRevealStart, onUnlock } = props;
+  const { card, showBack, showAddButton, topInset, onBack, onAddGroup, onSettings, onArchive, onDebugNamePress, onRevealStart, onUnlock, introTrigger, outroTrigger, startHidden } = props;
 
   // ── État de la transition reveal (partagé carte + header) ──
   const reveal = useMemo(
@@ -190,8 +196,25 @@ export default function GroupRoom(props: Props) {
     [card.shape, card.momentCount]
   );
   const revealProgress = useSharedValue(reveal.freezeProgress);
-  const exit = useSharedValue(0); // 0 = repos, 1 = chrome disparu
+  const exit = useSharedValue(0); // 0 = repos, 1 = chrome disparu (reveal)
+  // chrome : transition liste↔single. 1 = contenu caché (aspiré), 0 = en place. Démarre caché
+  // pendant l'agrandissement (startHidden) pour éviter tout flash avant l'entrée.
+  const chrome = useSharedValue(startHidden ? 1 : 0);
   const animatingRef = useRef(false);
+
+  // Entrée du contenu (ouverture du groupe) : revient en place depuis "caché", façon reveal.
+  useEffect(() => {
+    if (!introTrigger) return;
+    chrome.value = withTiming(0, { duration: 380, easing: Easing.out(Easing.cubic) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [introTrigger]);
+
+  // Sortie du contenu (fermeture du groupe) : repart vers "caché", façon reveal.
+  useEffect(() => {
+    if (!outroTrigger) return;
+    chrome.value = withTiming(1, { duration: 280, easing: Easing.in(Easing.cubic) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outroTrigger]);
   const lottieProps = useAnimatedProps(() => ({ progress: revealProgress.value }));
 
   // Fondu du Lottie sur ses ~0,2s finales (sinon il disparaît d'un coup).
@@ -230,8 +253,8 @@ export default function GroupRoom(props: Props) {
 
   // Header : nom (+ retour) part à gauche, boutons à droite. Déplacement court +
   // fondu accéléré (transparent dès ~exit 0,55) → plus discret que le chrome de la carte.
-  const leftExitStyle = useAnimatedStyle(() => ({ opacity: Math.max(0, 1 - exit.value * 1.8), transform: [{ translateX: -exit.value * 60 }] }));
-  const rightExitStyle = useAnimatedStyle(() => ({ opacity: Math.max(0, 1 - exit.value * 1.8), transform: [{ translateX: exit.value * 60 }] }));
+  const leftExitStyle = useAnimatedStyle(() => { const h = Math.max(exit.value, chrome.value); return { opacity: Math.max(0, 1 - h * 1.8), transform: [{ translateX: -h * 60 }] }; });
+  const rightExitStyle = useAnimatedStyle(() => { const h = Math.max(exit.value, chrome.value); return { opacity: Math.max(0, 1 - h * 1.8), transform: [{ translateX: h * 60 }] }; });
 
   return (
     <View style={[headerStyles.container, { paddingTop: topInset }]}>
@@ -271,7 +294,7 @@ export default function GroupRoom(props: Props) {
       {/* Carte plein écran (forcée sombre) */}
       <View style={headerStyles.cardWrap}>
         <ForceThemeMode mode="Dark">
-          <RoomCard {...props} lottieProps={lottieProps} lottieOpacityStyle={lottieOpacityStyle} exit={exit} startReveal={startReveal} lottieSource={reveal.source} />
+          <RoomCard {...props} lottieProps={lottieProps} lottieOpacityStyle={lottieOpacityStyle} exit={exit} chrome={chrome} startReveal={startReveal} lottieSource={reveal.source} />
         </ForceThemeMode>
       </View>
     </View>
@@ -283,12 +306,13 @@ type RoomCardProps = Props & {
   lottieOpacityStyle: any;
   lottieSource: any;
   exit: SharedValue<number>;
+  chrome: SharedValue<number>;
   startReveal: () => void;
   onCardFrame?: (frame: { x: number; y: number; width: number; height: number }) => void;
   onLottieFrame?: (frame: { x: number; y: number; width: number; height: number }) => void;
 };
 
-function RoomCard({ card, revealDate, unlocked, onCapture, onOpenChallenge, lottieProps, lottieOpacityStyle, lottieSource, exit, startReveal, onCardFrame, onLottieFrame }: RoomCardProps) {
+function RoomCard({ card, revealDate, unlocked, onCapture, onOpenChallenge, lottieProps, lottieOpacityStyle, lottieSource, exit, chrome, startReveal, onCardFrame, onLottieFrame }: RoomCardProps) {
   const { colors } = useTheme();
   const s = useThemedStyles(makeStyles);
   const hasMoments = card.momentCount > 0;
@@ -307,10 +331,11 @@ function RoomCard({ card, revealDate, unlocked, onCapture, onOpenChallenge, lott
     });
   };
 
-  // Sorties du chrome de la carte pendant la transition reveal (exit 0→1).
-  const topExitStyle = useAnimatedStyle(() => ({ opacity: 1 - exit.value, transform: [{ translateY: exit.value * 48 }] }));   // couronne/défi ↓
-  const countExitStyle = useAnimatedStyle(() => ({ opacity: 1 - exit.value, transform: [{ translateY: -exit.value * 48 }] })); // nb moments ↑
-  const bottomExitStyle = useAnimatedStyle(() => ({ opacity: 1 - exit.value, transform: [{ translateY: -exit.value * 80 }] })); // slider ↑
+  // Sorties du chrome de la carte : reveal (exit 0→1) OU transition liste↔single (chrome 0→1).
+  // On combine les deux par un max → mêmes translates masqués, quelle que soit l'origine.
+  const topExitStyle = useAnimatedStyle(() => { const h = Math.max(exit.value, chrome.value); return { opacity: 1 - h, transform: [{ translateY: h * 48 }] }; });   // couronne/défi ↓
+  const countExitStyle = useAnimatedStyle(() => { const h = Math.max(exit.value, chrome.value); return { opacity: 1 - h, transform: [{ translateY: -h * 48 }] }; }); // nb moments ↑
+  const bottomExitStyle = useAnimatedStyle(() => { const h = Math.max(exit.value, chrome.value); return { opacity: 1 - h, transform: [{ translateY: -h * 80 }] }; }); // slider ↑
 
   return (
     <View ref={cardRef} style={s.card} onLayout={measureCard} collapsable={false}>
