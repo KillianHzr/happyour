@@ -344,7 +344,7 @@ function RoomCard({ card, revealDate, unlocked, onCapture, onOpenChallenge, lott
   const lottieChromeStyle = useAnimatedStyle(() => ({ opacity: 1 - chrome.value, transform: [{ scale: 1 - chrome.value * 0.18 }] }));
 
   return (
-    <View ref={cardRef} style={s.card} onLayout={measureCard} collapsable={false}>
+    <View ref={cardRef} style={[s.card, !card.bgUrl && { borderWidth: 1, borderColor: colors.cardBorder }]} onLayout={measureCard} collapsable={false}>
       {/* Fond : crossfade quand le dernier moment change (clé = bgUrl). Le fond reste l'image
           floutée + voile sombre, identique à l'intro du reveal (vidéo → 1re frame, dessin → image). */}
       <Reanimated.View
@@ -357,7 +357,9 @@ function RoomCard({ card, revealDate, unlocked, onCapture, onOpenChallenge, lott
         {card.bgUrl ? (
           <BlurredImageBackground uri={card.bgUrl} />
         ) : (
-          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.bg }]} />
+          // Groupe sans moment : couleur de card par défaut (colors.card), identique à la
+          // liste et au fond fantôme du morph — sinon l'agrandissement paraît invisible.
+          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.card }]} />
         )}
       </Reanimated.View>
 

@@ -65,6 +65,49 @@ export type GroupCard = {
 
 export type CardFrame = { x: number; y: number; width: number; height: number };
 
+// Textes d'attente du reveal affichés dans la liste (état non déverrouillé). Tirés au hasard,
+// un texte différent par groupe à chaque actualisation ; on ne réutilise un texte que lorsque
+// les 12 ont été distribués (reset du pool). "Encore un peu de patience..." reste dans le lot.
+const WAITING_HINTS = [
+  "Encore un peu de patience...",
+  "Le reveal se prépare...",
+  "Chaque chose en son temps...",
+  "Le meilleur reste à venir...",
+  "Le grand jour approche...",
+  "On y est presque...",
+  "Garde un peu de suspense...",
+  "Ça vaut le coup d'attendre...",
+  "Tic-tac, ça arrive...",
+  "Bientôt, tout sera révélé...",
+  "Prépare-toi pour le reveal...",
+  "Encore quelques instants...",
+];
+
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/**
+ * Assigne un texte d'attente unique à chaque carte non déverrouillée. On pioche dans un pool
+ * mélangé ; quand il est vide (plus de 12 groupes en attente), on le remélange entièrement —
+ * un même texte n'apparaît donc sur deux groupes que si les 12 sont déjà utilisés.
+ */
+function assignWaitingHints(cards: GroupCard[]): Record<string, string> {
+  const map: Record<string, string> = {};
+  let pool: string[] = [];
+  for (const c of cards) {
+    if (c.unlocked) continue;
+    if (pool.length === 0) pool = shuffle(WAITING_HINTS);
+    map[c.id] = pool.pop()!;
+  }
+  return map;
+}
+
 type Props = {
   cards: GroupCard[];
   revealDate: Date;
@@ -105,7 +148,7 @@ const RevealCountdown = memo(function RevealCountdown({ revealDate, textStyle }:
  * en mode sombre, donc `useTheme()` ici renvoie toujours les couleurs dark.
  */
 const SliderCard = memo(function SliderCard({
-  card, width, height, marginRight, revealDate, unlocked, onSelect, borderOpacity, morph, isMorphing,
+  card, width, height, marginRight, revealDate, unlocked, onSelect, borderOpacity, morph, isMorphing, waitingHint,
 }: {
   card: GroupCard;
   width: number;
@@ -117,6 +160,7 @@ const SliderCard = memo(function SliderCard({
   borderOpacity?: Animated.AnimatedInterpolation<number>;
   morph?: Animated.Value;
   isMorphing?: boolean;
+  waitingHint?: string;
 }) {
   const { colors } = useTheme();
   const s = useThemedStyles(makeSliderStyles);
@@ -150,7 +194,7 @@ const SliderCard = memo(function SliderCard({
       {/* Contenu clippé (coins arrondis) : fond flouté + infos. L'overflow:hidden vit ICI,
           pas sur la card, pour que la bordure de sélection (rendue par-dessus, hors clip)
           ne soit pas rognée — notamment en bas. */}
-      <View style={s.cardClip}>
+      <View style={[s.cardClip, !card.bgUrl && { borderWidth: 1, borderColor: colors.cardBorder }]}>
       {card.bgUrl ? (
         // Flou "card" unifié (token cardBlur) — statique, pas de BlurView live ×N cartes.
         <BlurredImageBackground uri={card.bgUrl} />
@@ -188,7 +232,7 @@ const SliderCard = memo(function SliderCard({
         {/* Countdown + cadenas (ou état "reveal disponible") */}
         <Animated.View style={[s.countdownWrap, bottomStyle]}>
           <Text style={s.unlockHint}>
-            {unlocked ? "Ouvre ton groupe pour le déverrouiller" : "Encore un peu de patience..."}
+            {unlocked ? "Ouvre ton groupe pour le déverrouiller" : (waitingHint ?? "Encore un peu de patience...")}
           </Text>
           {/* border/default/default sur le bouton (state "disponible" comme "indisponible") */}
           <View style={s.countdown}>
@@ -252,6 +296,10 @@ export default function GroupsSlider({ cards, revealDate, onSelect, showActiveBo
 
   // Pas de loop : on rend les cartes une seule fois.
   const displayItems = cards;
+
+  // Texte d'attente aléatoire et unique par groupe. Recalculé quand `cards` change (le parent
+  // le mémoïse et ne le recrée qu'à l'actualisation de la page) → nouveau tirage à chaque refresh.
+  const waitingHints = useMemo(() => assignWaitingHints(cards), [cards]);
 
   // Bordure de sélection animée par carte : opacité 1 quand centrée, fondu vers 0
   // en s'éloignant. Nœuds stables (useMemo) pour ne pas casser le memo de SliderCard.
@@ -325,6 +373,7 @@ export default function GroupsSlider({ cards, revealDate, onSelect, showActiveBo
                   borderOpacity={showActiveBorder ? borderOpacities[idx] : undefined}
                   morph={morph}
                   isMorphing={!!morphingId && card.id === morphingId}
+                  waitingHint={waitingHints[card.id]}
                 />
               ))}
             </Animated.ScrollView>
@@ -433,10 +482,15 @@ const makeSliderStyles = (colors: ThemeColors) => StyleSheet.create({
     color: colors.text,
     lineHeight: undefined,
   },
+  // Hauteur FIXE = DOTS_AREA_HEIGHT (marginTop inclus) pour que la zone de pagination occupe
+  // exactement l'espace réservé dans le calcul de cardHeight, en mode pastilles COMME en mode
+  // compteur x/x. Sinon le compteur (plus haut que les pastilles) déborde et rogne le bas de
+  // la card.
   paginationWrap: {
-    alignItems: "center",
-    paddingVertical: spacing.xs,
+    height: DOTS_AREA_HEIGHT - spacing.sm,
     marginTop: spacing.sm,
+    alignItems: "center",
+    justifyContent: "center",
   },
   dotsRow: {
     flexDirection: "row",
@@ -455,6 +509,5 @@ const makeSliderStyles = (colors: ThemeColors) => StyleSheet.create({
   pageCounter: {
     ...textStyles.bodyExtraSmallStrong,
     color: colors.textTertiary, // text/default/tertiary
-    marginTop: spacing.xxs, // collé sous la pagination
   },
 });

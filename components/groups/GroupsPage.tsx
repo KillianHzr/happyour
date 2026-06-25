@@ -4,7 +4,7 @@ import { BlurredImageBackground } from "../atoms/BlurredImageBackground";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
 import { r2Storage } from "../../lib/r2";
-import { radii, spacing, textStyles, type ThemeColors } from "../../lib/theme";
+import { radii, spacing, textStyles, colors as darkColors, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import Icon from "../Icon";
 import { type ShapeName } from "../Shape";
@@ -532,10 +532,18 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
           contenu de la card tapée s'efface PAR-DESSUS le fond qui, lui, persiste et grandit. */}
       {showOverlay && (
         <Animated.View
-          style={[{ position: "absolute", borderRadius: radii.xl, overflow: "hidden" }, overlayAnimStyle as any]}
+          style={[
+            { position: "absolute", borderRadius: radii.xl, overflow: "hidden" },
+            // Groupe sans moment (pas d'image) : fond + bordure visibles, sinon le fond fantôme
+            // (≈ couleur de page) rend l'agrandissement imperceptible. On force les couleurs DARK
+            // (darkColors) car les cards liste/single sont toujours en thème sombre (ForceThemeMode) :
+            // sans ça, en mode light la transition flasherait en clair.
+            !openedGroup!.bgUrl && { borderWidth: 1, borderColor: darkColors.cardBorder },
+            overlayAnimStyle as any,
+          ]}
           pointerEvents="none"
         >
-          <MorphCard bgUrl={openedGroup!.bgUrl} bg={colors.bg} />
+          <MorphCard bgUrl={openedGroup!.bgUrl} bg={darkColors.card} />
         </Animated.View>
       )}
 
