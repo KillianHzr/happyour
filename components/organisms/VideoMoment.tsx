@@ -31,11 +31,6 @@ interface VideoMomentProps {
 
 const NAVBAR_HEIGHT = 100;
 
-// DEBUG helper: classify a URL as local file vs remote, without dumping the full string.
-const kindOf = (u?: string | null) =>
-  !u ? "none" : u.startsWith("file://") || u.includes("/cache/") || u.includes("Caches") ? "LOCAL" : "remote";
-
-
 export const VideoMoment = ({
   moment,
   currentUserId,
@@ -53,24 +48,12 @@ export const VideoMoment = ({
   const scrimColor = mode === "Dark" ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.85)";
   const [isPaused, setIsPaused] = useState(false);
   const [swapped, setSwapped] = useState(false);
+  // True once the player has buffered enough to start (status === "readyToPlay").
+  // We gate play() on this: calling play() before the asset is ready makes expo-video
+  // show a stale first frame for ~1s, then reset to 0 once it actually loads — the
+  // "play 1s, freeze, replay at 0" glitch on a return visit.
+  const [isReady, setIsReady] = useState(false);
   const isOwn = moment.user_id === currentUserId;
-
-  // ──────────────────────────────────────────────────────────────────────────
-  // DEBUG INSTRUMENTATION (remove once the freeze is understood)
-  // Each mounted instance gets a stable short id so we can tell a REMOUNT (new id)
-  // apart from a source swap on the SAME instance.
-  const dbgId = useRef(Math.random().toString(36).slice(2, 7)).current;
-  const dbgClip = (moment.image_path || "").slice(0, 16);
-  const dlog = (...args: any[]) =>
-    console.log(`[VID ${dbgId} ${dbgClip}]`, ...args);
-  const tMount = useRef(Date.now());
-  useEffect(() => {
-    dlog("MOUNT", { isVisible, cachedUrl: kindOf(cachedUrl) });
-    return () => dlog("UNMOUNT after", Date.now() - tMount.current, "ms");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  dlog("render", { isVisible, isPaused, swapped, src: kindOf(cachedUrl) });
-  // ──────────────────────────────────────────────────────────────────────────
 
   const uiOpacity = useSharedValue(1);
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -98,64 +81,69 @@ export const VideoMoment = ({
   const [sourceUrl, setSourceUrl] = useState<string | null>(cachedUrl || null);
   useEffect(() => {
     if (cachedUrl && cachedUrl !== sourceUrl && !isVisible) {
-      dlog("SOURCE UPGRADE (off-screen)", kindOf(sourceUrl), "->", kindOf(cachedUrl));
       setSourceUrl(cachedUrl);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cachedUrl, isVisible, sourceUrl]);
 
   const player = useVideoPlayer((!swapped && sourceUrl) ? sourceUrl : null, (p) => {
-    dlog("⚙️ NEW PLAYER created with source =", kindOf((!swapped && sourceUrl) ? sourceUrl : null));
     p.loop = true;
     p.muted = false;
-    p.timeUpdateEventInterval = 0.5; // DEBUG: emit timeUpdate every 0.5s so we can see the freeze
   });
 
   const isVisibleRef = useRef(isVisible ?? false);
   const isPausedRef = useRef(isPaused);
   const playerRef = useRef(player);
   playerRef.current = player;
+  isVisibleRef.current = isVisible ?? false;
+  isPausedRef.current = isPaused;
 
+  // Track readiness for the CURRENT player. A new player is created whenever the source
+  // changes (expo-video keys the player on the source), so this effect re-runs and resets
+  // readiness for it. We seed from the player's current status in case it's already buffered
+  // (e.g. a local file that loaded while the clip was off-screen).
   useEffect(() => {
-    isVisibleRef.current = isVisible ?? false;
-    isPausedRef.current = isPaused;
+    if (!player) return;
+    setIsReady(player.status === "readyToPlay");
+    const statusSub = player.addListener("statusChange", ({ status }: any) => {
+      setIsReady(status === "readyToPlay");
+    });
+    return () => statusSub.remove();
+  }, [player]);
+
+  // Play/pause control. We only PAUSE for visibility / pause-tap — never because of
+  // readiness. expo-video momentarily reports a non-"readyToPlay" status during normal
+  // playback (a buffer tick); pausing on that would freeze the clip ~1s in and never
+  // resume. So: when we want it playing, we start it only once it's ready (the readiness
+  // change re-runs this effect and starts it cleanly — no stale-frame/replay-0 glitch),
+  // and we leave it alone afterwards.
+  useEffect(() => {
     if (isVisible && !isPaused) {
-      dlog("▶️ play() [visibility effect]");
-      playerRef.current.play();
+      if (isReady) playerRef.current.play();
     } else {
-      dlog("⏸️ pause() [visibility effect]", { isVisible, isPaused });
       playerRef.current.pause();
     }
-  }, [isVisible, isPaused]);
+  }, [isVisible, isPaused, isReady]);
 
+  // Stall recovery: if playback drops out while we still want it playing (a momentary
+  // re-buffer), nudge it back after a short delay.
   useEffect(() => {
     if (!player) return;
     let stallTimer: ReturnType<typeof setTimeout> | null = null;
     const playingSub = player.addListener("playingChange", ({ isPlaying }) => {
-      dlog("playingChange ->", isPlaying, "@", player.currentTime?.toFixed?.(2));
       if (!isPlaying && isVisibleRef.current && !isPausedRef.current) {
         if (stallTimer) clearTimeout(stallTimer);
         stallTimer = setTimeout(() => {
           stallTimer = null;
           if (isVisibleRef.current && !isPausedRef.current && !playerRef.current?.playing) {
-            dlog("🔁 stall-recovery play()");
             playerRef.current.play();
           }
-        }, 200);
+        }, 300);
       }
     });
-    const statusSub = player.addListener("statusChange", ({ status, oldStatus, error }: any) => {
-      dlog("statusChange", oldStatus, "->", status, "@", player.currentTime?.toFixed?.(2), error ? `ERR:${error}` : "");
-    });
-    const timeSub = player.addListener("timeUpdate", ({ currentTime }: any) => {
-      dlog("⏱", currentTime?.toFixed?.(2), "playing=", player.playing, "buffered=", (player as any).bufferedPosition?.toFixed?.(2));
-    });
-    if (isVisibleRef.current && !isPausedRef.current) player.play();
     return () => {
       if (stallTimer) clearTimeout(stallTimer);
       playingSub.remove();
-      statusSub.remove();
-      timeSub.remove();
     };
   }, [player]);
 
@@ -206,9 +194,11 @@ export const VideoMoment = ({
 
     return (
       <>
-        <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center" }]} pointerEvents="none">
-          <ActivityIndicator size="large" color={colors.textMuted} />
-        </View>
+        {!isReady && (
+          <View style={[StyleSheet.absoluteFill, { justifyContent: "center", alignItems: "center" }]} pointerEvents="none">
+            <ActivityIndicator size="large" color={colors.textMuted} />
+          </View>
+        )}
         <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />
         {isVisible && isPaused && (
           <View style={styles.pauseOverlay} pointerEvents="none">
