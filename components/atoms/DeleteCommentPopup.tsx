@@ -8,11 +8,16 @@ import {
   Dimensions,
   Pressable,
 } from "react-native";
-import { radii as themeRadii, shadows, spacing, stroke, textStyles, type ThemeColors } from "../../lib/theme";
+import { radii as themeRadii, shadows, spacing, stroke, textStyles, glassBlurIntensity, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles, ForceTheme } from "../../lib/theme-context";
 import Svg, { Path } from "react-native-svg";
+import BlurView from "./BlurView";
+import { CommentItem, type Comment } from "../molecules/CommentItem";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+// Voile sombre plein écran posé derrière le commentaire sélectionné + le tooltip.
+const SCRIM_COLOR = "rgba(12, 12, 13, 0.20)";
 
 /** Rect écran (window) du commentaire visé, mesuré au long-press. */
 export interface CommentRect {
@@ -25,6 +30,9 @@ export interface CommentRect {
 interface DeleteCommentPopupProps {
   /** Rect écran du commentaire ciblé — le tooltip s'affiche juste en dessous. */
   rect: CommentRect;
+  /** Commentaire ciblé, ré-affiché AU-DESSUS du voile sombre. */
+  comment?: Comment | null;
+  groupMembers?: { user_id: string; username: string }[];
   onConfirm: () => void;
   onDismiss: () => void;
 }
@@ -34,6 +42,8 @@ const GAP_BELOW = 8;
 
 const DeleteCommentPopupInner = ({
   rect,
+  comment,
+  groupMembers = [],
   onConfirm,
   onDismiss,
 }: DeleteCommentPopupProps) => {
@@ -69,10 +79,27 @@ const DeleteCommentPopupInner = ({
   };
 
   return (
-    // 1. Pressable plein écran → capte un tap à l'extérieur pour fermer
-    // 2. Tooltip "Supprimer"
+    // 1. Voile sombre plein écran (tap à l'extérieur = fermer)
+    // 2. Commentaire ciblé ré-affiché AU-DESSUS du voile
+    // 3. Tooltip "Supprimer"
     <View style={[StyleSheet.absoluteFill, themedStyles.root]} pointerEvents="box-none">
-      <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} />
+      <Pressable style={[StyleSheet.absoluteFill, themedStyles.scrim]} onPress={onDismiss} />
+
+      {comment && (
+        <View
+          style={[themedStyles.raisedComment, { top: rect.y, left: rect.x, width: rect.width }]}
+          pointerEvents="none"
+        >
+          <CommentItem
+            item={comment}
+            isMyComment
+            isActive
+            animateIn={false}
+            onLongPressDelete={() => {}}
+            groupMembers={groupMembers}
+          />
+        </View>
+      )}
 
       <Animated.View
         style={[
@@ -87,6 +114,9 @@ const DeleteCommentPopupInner = ({
         ]}
         pointerEvents="auto"
       >
+        {/* Fond du bouton : flou (verre dépoli) + même voile sombre que le scrim. */}
+        <BlurView intensity={glassBlurIntensity} tint="dark" style={StyleSheet.absoluteFill} />
+        <View style={[StyleSheet.absoluteFill, themedStyles.popupTint]} pointerEvents="none" />
         <TouchableOpacity
           style={themedStyles.deleteButton}
           onPress={handleConfirm}
@@ -114,6 +144,14 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   root: {
     zIndex: 20,
   },
+  // Voile sombre plein écran posé par-dessus tout.
+  scrim: {
+    backgroundColor: SCRIM_COLOR,
+  },
+  // Conteneur du commentaire relevé au-dessus du voile (positionné sur son rect mesuré).
+  raisedComment: {
+    position: "absolute",
+  },
   // Parent : padding space/200 space/400, colonne, gap space/200, radius/300
   popup: {
     position: "absolute",
@@ -124,10 +162,14 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     alignItems: "flex-start",
     gap: spacing.sm,                  // space/200 = 8
     borderRadius: themeRadii.md,      // radius/300 = 12
-    backgroundColor: colors.opacityLight,
-    borderWidth: stroke.sm,
-    borderColor: colors.cardBorder,
+    overflow: "hidden",              // clippe le flou aux coins arrondis
+    borderWidth: stroke.sm,          // stroke/025 = 1
+    borderColor: colors.cardBorder,  // border/default/default
     ...shadows.md,
+  },
+  // Fond du bouton posé sur le flou.
+  popupTint: {
+    backgroundColor: "rgba(255, 255, 255, 0.60)",
   },
   // Inner : padding space/200, row centré, gap space/200
   deleteButton: {

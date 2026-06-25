@@ -852,6 +852,8 @@ function CommentModalContent({
           {deletePopup && (
             <DeleteCommentPopup
               rect={deletePopup.rect}
+              comment={comments.find((c) => c.id === deletePopup.commentId) ?? null}
+              groupMembers={fetchedGroupMembers}
               onConfirm={() => handleDeleteComment(deletePopup.commentId)}
               onDismiss={() => setDeletePopup(null)}
             />
@@ -923,6 +925,8 @@ function CommentModalContent({
       {deletePopup && (
         <DeleteCommentPopup
           rect={deletePopup.rect}
+          comment={comments.find((c) => c.id === deletePopup.commentId) ?? null}
+          groupMembers={fetchedGroupMembers}
           onConfirm={() => handleDeleteComment(deletePopup.commentId)}
           onDismiss={() => setDeletePopup(null)}
         />
