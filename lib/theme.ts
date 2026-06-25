@@ -587,6 +587,20 @@ export const blurIntensity = (px: number): number =>
 /** Intensité du flou "glass" (frosted), dérivée du token blur/glass (= blur.md). */
 export const glassBlurIntensity = blurIntensity(blur.md);
 
+/**
+ * Flou "card" — LE flou de référence de l'app pour un fond image flouté
+ * (cartes de groupe liste/single, coucou, et tous les fonds du reveal).
+ * = image floutée gaussienne (`blurRadius`) + voile sombre par-dessus.
+ *
+ * Forcé partout où un fond image flouté est utilisé, à la place des intensités
+ * `BlurView` ad hoc. Un seul endroit à régler pour changer le flou global.
+ * Voir le composant `BlurredImageBackground` qui l'applique.
+ */
+export const cardBlur = {
+  radius: 90,
+  overlay: "rgba(0,0,0,0.45)",
+} as const;
+
 // ─── Épaisseurs de trait (mode-indépendantes) ────────────────────────────────
 export const stroke = {
   sm: resolveToken("-> Size/stroke/025", "Value") as number,  // 1

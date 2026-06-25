@@ -1720,6 +1720,9 @@ export default function MainPagerScreen() {
               participants={connectedParticipants}
               onNotificationPress={handleOpenActivity}
               hasUnseenActivity={hasUnseenActivity}
+              // TODO: voir à la version finale — déclenchement de debug : tap sur le timer
+              // pour scroller tout en bas du reveal (couronne de la semaine), à retirer avant la release.
+              onTimerPress={() => photoFeedRef.current?.scrollToCrown?.()}
             />
           )}
           <PhotoFeed

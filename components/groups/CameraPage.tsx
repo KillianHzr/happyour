@@ -1804,7 +1804,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
             activeChallenge === null ? (
               <View style={[challengeStyles.topContainer, { paddingTop: cameraFrameTop + CHALLENGE_GAP }]} pointerEvents="box-none">
                 {/* Bouton INVISIBLE de déverrouillage reveal : zone libre entre le bord gauche
-                    de l'écran et le bouton Défis, à sa hauteur exacte. Aucun retour visuel. */}
+                    de l'écran et le bouton Défis, à sa hauteur exacte. Aucun retour visuel.
+                    TODO: voir à la version finale — bouton de debug pour déverrouiller le reveal
+                    pendant les démos/tests, à retirer (ou conditionner) avant la release. */}
                 {onDebugUnlock && defiBtnFrame && (
                   <TouchableOpacity
                     style={{ position: "absolute", top: defiBtnFrame.y, left: 0, width: defiBtnFrame.x, height: defiBtnFrame.height }}

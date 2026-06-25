@@ -1,8 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet, Animated } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Image } from "expo-image";
-import BlurView from "../atoms/BlurView";
+import { BlurredImageBackground } from "../atoms/BlurredImageBackground";
 import { ShapebandIcon } from "../atoms/ShapebandIcon";
 import { spacing, typography, radii, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
@@ -73,16 +72,7 @@ export const RevealEndPage = ({
   return (
     <View style={[styles.fullscreenPage, { paddingTop: insets.top }]}>
       <View style={styles.momentWrapper}>
-        {firstPhotoUrl ? (
-          <View style={StyleSheet.absoluteFill}>
-            <Image
-              source={{ uri: firstPhotoUrl }}
-              style={StyleSheet.absoluteFill}
-              contentFit="cover"
-            />
-            <BlurView intensity={75} tint="dark" style={StyleSheet.absoluteFill} />
-          </View>
-        ) : null}
+        <BlurredImageBackground uri={firstPhotoUrl} />
 
         <Animated.View style={[styles.middleContainer, { opacity, transform: [{ scale }] }]}>
           <View style={styles.shapebandContainer}>

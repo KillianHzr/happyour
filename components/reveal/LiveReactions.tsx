@@ -7,8 +7,8 @@ import {
   AppState,
   type AppStateStatus,
 } from "react-native";
-import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BlurredImageBackground } from "../atoms/BlurredImageBackground";
 import { supabase } from "../../lib/supabase";
 import Accelerometer from "expo-sensors/build/Accelerometer";
 import Svg, { Circle, Path } from "react-native-svg";
@@ -115,24 +115,11 @@ function WavingHand({
 // ─── BigWave — centred overlay shown on the waving user's own screen ──────────
 
 /**
- * Fond plein écran du coucou : exactement le fond des cards de groupe — image floutée
- * (blurRadius 90) + voile sombre rgba(0,0,0,0.45). Rendu derrière l'interface du coucou.
+ * Fond plein écran du coucou : exactement le fond des cards de groupe — flou "card"
+ * unifié (token `cardBlur`). Rendu derrière l'interface du coucou.
  */
 function WaveBackground({ url }: { url?: string | null }) {
-  if (!url) return null;
-  return (
-    <>
-      <Image
-        source={{ uri: url }}
-        style={StyleSheet.absoluteFillObject as any}
-        contentFit="cover"
-        transition={0}
-        cachePolicy="memory-disk"
-        blurRadius={90}
-      />
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.45)" }]} pointerEvents="none" />
-    </>
-  );
+  return <BlurredImageBackground uri={url} />;
 }
 
 function BigWave({

@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from "react";
 import { View, Text, StyleSheet, Animated } from "react-native";
 import { Svg, Path } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Image } from "expo-image";
+import { BlurredImageBackground } from "../atoms/BlurredImageBackground";
 import { TextSticker } from "../atoms/TextSticker";
 import { spacing, typography, radii, type ThemeColors } from "../../lib/theme";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
@@ -62,19 +62,7 @@ export const RevealIntroPage = ({
   return (
     <View style={[styles.fullscreenPage, { paddingTop: insets.top }]}>
       <View style={styles.momentWrapper}>
-        {firstPhotoUrl ? (
-          <View style={StyleSheet.absoluteFill}>
-            <Image
-              source={{ uri: firstPhotoUrl }}
-              style={StyleSheet.absoluteFill}
-              contentFit="cover"
-              transition={0}
-              cachePolicy="memory-disk"
-              blurRadius={38}
-            />
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.45)" }]} />
-          </View>
-        ) : null}
+        <BlurredImageBackground uri={firstPhotoUrl} />
 
         <Animated.View style={[styles.middleContainer, { opacity, transform: [{ scale }] }]}>
           <View style={styles.stickerWrapper}>

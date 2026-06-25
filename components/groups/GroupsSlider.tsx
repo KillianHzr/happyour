@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   ActivityIndicator, useWindowDimensions, Animated,
 } from "react-native";
-import { Image } from "expo-image";
+import { BlurredImageBackground } from "../atoms/BlurredImageBackground";
 import {
   radii, typography, spacing, stroke, textStyles,
   type ThemeColors,
@@ -147,19 +147,13 @@ const SliderCard = memo(function SliderCard({
       onPress={handlePress}
       style={[s.card, { width, height, marginRight }]}
     >
+      {/* Contenu clippé (coins arrondis) : fond flouté + infos. L'overflow:hidden vit ICI,
+          pas sur la card, pour que la bordure de sélection (rendue par-dessus, hors clip)
+          ne soit pas rognée — notamment en bas. */}
+      <View style={s.cardClip}>
       {card.bgUrl ? (
-        <>
-          {/* Flou STATIQUE (blurRadius) + voile sombre — léger (pas de BlurView live ×N cartes) */}
-          <Image
-            source={{ uri: card.bgUrl }}
-            style={StyleSheet.absoluteFillObject as any}
-            contentFit="cover"
-            transition={0}
-            cachePolicy="memory-disk"
-            blurRadius={90}
-          />
-          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.45)" }]} pointerEvents="none" />
-        </>
+        // Flou "card" unifié (token cardBlur) — statique, pas de BlurView live ×N cartes.
+        <BlurredImageBackground uri={card.bgUrl} />
       ) : (
         // Aucun moment → background/default/secondary (forcé dark via ForceThemeMode)
         <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.card }]} />
@@ -219,6 +213,7 @@ const SliderCard = memo(function SliderCard({
             )}
           </View>
         </Animated.View>
+      </View>
       </View>
       {borderOpacity && (
         <Animated.View
@@ -365,6 +360,12 @@ export default function GroupsSlider({ cards, revealDate, onSelect, showActiveBo
 
 const makeSliderStyles = (colors: ThemeColors) => StyleSheet.create({
   card: {
+    borderRadius: radii.xl,
+  },
+  // Calque clippé (coins arrondis) contenant le fond + le contenu. Séparé de `card` pour
+  // que la bordure de sélection, dessinée au-dessus hors de ce clip, ne soit pas rognée.
+  cardClip: {
+    ...StyleSheet.absoluteFillObject,
     borderRadius: radii.xl,
     overflow: "hidden",
     backgroundColor: "#0A0A0A",

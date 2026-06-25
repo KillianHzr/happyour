@@ -4,6 +4,7 @@ import {
   Platform, Animated, PanResponder,
 } from "react-native";
 import { Image } from "expo-image";
+import { BlurredImageBackground } from "../atoms/BlurredImageBackground";
 import { BlurView as NativeBlurView } from "@sbaiahmed1/react-native-blur";
 import LottieView from "lottie-react-native";
 import Reanimated, {
@@ -354,10 +355,7 @@ function RoomCard({ card, revealDate, unlocked, onCapture, onOpenChallenge, lott
         pointerEvents="none"
       >
         {card.bgUrl ? (
-          <>
-            <Image source={{ uri: card.bgUrl }} style={StyleSheet.absoluteFillObject as any} contentFit="cover" transition={0} cachePolicy="memory-disk" blurRadius={90} />
-            <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.45)" }]} pointerEvents="none" />
-          </>
+          <BlurredImageBackground uri={card.bgUrl} />
         ) : (
           <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.bg }]} />
         )}

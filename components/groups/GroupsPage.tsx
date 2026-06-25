@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Easing, Dimensions, BackHandler } from "react-native";
-import { Image } from "expo-image";
+import { BlurredImageBackground } from "../atoms/BlurredImageBackground";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
 import { r2Storage } from "../../lib/r2";
@@ -133,19 +133,7 @@ function midnightAfter(ts: number): number {
  */
 function MorphCard({ bgUrl, bg }: { bgUrl: string | null; bg: string }) {
   if (!bgUrl) return <View style={[StyleSheet.absoluteFillObject, { backgroundColor: bg }]} />;
-  return (
-    <>
-      <Image
-        source={{ uri: bgUrl }}
-        style={StyleSheet.absoluteFillObject as any}
-        contentFit="cover"
-        transition={0}
-        cachePolicy="memory-disk"
-        blurRadius={90}
-      />
-      <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.45)" }]} pointerEvents="none" />
-    </>
-  );
+  return <BlurredImageBackground uri={bgUrl} />;
 }
 
 export default function GroupsPage({ allGroups, groupData, revealConfig, isActive, userId, enterGroupId, onEnteredGroup, closeGroupSignal, onSelectGroup, onAddGroup, onGoToCapture, onOpenChallenge, onOpenReveal, onRevealStart, onCardFrame, onLottieFrame, onOpenSettings, onOpenArchives, onScrollLock, onDebugNamePress, debugUnlocked, photosVersion }: Props) {

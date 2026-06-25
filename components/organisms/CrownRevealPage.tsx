@@ -2,6 +2,7 @@ import * as React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Svg, Path } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BlurredImageBackground } from "../atoms/BlurredImageBackground";
 import { UserAvatar } from "../atoms/Avatar";
 import { CrownIcon } from "../atoms/CrownIcon";
 import { PhotoEntry } from "../../lib/feed-types";
@@ -43,6 +44,9 @@ export const CrownRevealPage = ({
 
   return (
     <View style={[styles.fullscreenPage, { paddingTop: paddingTopBottom, paddingBottom: paddingTopBottom }]}>
+      {/* Fond : photo de profil du couronné, floutée (flou "card" unifié). */}
+      <BlurredImageBackground uri={winner.avatar_url} />
+
       <View style={styles.crownRevealInner}>
         {/* Header Section */}
         <View style={styles.titleContainer}>
@@ -93,7 +97,10 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     height: "100%",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: colors.bg
+    backgroundColor: colors.bg,
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
+    overflow: "hidden",
   },
   crownRevealInner: {
     alignItems: "center",
