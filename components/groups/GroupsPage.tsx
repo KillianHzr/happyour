@@ -12,6 +12,7 @@ import GroupsSlider, { type GroupCard, type CardFrame } from "./GroupsSlider";
 import GroupRoom from "./GroupRoom";
 import GroupSearchSheet from "./GroupSearchSheet";
 import { type ActiveChallenge, TARGET_CHALLENGE_PROMPT, getChallengePrompt } from "../../lib/challenges";
+import { computeCrownWinner } from "../../lib/crown";
 import { hapticImpact } from "../../lib/haptics";
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -37,13 +38,26 @@ type GroupInfo = { id: string; name: string; invite_code?: string };
 
 // Données déjà chargées par [id].tsx (pas de fetch ici → cards instantanées)
 type GroupDataLike = {
-  photos: { image_path: string; created_at: string; url: string; user_id?: string }[]; // triées croissant
+  photos: { image_path: string; created_at: string; url: string; user_id?: string; video_thumbnail_url?: string | null }[]; // triées croissant
   photoCount: number; // moments depuis le dernier reveal (cycle courant)
   members: { avatar_url?: string | null; role?: string; user_id?: string; username?: string }[];
   crownWinnerId?: string | null;
   challenges?: { period1: any | null; period2: any | null } | null;
   currentUserRespondedToChallenge?: boolean;
 };
+
+/**
+ * URL d'image de fond pour un moment (comme l'intro du reveal) :
+ *  - photo / dessin → l'image elle-même,
+ *  - vidéo → la 1re frame (vignette),
+ *  - texte / audio → pas de visuel (null).
+ */
+function momentBgUrl(p: { image_path: string; url?: string; video_thumbnail_url?: string | null }): string | null {
+  const ip = p.image_path;
+  if (ip === "text_mode" || ip.endsWith(".m4a")) return null;
+  if (ip.endsWith(".mp4")) return p.video_thumbnail_url ?? null;
+  return p.url ?? null; // photo OU dessin (_draw) = jpg
+}
 
 type Props = {
   allGroups: GroupInfo[];
@@ -152,8 +166,12 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
   const lastRevealTs = revealDate.getTime() - WEEK_MS;
   const unlockedDefault = (Date.now() - lastRevealTs < DAY_MS) || !!debugUnlocked;
 
-  // Champs dynamiques rafraîchis par le fetch à l'arrivée (uniquement ce qui change)
-  type CardOverride = { momentCount: number; shape: ShapeName | null; bgUrl: string | null; unlocked: boolean };
+  // Champs dynamiques rafraîchis par le fetch (tout ce qui change ENSEMBLE : nb moments, shape,
+  // fond, état reveal ET couronne → même timing d'update, plus de couronne en décalé).
+  type CardOverride = {
+    momentCount: number; shape: ShapeName | null; bgUrl: string | null; unlocked: boolean;
+    crownUsername: string | null; crownAvatarUrl: string | null;
+  };
   const [overrides, setOverrides] = useState<Record<string, CardOverride>>({});
 
   // Base instantanée dérivée des données déjà chargées par [id].tsx (aucune attente).
@@ -164,11 +182,13 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
       const lastMoment = photos.length ? photos[photos.length - 1] : undefined; // triées croissant
       const momentCount = gd?.photoCount ?? 0; // moments depuis le dernier reveal
 
-      // Fond : dernière vraie photo (sinon avatar du chef). Aucun moment → null = fond dark.
+      // Fond : dernier moment visuel (photo/dessin, ou 1re frame d'une vidéo). À défaut (que du
+      // texte/audio) → avatar du chef. Aucun moment → null = fond dark.
       let bgUrl: string | null = null;
       if (momentCount > 0) {
         for (let i = photos.length - 1; i >= 0; i--) {
-          if (isPhotoPath(photos[i].image_path) && photos[i].url) { bgUrl = photos[i].url; break; }
+          const u = momentBgUrl(photos[i]);
+          if (u) { bgUrl = u; break; }
         }
         if (!bgUrl) {
           const admin = gd?.members?.find((m) => m.role === "admin");
@@ -215,7 +235,7 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
     // On applique les champs rafraîchis (fond, nombre de moments, shape, état reveal) sans réordonner
     return built.map((c) => {
       const o = overrides[c.id];
-      return o ? { ...c, momentCount: o.momentCount, shape: o.shape, bgUrl: o.bgUrl, unlocked: o.unlocked } : c;
+      return o ? { ...c, momentCount: o.momentCount, shape: o.shape, bgUrl: o.bgUrl, unlocked: o.unlocked, crownUsername: o.crownUsername, crownAvatarUrl: o.crownAvatarUrl } : c;
     });
   }, [allGroups, groupData, overrides, unlockedDefault]);
 
@@ -234,8 +254,8 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
     await Promise.all(
       allGroups.map(async (g) => {
         const [photosRes, membersRes] = await Promise.all([
-          supabase.from("photos").select("image_path, created_at").eq("group_id", g.id).order("created_at", { ascending: false }),
-          supabase.from("group_members").select("role, profiles:user_id(avatar_url)").eq("group_id", g.id),
+          supabase.from("photos").select("image_path, created_at, user_id, video_thumbnail_path").eq("group_id", g.id).order("created_at", { ascending: false }),
+          supabase.from("group_members").select("role, user_id, profiles:user_id(username, avatar_url)").eq("group_id", g.id),
         ]);
         const photos = photosRes.data ?? [];
 
@@ -258,12 +278,36 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
           return t >= windowStart && t < windowEnd;
         });
         const last = windowed[0] as any | undefined;
-        const lastPhoto = windowed.find((p: any) => isPhotoPath(p.image_path)) as any | undefined;
-        const admin = (membersRes.data ?? []).find((m: any) => m.role === "admin");
-        const chiefAvatar = (admin as any)?.profiles?.avatar_url ?? null;
+        const members = (membersRes.data ?? []) as any[];
+        const admin = members.find((m) => m.role === "admin");
+        const chiefAvatar = admin?.profiles?.avatar_url ?? null;
         const momentCount = windowed.length;
-        // Aucun moment → pas de fond (null = background/default/secondary dark)
-        const bgUrl = momentCount > 0 ? (lastPhoto ? r2Storage.getPublicUrl(lastPhoto.image_path) : chiefAvatar) : null;
+
+        // Fond : dernier moment visuel (photo/dessin, ou 1re frame d'une vidéo) ; à défaut chef.
+        const bgFromMoment = (p: any): string | null => {
+          const ip: string = p.image_path;
+          if (ip === "text_mode" || ip.endsWith(".m4a")) return null;
+          if (ip.endsWith(".mp4")) return p.video_thumbnail_path ? r2Storage.getPublicUrl(p.video_thumbnail_path) : null;
+          return r2Storage.getPublicUrl(ip); // photo OU dessin
+        };
+        let bgUrl: string | null = null;
+        if (momentCount > 0) {
+          for (const p of windowed) { const u = bgFromMoment(p); if (u) { bgUrl = u; break; } } // windowed = récent→ancien
+          if (!bgUrl) bgUrl = chiefAvatar;
+        }
+
+        // Couronne : recalculée ICI, sur la MÊME fenêtre que [id].tsx (collecte → jusqu'au
+        // prochain reveal ; révélée → la semaine révélée) et la MÊME récupération que le reste
+        // (nb moments / fond) → mise à jour synchrone, plus de décalage.
+        const crownEnd = windowEnd === Infinity ? lastReveal + WEEK_MS : windowEnd;
+        const crown = computeCrownWinner(
+          windowed.map((p: any) => ({ user_id: p.user_id, created_at: p.created_at })) as any,
+          new Date(windowStart),
+          new Date(crownEnd),
+        );
+        const winner = crown ? members.find((m) => m.user_id === crown.winnerId) : undefined;
+        const winnerProfile: any = Array.isArray(winner?.profiles) ? winner?.profiles?.[0] : winner?.profiles;
+
         // Reveal accessible pour CE groupe uniquement tant qu'on affiche une vraie fenêtre reveal.
         const unlocked = showRevealed || !!debugUnlocked;
         setOverrides((prev) => ({
@@ -273,6 +317,8 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
             shape: last ? imagePathToShape(last.image_path) : null,
             bgUrl,
             unlocked,
+            crownUsername: winnerProfile?.username ?? null,
+            crownAvatarUrl: winnerProfile?.avatar_url ?? null,
           },
         }));
       })
@@ -340,7 +386,7 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
     if (phase === "opening" && startFrame && singleFrame && !morphStartedRef.current) {
       morphStartedRef.current = true;
       Animated.timing(morph, {
-        toValue: 1, duration: 460, easing: Easing.out(Easing.cubic), useNativeDriver: false,
+        toValue: 1, duration: 460, easing: Easing.out(Easing.cubic), useNativeDriver: true,
       }).start(({ finished }) => {
         if (finished) { setPhase("single"); setIntroKey((k) => k + 1); }
       });
@@ -399,7 +445,7 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
         closeTimerRef.current = setTimeout(() => {
           setPhase("closingGrow");
           Animated.timing(morph, {
-            toValue: 0, duration: 440, easing: Easing.inOut(Easing.cubic), useNativeDriver: false,
+            toValue: 0, duration: 440, easing: Easing.inOut(Easing.cubic), useNativeDriver: true,
           }).start(({ finished }) => { if (finished) resetToList(); });
         }, 280);
         return "closingOut";
@@ -472,13 +518,20 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
     opacity: morph.interpolate({ inputRange: [0, 0.4], outputRange: [1, 0], extrapolate: "clamp" }),
     transform: [{ translateY: morph.interpolate({ inputRange: [0, 0.4], outputRange: [0, -20], extrapolate: "clamp" }) }],
   };
-  // Card fantôme : SEUL le fond (image + flou) interpolé de la frame liste → frame single. Le
-  // même fond persiste tout du long (pas de crossfade) ; la single prend le relais à l'identique.
+  // Card fantôme : posée à la taille FINALE (single) et amenée à la taille liste via un
+  // transform NATIF (scale + translate). L'image floutée n'est rastérisée qu'une fois → le GPU
+  // la met à l'échelle (aucun re-flou par frame) → fluide même avec un dessin lourd en fond.
   const overlayAnimStyle = (startFrame && singleFrame) ? {
-    left: morph.interpolate({ inputRange: [0, 1], outputRange: [startFrame.x, singleFrame.x] }),
-    top: morph.interpolate({ inputRange: [0, 1], outputRange: [startFrame.y, singleFrame.y] }),
-    width: morph.interpolate({ inputRange: [0, 1], outputRange: [startFrame.width, singleFrame.width] }),
-    height: morph.interpolate({ inputRange: [0, 1], outputRange: [startFrame.height, singleFrame.height] }),
+    left: singleFrame.x,
+    top: singleFrame.y,
+    width: singleFrame.width,
+    height: singleFrame.height,
+    transform: [
+      { translateX: morph.interpolate({ inputRange: [0, 1], outputRange: [(startFrame.x + startFrame.width / 2) - (singleFrame.x + singleFrame.width / 2), 0] }) },
+      { translateY: morph.interpolate({ inputRange: [0, 1], outputRange: [(startFrame.y + startFrame.height / 2) - (singleFrame.y + singleFrame.height / 2), 0] }) },
+      { scaleX: morph.interpolate({ inputRange: [0, 1], outputRange: [startFrame.width / singleFrame.width, 1] }) },
+      { scaleY: morph.interpolate({ inputRange: [0, 1], outputRange: [startFrame.height / singleFrame.height, 1] }) },
+    ],
   } : null;
   const showOverlay = (phase === "opening" || phase === "closingGrow") && !!overlayAnimStyle && !!openedGroup;
   // La single (vraie) est montée en continu (pour mesurer son fond), mais n'est VISIBLE qu'une

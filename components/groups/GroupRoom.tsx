@@ -14,6 +14,8 @@ import Reanimated, {
   interpolate,
   Extrapolation,
   Easing,
+  FadeIn,
+  FadeOut,
   runOnJS,
   type SharedValue,
 } from "react-native-reanimated";
@@ -342,16 +344,24 @@ function RoomCard({ card, revealDate, unlocked, onCapture, onOpenChallenge, lott
 
   return (
     <View ref={cardRef} style={s.card} onLayout={measureCard} collapsable={false}>
-      {card.bgUrl ? (
-        <>
-          {/* Flou STATIQUE (blurRadius) + voile sombre — léger (pas de BlurView live) et
-              identique au filmstrip → raccord card↔transition propre. */}
-          <Image source={{ uri: card.bgUrl }} style={StyleSheet.absoluteFillObject as any} contentFit="cover" transition={0} cachePolicy="memory-disk" blurRadius={90} />
-          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.45)" }]} pointerEvents="none" />
-        </>
-      ) : (
-        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.bg }]} />
-      )}
+      {/* Fond : crossfade quand le dernier moment change (clé = bgUrl). Le fond reste l'image
+          floutée + voile sombre, identique à l'intro du reveal (vidéo → 1re frame, dessin → image). */}
+      <Reanimated.View
+        key={card.bgUrl ?? "none"}
+        entering={FadeIn.duration(320)}
+        exiting={FadeOut.duration(320)}
+        style={StyleSheet.absoluteFillObject}
+        pointerEvents="none"
+      >
+        {card.bgUrl ? (
+          <>
+            <Image source={{ uri: card.bgUrl }} style={StyleSheet.absoluteFillObject as any} contentFit="cover" transition={0} cachePolicy="memory-disk" blurRadius={90} />
+            <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.45)" }]} pointerEvents="none" />
+          </>
+        ) : (
+          <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.bg }]} />
+        )}
+      </Reanimated.View>
 
       <View style={s.cardContent}>
         {/* ── Haut : no-capture (0 moment) ou top-infos (≥1 moment) ── */}
@@ -375,7 +385,12 @@ function RoomCard({ card, revealDate, unlocked, onCapture, onOpenChallenge, lott
                 {card.challengeShape && <Shape name={card.challengeShape} size={20} color={colors.icon} />}
               </TouchableOpacity>
             )}
-            <View style={s.tagQueenKing}>
+            {/* Couronne : fond en fondu quand le porteur change (clé = pseudo+avatar). */}
+            <Reanimated.View
+              style={s.tagQueenKing}
+              key={`crown-${card.crownUsername ?? ""}-${card.crownAvatarUrl ?? ""}`}
+              entering={FadeIn.duration(300)}
+            >
               <View style={s.avatar}>
                 {card.crownAvatarUrl ? (
                   <Image source={{ uri: card.crownAvatarUrl }} style={s.avatarImg as any} contentFit="cover" />
@@ -390,7 +405,7 @@ function RoomCard({ card, revealDate, unlocked, onCapture, onOpenChallenge, lott
                 <Text style={s.queenKingName} numberOfLines={1} ellipsizeMode="tail">{card.crownUsername ?? "—"}</Text>
                 <Text style={s.queenKingLabel}>Couronne</Text>
               </View>
-            </View>
+            </Reanimated.View>
           </Reanimated.View>
           </View>
         )}
@@ -402,7 +417,8 @@ function RoomCard({ card, revealDate, unlocked, onCapture, onOpenChallenge, lott
           ) : (
             <>
               {hasMoments ? (
-                <Reanimated.View style={lottieChromeStyle} pointerEvents="none">
+                // Clé = type du dernier moment → le Lottie change en fondu quand le type change.
+                <Reanimated.View key={`lottie-${card.shape ?? ""}`} entering={FadeIn.duration(300)} style={lottieChromeStyle} pointerEvents="none">
                   <Reanimated.View ref={lottieRef} style={[s.lottieWrap, lottieOpacityStyle]} pointerEvents="none">
                     <ReanimatedLottie
                       source={lottieSource}
@@ -421,7 +437,8 @@ function RoomCard({ card, revealDate, unlocked, onCapture, onOpenChallenge, lott
               )}
               <View style={s.countMask}>
                 <Reanimated.View style={[s.dataTextRow, countExitStyle]}>
-                  <Text style={s.momentCount}>{card.momentCount}</Text>
+                  {/* Le nombre se met à jour en fondu (clé = valeur). */}
+                  <Reanimated.Text key={card.momentCount} entering={FadeIn.duration(260)} style={s.momentCount}>{card.momentCount}</Reanimated.Text>
                   <Text style={s.momentLabel}>Moments</Text>
                 </Reanimated.View>
               </View>
