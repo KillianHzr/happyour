@@ -21,6 +21,7 @@ import { radii, spacing, stroke, textStyles, type ThemeColors } from "../../lib/
 import { useTheme, useThemedStyles, ForceThemeMode } from "../../lib/theme-context";
 import Shape, { type ShapeName } from "../Shape";
 import Icon from "../Icon";
+import { CloseIcon } from "./GroupIcons";
 import { getRevealLottie } from "./revealLottie";
 import type { GroupCard } from "./GroupsSlider";
 import { hapticUnlockStart, hapticUnlockUpdate, hapticUnlockUpdateRaw, hapticUnlockStop } from "../../lib/haptics";
@@ -264,7 +265,7 @@ export default function GroupRoom(props: Props) {
           <Reanimated.View style={[headerStyles.headerLeft, leftExitStyle]}>
             {showBack && (
               <TouchableOpacity style={headerStyles.iconBtn} onPress={onBack} activeOpacity={0.7}>
-                <Icon name="chevron-left" size={20} color={colors.icon} />
+                <CloseIcon />
               </TouchableOpacity>
             )}
             {onDebugNamePress ? (
