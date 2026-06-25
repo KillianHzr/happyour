@@ -1,6 +1,12 @@
 import { Platform, Vibration } from "react-native";
 import * as Haptics from "expo-haptics";
-import { playAhap } from "../modules/ahap-haptics/src";
+import {
+  playAhap,
+  hasContinuousHaptics,
+  startContinuousAhap,
+  updateContinuousAhap,
+  stopContinuousAhap,
+} from "../modules/ahap-haptics/src";
 import envoiePattern from "../assets/haptics/envoie.json";
 import revealPattern from "../assets/haptics/reveal.json";
 import coucouPattern from "../assets/haptics/coucou.json";
@@ -54,4 +60,62 @@ export function hapticSend(): void {
 /** Vibration jouée au déverrouillage du reveal. */
 export function hapticReveal(): void {
   playAhap(revealPattern as object);
+}
+
+// ── Retour haptique continu à intensité dynamique (slider de déverrouillage du groupe) ──
+//
+// Tant qu'on maintient le doigt, ça vibre ; l'intensité suit le pourcentage de slide (0→1),
+// et continue de s'adapter même si le doigt est immobile sur le nob.
+// iOS : lecteur continu Core Haptics (intensité ajustée en direct).
+// Android (module natif iOS absent) : on émule par des `Vibration.vibrate` répétés dont la
+// cadence se resserre quand l'intensité monte → sensation de montée en puissance.
+
+let androidPulseTimer: ReturnType<typeof setInterval> | null = null;
+let androidPulseProgress = 0; // 0–1, lu par le timer
+
+function androidPulseTick(): void {
+  // Plus on est proche de 1, plus les impulsions sont rapprochées et longues.
+  const p = androidPulseProgress;
+  if (p <= 0.001) return;
+  Vibration.vibrate(Math.round(8 + p * 22)); // 8ms → 30ms
+}
+
+/** Démarre le retour continu du slider. `progress` 0–1 = pourcentage de slide initial. */
+export function hapticUnlockStart(progress: number): void {
+  const p = Math.max(0, Math.min(1, progress));
+  if (Platform.OS === "ios" && hasContinuousHaptics) {
+    // Intensité plancher pour qu'on sente déjà quelque chose dès la prise, montée jusqu'à 1.
+    // Netteté qui monte aussi → plus "mordant" en fin de course.
+    startContinuousAhap(0.15 + p * 0.85, 0.3 + p * 0.7);
+    return;
+  }
+  // Android : pulsations périodiques pilotées par la progression.
+  androidPulseProgress = p;
+  if (androidPulseTimer == null) {
+    androidPulseTimer = setInterval(androidPulseTick, 60);
+  }
+}
+
+/** Met à jour l'intensité du retour continu en fonction du pourcentage de slide (0–1). */
+export function hapticUnlockUpdate(progress: number): void {
+  const p = Math.max(0, Math.min(1, progress));
+  if (Platform.OS === "ios" && hasContinuousHaptics) {
+    updateContinuousAhap(0.15 + p * 0.85, 0.3 + p * 0.7);
+    return;
+  }
+  androidPulseProgress = p;
+}
+
+/** Arrête le retour continu (doigt relâché / déverrouillage déclenché). */
+export function hapticUnlockStop(): void {
+  if (Platform.OS === "ios" && hasContinuousHaptics) {
+    stopContinuousAhap();
+    return;
+  }
+  if (androidPulseTimer != null) {
+    clearInterval(androidPulseTimer);
+    androidPulseTimer = null;
+  }
+  androidPulseProgress = 0;
+  Vibration.cancel();
 }

@@ -23,6 +23,7 @@ import Shape, { type ShapeName } from "../Shape";
 import Icon from "../Icon";
 import { getRevealLottie } from "./revealLottie";
 import type { GroupCard } from "./GroupsSlider";
+import { hapticUnlockStart, hapticUnlockUpdate, hapticUnlockStop } from "../../lib/haptics";
 
 const ReanimatedLottie = Reanimated.createAnimatedComponent(LottieView);
 
@@ -60,11 +61,26 @@ function UnlockSlider({ onUnlock }: { onUnlock: () => void }) {
   const maxWidthRef = useRef(NOB_MIN);
   const firedRef = useRef(false);
 
+  // Sécurité : si le slider se démonte alors que le doigt est encore posé (release/terminate
+  // non émis), on coupe le retour haptique continu pour ne pas le laisser tourner.
+  useEffect(() => () => hapticUnlockStop(), []);
+
+  // Progression 0→1 du nob (pour piloter l'intensité haptique).
+  const progressFor = (w: number) => {
+    const maxW = maxWidthRef.current;
+    const span = Math.max(1, maxW - NOB_MIN);
+    return Math.max(0, Math.min(1, (w - NOB_MIN) / span));
+  };
+
   const pan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 2,
-      onPanResponderGrant: () => { firedRef.current = false; },
+      onPanResponderGrant: () => {
+        firedRef.current = false;
+        // Démarre le retour haptique continu dès la prise du nob (intensité = progression).
+        hapticUnlockStart(progressFor(NOB_MIN));
+      },
       onPanResponderMove: (_e, g) => {
         if (firedRef.current) return;
         const maxW = maxWidthRef.current;
@@ -76,17 +92,22 @@ function UnlockSlider({ onUnlock }: { onUnlock: () => void }) {
         if (w >= maxW - 2) {
           firedRef.current = true;
           widthAnim.setValue(maxW);
+          hapticUnlockStop(); // le déverrouillage joue sa propre vibration (hapticReveal)
           onUnlock();
           setTimeout(() => widthAnim.setValue(NOB_MIN), 800);
           return;
         }
         widthAnim.setValue(w);
+        // Ajuste l'intensité en direct selon la progression (continue même doigt immobile).
+        hapticUnlockUpdate(progressFor(w));
       },
       onPanResponderRelease: () => {
+        hapticUnlockStop();
         if (firedRef.current) return; // reset géré par le timeout après l'ouverture du reveal
         Animated.spring(widthAnim, { toValue: NOB_MIN, useNativeDriver: false }).start();
       },
       onPanResponderTerminate: () => {
+        hapticUnlockStop();
         if (firedRef.current) return;
         Animated.spring(widthAnim, { toValue: NOB_MIN, useNativeDriver: false }).start();
       },

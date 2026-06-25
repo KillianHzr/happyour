@@ -7,6 +7,10 @@ public class SeamlessRecorderView: ExpoView {
   // MARK: - Session
   private let session = AVCaptureSession()
   private var currentCameraPosition: AVCaptureDevice.Position = .back
+  // Caméra demandée par la prop `facing` (avant/arrière). La config initiale l'utilise pour
+  // démarrer DIRECTEMENT sur la bonne caméra, sans flash arrière→avant à chaque (re)montage.
+  private var requestedFacing: AVCaptureDevice.Position = .back
+  private var didConfigureSession = false
   private var videoDeviceInput: AVCaptureDeviceInput?
 
   private let videoOutput = AVCaptureVideoDataOutput()
@@ -63,7 +67,10 @@ public class SeamlessRecorderView: ExpoView {
     previewLayer.session = session
     previewLayer.videoGravity = .resizeAspectFill
     layer.addSublayer(previewLayer)
-    setupSession()
+    // Différé d'un tick de la main-runloop : Expo applique les props (dont `facing`) juste
+    // après l'init, sur le main thread, avant ce bloc → `requestedFacing` est déjà à jour et
+    // la session démarre DIRECTEMENT sur la bonne caméra (plus de switch arrière→avant visible).
+    DispatchQueue.main.async { [weak self] in self?.setupSession() }
   }
 
   public override func layoutSubviews() {
@@ -108,7 +115,7 @@ public class SeamlessRecorderView: ExpoView {
       guard let self else { return }
       self.session.beginConfiguration()
       self.session.sessionPreset = .hd1280x720
-      self.addCameraInput(position: .back)
+      self.addCameraInput(position: self.requestedFacing)
       self.addAudioInput()
       self.addOutputs()
       self.session.commitConfiguration()
@@ -116,6 +123,7 @@ public class SeamlessRecorderView: ExpoView {
       self.setPortraitOrientation(on: self.videoOutput.connection(with: .video))
       self.applyCurrentZoom()
       self.session.startRunning()
+      self.didConfigureSession = true
     }
   }
 
@@ -192,7 +200,10 @@ public class SeamlessRecorderView: ExpoView {
 
   func setFacing(_ facing: String) {
     let position: AVCaptureDevice.Position = (facing == "front") ? .front : .back
-    guard position != currentCameraPosition, !isWriting else { return }
+    requestedFacing = position
+    // Avant la config initiale : on stocke juste la valeur, setupSession démarre dessus.
+    // Après : on switch seulement si la caméra change réellement.
+    guard didConfigureSession, position != currentCameraPosition, !isWriting else { return }
     sessionQueue.async { [weak self] in self?.switchCamera(to: position) }
   }
 
