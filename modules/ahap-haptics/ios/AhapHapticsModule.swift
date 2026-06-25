@@ -70,21 +70,27 @@ public class AhapHapticsModule: Module {
       // Stoppe un éventuel lecteur précédent avant d'en recréer un.
       try? continuousPlayer?.stop(atTime: CHHapticTimeImmediate)
 
-      // Événement continu de longue durée (30s) : on ne le laisse jamais finir tout seul,
-      // c'est stopContinuous (relâchement du doigt) qui l'arrête.
+      // IMPORTANT : `hapticIntensityControl` (paramètre dynamique) est un MULTIPLICATEUR de
+      // l'intensité de base de l'événement. On crée donc l'événement à intensité PLEINE (1.0)
+      // pour que le contrôle dynamique 0–1 corresponde directement à l'intensité ressentie.
+      // (Avant, la base valait l'intensité de départ ~0.15 → tout était plafonné très bas →
+      // on ne sentait quasi rien jusqu'à la fin.)
       let event = CHHapticEvent(
         eventType: .hapticContinuous,
         parameters: [
-          CHHapticEventParameter(parameterID: .hapticIntensity, value: clamp01(intensity)),
-          CHHapticEventParameter(parameterID: .hapticSharpness, value: clamp01(sharpness)),
+          CHHapticEventParameter(parameterID: .hapticIntensity, value: 1.0),
+          // Base neutre 0.5 ; la netteté réelle est pilotée par l'offset dynamique (cf. update).
+          CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.5),
         ],
         relativeTime: 0,
-        duration: 30
+        duration: 30 // longue durée ; c'est stopContinuous (doigt relâché) qui l'arrête.
       )
       let pattern = try CHHapticPattern(events: [event], parameters: [])
       let player = try engine?.makeAdvancedPlayer(with: pattern)
       try player?.start(atTime: CHHapticTimeImmediate)
       continuousPlayer = player
+      // Applique l'intensité de départ via le contrôle dynamique.
+      updateContinuous(intensity: intensity, sharpness: sharpness)
     } catch {
       // Best-effort.
     }
@@ -92,10 +98,11 @@ public class AhapHapticsModule: Module {
 
   private func updateContinuous(intensity: Float, sharpness: Float) {
     guard let player = continuousPlayer else { return }
-    // Paramètres dynamiques appliqués en direct, sans recréer le pattern → vibration fluide.
+    // Intensité = multiplicateur 0–1 appliqué en direct (base événement = 1.0).
+    // Netteté = offset additif (base 0.5) → on recadre autour de 0.5.
     let params = [
       CHHapticDynamicParameter(parameterID: .hapticIntensityControl, value: clamp01(intensity), relativeTime: 0),
-      CHHapticDynamicParameter(parameterID: .hapticSharpnessControl, value: clamp01(sharpness), relativeTime: 0),
+      CHHapticDynamicParameter(parameterID: .hapticSharpnessControl, value: max(-1, min(1, sharpness - 0.5)), relativeTime: 0),
     ]
     try? player.sendParameters(params, atTime: CHHapticTimeImmediate)
   }

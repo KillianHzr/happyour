@@ -74,19 +74,23 @@ let androidPulseTimer: ReturnType<typeof setInterval> | null = null;
 let androidPulseProgress = 0; // 0–1, lu par le timer
 
 function androidPulseTick(): void {
-  // Plus on est proche de 1, plus les impulsions sont rapprochées et longues.
+  // Plancher net (déjà senti dès la prise) + durée qui monte avec la progression.
   const p = androidPulseProgress;
-  if (p <= 0.001) return;
-  Vibration.vibrate(Math.round(8 + p * 22)); // 8ms → 30ms
+  Vibration.vibrate(Math.round(18 + p * 22)); // 18ms → 40ms
 }
+
+// Courbe d'intensité du slider : plancher élevé (déjà bien senti dès la prise) + montée rapide
+// via une racine (le milieu cogne fort), jusqu'à 1.0 plein en fin de course.
+// p=0 → 0.5 ; p=0.25 → 0.75 ; p=0.5 → 0.85 ; p=1 → 1.0.
+const unlockIntensity = (p: number) => 0.5 + 0.5 * Math.sqrt(p);
+// Netteté qui monte aussi → plus "mordant" vers la fin.
+const unlockSharpness = (p: number) => 0.4 + 0.6 * p;
 
 /** Démarre le retour continu du slider. `progress` 0–1 = pourcentage de slide initial. */
 export function hapticUnlockStart(progress: number): void {
   const p = Math.max(0, Math.min(1, progress));
   if (Platform.OS === "ios" && hasContinuousHaptics) {
-    // Intensité plancher pour qu'on sente déjà quelque chose dès la prise, montée jusqu'à 1.
-    // Netteté qui monte aussi → plus "mordant" en fin de course.
-    startContinuousAhap(0.15 + p * 0.85, 0.3 + p * 0.7);
+    startContinuousAhap(unlockIntensity(p), unlockSharpness(p));
     return;
   }
   // Android : pulsations périodiques pilotées par la progression.
@@ -100,7 +104,7 @@ export function hapticUnlockStart(progress: number): void {
 export function hapticUnlockUpdate(progress: number): void {
   const p = Math.max(0, Math.min(1, progress));
   if (Platform.OS === "ios" && hasContinuousHaptics) {
-    updateContinuousAhap(0.15 + p * 0.85, 0.3 + p * 0.7);
+    updateContinuousAhap(unlockIntensity(p), unlockSharpness(p));
     return;
   }
   androidPulseProgress = p;
