@@ -67,6 +67,7 @@ type Props = {
   onScrollLock?: (locked: boolean) => void;
   onDebugNamePress?: () => void;       // DEV : clic sur le nom du groupe → menu debug
   debugUnlocked?: boolean;             // DEV : force l'état déverrouillé du reveal
+  photosVersion?: number;              // ++ à chaque nouveau moment → refresh (même en single ouverte)
 };
 
 /** Mappe un image_path vers la shape du moment correspondant. */
@@ -133,7 +134,7 @@ function MorphCard({ bgUrl, bg }: { bgUrl: string | null; bg: string }) {
   );
 }
 
-export default function GroupsPage({ allGroups, groupData, revealConfig, isActive, userId, enterGroupId, onEnteredGroup, closeGroupSignal, onSelectGroup, onAddGroup, onGoToCapture, onOpenChallenge, onOpenReveal, onRevealStart, onCardFrame, onLottieFrame, onOpenSettings, onOpenArchives, onScrollLock, onDebugNamePress, debugUnlocked }: Props) {
+export default function GroupsPage({ allGroups, groupData, revealConfig, isActive, userId, enterGroupId, onEnteredGroup, closeGroupSignal, onSelectGroup, onAddGroup, onGoToCapture, onOpenChallenge, onOpenReveal, onRevealStart, onCardFrame, onLottieFrame, onOpenSettings, onOpenArchives, onScrollLock, onDebugNamePress, debugUnlocked, photosVersion }: Props) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
@@ -281,6 +282,13 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
   useEffect(() => {
     if (isActive) refresh();
   }, [isActive, refresh]);
+
+  // Nouveau moment posté (realtime) → recalcule les overrides (nb moments / shape / fond) même
+  // quand on est dans la single d'un groupe, sinon la vue resterait figée sur des valeurs périmées.
+  useEffect(() => {
+    if (photosVersion && isActive) refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [photosVersion]);
 
   const singleGroup = cards.length === 1;
   const selectionShown = !singleGroup && !viewingGroupId;

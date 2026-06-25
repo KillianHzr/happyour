@@ -139,6 +139,9 @@ export default function MainPagerScreen() {
   // Group data (all groups preloaded)
   const [groupData, setGroupData] = useState<Record<string, GroupData>>({});
   const [dataLoaded, setDataLoaded] = useState(false);
+  // Incrémenté à chaque nouveau moment (realtime) → force GroupsPage à rafraîchir ses overrides
+  // (nb moments / shape / fond) même quand on est dans la single d'un groupe.
+  const [photosVersion, setPhotosVersion] = useState(0);
   const [revealConfig, setRevealConfig] = useState({ day: 0, hour: 20 });
 
   // User profile
@@ -887,7 +890,7 @@ export default function MainPagerScreen() {
     const channel = supabase
       .channel(`user-rt-${user.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "photos" },
-        () => { fetchAllDataRef.current(); })
+        () => { fetchAllDataRef.current(); setPhotosVersion((v) => v + 1); })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "group_members" },
         () => { fetchAllDataRef.current(); })
       .subscribe();
@@ -1537,8 +1540,9 @@ export default function MainPagerScreen() {
       // Le nom du groupe n'est plus cliquable : le déverrouillage du reveal se fait via le
       // bouton invisible dans la capture (cf. onDebugUnlock de CameraPage).
       debugUnlocked={debugUnlocked}
+      photosVersion={photosVersion}
     />
-  ), [allGroups, groupData, revealConfig, activePage === 0, user?.id, enterGroupId, closeGroupSignal, handleSwitchGroup, debugUnlocked, handleRevealStart, handleGroupRoomUnlock, handleCardFrame, handleLottieFrame]);
+  ), [allGroups, groupData, revealConfig, activePage === 0, user?.id, enterGroupId, closeGroupSignal, handleSwitchGroup, debugUnlocked, handleRevealStart, handleGroupRoomUnlock, handleCardFrame, handleLottieFrame, photosVersion]);
 
   // Page initiale de la feuille de réglages du groupe (titre "Paramètres" porté par SettingsSheet)
   const groupSettingsInitialPage = useMemo(() => ({
