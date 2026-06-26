@@ -374,12 +374,32 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
     if (phase === "opening" && startFrame && singleFrame && !morphStartedRef.current) {
       morphStartedRef.current = true;
       Animated.timing(morph, {
-        toValue: 1, duration: 460, easing: Easing.out(Easing.cubic), useNativeDriver: true,
+        toValue: 1, duration: 380, easing: Easing.out(Easing.cubic), useNativeDriver: true,
       }).start(({ finished }) => {
         if (finished) { setPhase("single"); setIntroKey((k) => k + 1); }
       });
     }
   }, [phase, startFrame, singleFrame, morph]);
+
+  // Filet de sécurité : aucune phase transitoire (opening/closingOut/closingGrow) ne doit
+  // rester bloquée — sinon tous les calques sont en pointerEvents="none" et l'écran est figé/
+  // non-cliquable. Si une phase transitoire dure trop longtemps (frame jamais mesurée, callback
+  // d'anim non déclenché au remount…), on force l'état terminal. Le délai (1200ms) est très au-delà
+  // d'une transition normale (~400ms ouverture, ~560ms fermeture) → ne se déclenche qu'en cas de blocage.
+  useEffect(() => {
+    if (phase === "list" || phase === "single") return;
+    const t = setTimeout(() => {
+      if (phase === "opening") {
+        morphStartedRef.current = true;
+        morph.setValue(1);
+        setIntroKey((k) => k + 1);
+        setPhase("single");
+      } else {
+        resetToList();
+      }
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [phase, morph, resetToList]);
 
   // Construit l'ActiveChallenge du défi en cours d'un groupe (même logique que la card),
   // pour ouvrir directement sa capture au clic sur l'encart "Défi @…".
@@ -433,9 +453,9 @@ export default function GroupsPage({ allGroups, groupData, revealConfig, isActiv
         closeTimerRef.current = setTimeout(() => {
           setPhase("closingGrow");
           Animated.timing(morph, {
-            toValue: 0, duration: 440, easing: Easing.inOut(Easing.cubic), useNativeDriver: true,
+            toValue: 0, duration: 360, easing: Easing.inOut(Easing.cubic), useNativeDriver: true,
           }).start(({ finished }) => { if (finished) resetToList(); });
-        }, 280);
+        }, 200);
         return "closingOut";
       }
       resetToList();

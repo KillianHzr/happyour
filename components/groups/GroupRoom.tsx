@@ -209,7 +209,7 @@ export default function GroupRoom(props: Props) {
   // Entrée du contenu (ouverture du groupe) : revient en place depuis "caché", façon reveal.
   useEffect(() => {
     if (!introTrigger) return;
-    chrome.value = withTiming(0, { duration: 380, easing: Easing.out(Easing.cubic) });
+    chrome.value = withTiming(0, { duration: 320, easing: Easing.out(Easing.cubic) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [introTrigger]);
 
@@ -325,14 +325,20 @@ function RoomCard({ card, revealDate, unlocked, onCapture, onOpenChallenge, lott
   const lottieRef = useRef<any>(null);
   // Frames (coords fenêtre) → départ du grow de l'overlay + repositionnement du Lottie au-dessus.
   const measureCard = () => {
-    requestAnimationFrame(() => {
+    // measureInWindow renvoie parfois 0×0 juste après un (re)mount (vue pas encore positionnée).
+    // Si c'est le cas, on retente sur quelques frames : sans frame valide, le morph d'ouverture
+    // côté parent ne démarre jamais et l'écran reste figé en phase "opening".
+    let tries = 0;
+    const attempt = () => {
       cardRef.current?.measureInWindow((x, y, width, height) => {
         if (width > 0 && height > 0) onCardFrame?.({ x, y, width, height });
+        else if (tries++ < 5) requestAnimationFrame(attempt);
       });
       lottieRef.current?.measureInWindow?.((x: number, y: number, width: number, height: number) => {
         if (width > 0 && height > 0) onLottieFrame?.({ x, y, width, height });
       });
-    });
+    };
+    requestAnimationFrame(attempt);
   };
 
   // Sorties du chrome de la carte : reveal (exit 0→1) OU transition liste↔single (chrome 0→1).
