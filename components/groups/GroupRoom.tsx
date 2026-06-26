@@ -49,7 +49,20 @@ const RevealCountdown = memo(function RevealCountdown({ revealDate, textStyle }:
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
-  return <Text style={textStyle}>{formatCountdown(revealDate.getTime() - now)}</Text>;
+  // Chaque chiffre dans une cellule de largeur fixe → le countdown ne change pas de taille à
+  // chaque seconde (les chiffres n'ont pas tous la même largeur naturelle dans la police).
+  const str = formatCountdown(revealDate.getTime() - now);
+  const fontSize = StyleSheet.flatten(textStyle)?.fontSize ?? 24;
+  const digitWidth = fontSize * 0.6;
+  return (
+    <View style={{ flexDirection: "row", alignItems: "baseline" }}>
+      {str.split("").map((ch, i) =>
+        ch >= "0" && ch <= "9"
+          ? <Text key={i} style={[textStyle, { width: digitWidth, textAlign: "center" }]}>{ch}</Text>
+          : <Text key={i} style={textStyle}>{ch}</Text>
+      )}
+    </View>
+  );
 });
 
 /** Slider de déverrouillage : le nob s'agrandit en largeur sous le doigt quand on le tire
@@ -323,6 +336,11 @@ function RoomCard({ card, revealDate, unlocked, onCapture, onOpenChallenge, lott
   const postedThisWeek = card.postedThisWeek ?? false;
   const cardRef = useRef<View>(null);
   const lottieRef = useRef<any>(null);
+  // Skip le fondu d'entrée du fond au tout premier rendu (ouverture directe après création/
+  // adhésion ou via le morph) → on arrive dans la single sans "anim d'apparition". Le fondu reste
+  // actif ensuite pour le crossfade du fond quand le dernier moment change (bgUrl change).
+  const firstBgRef = useRef(true);
+  useEffect(() => { firstBgRef.current = false; }, []);
   // Frames (coords fenêtre) → départ du grow de l'overlay + repositionnement du Lottie au-dessus.
   const measureCard = () => {
     // measureInWindow renvoie parfois 0×0 juste après un (re)mount (vue pas encore positionnée).
@@ -355,7 +373,7 @@ function RoomCard({ card, revealDate, unlocked, onCapture, onOpenChallenge, lott
           floutée + voile sombre, identique à l'intro du reveal (vidéo → 1re frame, dessin → image). */}
       <Reanimated.View
         key={card.bgUrl ?? "none"}
-        entering={FadeIn.duration(320)}
+        entering={firstBgRef.current ? undefined : FadeIn.duration(320)}
         exiting={FadeOut.duration(320)}
         style={StyleSheet.absoluteFillObject}
         pointerEvents="none"
@@ -480,7 +498,7 @@ function RoomCard({ card, revealDate, unlocked, onCapture, onOpenChallenge, lott
           ) : (
             <View style={s.countdown}>
               <RevealCountdown revealDate={revealDate} textStyle={s.countdownText} />
-              <Icon name="lock" size={24} color={colors.icon} />
+              <Icon name="lock-border" size={24} color={colors.icon} />
             </View>
           )}
         </Reanimated.View>
@@ -565,7 +583,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     gap: spacing.xl, alignSelf: "stretch", borderRadius: radii.xl,
     borderWidth: stroke.sm, borderColor: colors.cardBorder, backgroundColor: colors.bg,
   },
-  countdownText: { ...textStyles.heading, color: colors.text, lineHeight: undefined },
+  countdownText: { ...textStyles.heading, color: colors.text, lineHeight: undefined, fontVariant: ["tabular-nums"] },
   // ── unlock slider ──
   unlockTrack: {
     height: 80, padding: spacing.sm, flexDirection: "row", justifyContent: "space-between",

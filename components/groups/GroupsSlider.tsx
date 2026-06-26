@@ -92,18 +92,27 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-/**
- * Assigne un texte d'attente unique à chaque carte non déverrouillée. On pioche dans un pool
- * mélangé ; quand il est vide (plus de 12 groupes en attente), on le remélange entièrement —
- * un même texte n'apparaît donc sur deux groupes que si les 12 sont déjà utilisés.
- */
+// Cache au niveau module (durée de vie = l'app) : un texte est tiré UNE fois par groupe puis
+// figé. Ainsi le texte ne change plus à chaque fois qu'on entre dans la vue groupe — il n'est
+// (re)distribué qu'au lancement de l'app (ou pour un groupe jamais vu jusqu'ici). On pioche dans
+// un pool mélangé persistant ; quand il est vide, on le remélange (uniques tant que < 12 groupes).
+const hintByGroupId: Record<string, string> = {};
+let hintPool: string[] = [];
+
+function getWaitingHint(groupId: string): string {
+  if (!hintByGroupId[groupId]) {
+    if (hintPool.length === 0) hintPool = shuffle(WAITING_HINTS);
+    hintByGroupId[groupId] = hintPool.pop()!;
+  }
+  return hintByGroupId[groupId];
+}
+
+/** Map (stable) id de carte non déverrouillée → texte d'attente figé pour la session. */
 function assignWaitingHints(cards: GroupCard[]): Record<string, string> {
   const map: Record<string, string> = {};
-  let pool: string[] = [];
   for (const c of cards) {
     if (c.unlocked) continue;
-    if (pool.length === 0) pool = shuffle(WAITING_HINTS);
-    map[c.id] = pool.pop()!;
+    map[c.id] = getWaitingHint(c.id);
   }
   return map;
 }
@@ -139,7 +148,20 @@ const RevealCountdown = memo(function RevealCountdown({ revealDate, textStyle }:
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
-  return <Text style={textStyle}>{formatCountdown(revealDate.getTime() - now)}</Text>;
+  // Chaque chiffre dans une cellule de largeur fixe → le countdown ne change pas de taille à
+  // chaque seconde (les chiffres n'ont pas tous la même largeur naturelle dans la police).
+  const str = formatCountdown(revealDate.getTime() - now);
+  const fontSize = StyleSheet.flatten(textStyle)?.fontSize ?? 24;
+  const digitWidth = fontSize * 0.6;
+  return (
+    <View style={{ flexDirection: "row", alignItems: "baseline" }}>
+      {str.split("").map((ch, i) =>
+        ch >= "0" && ch <= "9"
+          ? <Text key={i} style={[textStyle, { width: digitWidth, textAlign: "center" }]}>{ch}</Text>
+          : <Text key={i} style={textStyle}>{ch}</Text>
+      )}
+    </View>
+  );
 });
 
 /**
@@ -206,7 +228,7 @@ const SliderCard = memo(function SliderCard({
       <View style={s.cardContent}>
         {/* Nom du groupe (texte text/default sur fond brand/default) */}
         <Animated.View style={nameStyle}>
-          <NameTag text={card.name} />
+          <NameTag text={card.name} maxLines={2} />
         </Animated.View>
 
         {/* Bloc data : shape du dernier moment + nombre de moments */}
@@ -252,7 +274,7 @@ const SliderCard = memo(function SliderCard({
             ) : (
               <>
                 <RevealCountdown revealDate={revealDate} textStyle={s.countdownText} />
-                <Icon name="lock" size={24} color={colors.icon} />
+                <Icon name="lock-border" size={24} color={colors.icon} />
               </>
             )}
           </View>
@@ -481,6 +503,7 @@ const makeSliderStyles = (colors: ThemeColors) => StyleSheet.create({
     ...textStyles.heading,
     color: colors.text,
     lineHeight: undefined,
+    fontVariant: ["tabular-nums"], // chiffres à largeur fixe → le countdown ne "saute" pas chaque seconde
   },
   // Hauteur FIXE = DOTS_AREA_HEIGHT (marginTop inclus) pour que la zone de pagination occupe
   // exactement l'espace réservé dans le calcul de cardHeight, en mode pastilles COMME en mode

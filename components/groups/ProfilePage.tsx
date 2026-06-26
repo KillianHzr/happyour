@@ -433,7 +433,7 @@ export default function ProfilePage({
               </View>
               <View style={styles.topHeaderRight}>
                 <TouchableOpacity style={styles.moreBtn} activeOpacity={0.75} onPress={() => setShowSettings(true)}>
-                  <Icon name="menu" size={20} color={colors.iconNeutral} />
+                  <Icon name="settings" size={20} color={colors.iconNeutral} />
                 </TouchableOpacity>
               </View>
             </View>

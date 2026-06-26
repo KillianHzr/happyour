@@ -13,6 +13,8 @@ interface TextStickerProps {
   uppercase?: boolean;
   /** Autorise le retour à la ligne (au lieu de tronquer avec "…"). */
   multiline?: boolean;
+  /** En mode multiline, nombre max de lignes avant troncature "…" (undefined = illimité). */
+  maxLines?: number;
   /** Style subtitle-strong (ParkinsansBold / 700) au lieu du SemiBold par défaut (nom de groupe). */
   bold?: boolean;
 }
@@ -25,6 +27,7 @@ export const TextSticker = ({
   padY = spacing.xs2,
   uppercase = true,
   multiline = false,
+  maxLines,
   bold = false,
 }: TextStickerProps) => {
   const { colors } = useTheme();
@@ -138,7 +141,8 @@ export const TextSticker = ({
             fontWeight: stickerFontWeight,
           },
         ]}
-        numberOfLines={multiline ? undefined : 1}
+        numberOfLines={multiline ? maxLines : 1}
+        ellipsizeMode="tail"
       >
         {displayValue}
       </Text>
