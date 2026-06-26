@@ -16,7 +16,7 @@ import { setCaptureData } from "../../lib/capture-store";
 import { hapticSend, hapticLight, hapticSelection } from "../../lib/haptics";
 import { useUpload } from "../../lib/upload-context";
 import DrawingCanvas, { type DrawingCanvasRef } from "../DrawingCanvas";
-import { SendIcon, FeatherIcon, FlipIcon, CloseIcon, FlashIcon } from "./GroupIcons";
+import { SendIcon, FeatherIcon, FlipIcon, CloseIcon, CloseXIcon, FlashIcon } from "./GroupIcons";
 import { VolumeManager } from "react-native-volume-manager";
 import ChallengesModal, { ChallengesContent, ChallengesSlider, ChallengePromptText } from "./ChallengesModal";
 import { type ActiveChallenge, getCurrentChallengePeriod, TARGET_CHALLENGE_PROMPT } from "../../lib/challenges";
@@ -2055,7 +2055,17 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
 
             {/* Bouton fermer — fondu pendant l'édition de la description */}
             <Animated.View style={[styles.previewTopBtns, { opacity: uiOpacityAnim }]} pointerEvents={isEditingCaption ? "none" : "box-none"}>
-              <TouchableOpacity style={styles.topSquareBtn} onPress={activeChallenge !== null ? handleTrash : resetAll}><CloseIcon /></TouchableOpacity>
+              <TouchableOpacity style={styles.topSquareBtn} onPress={activeChallenge !== null ? handleTrash : resetAll}>
+                {/* Flou (rendu glass de l'app) + voile léger derrière la croix, pour qu'elle reste
+                    lisible quel que soit le contenu (photo / vidéo / dessin). */}
+                {Platform.OS === "android" ? (
+                  <NativeBlurView blurAmount={20} blurType="dark" style={StyleSheet.absoluteFill} pointerEvents="none" />
+                ) : (
+                  <BlurView intensity={glassBlurIntensity} tint="dark" blurMethod={BLUR_METHOD} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                )}
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.2)" }]} pointerEvents="none" />
+                <CloseXIcon size={20} color="white" />
+              </TouchableOpacity>
             </Animated.View>
 
           </Animated.View>
@@ -2829,7 +2839,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   // Texte du bouton zoom cyclique : single-line/body-small-strong, text/default/default
   zoomPresetText: { ...textStyles.singleLineBodySmallStrong, color: colors.text },
   previewTopBtns: { position: "absolute", top: 16, left: 16, right: 16, flexDirection: "row", justifyContent: "space-between" },
-  topSquareBtn: { width: 38, height: 38, borderRadius: radii.sm, backgroundColor: colors.opacityLight, justifyContent: "center", alignItems: "center" },
+  topSquareBtn: { width: 40, height: 40, padding: 0, gap: spacing.sm, borderRadius: radii.md, overflow: "hidden", justifyContent: "center", alignItems: "center" },
   previewContent: { position: "absolute", left: spacing.lg, right: spacing.lg },
   // Barre légende unifiée (texte + micro)
   captionBar: { overflow: "hidden", borderRadius: radii.md, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, flexDirection: "row", alignItems: "center", minHeight: 48 },

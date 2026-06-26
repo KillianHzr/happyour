@@ -196,7 +196,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
       try {
         const { finalPath, secondPath, captionAudioPath, videoThumbnailPath, secondVideoThumbnailPath } = await uploadFilesToR2(fileName, fileUri, contentType, secondFile, captionAudioFile, mirrorPrimary);
         
-        const { error } = await supabase.from("photos").insert([{
+        const { data: inserted, error } = await supabase.from("photos").insert([{
           ...dbData,
           image_path: finalPath,
           second_image_path: secondPath,
@@ -205,9 +205,20 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
           second_video_thumbnail_path: secondVideoThumbnailPath,
           waveform: waveform || null,
           caption_waveform: captionWaveform || null
-        }]);
+        }]).select("id").single();
 
         if (error) throw error;
+
+        // Marque ce moment comme le « dernier supprimable » du membre dans CE groupe.
+        // Au prochain partage il sera remplacé ; à sa suppression la FK le remet à null
+        // → l'avant-dernier ne redevient jamais supprimable (cf. migration).
+        if (inserted?.id && dbData?.group_id && dbData?.user_id) {
+          await supabase.from("group_members")
+            .update({ deletable_photo_id: inserted.id })
+            .eq("group_id", dbData.group_id)
+            .eq("user_id", dbData.user_id);
+        }
+
         setUploads(prev => prev.map(u => u.id === id ? { ...u, status: "success", progress: 100 } : u));
 
         // Re-arm the "Tu dors ?" reminder: it now fires 24h from THIS share (i.e. only if the

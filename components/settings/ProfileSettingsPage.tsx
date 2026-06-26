@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
+  ActionSheetIOS, Alert, Platform,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { Image } from "expo-image";
@@ -156,14 +157,46 @@ export default function ProfileSettingsPage({ username, avatarUrl, email, onUser
   }, [isDirty, saving, updateTopConfig]);
 
   // ── Avatar picker ──
-  const pickAvatar = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
+  const launchPicker = async (source: "camera" | "library") => {
+    const opts: ImagePicker.ImagePickerOptions = {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.5,
-    });
-    if (!result.canceled) setLocalAvatarUri(result.assets[0].uri);
+    };
+    if (source === "camera") {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Permission refusée", "L'accès à la caméra est requis pour prendre une photo.");
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync(opts);
+      if (!result.canceled) setLocalAvatarUri(result.assets[0].uri);
+    } else {
+      const result = await ImagePicker.launchImageLibraryAsync(opts);
+      if (!result.canceled) setLocalAvatarUri(result.assets[0].uri);
+    }
+  };
+
+  const pickAvatar = () => {
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ["Annuler", "Prendre une photo", "Choisir dans la galerie"],
+          cancelButtonIndex: 0,
+        },
+        (i) => {
+          if (i === 1) launchPicker("camera");
+          else if (i === 2) launchPicker("library");
+        },
+      );
+    } else {
+      Alert.alert("Photo de profil", "Choisis une source", [
+        { text: "Prendre une photo", onPress: () => launchPicker("camera") },
+        { text: "Choisir dans la galerie", onPress: () => launchPicker("library") },
+        { text: "Annuler", style: "cancel" },
+      ]);
+    }
   };
 
   const displayAvatar = localAvatarUri ?? currentAvatarUrl;

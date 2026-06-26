@@ -143,6 +143,8 @@ export default function ProfilePage({
 
   // ── Profile data ──
   const [photoTimestamps, setPhotoTimestamps] = useState<{ id: string; created_at: string; group_id: string; image_path: string; note: string | null }[]>([]);
+  // Id du vrai dernier moment supprimable, par groupe (group_members.deletable_photo_id).
+  const [deletableByGroup, setDeletableByGroup] = useState<Record<string, string | null>>({});
   const [streak, setStreak] = useState(0);
   const [streakWeeks, setStreakWeeks] = useState<Set<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
@@ -276,13 +278,17 @@ export default function ProfilePage({
   const coffreGroupStat = groupCoffreStats[coffreGroup?.id ?? ""];
 
   const canDeleteLastMoment = useMemo(() => {
-    if (!coffreLastPhoto) return false;
+    if (!coffreLastPhoto || !coffreGroup) return false;
+    // Le moment affiché doit être CELUI explicitement marqué comme supprimable
+    // (le vrai dernier partagé). Après une suppression, le flag est null → on ne
+    // peut plus supprimer l'avant-dernier.
+    if (deletableByGroup[coffreGroup.id] !== coffreLastPhoto.id) return false;
     const today = new Date();
     const monday = getMondayOf(today);
     const { revealStart } = weekRevealDates(monday, revealConfig.day, revealConfig.hour);
     const photoDate = new Date(coffreLastPhoto.created_at);
     return photoDate >= monday && photoDate < revealStart && Date.now() < revealStart.getTime();
-  }, [coffreLastPhoto, revealConfig]);
+  }, [coffreLastPhoto, coffreGroup, deletableByGroup, revealConfig]);
 
   const [showSettings, setShowSettings] = useState(false);
 
@@ -305,6 +311,16 @@ export default function ProfilePage({
 
     const safeTimestamps = timestamps ?? [];
     setPhotoTimestamps(safeTimestamps);
+
+    // ── Marqueur "dernier moment supprimable" par groupe ──
+    const { data: memberRows } = await supabase
+      .from("group_members")
+      .select("group_id, deletable_photo_id")
+      .eq("user_id", userId)
+      .in("group_id", allGroups.map(g => g.id));
+    const deletableMap: Record<string, string | null> = {};
+    for (const r of memberRows ?? []) deletableMap[r.group_id] = r.deletable_photo_id;
+    setDeletableByGroup(deletableMap);
 
     // ── Daily streak ──
     function dayKey(d: Date): string { return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; }
@@ -362,6 +378,11 @@ export default function ProfilePage({
 
   const deleteLastMoment = useCallback(async () => {
     if (!coffreLastPhoto || !coffreGroup) return;
+    // Sécurité : ne supprime que le moment réellement marqué comme supprimable.
+    if (deletableByGroup[coffreGroup.id] !== coffreLastPhoto.id) {
+      setShowDeleteMomentModal(false);
+      return;
+    }
     setDeletingMoment(true);
     try {
       await supabase.from("reactions").delete().eq("photo_id", coffreLastPhoto.id);
@@ -377,7 +398,7 @@ export default function ProfilePage({
     } finally {
       setDeletingMoment(false);
     }
-  }, [coffreLastPhoto, coffreGroup, loadData, showToast]);
+  }, [coffreLastPhoto, coffreGroup, deletableByGroup, loadData, showToast]);
 
   // Initial load
   useEffect(() => { loadData(); }, [loadData]);
@@ -572,12 +593,16 @@ export default function ProfilePage({
                         </TouchableOpacity>
                       )}
                     </View>
-                    <View style={styles.cofreBentoCapture}>
+                    <TouchableOpacity
+                      style={styles.cofreBentoCapture}
+                      onPress={() => setShowDeleteMomentModal(true)}
+                      activeOpacity={0.7}
+                    >
                       {coffreLastPhoto?.image_path !== "text_mode"
                         ? <Image source={{ uri: r2Storage.getPublicUrl(coffreLastPhoto?.image_path ?? "") }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
                         : <View style={{ flex: 1, backgroundColor: colors.bgNeutral }} />
                       }
-                    </View>
+                    </TouchableOpacity>
                   </View>
                 )}
               </View>

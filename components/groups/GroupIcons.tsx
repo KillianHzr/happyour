@@ -59,6 +59,13 @@ export const CloseIcon = () => {
   );
 };
 
+// Croix "X" pleine (coins arrondis) — cf. X.svg. Taille 20 par défaut, fill blanc.
+export const CloseXIcon = ({ size = 20, color = "white" }: { size?: number; color?: string }) => (
+  <Svg width={size} height={size} viewBox="0 0 20 20" fill="none" style={{ flexShrink: 0 }}>
+    <Path d="M14.2929 4.29289C14.6834 3.90237 15.3164 3.90237 15.707 4.29289C16.0975 4.68342 16.0975 5.31643 15.707 5.70696L11.414 9.99992L15.707 14.2929C16.0975 14.6834 16.0975 15.3164 15.707 15.707C15.3164 16.0975 14.6834 16.0975 14.2929 15.707L9.99992 11.414L5.70696 15.707C5.31643 16.0975 4.68342 16.0975 4.29289 15.707C3.90237 15.3164 3.90237 14.6834 4.29289 14.2929L8.58586 9.99992L4.29289 5.70696C3.90237 5.31643 3.90237 4.68342 4.29289 4.29289C4.68342 3.90237 5.31643 3.90237 5.70696 4.29289L9.99992 8.58586L14.2929 4.29289Z" fill={color} />
+  </Svg>
+);
+
 export const FlashIcon = ({ mode }: { mode: FlashMode }) => {
   const { colors } = useTheme();
   const color = mode === "off" ? colors.textTertiary : colors.text;
