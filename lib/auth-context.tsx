@@ -8,13 +8,17 @@ type AuthState = {
   loading: boolean;
   isOffline: boolean;
   profileComplete: boolean | null;
+  /** L'utilisateur a-t-il déjà passé l'onboarding (slider de bienvenue) ? */
+  hasOnboarded: boolean | null;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, username: string) => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   sendOtp: (email: string) => Promise<void>;
-  verifyOtp: (email: string, token: string) => Promise<boolean>;
-  checkProfileStatus: (userId: string) => Promise<boolean>;
+  verifyOtp: (email: string, token: string) => Promise<{ isComplete: boolean; hasOnboarded: boolean }>;
+  checkProfileStatus: (userId: string) => Promise<{ isComplete: boolean; hasOnboarded: boolean }>;
+  /** Marque l'onboarding comme fait (persisté en BDD) — appelé en sortie du slider. */
+  markOnboarded: () => Promise<void>;
   bypassAuthDev: (isExistingUser?: boolean) => Promise<void>;
 };
 
@@ -25,21 +29,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isOffline, setIsOffline] = useState(false); // Désactivé (nécessite rebuild natif)
   const [profileComplete, setProfileComplete] = useState<boolean | null>(null);
+  const [hasOnboarded, setHasOnboarded] = useState<boolean | null>(null);
 
   const checkProfileStatus = async (userId: string) => {
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("profiles")
-        .select("username")
+        .select("username, has_onboarded")
         .eq("id", userId)
         .single();
-      
-      const complete = !!data?.username;
-      setProfileComplete(complete);
-      return complete;
+
+      const isComplete = !!data?.username;
+      const onboarded = !!data?.has_onboarded;
+      setProfileComplete(isComplete);
+      setHasOnboarded(onboarded);
+      return { isComplete, hasOnboarded: onboarded };
     } catch (e) {
       setProfileComplete(false);
-      return false;
+      setHasOnboarded(false);
+      return { isComplete: false, hasOnboarded: false };
     } finally {
       setLoading(false);
     }
@@ -53,6 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         checkProfileStatus(session.user.id);
       } else {
         setProfileComplete(false);
+        setHasOnboarded(false);
         setLoading(false);
       }
     });
@@ -62,6 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (event === "SIGNED_OUT") {
         setSession(null);
         setProfileComplete(false);
+        setHasOnboarded(false);
       } else if (session) {
         setSession(session);
         checkProfileStatus(session.user.id);
@@ -105,10 +115,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       type: "email",
     });
     if (error) throw error;
-    if (data.session?.user) {
-      return await checkProfileStatus(data.session.user.id);
-    }
-    return false;
+    const u = data.session?.user;
+    if (!u) return { isComplete: false, hasOnboarded: false };
+    // La décision slider/app se base sur le flag persistant `has_onboarded`
+    // (cf. checkProfileStatus) : fiable, sans seuil temporel.
+    return await checkProfileStatus(u.id);
+  };
+
+  /** Persiste « onboarding fait » (appelé en sortie du slider) + maj de l'état local. */
+  const markOnboarded = async () => {
+    setHasOnboarded(true);
+    const userId = session?.user?.id;
+    if (!userId) return;
+    const { error } = await supabase
+      .from("profiles")
+      .upsert({ id: userId, has_onboarded: true }, { onConflict: "id" });
+    if (error) console.warn("[auth] échec markOnboarded:", error.message);
   };
 
   const logout = async () => {
@@ -138,6 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
     setSession(dummySession);
     setProfileComplete(isExistingUser);
+    setHasOnboarded(isExistingUser);
     setLoading(false);
   };
 
@@ -149,6 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loading,
         isOffline,
         profileComplete,
+        hasOnboarded,
         login,
         register,
         logout,
@@ -156,6 +180,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         sendOtp,
         verifyOtp,
         checkProfileStatus,
+        markOnboarded,
         bypassAuthDev,
       }}
     >

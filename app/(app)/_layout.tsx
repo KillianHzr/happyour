@@ -6,17 +6,17 @@ import { useEffect } from "react";
 import OfflineBanner from "../../components/OfflineBanner";
 
 export default function AppLayout() {
-  const { session, loading, profileComplete } = useAuth();
+  const { session, loading, hasOnboarded } = useAuth();
 
   useEffect(() => {
-    if (!loading && profileComplete !== null) {
+    if (!loading && hasOnboarded !== null) {
       if (!session) {
         router.replace("/(auth)/intro");
-      } else if (profileComplete === false) {
+      } else if (hasOnboarded === false) {
         router.replace("/(onboarding)/intro");
       }
     }
-  }, [session, loading, profileComplete]);
+  }, [session, loading, hasOnboarded]);
 
   useEffect(() => {
     if (session?.user?.id) {

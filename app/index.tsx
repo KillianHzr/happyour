@@ -7,7 +7,7 @@ import LoadingScreen from "../components/LoadingScreen";
 import NoConnectionScreen from "../components/NoConnectionScreen";
 
 export default function Index() {
-  const { session, loading: authLoading, profileComplete, checkProfileStatus } = useAuth();
+  const { session, loading: authLoading, hasOnboarded, checkProfileStatus } = useAuth();
   const networkState = useNetworkState();
   // ⚠️ TEST DEV : passe à true pour voir l'écran "pas de connexion" SANS couper le wifi
   // (utile en dev build connecté à Metro). Remettre à false avant de commit/build.
@@ -65,7 +65,7 @@ export default function Index() {
     return <NoConnectionScreen />;
   }
 
-  if (authLoading || checkingGroup || profileComplete === null) {
+  if (authLoading || checkingGroup || hasOnboarded === null) {
     return <LoadingScreen />;
   }
 
@@ -73,7 +73,7 @@ export default function Index() {
     return <Redirect href="/(auth)/intro" />;
   }
 
-  if (profileComplete === false) {
+  if (hasOnboarded === false) {
     return <Redirect href="/(onboarding)/intro" />;
   }
 

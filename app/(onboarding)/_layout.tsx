@@ -4,25 +4,25 @@ import { useAuth } from "../../lib/auth-context";
 import Loader from "../../components/Loader";
 import { View, StyleSheet } from "react-native";
 import { type ThemeColors } from "../../lib/theme";
-import { useThemedStyles } from "../../lib/theme-context";
+import { useTheme, useThemedStyles } from "../../lib/theme-context";
 
 export default function OnboardingLayout() {
-  const { session, loading, profileComplete } = useAuth();
+  const { session, loading } = useAuth();
+  const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
 
+  // Le groupe onboarding (slider de bienvenue, etc.) ne dépend QUE de la session :
+  // on l'affiche aussi bien aux nouveaux comptes (profil incomplet) qu'aux comptes
+  // déjà complets qui viennent de cliquer « Démarrer » (signup). Les profils
+  // complets en connexion normale sont, eux, routés vers l'app par index.tsx /
+  // (app)/_layout / adminlogin — ils n'arrivent jamais ici par accident.
   useEffect(() => {
-    if (!loading && profileComplete !== null) {
-      if (!session) {
-        router.replace("/(auth)/intro");
-      } else if (profileComplete === true) {
-        // Utilisateur complet qui ne fait que transiter par l'onboarding
-        // (ex. login admin) → on l'envoie vers l'app, pas vers l'écran join.
-        router.replace("/(app)/groups");
-      }
+    if (!loading && !session) {
+      router.replace("/(auth)/intro");
     }
-  }, [session, loading, profileComplete]);
+  }, [session, loading]);
 
-  if (loading || profileComplete === null || !session || profileComplete === true) {
+  if (loading || !session) {
     return (
       <View style={styles.container}>
         <Loader size={40} />
@@ -36,7 +36,7 @@ export default function OnboardingLayout() {
         headerShown: false,
         gestureEnabled: false, // Prevents skipping steps on iOS back-swipe
         animation: "slide_from_right",
-        contentStyle: { backgroundColor: "#0A0A0F" },
+        contentStyle: { backgroundColor: colors.bg },
       }}
     />
   );

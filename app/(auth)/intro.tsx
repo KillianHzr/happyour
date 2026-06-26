@@ -14,6 +14,8 @@ import { DiscloseIcon } from "../../components/atoms/DiscloseIcon";
 const bgIntroField = require("../../assets/images/background-intro-field.png");
 
 export default function IntroScreen() {
+  // Le tout premier écran de l'onboarding est toujours en sombre (le reste de
+  // l'onboarding suit, lui, le thème du téléphone).
   return (
     <ForceTheme mode="Dark">
       <IntroScreenContent />
@@ -65,11 +67,17 @@ function IntroScreenContent() {
 
           <Text style={styles.termsText}>
             En continuant vous acceptez nos{" "}
-            <Text style={styles.termsSpan} onPress={() => {}}>
+            <Text
+              style={styles.termsSpan}
+              onPress={() => router.push("/(auth)/legal?page=terms")}
+            >
               Termes
             </Text>{" "}
             et{" "}
-            <Text style={styles.termsSpan} onPress={() => {}}>
+            <Text
+              style={styles.termsSpan}
+              onPress={() => router.push("/(auth)/legal?page=privacy")}
+            >
               Politique de Confidentialité
             </Text>
           </Text>
@@ -132,7 +140,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   },
   buttonText: {
     ...textStyles.singleLineSubheadingStrong,
-    color: colors.textBrandOnBrandSecondary,
+    color: colors.textFix,
     lineHeight: undefined,
   },
   termsText: {
