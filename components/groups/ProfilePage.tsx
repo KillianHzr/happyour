@@ -205,6 +205,18 @@ export default function ProfilePage({
 
   const coffreGroup = sortedCoffreGroups[coffreGroupIndex] ?? null;
 
+  // Le slider du coffre suit le groupe ouvert en single : quand on change de groupe
+  // dans la page groupe (groupName change), on aligne la sélection du profil dessus.
+  // On résout l'index dans la liste TRIÉE courante (via ref) pour ne se déclencher
+  // que sur changement de groupName — pas à chaque re-tri après un refresh de photos
+  // — afin de préserver une sélection manuelle tant que le groupe ouvert ne change pas.
+  const sortedCoffreGroupsRef = useRef(sortedCoffreGroups);
+  sortedCoffreGroupsRef.current = sortedCoffreGroups;
+  useEffect(() => {
+    const idx = sortedCoffreGroupsRef.current.findIndex(g => g.name === groupName);
+    if (idx >= 0) setCoffreGroupIndex(idx);
+  }, [groupName]);
+
   // Swipe horizontal sur tout le bloc coffre (groupe + stats) pour changer de groupe, comme
   // les flèches de pagination. Détection horizontale stricte pour ne pas voler le scroll vertical.
   const coffreIndexRef = useRef(coffreGroupIndex);
