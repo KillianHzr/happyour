@@ -668,7 +668,10 @@ export default function MainPagerScreen() {
             // Count, per photo, comments from *others* added since the user last
             // opened that post's comments. Own comments never count as "unseen".
             const newCommentsCountMap: Record<string, number> = {};
+            // Total de réactions (commentaires) par photo — affiché en permanence.
+            const commentsCountMap: Record<string, number> = {};
             for (const c of commentsRes.data ?? []) {
+              commentsCountMap[c.photo_id] = (commentsCountMap[c.photo_id] || 0) + 1;
               if (c.user_id === user.id) continue;
               const lastViewedAt = viewsMap[c.photo_id];
               if (!lastViewedAt || new Date(c.created_at) > new Date(lastViewedAt)) {
@@ -717,6 +720,7 @@ export default function MainPagerScreen() {
                 reactions: reactionsByPhoto[p.id] ?? [],
                 hasNewComments: !!hasNewComments,
                 newCommentsCount,
+                commentsCount: commentsCountMap[p.id] ?? 0,
                 video_thumbnail_path: p.video_thumbnail_path ?? null,
                 second_video_thumbnail_path: p.second_video_thumbnail_path ?? null,
                 video_thumbnail_url: videoThumbnailUrl,
@@ -1404,7 +1408,9 @@ export default function MainPagerScreen() {
       const viewsMap = Object.fromEntries((viewsRes.data ?? []).map((v: any) => [v.photo_id, v.last_viewed_at]));
       // Count unseen comments from others, mirroring fetchAllData.
       const countMap: Record<string, number> = {};
+      const totalMap: Record<string, number> = {};
       for (const c of commentsRes.data ?? []) {
+        totalMap[c.photo_id] = (totalMap[c.photo_id] || 0) + 1;
         if (c.user_id === user.id) continue;
         const lastViewedAt = viewsMap[c.photo_id];
         if (!lastViewedAt || new Date(c.created_at) > new Date(lastViewedAt)) {
@@ -1421,7 +1427,7 @@ export default function MainPagerScreen() {
             ...g,
             photos: g.photos.map(p => {
               const count = countMap[p.id] ?? 0;
-              return { ...p, hasNewComments: count > 0, newCommentsCount: count };
+              return { ...p, hasNewComments: count > 0, newCommentsCount: count, commentsCount: totalMap[p.id] ?? 0 };
             })
           }
         };

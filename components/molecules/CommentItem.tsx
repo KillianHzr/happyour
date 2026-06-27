@@ -34,6 +34,8 @@ interface CommentItemProps {
   item: Comment;
   isMyComment: boolean;
   onLongPressDelete: (id: string, rect: CommentRect) => void;
+  /** Appui long sur le commentaire de quelqu'un d'autre → signalement. */
+  onLongPressReport?: (id: string, rect: CommentRect) => void;
   /** True quand ce commentaire est celui dont le tooltip "Supprimer" est ouvert. */
   isActive?: boolean;
   animateIn?: boolean;
@@ -116,7 +118,7 @@ function parseMentionContent(
   return parts.length > 0 ? parts : [{ text: content, isMention: false }];
 }
 
-export const CommentItem = React.memo(({ item, isMyComment, onLongPressDelete, groupMembers = [], isActive = false, animateIn = false }: CommentItemProps) => {
+export const CommentItem = React.memo(({ item, isMyComment, onLongPressDelete, onLongPressReport, groupMembers = [], isActive = false, animateIn = false }: CommentItemProps) => {
   const styles = useThemedStyles(makeStyles);
   const { colors } = useTheme();
   const rowRef = useRef<View>(null);
@@ -141,11 +143,13 @@ export const CommentItem = React.memo(({ item, isMyComment, onLongPressDelete, g
     <Pressable
       ref={rowRef}
       onLongPress={() => {
-        if (isMyComment) {
-          rowRef.current?.measureInWindow((x, y, width, height) => {
+        rowRef.current?.measureInWindow((x, y, width, height) => {
+          if (isMyComment) {
             onLongPressDelete(item.id, { x, y, width, height });
-          });
-        }
+          } else {
+            onLongPressReport?.(item.id, { x, y, width, height });
+          }
+        });
       }}
       delayLongPress={800}
       style={styles.commentRow}

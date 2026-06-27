@@ -722,7 +722,11 @@ const PhotoFeedContent = forwardRef(({
             <BottomActionBar
               primaryLabel="Réactions"
               onPrimaryPress={() => openComments(moment.id, moment.user_id)}
-              badgeCount={moment?.hasNewComments ? (moment?.newCommentsCount ?? 0) : null}
+              // Total des réactions = commentaires + stickers (emoji).
+              badgeCount={((moment?.commentsCount ?? 0) + (moment?.reactions?.length ?? 0)) > 0
+                ? (moment?.commentsCount ?? 0) + (moment?.reactions?.length ?? 0)
+                : null}
+              badgeHighlighted={!!moment?.hasNewComments}
               secondary={{
                 key: "share-btn",
                 icon: (

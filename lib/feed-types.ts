@@ -26,4 +26,6 @@ export type PhotoEntry = {
   hasNewComments?: boolean;
   /** Number of comments from others added since the user last opened this post's comments. */
   newCommentsCount?: number;
+  /** Nombre TOTAL de réactions (commentaires) du moment — affiché en permanence dans la pastille. */
+  commentsCount?: number;
 };

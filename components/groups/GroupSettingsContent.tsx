@@ -15,6 +15,7 @@ import BottomSheet from "../BottomSheet";
 import ConfirmModal from "../ConfirmModal";
 import { NamePill } from "../atoms/NamePill";
 import ProfilePage from "./ProfilePage";
+import ReportSheet from "../ReportSheet";
 
 const NAME_MAX = 50;
 const DOWNLOAD_LINK = "disclose.app/download";
@@ -71,6 +72,8 @@ export default function GroupSettingsContent({
   const [transferring, setTransferring] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<Member | null>(null);
   const [removing, setRemoving] = useState(false);
+  // Signalement d'un membre (n'importe quel user peut signaler n'importe qui sauf lui-même).
+  const [reportTarget, setReportTarget] = useState<Member | null>(null);
 
   useEffect(() => () => { if (copyTimer.current) clearTimeout(copyTimer.current); }, []);
 
@@ -220,14 +223,16 @@ export default function GroupSettingsContent({
           <View style={styles.prochesList}>
             {members.map((m) => {
               const admin = m.role === "admin";
-              const canManage = isAdmin && m.user_id !== userId;
+              // N'importe qui peut ouvrir le menu sur un autre membre (au minimum pour
+              // le signaler). Les options admin restent gatées dans le tooltip.
+              const isSelf = m.user_id === userId;
               return (
                 <TouchableOpacity
                   key={m.user_id}
                   ref={(r) => { itemRefs.current[m.user_id] = r as unknown as View | null; }}
                   style={styles.avatarBlock}
                   onPress={() => openMember(m)}
-                  onLongPress={canManage ? () => openTooltip(m) : undefined}
+                  onLongPress={!isSelf ? () => openTooltip(m) : undefined}
                   delayLongPress={300}
                   activeOpacity={0.7}
                 >
@@ -426,21 +431,35 @@ export default function GroupSettingsContent({
             >
               <BlurView intensity={glassBlurIntensity} tint="dark" style={StyleSheet.absoluteFill} />
               <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.opacityLight }]} pointerEvents="none" />
+              {/* Options admin (gérer le membre) — visibles seulement pour un admin. */}
+              {isAdmin && tooltip.member.user_id !== userId && (
+                <>
+                  <TouchableOpacity
+                    style={styles.tooltipBtn}
+                    activeOpacity={0.7}
+                    onPress={() => { const m = tooltip.member; setTooltip(null); setTransferTarget(m); }}
+                  >
+                    <Icon name="award" size={20} color={colors.iconFix} />
+                    <Text style={[styles.tooltipBtnText, { color: colors.textFix }]}>Passer admin</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.tooltipBtn}
+                    activeOpacity={0.7}
+                    onPress={() => { const m = tooltip.member; setTooltip(null); setRemoveTarget(m); }}
+                  >
+                    <Icon name="trash" size={20} color={colors.iconDangerTertiary} />
+                    <Text style={[styles.tooltipBtnText, { color: colors.textDangerTertiary }]}>Retirer</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+              {/* Signaler — accessible à n'importe quel membre, sur n'importe qui (sauf soi). */}
               <TouchableOpacity
                 style={styles.tooltipBtn}
                 activeOpacity={0.7}
-                onPress={() => { const m = tooltip.member; setTooltip(null); setTransferTarget(m); }}
+                onPress={() => { const m = tooltip.member; setTooltip(null); setReportTarget(m); }}
               >
-                <Icon name="award" size={20} color={colors.iconFix} />
-                <Text style={[styles.tooltipBtnText, { color: colors.textFix }]}>Passer admin</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.tooltipBtn}
-                activeOpacity={0.7}
-                onPress={() => { const m = tooltip.member; setTooltip(null); setRemoveTarget(m); }}
-              >
-                <Icon name="trash" size={20} color={colors.iconDangerTertiary} />
-                <Text style={[styles.tooltipBtnText, { color: colors.textDangerTertiary }]}>Retirer</Text>
+                <Icon name="shield" size={20} color={colors.iconFix} />
+                <Text style={[styles.tooltipBtnText, { color: colors.textFix }]}>Signaler</Text>
               </TouchableOpacity>
             </Animated.View>
           )}
@@ -473,6 +492,15 @@ export default function GroupSettingsContent({
         confirmVariant="danger"
         onConfirm={handleRemove}
         loading={removing}
+      />
+
+      {/* ── Bottom sheet : signaler un membre ── */}
+      <ReportSheet
+        visible={!!reportTarget}
+        onClose={() => setReportTarget(null)}
+        reportedUserId={reportTarget?.user_id ?? ""}
+        reportedUsername={reportTarget?.username}
+        groupId={activeGroupId}
       />
     </>
   );

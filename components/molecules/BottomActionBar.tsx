@@ -28,8 +28,10 @@ export interface BottomActionSecondary {
 interface BottomActionBarProps {
   primaryLabel: string;
   onPrimaryPress: () => void;
-  /** When non-null, shows a count badge on the primary button. */
+  /** When non-null, shows a count badge on the primary button (total des réactions). */
   badgeCount?: number | null;
+  /** true = il y a des réactions non vues → style mis en avant ; false = style par défaut. */
+  badgeHighlighted?: boolean;
   secondary?: BottomActionSecondary | null;
   /** Grise le bouton principal et bloque l'appui (ex: défi sans réponse). */
   primaryDisabled?: boolean;
@@ -39,6 +41,7 @@ export const BottomActionBar = ({
   primaryLabel,
   onPrimaryPress,
   badgeCount,
+  badgeHighlighted = false,
   secondary,
   primaryDisabled = false,
 }: BottomActionBarProps) => {
@@ -56,8 +59,8 @@ export const BottomActionBar = ({
       >
         <Text style={[styles.reactionsBtnText, primaryDisabled && styles.reactionsBtnTextDisabled]}>{primaryLabel}</Text>
         {badgeCount != null && (
-          <View style={styles.reactionsBtnBadge}>
-            <Text style={styles.reactionsBtnBadgeText}>{badgeCount}</Text>
+          <View style={[styles.reactionsBtnBadge, !badgeHighlighted && styles.reactionsBtnBadgeSeen]}>
+            <Text style={[styles.reactionsBtnBadgeText, !badgeHighlighted && styles.reactionsBtnBadgeTextSeen]}>{badgeCount}</Text>
           </View>
         )}
       </AnimatedTouchableOpacity>
@@ -113,6 +116,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
   reactionsBtnTextDisabled: {
     color: colors.textOnDisabled, // text/disabled/on-disabled
   },
+  // État par défaut du badge = "nouvelles réactions" (fond inverse + texte brand/tertiary).
   reactionsBtnBadge: {
     position: "absolute",
     top: -6,
@@ -129,6 +133,13 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     ...textStyles.bodySmall,
     color: colors.textBrandTertiary,
     textAlign: "center",
+  },
+  // État "rien de nouveau" (réactions déjà vues) : background/brand/secondary + text/default/default-fix.
+  reactionsBtnBadgeSeen: {
+    backgroundColor: colors.brandSecondary,
+  },
+  reactionsBtnBadgeTextSeen: {
+    color: colors.textFix,
   },
   placeholderBtn: {
     width: 52,
