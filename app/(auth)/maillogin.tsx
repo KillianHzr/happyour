@@ -6,6 +6,7 @@ import { useToast } from "../../lib/toast-context";
 import { translateError } from "../../lib/error-messages";
 import { typography, type ThemeColors } from "../../lib/theme";
 import { useThemedStyles } from "../../lib/theme-context";
+import { isReviewEmail } from "../../lib/review-account";
 import {
   OnboardingScreen,
   OnboardingTitle,
@@ -33,6 +34,12 @@ export default function MailLoginScreen() {
     setLoading(true);
     try {
       const formattedEmail = email.trim().toLowerCase();
+      // Compte de démo Apple : pas d'OTP, on affiche l'écran de connexion par mot
+      // de passe (le testeur saisit le mot de passe fourni dans App Store Connect).
+      if (isReviewEmail(formattedEmail)) {
+        router.push({ pathname: "/(auth)/password", params: { email: formattedEmail } });
+        return;
+      }
       await sendOtp(formattedEmail);
       showToast("Code de vérification envoyé par mail.", undefined, "success");
       router.push({
