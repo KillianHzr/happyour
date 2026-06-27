@@ -12,7 +12,7 @@
       "backgroundColor": "#000000"
     },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.jeanmiduntm.HappyOur",
       "icon": "./assets/icon.png",
       "infoPlist": {
