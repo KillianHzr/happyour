@@ -10,6 +10,7 @@ import { useRouter } from "expo-router";
 import { useTheme, useThemedStyles, ForceTheme } from "../../lib/theme-context";
 import { spacing, radii, textStyles, type ThemeColors } from "../../lib/theme";
 import { DiscloseIcon } from "../../components/atoms/DiscloseIcon";
+import { preloadOnboardingAssets } from "../../lib/onboarding-assets";
 
 const bgIntroField = require("../../assets/images/background-intro-field.png");
 
@@ -27,6 +28,14 @@ function IntroScreenContent() {
   const router = useRouter();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
+
+  // Entrée du tunnel (les 2 boutons mènent à maillogin) → on précharge dès
+  // maintenant toutes les images de l'onboarding pour qu'aucune ne « charge »
+  // à l'arrivée sur sa page.
+  const enterTunnel = () => {
+    preloadOnboardingAssets();
+    router.push("/(auth)/maillogin");
+  };
 
   return (
     <View style={styles.container}>
@@ -50,7 +59,7 @@ function IntroScreenContent() {
         {/* Bottom-aligned view with space/400 (spacing.lg) gap */}
         <View style={styles.bottomView}>
           <TouchableOpacity
-            onPress={() => router.push("/(auth)/maillogin")}
+            onPress={enterTunnel}
             activeOpacity={0.7}
             style={styles.loginLink}
           >
@@ -59,7 +68,7 @@ function IntroScreenContent() {
 
           <TouchableOpacity
             style={styles.button}
-            onPress={() => router.push("/(auth)/maillogin")}
+            onPress={enterTunnel}
             activeOpacity={0.85}
           >
             <Text style={styles.buttonText}>Démarrer</Text>

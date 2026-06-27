@@ -16,18 +16,18 @@ export default function OnboardingGroupScreen() {
     <OnboardingSlideLayout
       top={
         <>
-          <OnboardingStickerText text={"Inaugure ton premier\n[groupe] !"} rotate="-2deg" />
+          <OnboardingStickerText text={"Inaugure ton premier\n[groupe] !"} rotate="2deg" />
 
           {/* 80px sous le texte : choix créer / rejoindre (style "Importe galerie"). */}
           <View style={styles.buttons}>
             <OnboardingButton
               label="Créer un groupe"
-              onPress={() => router.push("/(app)/groups/create")}
+              onPress={() => router.push("/(onboarding)/group-name")}
               variant="secondary"
             />
             <OnboardingButton
               label="Rejoindre un groupe"
-              onPress={() => router.push("/(app)/groups/join")}
+              onPress={() => router.push("/(onboarding)/group-join")}
               variant="secondary"
             />
           </View>

@@ -1,8 +1,14 @@
 import { useState } from "react";
-import { View, StyleSheet, TouchableOpacity, ActionSheetIOS, Alert, Platform } from "react-native";
+import { View, StyleSheet, TouchableOpacity, ActionSheetIOS, Alert, Platform, ActivityIndicator } from "react-native";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
+import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
+import { decode } from "base64-arraybuffer";
+import { useAuth } from "../../lib/auth-context";
+import { useToast } from "../../lib/toast-context";
+import { supabase } from "../../lib/supabase";
+import { r2Storage } from "../../lib/r2";
 import { useTheme, useThemedStyles } from "../../lib/theme-context";
 import { radii, type ThemeColors } from "../../lib/theme";
 import { CameraIcon } from "../../components/atoms/CameraIcon";
@@ -15,19 +21,45 @@ import {
 
 export default function OnboardingPhotoScreen() {
   const router = useRouter();
+  const { user } = useAuth();
+  const { showToast } = useToast();
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
-  // Une fois la photo choisie : on l'affiche dans le carré puis on passe à l'étape
-  // suivante (choix du surnom). L'uri est transmise pour la suite de l'onboarding.
-  const onPicked = (uri: string) => {
+  // Une fois la photo choisie : on l'affiche, on l'upload sur R2 et on enregistre
+  // `avatar_url` en BDD, PUIS on passe à l'étape suivante (surnom).
+  const onPicked = async (uri: string) => {
+    if (uploading) return;
     setAvatarUri(uri);
-    // replace : à partir du surnom on ne doit jamais revenir à la page photo.
-    router.replace({ pathname: "/(onboarding)/username", params: { avatar: uri } });
+    if (!user) {
+      router.replace("/(onboarding)/username");
+      return;
+    }
+    setUploading(true);
+    try {
+      const m = await manipulateAsync(
+        uri,
+        [{ resize: { width: 200, height: 200 } }],
+        { compress: 0.7, format: SaveFormat.JPEG, base64: true },
+      );
+      if (!m.base64) throw new Error("Erreur image");
+      const filePath = `avatars/${user.id}_${Date.now()}.jpg`;
+      await r2Storage.upload(filePath, decode(m.base64), "image/jpeg");
+      const url = r2Storage.getPublicUrl(filePath);
+      const { error } = await supabase.from("profiles").upsert({ id: user.id, avatar_url: url }, { onConflict: "id" });
+      if (error) throw error;
+      router.replace("/(onboarding)/username");
+    } catch (e: any) {
+      showToast("Impossible d'enregistrer la photo, réessaie.", undefined, "error");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const launchPicker = async (source: "camera" | "library") => {
+    if (uploading) return;
     const opts: ImagePicker.ImagePickerOptions = {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
@@ -83,6 +115,11 @@ export default function OnboardingPhotoScreen() {
             ) : (
               <CameraIcon size={32} color={colors.iconBrandTertiary} />
             )}
+            {uploading && (
+              <View style={styles.uploadOverlay}>
+                <ActivityIndicator color={colors.iconBrandOnBrand} />
+              </View>
+            )}
           </TouchableOpacity>
         </>
       }
@@ -122,5 +159,11 @@ const makeStyles = (_colors: ThemeColors) =>
     buttons: {
       width: "100%",
       gap: 12,
+    },
+    uploadOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: "rgba(0,0,0,0.35)",
     },
   });

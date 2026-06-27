@@ -287,6 +287,7 @@ export const buildColors = (mode: ThemeMode) => ({
 
   // ── Background / Fond par défaut ─────────────────────────────────────────
   bg:                    resolveToken("-> Color/background/default/default",          mode), // #1E1E1E
+  bgFix:                 resolveToken("-> Color/background/default/default-fix",      mode), // fond fixe (indépendant du mode)
   bgHover:               resolveToken("-> Color/background/default/default-hover",    mode), // #383838
   card:                  resolveToken("-> Color/background/default/secondary",        mode), // #2C2C2C
   cardHover:             resolveToken("-> Color/background/default/secondary-hover",  mode), // #1E1E1E

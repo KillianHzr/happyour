@@ -126,11 +126,20 @@ export function OnboardingStickerText({
   text,
   rotate = "2.5deg",
   stickerY = 4,
+  textColor,
+  stickerBg,
+  stickerColor,
 }: {
   text: string;
   rotate?: string;
   /** Décalage vertical (translateY) du sticker. Mettre 0 pour le désactiver. */
   stickerY?: number;
+  /** Override couleur du texte hors sticker. */
+  textColor?: string;
+  /** Override fond du sticker. */
+  stickerBg?: string;
+  /** Override couleur du texte du sticker. */
+  stickerColor?: string;
 }) {
   const styles = useThemedStyles(makeStyles);
   // On rend chaque ligne (séparées par \n) comme une rangée flex centrée. Une vue
@@ -144,7 +153,7 @@ export function OnboardingStickerText({
         const match = line.match(/^([\s\S]*?)\[([\s\S]+?)\]([\s\S]*)$/);
         if (!match) {
           return (
-            <Text key={i} style={styles.subtitleStrongText}>
+            <Text key={i} style={[styles.subtitleStrongText, textColor ? { color: textColor } : null]}>
               {line}
             </Text>
           );
@@ -152,11 +161,17 @@ export function OnboardingStickerText({
         const [, before, word, after] = match;
         return (
           <View key={i} style={styles.stickerLine}>
-            {before !== "" && <Text style={styles.subtitleStrongText}>{before}</Text>}
-            <View style={[styles.stickerContainer, { transform: [{ rotate }, { translateY: stickerY }] }]}>
-              <Text style={styles.stickerText}>{word}</Text>
+            {before !== "" && <Text style={[styles.subtitleStrongText, textColor ? { color: textColor } : null]}>{before}</Text>}
+            <View
+              style={[
+                styles.stickerContainer,
+                { transform: [{ rotate }, { translateY: stickerY }] },
+                stickerBg ? { backgroundColor: stickerBg } : null,
+              ]}
+            >
+              <Text style={[styles.stickerText, stickerColor ? { color: stickerColor } : null]}>{word}</Text>
             </View>
-            {after !== "" && <Text style={styles.subtitleStrongText}>{after}</Text>}
+            {after !== "" && <Text style={[styles.subtitleStrongText, textColor ? { color: textColor } : null]}>{after}</Text>}
           </View>
         );
       })}
@@ -174,14 +189,18 @@ export function OnboardingHighlight({ children }: { children: ReactNode }) {
 export function OnboardingTextField({
   inputStyle,
   containerStyle,
+  counterMax,
   ...inputProps
 }: TextInputProps & {
   inputStyle?: StyleProp<TextStyle>;
   containerStyle?: StyleProp<ViewStyle>;
+  /** Affiche un compteur x/xx à droite (comme le champ surnom de l'édition profil). */
+  counterMax?: number;
 }) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const [isFocused, setIsFocused] = useState(false);
+  const len = String(inputProps.value ?? "").length;
 
   return (
     <View
@@ -204,6 +223,11 @@ export function OnboardingTextField({
           inputProps.onBlur?.(e);
         }}
       />
+      {counterMax != null && (
+        <Text style={styles.inputCounter}>
+          {len}/{counterMax}
+        </Text>
+      )}
     </View>
   );
 }
@@ -223,15 +247,26 @@ export function OnboardingButton({
   active?: boolean;
   loading?: boolean;
   disabled?: boolean;
-  /** "primary" = brand ; "secondary" = background/neutral/tertiary + text/neutral/default. */
-  variant?: "primary" | "secondary";
+  /**
+   * "primary"   = brand + text/default/default-fix
+   * "secondary" = background/neutral/tertiary + text/neutral/default
+   * "plain"     = background/default/default + text/default/default
+   */
+  variant?: "primary" | "secondary" | "plain";
 }) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
 
-  const isSecondary = variant === "secondary";
-  const bg = isSecondary ? colors.bgNeutralTertiary : active ? colors.brand : colors.bgNeutralTertiary;
-  const fg = isSecondary ? colors.textNeutral : active ? colors.textFix : colors.textNeutral;
+  const bg =
+    variant === "plain" ? colors.bg
+    : variant === "secondary" ? colors.bgNeutralTertiary
+    : active ? colors.brand
+    : colors.bgNeutralTertiary;
+  const fg =
+    variant === "plain" ? colors.text
+    : variant === "secondary" ? colors.textNeutral
+    : active ? colors.textFix
+    : colors.textNeutral;
 
   return (
     <TouchableOpacity
@@ -393,6 +428,12 @@ const makeStyles = (colors: ThemeColors) =>
       fontSize: textStyles.singleLineSubheadingStrong.fontSize,
       includeFontPadding: false,
       padding: 0,
+    },
+    inputCounter: {
+      fontFamily: typography.family.semibold,
+      fontSize: typography.size.md,
+      color: colors.textTertiary,
+      includeFontPadding: false,
     },
 
     // ── Bouton principal
