@@ -12,13 +12,13 @@
       "backgroundColor": "#000000"
     },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.jeanmiduntm.HappyOur",
       "icon": "./assets/icon.png",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "46"
+      "buildNumber": "47"
     },
     "android": {
       "package": "com.happyour.app",
