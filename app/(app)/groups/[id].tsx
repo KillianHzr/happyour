@@ -237,11 +237,6 @@ export default function MainPagerScreen() {
 
   // DEV
   const [debugUnlocked, setDebugUnlocked] = useState(false);
-  // TODO: voir à la version finale — debug démo : déverrouillage via le bouton INVISIBLE
-  // (à gauche de "Défis") uniquement → le countdown du reveal démarre toujours à 21h36
-  // restantes. Pas activé par le menu debug classique. À retirer avant la release.
-  const [debugRevealCountdown, setDebugRevealCountdown] = useState(false);
-  const [revealEndOverride, setRevealEndOverride] = useState<number | null>(null);
   const [showDebugMenu, setShowDebugMenu] = useState(false);
   const [debugVaultChallenges, setDebugVaultChallenges] = useState<{ period1: ChallengeWithData | null; period2: ChallengeWithData | null } | null>(null);
   const [showCustomChallengeCreate, setShowCustomChallengeCreate] = useState(false);
@@ -865,21 +860,9 @@ export default function MainPagerScreen() {
 
   const activeRevealEndTime = activeRevealEndDate.getTime();
 
-  // TODO: voir à la version finale — debug démo : reveal ouvert via le bouton invisible
-  // → countdown figé à 21h36 au départ (fin = ouverture + 21h36). À retirer avant la release.
-  useEffect(() => {
-    if (showReveal && debugRevealCountdown) {
-      setRevealEndOverride(Date.now() + (21 * 60 + 36) * 60 * 1000);
-    } else if (!showReveal) {
-      setRevealEndOverride(null);
-    }
-  }, [showReveal, debugRevealCountdown]);
-
-  const effectiveRevealEndTime = revealEndOverride ?? activeRevealEndTime;
-
   useEffect(() => {
     const tick = () => {
-      const ms = effectiveRevealEndTime - Date.now();
+      const ms = activeRevealEndTime - Date.now();
       if (ms <= 0) { setRevealTimeLeft("Expiré"); setRevealMsLeft(0); return; }
       setRevealMsLeft(ms);
       const h = Math.floor(ms / 3600000);
@@ -890,7 +873,7 @@ export default function MainPagerScreen() {
     tick();
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
-  }, [effectiveRevealEndTime]);
+  }, [activeRevealEndTime]);
 
   useEffect(() => {
     const hasJustFinished = activeUploads.some((u) => u.status === "success");
@@ -1554,8 +1537,6 @@ export default function MainPagerScreen() {
       onOpenSettings={() => setShowGroupSettings(true)}
       onOpenArchives={() => setShowArchives(true)}
       onScrollLock={setGroupsPagerLocked}
-      // Le nom du groupe n'est plus cliquable : le déverrouillage du reveal se fait via le
-      // bouton invisible dans la capture (cf. onDebugUnlock de CameraPage).
       debugUnlocked={debugUnlocked}
       photosVersion={photosVersion}
     />
@@ -1598,7 +1579,6 @@ export default function MainPagerScreen() {
         onScrollLock={(v) => { setCameraScrollLocked(v); }}
         onHideMenu={setCameraHideMenu}
         onCaptureSent={(info) => { setProfileRefreshKey(k => k + 1); showCaptureToast(info); }}
-        onDebugUnlock={() => { setDebugUnlocked(true); setDebugRevealCountdown(true); }}
       />
     </ForceThemeMode>
   ), [activeGroupId, user?.id, activePage === 1, allGroups, pendingChallenge]);
@@ -1737,9 +1717,6 @@ export default function MainPagerScreen() {
               participants={connectedParticipants}
               onNotificationPress={handleOpenActivity}
               hasUnseenActivity={hasUnseenActivity}
-              // TODO: voir à la version finale — déclenchement de debug : tap sur le timer
-              // pour scroller tout en bas du reveal (couronne de la semaine), à retirer avant la release.
-              onTimerPress={() => photoFeedRef.current?.scrollToCrown?.()}
             />
           )}
           <PhotoFeed

@@ -106,8 +106,6 @@ type Props = {
   // Défi à activer directement (clic sur l'encart "Défi @…" dans la single du groupe).
   pendingChallenge?: ActiveChallenge | null;
   onPendingChallengeConsumed?: () => void;
-  // Bouton invisible (zone libre à gauche du bouton Défis) → déverrouille le reveal, sans retour visuel.
-  onDebugUnlock?: () => void;
 };
 
 class CameraErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean; error: string }> {
@@ -120,7 +118,7 @@ class CameraErrorBoundary extends Component<{ children: React.ReactNode }, { has
   }
 }
 
-function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, onHideMenu, onCaptureSent, pendingChallenge, onPendingChallengeConsumed, onDebugUnlock }: Props) {
+function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, onHideMenu, onCaptureSent, pendingChallenge, onPendingChallengeConsumed }: Props) {
   const insets = useSafeAreaInsets();
   const { width: winWidth, height: winHeight } = useWindowDimensions();
   const { colors } = useTheme();
@@ -173,7 +171,6 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const [showChallengesInline, setShowChallengesInline] = useState(false);
   const [activeChallenge, setActiveChallenge] = useState<ActiveChallenge | null>(null);
   // Frame mesurée du bouton Défis → positionne le bouton invisible (zone libre à sa gauche).
-  const [defiBtnFrame, setDefiBtnFrame] = useState<{ x: number; y: number; height: number } | null>(null);
   const challengeChooseRef = useRef<(() => void) | null>(null);
   // Carte de défi active déjà répondue → bouton « Choisir » désactivé.
   const [challengeActiveResponded, setChallengeActiveResponded] = useState(false);
@@ -1803,20 +1800,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
           {!capturingSecond && !isRecording && !(cameraMode === "DESSIN" && canUndo) && !showColorPalette && (
             activeChallenge === null ? (
               <View style={[challengeStyles.topContainer, { paddingTop: cameraFrameTop + CHALLENGE_GAP }]} pointerEvents="box-none">
-                {/* Bouton INVISIBLE de déverrouillage reveal : zone libre entre le bord gauche
-                    de l'écran et le bouton Défis, à sa hauteur exacte. Aucun retour visuel.
-                    TODO: voir à la version finale — bouton de debug pour déverrouiller le reveal
-                    pendant les démos/tests, à retirer (ou conditionner) avant la release. */}
-                {onDebugUnlock && defiBtnFrame && (
-                  <TouchableOpacity
-                    style={{ position: "absolute", top: defiBtnFrame.y, left: 0, width: defiBtnFrame.x, height: defiBtnFrame.height }}
-                    onPress={onDebugUnlock}
-                    activeOpacity={1}
-                  />
-                )}
                 <TouchableOpacity
                   style={challengeStyles.challengeBtn}
-                  onLayout={(e) => { const { x, y, height } = e.nativeEvent.layout; setDefiBtnFrame({ x, y, height }); }}
                   onPress={() => setShowChallengesInline(true)}
                   activeOpacity={0.8}
                 >

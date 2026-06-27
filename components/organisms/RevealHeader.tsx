@@ -21,12 +21,6 @@ interface RevealHeaderProps {
   revealMsLeft: number;
   participants: Participant[];
   onNotificationPress?: () => void;
-  /**
-   * TODO: voir à la version finale — déclenchement de debug : tap sur le timer pour scroller
-   * tout en bas du reveal jusqu'à la couronne de la semaine (démos/tests), à retirer (ou
-   * conditionner) avant la release.
-   */
-  onTimerPress?: () => void;
   /** Affiche une pastille brand en haut-droite du bouton Activité (nouvelle activité non vue). */
   hasUnseenActivity?: boolean;
   /** Mode archive : remplace timer + présence par "Reveal XX" + plage de dates. */
@@ -49,7 +43,6 @@ export const RevealHeader = ({
   revealMsLeft,
   participants = [],
   onNotificationPress,
-  onTimerPress,
   hasUnseenActivity = false,
   archive,
 }: RevealHeaderProps) => {
@@ -93,20 +86,13 @@ export const RevealHeader = ({
         )}
 
         {/* 2. Timer Pill */}
-        {/* TODO: voir à la version finale — tap sur le timer = déclenchement de debug qui
-            scrolle tout en bas du reveal (couronne de la semaine), à retirer avant la release. */}
         {!archive && countdownText !== "" && (
-          <TouchableOpacity
-            style={styles.timerPill}
-            onPress={onTimerPress}
-            disabled={!onTimerPress}
-            activeOpacity={onTimerPress ? 0.7 : 1}
-          >
+          <View style={styles.timerPill}>
             <GlassBackground radius={radii.sm} />
             <Text style={styles.timerText}>
               {countdownText}
             </Text>
-          </TouchableOpacity>
+          </View>
         )}
 
         {/* 3. Connected Users Row */}
