@@ -35,6 +35,7 @@ import { useAuth } from "../lib/auth-context";
 import { notifyReaction } from "../lib/notifications";
 import { CommentItem, Comment, CommentRect } from "./molecules/CommentItem";
 import { DeleteCommentPopup } from "./atoms/DeleteCommentPopup";
+import ReportSheet from "./ReportSheet";
 import { CommentInput, MentionSuggestionsPopup, GroupMember } from "./molecules/CommentInput";
 import { TextSticker } from "./atoms/TextSticker";
 import { StickerToast } from "./atoms/StickerToast";
@@ -271,6 +272,12 @@ function CommentModalContent({
     commentId: string;
     rect: CommentRect;
   } | null>(null);
+  // Signalement d'un commentaire de quelqu'un d'autre (popup "Signaler" + bottom sheet).
+  const [reportPopup, setReportPopup] = useState<{
+    commentId: string;
+    rect: CommentRect;
+  } | null>(null);
+  const [reportTarget, setReportTarget] = useState<{ reportedUserId: string; commentId: string } | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   // True while the keyboard is up; set at keyboard-start so the sheet shrinks and
   // the parent hides the stickers immediately (not after the keyboard settles).
@@ -786,6 +793,13 @@ function CommentModalContent({
     []
   );
 
+  const handleLongPressReport = useCallback(
+    (commentId: string, rect: CommentRect) => {
+      setReportPopup({ commentId, rect });
+    },
+    []
+  );
+
   // ── Content helpers ───────────────────────────────────────────────────────────
   const emojiRegex = /[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FEFF}\u{200D}\u{20E3}]/gu;
 
@@ -812,11 +826,12 @@ function CommentModalContent({
       item={item}
       isMyComment={item.user_id === user?.id}
       onLongPressDelete={readOnly ? (() => {}) : handleLongPressDelete}
-      isActive={item.id === deletePopup?.commentId}
+      onLongPressReport={readOnly ? undefined : handleLongPressReport}
+      isActive={item.id === deletePopup?.commentId || item.id === reportPopup?.commentId}
       groupMembers={fetchedGroupMembers}
       animateIn={item.id === newestCommentId}
     />
-  ), [user?.id, handleLongPressDelete, fetchedGroupMembers, newestCommentId, deletePopup?.commentId, readOnly]); // eslint-disable-line
+  ), [user?.id, handleLongPressDelete, handleLongPressReport, fetchedGroupMembers, newestCommentId, deletePopup?.commentId, reportPopup?.commentId, readOnly]); // eslint-disable-line
 
   if (inline) {
     return (
@@ -858,6 +873,27 @@ function CommentModalContent({
               onDismiss={() => setDeletePopup(null)}
             />
           )}
+
+          {reportPopup && (
+            <DeleteCommentPopup
+              mode="report"
+              rect={reportPopup.rect}
+              comment={comments.find((c) => c.id === reportPopup.commentId) ?? null}
+              groupMembers={fetchedGroupMembers}
+              onConfirm={() => {
+                const c = comments.find((c) => c.id === reportPopup.commentId);
+                if (c) setReportTarget({ reportedUserId: c.user_id, commentId: c.id });
+              }}
+              onDismiss={() => setReportPopup(null)}
+            />
+          )}
+
+          <ReportSheet
+            visible={!!reportTarget}
+            onClose={() => setReportTarget(null)}
+            reportedUserId={reportTarget?.reportedUserId ?? ""}
+            commentId={reportTarget?.commentId}
+          />
         </View>
       </ForceTheme>
     );
@@ -931,6 +967,27 @@ function CommentModalContent({
           onDismiss={() => setDeletePopup(null)}
         />
       )}
+
+      {reportPopup && (
+        <DeleteCommentPopup
+          mode="report"
+          rect={reportPopup.rect}
+          comment={comments.find((c) => c.id === reportPopup.commentId) ?? null}
+          groupMembers={fetchedGroupMembers}
+          onConfirm={() => {
+            const c = comments.find((c) => c.id === reportPopup.commentId);
+            if (c) setReportTarget({ reportedUserId: c.user_id, commentId: c.id });
+          }}
+          onDismiss={() => setReportPopup(null)}
+        />
+      )}
+
+      <ReportSheet
+        visible={!!reportTarget}
+        onClose={() => setReportTarget(null)}
+        reportedUserId={reportTarget?.reportedUserId ?? ""}
+        commentId={reportTarget?.commentId}
+      />
     </View>
   );
 }

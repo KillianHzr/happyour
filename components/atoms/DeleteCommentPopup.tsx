@@ -33,6 +33,8 @@ interface DeleteCommentPopupProps {
   /** Commentaire ciblé, ré-affiché AU-DESSUS du voile sombre. */
   comment?: Comment | null;
   groupMembers?: { user_id: string; username: string }[];
+  /** "delete" (mon commentaire) ou "report" (commentaire de quelqu'un d'autre). */
+  mode?: "delete" | "report";
   onConfirm: () => void;
   onDismiss: () => void;
 }
@@ -44,9 +46,11 @@ const DeleteCommentPopupInner = ({
   rect,
   comment,
   groupMembers = [],
+  mode = "delete",
   onConfirm,
   onDismiss,
 }: DeleteCommentPopupProps) => {
+  const isReport = mode === "report";
   const { colors } = useTheme();
   const themedStyles = useThemedStyles(makeStyles);
 
@@ -92,7 +96,7 @@ const DeleteCommentPopupInner = ({
         >
           <CommentItem
             item={comment}
-            isMyComment
+            isMyComment={!isReport}
             isActive
             animateIn={false}
             onLongPressDelete={() => {}}
@@ -122,10 +126,20 @@ const DeleteCommentPopupInner = ({
           onPress={handleConfirm}
           activeOpacity={0.75}
         >
-          <Svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <Path d="M14.833 5.99902H5.16699V16.666C5.16699 16.8428 5.23728 17.0127 5.3623 17.1377C5.48722 17.2624 5.65647 17.3329 5.83301 17.333H14.167C14.3435 17.3329 14.5128 17.2624 14.6377 17.1377C14.7627 17.0127 14.833 16.8428 14.833 16.666V5.99902ZM12.333 3.33301C12.333 3.1562 12.2627 2.98635 12.1377 2.86133C12.0128 2.73648 11.8436 2.6661 11.667 2.66602H8.33301C8.15639 2.6661 7.98724 2.73648 7.8623 2.86133C7.73728 2.98635 7.66699 3.1562 7.66699 3.33301V3.99902H12.333V3.33301ZM14.333 3.99902H17.5C18.0522 3.99902 18.4998 4.44689 18.5 4.99902C18.5 5.55131 18.0523 5.99902 17.5 5.99902H16.833V16.666C16.833 17.3732 16.5527 18.0517 16.0527 18.5518C15.5527 19.0518 14.8741 19.3329 14.167 19.333H5.83301C5.12588 19.3329 4.44729 19.0518 3.94727 18.5518C3.44727 18.0517 3.16699 17.3732 3.16699 16.666V5.99902H2.5C1.94772 5.99902 1.5 5.55131 1.5 4.99902C1.50018 4.44689 1.94782 3.99902 2.5 3.99902H5.66699V3.33301C5.66699 2.62592 5.94737 1.94733 6.44727 1.44727C6.94729 0.947245 7.62588 0.666102 8.33301 0.666016H11.667C12.3741 0.666102 13.0527 0.947245 13.5527 1.44727C14.0526 1.94733 14.333 2.62592 14.333 3.33301V3.99902Z" fill={colors.bgDanger} />
-          </Svg>
-          <Text style={themedStyles.deleteLabel}>Supprimer</Text>
+          {isReport ? (
+            // Icône drapeau (signaler)
+            <Svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <Path d="M4 22V4M4 4C4 4 5.5 3 8 3C10.5 3 13.5 5 16 5C18.5 5 20 4 20 4V14C20 14 18.5 15 16 15C13.5 15 10.5 13 8 13C5.5 13 4 14 4 14"
+                stroke={colors.text} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+          ) : (
+            <Svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <Path d="M14.833 5.99902H5.16699V16.666C5.16699 16.8428 5.23728 17.0127 5.3623 17.1377C5.48722 17.2624 5.65647 17.3329 5.83301 17.333H14.167C14.3435 17.3329 14.5128 17.2624 14.6377 17.1377C14.7627 17.0127 14.833 16.8428 14.833 16.666V5.99902ZM12.333 3.33301C12.333 3.1562 12.2627 2.98635 12.1377 2.86133C12.0128 2.73648 11.8436 2.6661 11.667 2.66602H8.33301C8.15639 2.6661 7.98724 2.73648 7.8623 2.86133C7.73728 2.98635 7.66699 3.1562 7.66699 3.33301V3.99902H12.333V3.33301ZM14.333 3.99902H17.5C18.0522 3.99902 18.4998 4.44689 18.5 4.99902C18.5 5.55131 18.0523 5.99902 17.5 5.99902H16.833V16.666C16.833 17.3732 16.5527 18.0517 16.0527 18.5518C15.5527 19.0518 14.8741 19.3329 14.167 19.333H5.83301C5.12588 19.3329 4.44729 19.0518 3.94727 18.5518C3.44727 18.0517 3.16699 17.3732 3.16699 16.666V5.99902H2.5C1.94772 5.99902 1.5 5.55131 1.5 4.99902C1.50018 4.44689 1.94782 3.99902 2.5 3.99902H5.66699V3.33301C5.66699 2.62592 5.94737 1.94733 6.44727 1.44727C6.94729 0.947245 7.62588 0.666102 8.33301 0.666016H11.667C12.3741 0.666102 13.0527 0.947245 13.5527 1.44727C14.0526 1.94733 14.333 2.62592 14.333 3.33301V3.99902Z" fill={colors.bgDanger} />
+            </Svg>
+          )}
+          <Text style={[themedStyles.deleteLabel, isReport && { color: colors.text }]}>
+            {isReport ? "Signaler" : "Supprimer"}
+          </Text>
         </TouchableOpacity>
       </Animated.View>
     </View>
