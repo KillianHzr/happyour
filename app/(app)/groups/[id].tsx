@@ -262,6 +262,11 @@ export default function MainPagerScreen() {
   // ── Transition single → reveal (filmstrip flouté) ──
   const [revealTransition, setRevealTransition] = useState(false); // monté (préchauffe) dès le slide
   const [revealActive, setRevealActive] = useState(false);         // anim lancée à la fin de l'aspiration
+  // Filet de sécurité : l'entrée dans le reveal dépend d'un callback d'anim Reanimated
+  // (RevealTransition → onArrived). Si ce callback est perdu (JS thread saturé, anim
+  // interrompue), revealActive reste latché à true et toute nouvelle tentative devient un
+  // no-op → bloqué sur la single jusqu'au redémarrage. Ce timer force l'ouverture.
+  const revealWatchdogRef = useRef<NodeJS.Timeout | null>(null);
   const cardFrameRef = useRef<{ x: number; y: number; width: number; height: number } | null>(null);
   // 10 dernières photos (récent→ancien) + tout premier moment, en URLs d'affichage floutables.
   const revealStripUrls = useMemo(() => {
@@ -456,6 +461,11 @@ export default function MainPagerScreen() {
     if (!cardFrameRef.current || revealStripUrls.length === 0) { setShowReveal(true); return; }
     setRevealTransition(true); // au cas où le slide n'a pas monté (sécurité)
     setRevealActive(true);
+    // Si la transition n'aboutit pas (callback runOnJS perdu, anim interrompue), on force
+    // l'ouverture du reveal pour ne jamais rester coincé sur la single. Marge au-dessus de
+    // la durée d'anim (GROW_MS 420 + STRIP_MS 1100 + ~150).
+    if (revealWatchdogRef.current) clearTimeout(revealWatchdogRef.current);
+    revealWatchdogRef.current = setTimeout(() => setShowReveal(true), 2500);
   }, [revealStripUrls]);
 
   useEffect(() => {
@@ -564,7 +574,11 @@ export default function MainPagerScreen() {
           const me = (membersRes.data ?? []).find((m: any) => m.user_id === user.id);
           const isAdminForGroup = me?.role === "admin" ?? false;
 
-          const challengeWeekStart = getChallengeWeekStart(prevRevealDate);
+          // La semaine de défis à révéler = celle qui se termine au reveal courant (photoEnd),
+          // pas prevRevealDate. Le dimanche soir après 20h, prevRevealDate pointe sur le reveal
+          // d'il y a une semaine → on chargeait les défis avec une semaine de retard (bug : défis
+          // de la semaine écoulée invisibles). photoEnd suit la même fenêtre que les photos/couronne.
+          const challengeWeekStart = getChallengeWeekStart(photoEnd);
           let challenges = await fetchChallengeData(g.id, challengeWeekStart, membersData);
           // DEV: if prev week has no challenges, load current week so simulate-reveal shows data
           if (__DEV__ && !challenges.period1 && !challenges.period2) {
@@ -1350,8 +1364,20 @@ export default function MainPagerScreen() {
     if (revealStripUrls.length) Image.prefetch(revealStripUrls);
     if (cardFrameRef.current && revealStripUrls.length) setRevealTransition(true);
   }, [menuExit, revealStripUrls]);
-  // Réaffiche le menu quand le reveal se ferme.
-  useEffect(() => { if (!showReveal) menuExit.setValue(0); }, [showReveal, menuExit]);
+  // Réaffiche le menu quand le reveal se ferme + réarme un état de transition propre.
+  // Sans ce reset, revealActive resterait latché à true après une transition interrompue et
+  // bloquerait toutes les ouvertures suivantes (setRevealActive(true) devient un no-op).
+  useEffect(() => {
+    if (showReveal) {
+      // Entré dans le reveal : le watchdog n'a plus lieu d'être.
+      if (revealWatchdogRef.current) { clearTimeout(revealWatchdogRef.current); revealWatchdogRef.current = null; }
+    } else {
+      menuExit.setValue(0);
+      setRevealTransition(false);
+      setRevealActive(false);
+      if (revealWatchdogRef.current) { clearTimeout(revealWatchdogRef.current); revealWatchdogRef.current = null; }
+    }
+  }, [showReveal, menuExit]);
 
   const cameraTranslateX = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [-SCREEN_WIDTH, 0, SCREEN_WIDTH] });
   const cameraScale = scrollX.interpolate({ inputRange: [0, SCREEN_WIDTH, 2 * SCREEN_WIDTH], outputRange: [0.9, 1, 0.9] });
