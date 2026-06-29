@@ -589,7 +589,7 @@ const makeStyles = (colors: ThemeColors) => StyleSheet.create({
     height: 80, padding: spacing.sm, flexDirection: "row", justifyContent: "space-between",
     alignItems: "center", alignSelf: "stretch", borderRadius: radii.xl, backgroundColor: colors.bg,
   },
-  unlockNob: { alignSelf: "stretch", borderRadius: radii.xl, backgroundColor: colors.brand, zIndex: 2 },
+  unlockNob: { alignSelf: "stretch", borderRadius: radii.lg, backgroundColor: colors.brand, zIndex: 2 },
   unlockTextWrap: { position: "absolute", right: 24, top: 0, bottom: 0, flexDirection: "row", alignItems: "center", gap: spacing.xs, zIndex: 1 },
   unlockText: { ...textStyles.bodyBase, color: colors.textTertiary, lineHeight: undefined },
 });
