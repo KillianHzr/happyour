@@ -152,7 +152,19 @@ export default function ProfilePage({
   // Scroll activé uniquement si le contenu dépasse la zone visible → pas de bounce iOS inutile.
   const [scrollViewportH, setScrollViewportH] = useState(0);
   const [scrollContentH, setScrollContentH] = useState(0);
-  const isScrollable = scrollContentH > scrollViewportH + 1;
+  // Hystérésis : un seuil de ±1px faisait clignoter en boucle sur les écrans où le contenu
+  // tombe pile à la limite. Monter/démonter le RefreshControl (et toggler scrollEnabled)
+  // re-mesure la ScrollView de ~1px → isScrollable repassait true/false en boucle → tressautement.
+  // Avec une bande morte (16px) et une décision mémorisée, une fois stabilisé ça ne flippe plus.
+  const [isScrollable, setIsScrollable] = useState(false);
+  useEffect(() => {
+    if (scrollViewportH === 0 || scrollContentH === 0) return;
+    setIsScrollable((prev) =>
+      prev
+        ? scrollContentH > scrollViewportH - 16   // reste scrollable tant qu'on n'est pas nettement en dessous
+        : scrollContentH > scrollViewportH + 16   // ne devient scrollable qu'au-delà d'une marge franche
+    );
+  }, [scrollViewportH, scrollContentH]);
 
   // ── Container coffre ──
   const [coffreGroupIndex, setCoffreGroupIndex] = useState(() => {
