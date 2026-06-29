@@ -938,7 +938,10 @@ export default function MainPagerScreen() {
     const sub = AppState.addEventListener("change", (state) => {
       if (state === "active") {
         if (!isMounted.skipped) { isMounted.skipped = true; return; }
+        // photosVersion++ aussi : sinon GroupsPage met à jour sa base mais pas ses overrides
+        // (dont le fond de card), qui restent figés sur la capture précédente.
         fetchAllDataRef.current();
+        setPhotosVersion((v) => v + 1);
       }
     });
     return () => sub.remove();
@@ -948,7 +951,9 @@ export default function MainPagerScreen() {
   useEffect(() => {
     const interval = setInterval(() => {
       if (AppState.currentState === "active" && !showReveal) {
+        // cf. ci-dessus : on bump aussi photosVersion pour rafraîchir les overrides (fond de card).
         fetchAllDataRef.current();
+        setPhotosVersion((v) => v + 1);
       }
     }, 120_000);
     return () => clearInterval(interval);

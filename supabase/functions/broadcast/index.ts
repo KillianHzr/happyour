@@ -1,9 +1,12 @@
-// Edge Function : envoi d'une notification push à TOUS les utilisateurs.
+// Edge Function : envoi d'une notification push à TOUS les utilisateurs (ou à un seul).
 //
 // Usage (POST, header x-share-secret) :
 //   {}                                  → notif "reveal dispo" par défaut (texte/son du reveal)
 //   { "title": "...", "body": "..." }   → notif personnalisée
 //   { "variant": "reveal" | "basic" }   → choisit le son (défaut: reveal)
+//   { "email": "..." }                  → cible UN seul utilisateur (par email auth)
+//   { "userId": "uuid" }                → cible UN seul utilisateur (par id profil)
+// Sans email/userId → broadcast à tout le monde (comportement par défaut).
 //
 // ⚠️ Purement cosmétique : envoyer cette notif ne déverrouille RIEN dans l'app (la dispo du
 // reveal est calculée côté client). Sert p.ex. à déclencher la notif pendant une démo.
@@ -97,17 +100,49 @@ Deno.serve(async (req) => {
   const sound = variant === "reveal" ? "reveal_notification.wav" : "basic_notification.wav";
   const channelId = variant === "reveal" ? "reveal" : "default";
 
-  const { data: rows, error } = await sb
+  // Ciblage optionnel d'un seul utilisateur (par id ou email). Sinon : tout le monde.
+  // L'email vit dans auth.users (pas dans profiles) → on le résout via l'API admin Auth.
+  let targetUserId = typeof body?.userId === "string" && body.userId ? body.userId : null;
+  const targetEmail = typeof body?.email === "string" && body.email ? body.email.trim().toLowerCase() : null;
+
+  if (!targetUserId && targetEmail) {
+    // Parcourt les pages de auth.users pour trouver l'id correspondant à l'email.
+    let found: string | null = null;
+    for (let page = 1; page <= 50 && !found; page++) {
+      const { data, error: listErr } = await sb.auth.admin.listUsers({ page, perPage: 1000 });
+      if (listErr) {
+        console.error("[broadcast] listUsers error:", listErr.message);
+        return new Response(JSON.stringify({ ok: false, error: listErr.message }), { status: 500 });
+      }
+      const users = data?.users ?? [];
+      const hit = users.find((u: any) => (u.email ?? "").toLowerCase() === targetEmail);
+      if (hit) found = hit.id;
+      if (users.length < 1000) break; // dernière page
+    }
+    if (!found) {
+      console.log(`[broadcast] email introuvable: ${targetEmail}`);
+      return new Response(JSON.stringify({ ok: false, error: "email introuvable", sent: 0 }), {
+        status: 404, headers: { "Content-Type": "application/json" },
+      });
+    }
+    targetUserId = found;
+  }
+
+  let query = sb
     .from("profiles")
     .select("expo_push_token")
     .not("expo_push_token", "is", null);
+  if (targetUserId) query = query.eq("id", targetUserId);
+
+  const { data: rows, error } = await query;
   if (error) {
     console.error("[broadcast] select error:", error.message);
     return new Response(JSON.stringify({ ok: false, error: error.message }), { status: 500 });
   }
 
+  const target = targetEmail ? `email=${targetEmail}` : targetUserId ? `userId=${targetUserId}` : "ALL";
   const tokens = [...new Set((rows ?? []).map((r: any) => r.expo_push_token).filter(Boolean))] as string[];
-  console.log(`[broadcast] "${title}" / "${text}" → ${tokens.length} tokens`);
+  console.log(`[broadcast] (${target}) "${title}" / "${text}" → ${tokens.length} tokens`);
   await sendPush(tokens, title, text, sound, channelId);
 
   return new Response(JSON.stringify({ ok: true, sent: tokens.length }), {
