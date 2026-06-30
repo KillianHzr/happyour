@@ -373,12 +373,17 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const micOpacityAnim = useRef(new Animated.Value(1)).current;
   // Position verticale de la barre de légende (absolue dans previewFullContainer).
   const captionBarBottomAnim = useRef(new Animated.Value(NAVBAR_HEIGHT + spacing.lg)).current;
-  // Dernière hauteur clavier connue (Android + iOS) — sert au filet de sécurité iOS.
+  // Dernière hauteur clavier connue (Android + iOS) — sert à animer l'ouverture
+  // immédiatement, sans dépendre de keyboardWillShow.
   const lastKbHRef = useRef<number | null>(null);
-  // Filet de sécurité iOS : timer armé au focus de la légende, désarmé par onShow. S'il
-  // expire (= keyboardWillShow raté, bug intermittent sur iPhone récents), on lance
-  // l'animation d'ouverture nous-mêmes pour que la légende remonte quand même.
-  const captionShowFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Horodatage de l'ouverture de l'édition + si keyboardWillShow a déjà été vu pour cette
+  // session. Sert à ignorer un keyboardWillHide « fantôme » émis par iOS pendant la
+  // transition d'ouverture (avant tout willShow), qui sinon refermait la légende. Et
+  // captionAnimatedKbHRef = hauteur clavier à laquelle on a déjà animé l'ouverture (évite
+  // de ré-animer pour rien quand willShow confirme la même hauteur).
+  const captionEditOpenedAtRef = useRef(0);
+  const captionShowSeenRef = useRef(false);
+  const captionAnimatedKbHRef = useRef(0);
 
   // Keep ref in sync so keyboard listeners don't capture stale state
   useEffect(() => { isEditingCaptionRef.current = isEditingCaption; }, [isEditingCaption]);
@@ -398,8 +403,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
 
     const onShow = Keyboard.addListener(kbShow, (e) => {
       if (!isEditingCaptionRef.current) return;
-      // onShow a bien tiré → annule le filet de sécurité iOS (cf. startEditCaption).
-      if (captionShowFallbackRef.current) { clearTimeout(captionShowFallbackRef.current); captionShowFallbackRef.current = null; }
+      captionShowSeenRef.current = true; // willShow a tiré → plus de garde "hide fantôme"
       const kbH = e.endCoordinates.height;
       lastKbHRef.current = kbH; // mémorise la hauteur réelle (sert au filet de sécurité iOS)
 
@@ -431,7 +435,10 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         return;
       }
 
-      // iOS : keyboardWillShow arrive avant l'animation du clavier — sync parfait.
+      // iOS : on a déjà animé l'ouverture immédiatement au tap (startEditCaption). Si la
+      // hauteur réelle correspond à notre estimation, rien à corriger → on évite de
+      // relancer l'animation (qui ferait un micro-saut). Sinon on ajuste à la vraie hauteur.
+      if (Math.abs(kbH - captionAnimatedKbHRef.current) <= 1) return;
       const dur = (e as any).duration > 10 ? (e as any).duration : 280;
       const topFixed = Math.max(0, winHeight - winWidth * 16 / 9 - NAVBAR_HEIGHT);
       const captionBarBottom = kbH + MARGIN_ABOVE_KB;
@@ -451,8 +458,15 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     });
 
     const onHide = Keyboard.addListener(kbHide, (e) => {
-      // Annule un éventuel filet de sécurité iOS en attente (le clavier se ferme).
-      if (captionShowFallbackRef.current) { clearTimeout(captionShowFallbackRef.current); captionShowFallbackRef.current = null; }
+      // iOS récents (ex. iPhone 17 Pro) : un keyboardWillHide « fantôme » peut survenir
+      // pendant la transition d'ouverture (juste après le focus, avant tout willShow). On
+      // l'ignore tant qu'on n'a pas vu de willShow et qu'on vient d'ouvrir, sinon il
+      // refermait la légende qu'on vient d'ouvrir. Un vrai dismiss arrive, lui, après que
+      // le clavier s'est montré (willShow vu) ou bien plus tard.
+      if (Platform.OS === "ios" && isEditingCaptionRef.current && !captionShowSeenRef.current
+          && Date.now() - captionEditOpenedAtRef.current < 600) {
+        return;
+      }
       // Cross-fade synchronisé avec la fermeture du clavier (iOS keyboardWillHide →
       // démarre dès le début de la descente) : le check disparaît, le micro apparaît.
       const checkDur = (e as any).duration > 10 ? (e as any).duration : 250;
@@ -497,7 +511,6 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
 
     return () => {
       onShow.remove(); onHide.remove();
-      if (captionShowFallbackRef.current) { clearTimeout(captionShowFallbackRef.current); captionShowFallbackRef.current = null; }
     };
   }, [winWidth, winHeight, insets.top, insets.bottom, activeChallenge]);
 
@@ -505,6 +518,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   // du clavier). Mêmes cibles que le chemin onShow. Utilisé par le filet de sécurité iOS quand
   // keyboardWillShow est raté. `kbH` = hauteur clavier estimée (dernière connue).
   const animateCaptionOpen = (kbH: number, duration: number) => {
+    captionAnimatedKbHRef.current = kbH; // hauteur à laquelle on anime (cf. onShow : skip si identique)
     const topFixed = Math.max(0, winHeight - winWidth * 16 / 9 - NAVBAR_HEIGHT);
     const captionBarBottom = kbH + MARGIN_ABOVE_KB;
     const mediaFrameBottom = winHeight - captionBarBottom - EDIT_CAPTION_H - CAPTION_GAP;
@@ -527,6 +541,8 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const startEditCaption = () => {
     isEditingCaptionRef.current = true;
     setIsEditingCaption(true);
+    captionEditOpenedAtRef.current = Date.now();
+    captionShowSeenRef.current = false;
     confirmBtnOpacityAnim.setValue(0); // check caché au départ, apparaît en fondu à l'ouverture
     micOpacityAnim.setValue(1);        // micro visible au départ, disparaît en fondu à l'ouverture
 
@@ -551,17 +567,12 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
         Animated.timing(uiOpacityAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
       ]).start();
     } else {
-      // iOS : l'animation est normalement pilotée par keyboardWillShow (onShow), parfaitement
-      // synchronisée avec le clavier. Mais sur iOS récents (ex. iPhone 17 Pro) cet événement
-      // est parfois raté à l'ouverture → la légende ne remontait pas et la preview ne se
-      // redimensionnait pas (bug intermittent). Filet : si onShow n'a pas désarmé ce timer
-      // dans les 250ms, on déclenche l'animation nous-mêmes avec la dernière hauteur connue.
-      if (captionShowFallbackRef.current) clearTimeout(captionShowFallbackRef.current);
-      captionShowFallbackRef.current = setTimeout(() => {
-        captionShowFallbackRef.current = null;
-        if (!isEditingCaptionRef.current) return; // édition annulée entre-temps
-        animateCaptionOpen(lastKbHRef.current ?? 336, 280);
-      }, 250);
+      // iOS : on anime l'ouverture IMMÉDIATEMENT avec la dernière hauteur clavier connue,
+      // sans attendre keyboardWillShow. Cet event est parfois raté à l'ouverture sur iOS
+      // récents (ex. iPhone 17 Pro) → la légende ne remontait pas au-dessus du clavier
+      // (bug intermittent). En animant nous-mêmes dès le tap, on ne dépend plus de lui ;
+      // onShow, s'il arrive, corrigera juste la hauteur exacte (cf. skip si identique).
+      animateCaptionOpen(lastKbHRef.current ?? 336, 280);
     }
   };
 
