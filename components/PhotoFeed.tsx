@@ -79,6 +79,9 @@ type Props = {
   crownWinnerId?: string | null;
   crownDurationMs?: number;
   crownAllDurations?: Record<string, number>;
+  // DEBUG DÉMO : couronne 100% fake — winner construit depuis ce profil (avatar/pseudo)
+  // même s'il n'a aucun moment dans le feed. À retirer avant la prod.
+  crownWinnerOverride?: { user_id: string; username: string; avatar_url: string | null };
   groupName?: string;
   introTitle?: string;
   introSubtitle?: string;
@@ -131,6 +134,7 @@ const PhotoFeedContent = forwardRef(({
   crownWinnerId,
   crownDurationMs = 0,
   crownAllDurations = {},
+  crownWinnerOverride,
   groupName,
   introTitle,
   introSubtitle,
@@ -541,17 +545,22 @@ const PhotoFeedContent = forwardRef(({
         />
       );
     } else if (item.type === "crown") {
-      const winner = photos.find((p) => p.user_id === crownWinnerId);
+      // DEBUG DÉMO : si le gagnant n'a aucun moment dans le feed, on fabrique une entrée
+      // synthétique à partir du profil fourni (avatar/pseudo). À retirer avant la prod.
+      const winner = photos.find((p) => p.user_id === crownWinnerId)
+        ?? (crownWinnerOverride
+          ? ({ id: "fake-crown-winner", user_id: crownWinnerOverride.user_id, username: crownWinnerOverride.username, avatar_url: crownWinnerOverride.avatar_url } as unknown as PhotoEntry)
+          : undefined);
       if (!winner) return null;
       const currentUserPhoto = photos.find((p) => p.user_id === currentUserId);
       content = (
-        <CrownRevealPage 
-          winner={winner} 
-          durationMs={crownDurationMs} 
+        <CrownRevealPage
+          winner={winner}
+          durationMs={crownDurationMs}
           currentUserId={currentUserId}
           userDurationMs={currentUserId ? (crownAllDurations[currentUserId] ?? 0) : 0}
-          currentUserAvatarUrl={currentUserPhoto?.avatar_url}
-          currentUsername={currentUserPhoto?.username || "Moi"}
+          currentUserAvatarUrl={currentUserPhoto?.avatar_url ?? currentUserAvatarUrl}
+          currentUsername={currentUserPhoto?.username || currentUsername || "Moi"}
         />
       );
     } else if (item.type === "separator") {

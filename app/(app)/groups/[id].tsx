@@ -117,6 +117,13 @@ function getWeekBounds(revealDayOfWeek = 0, revealHour = 20) {
   return { monday, revealDate, prevRevealDate };
 }
 
+// TODO: DEBUG DÉMO — à RETIRER avant la prod. Faux couronnement de fin de reveal, 100% en
+// dur pour les comptes de démo : gagnant = ce compte (avatar/pseudo réels) à 49h37, moi à
+// 22h14, indépendamment des moments réellement postés.
+const FAKE_CROWN_WINNER_ID = "a4aec7cf-87c2-4603-b216-f8567e103448";
+const FAKE_CROWN_WINNER_MS = (49 * 60 + 37) * 60 * 1000; // 49h37
+const FAKE_CROWN_ME_MS = (22 * 60 + 14) * 60 * 1000;     // 22h14
+
 export default function MainPagerScreen() {
   const { id, onboarding } = useLocalSearchParams<{ id: string; onboarding?: string }>();
   const { user } = useAuth();
@@ -256,8 +263,25 @@ export default function MainPagerScreen() {
   const members = activeData?.members ?? [];
   const photoCount = activeData?.photoCount ?? 0;
   const photos = activeData?.photos ?? [];
-  const crownWinnerId = activeData?.crownWinnerId ?? null;
-  const crownDurationMs = activeData?.crownDurationMs ?? 0;
+  // TODO: DEBUG DÉMO — à RETIRER avant la prod. Couronne de fin de reveal 100% fake pour les
+  // comptes de démo (cf. constantes en haut du fichier). On récupère juste l'avatar + pseudo
+  // du compte gagnant pour les afficher (indépendant des moments du feed).
+  const [fakeCrownWinner, setFakeCrownWinner] = useState<{ username: string; avatar_url: string | null } | null>(null);
+  useEffect(() => {
+    if (!debugDemoAllowed) { setFakeCrownWinner(null); return; }
+    let cancelled = false;
+    supabase.from("profiles").select("username, avatar_url").eq("id", FAKE_CROWN_WINNER_ID).maybeSingle()
+      .then(({ data }) => { if (!cancelled && data) setFakeCrownWinner({ username: data.username, avatar_url: data.avatar_url }); });
+    return () => { cancelled = true; };
+  }, [debugDemoAllowed]);
+  const crownWinnerId = debugDemoAllowed ? FAKE_CROWN_WINNER_ID : (activeData?.crownWinnerId ?? null);
+  const crownDurationMs = debugDemoAllowed ? FAKE_CROWN_WINNER_MS : (activeData?.crownDurationMs ?? 0);
+  const crownAllDurations = debugDemoAllowed
+    ? { [FAKE_CROWN_WINNER_ID]: FAKE_CROWN_WINNER_MS, ...(user?.id ? { [user.id]: FAKE_CROWN_ME_MS } : {}) }
+    : (activeData?.allDurations ?? {});
+  const crownWinnerOverride = debugDemoAllowed && fakeCrownWinner
+    ? { user_id: FAKE_CROWN_WINNER_ID, username: fakeCrownWinner.username, avatar_url: fakeCrownWinner.avatar_url }
+    : undefined;
   const isAdmin = activeData?.isAdmin ?? false;
   const challenges = activeData?.challenges ?? null;
 
@@ -1793,7 +1817,8 @@ export default function MainPagerScreen() {
             revealEndDate={activeRevealEndDate}
             crownWinnerId={crownWinnerId}
             crownDurationMs={crownDurationMs}
-            crownAllDurations={activeData?.allDurations ?? {}}
+            crownAllDurations={crownAllDurations}
+            crownWinnerOverride={crownWinnerOverride}
             groupName={groupName}
             currentUserAvatarUrl={avatarUrl ?? null}
             currentUsername={username}
