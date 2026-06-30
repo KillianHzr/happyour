@@ -97,6 +97,9 @@ type ChallengesSliderProps = ChallengesContentProps & {
   // Visibilité de la vue (le slider reste monté, l'opacité est togglée). À chaque
   // ouverture on rafraîchit silencieusement les réponses (participation, compteur).
   visible?: boolean;
+  // À l'ouverture, scrolle le slider sur le défi de ce groupe (ex. ouverture depuis la
+  // single d'un groupe). null/undefined → démarre sur le premier.
+  initialGroupId?: string | null;
 };
 
 export function ChallengesSlider({
@@ -107,6 +110,7 @@ export function ChallengesSlider({
   chooseRef,
   onActiveChange,
   visible,
+  initialGroupId,
 }: ChallengesSliderProps) {
   const { colors } = useTheme();
   const sliderStyles = useThemedStyles(makeSliderStyles);
@@ -267,6 +271,26 @@ export function ChallengesSlider({
     reportActive(activeIndexRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupChallenges]);
+
+  // Ouverture depuis la single d'un groupe : à chaque passage visible (false → true),
+  // on positionne le slider sur le défi de ce groupe (sans animation).
+  const prevVisibleScrollRef = useRef(false);
+  useEffect(() => {
+    const becameVisible = !!visible && !prevVisibleScrollRef.current;
+    prevVisibleScrollRef.current = !!visible;
+    if (!becameVisible || !initialGroupId || snapInterval <= 0) return;
+    const idx = groupChallengesRef.current.findIndex((gc) => gc.groupId === initialGroupId);
+    if (idx < 0) return;
+    // double rAF : laisse le ScrollView finir son layout avant de scroller.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ x: idx * snapInterval, animated: false });
+      setActiveIndex(idx);
+      activeIndexRef.current = idx;
+      hapticIdxRef.current = idx;
+      reportActive(idx);
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, initialGroupId, snapInterval]);
 
   // Pas de loop : on rend les défis une seule fois.
   const displayItems = groupChallenges;

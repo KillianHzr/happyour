@@ -171,6 +171,9 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
   const lastSharedGroupIdsRef = useRef<string[] | null>(null);
   const lastSharedStorageKey = `last_shared_groups_${userId}`;
   const [showChallengesInline, setShowChallengesInline] = useState(false);
+  // Groupe sur lequel pré-scroller le slider de défis (ouverture depuis la single d'un
+  // groupe). null = ouverture normale via le bouton « Défis » → démarre sur le premier.
+  const [challengeScrollGroupId, setChallengeScrollGroupId] = useState<string | null>(null);
   const [activeChallenge, setActiveChallenge] = useState<ActiveChallenge | null>(null);
   // Frame mesurée du bouton Défis → positionne le bouton invisible (zone libre à sa gauche).
   const [defiBtnFrame, setDefiBtnFrame] = useState<{ x: number; y: number; height: number } | null>(null);
@@ -900,12 +903,24 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
     previewMarginBottomAnim.setValue(NAVBAR_HEIGHT);
   };
 
-  // Active directement un défi demandé depuis l'extérieur (encart "Défi @…" de la single).
+  // Ouverture demandée depuis l'extérieur (encart "Défi @…" de la single) : on ouvre la
+  // vue liste des défis, slider pré-positionné sur le défi du groupe d'origine (au lieu
+  // d'activer directement la capture de ce défi).
+  //
+  // On bascule l'overlay PENDANT le render (pattern « ajuster un state quand une prop
+  // change ») et non dans un effet : sinon l'overlay ne s'affiche qu'au render suivant,
+  // ce qui laisse voir la caméra une frame avant que la vue Défis ne la recouvre (le
+  // passage à la page capture, lui, est instantané). La ref garde-fou évite la boucle.
+  const prevPendingChallengeRef = useRef<ActiveChallenge | null>(null);
+  if (pendingChallenge && pendingChallenge !== prevPendingChallengeRef.current) {
+    prevPendingChallengeRef.current = pendingChallenge;
+    setChallengeScrollGroupId(pendingChallenge.groupId);
+    setShowChallengesInline(true);
+  }
+  // Consomme la demande après coup (l'overlay est déjà ouvert) pour que le parent réarme
+  // pendingChallenge à null.
   useEffect(() => {
-    if (!pendingChallenge) return;
-    handleSelectChallenge(pendingChallenge);
-    setShowChallengesInline(false);
-    onPendingChallengeConsumed?.();
+    if (pendingChallenge) onPendingChallengeConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingChallenge]);
 
@@ -1874,7 +1889,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
                 <TouchableOpacity
                   style={challengeStyles.challengeBtn}
                   onLayout={(e) => { const { x, y, height } = e.nativeEvent.layout; setDefiBtnFrame({ x, y, height }); }}
-                  onPress={() => setShowChallengesInline(true)}
+                  onPress={() => { setChallengeScrollGroupId(null); setShowChallengesInline(true); }}
                   activeOpacity={0.8}
                 >
                   <Text style={challengeStyles.challengeBtnText}>Défis</Text>
@@ -2292,6 +2307,7 @@ function CameraPageInner({ groupId, userId, isActive, allGroups, onScrollLock, o
             <ChallengesSlider
               allGroups={allGroups}
               currentUserId={userId}
+              initialGroupId={challengeScrollGroupId}
               onSelectChallenge={(challenge) => {
                 handleSelectChallenge(challenge);
                 setShowChallengesInline(false);

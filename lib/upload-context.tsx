@@ -4,6 +4,15 @@ import { manipulateAsync, FlipType, SaveFormat } from "expo-image-manipulator";
 import { supabase } from "./supabase";
 import { r2Storage } from "./r2";
 import { scheduleNoShareReminder } from "./notifications";
+import { isDebugDemoEmail } from "./debug-demo";
+
+// DEBUG DÉMO (à retirer après la présentation) : si le compte connecté est un compte
+// de démo, on antidate le moment à J+2 (poste mardi → daté jeudi, mercredi → vendredi).
+async function debugDemoCreatedAt(): Promise<string | undefined> {
+  const { data } = await supabase.auth.getSession();
+  if (!isDebugDemoEmail(data.session?.user?.email)) return undefined;
+  return new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
+}
 
 type UploadStatus = "uploading" | "success" | "error";
 
@@ -195,7 +204,9 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       try {
         const { finalPath, secondPath, captionAudioPath, videoThumbnailPath, secondVideoThumbnailPath } = await uploadFilesToR2(fileName, fileUri, contentType, secondFile, captionAudioFile, mirrorPrimary);
-        
+
+        const createdAtOverride = await debugDemoCreatedAt(); // DEBUG DÉMO : J+2 pour les comptes de démo
+
         const { data: inserted, error } = await supabase.from("photos").insert([{
           ...dbData,
           image_path: finalPath,
@@ -204,7 +215,8 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
           video_thumbnail_path: videoThumbnailPath,
           second_video_thumbnail_path: secondVideoThumbnailPath,
           waveform: waveform || null,
-          caption_waveform: captionWaveform || null
+          caption_waveform: captionWaveform || null,
+          ...(createdAtOverride ? { created_at: createdAtOverride } : {})
         }]).select("id").single();
 
         if (error) throw error;
@@ -253,7 +265,9 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       try {
         const { finalPath, secondPath, videoThumbnailPath, secondVideoThumbnailPath } = await uploadFilesToR2(fileName, fileUri, contentType, secondFile);
-        
+
+        const createdAtOverride = await debugDemoCreatedAt(); // DEBUG DÉMO : J+2 pour les comptes de démo
+
         const { error } = await supabase.from("challenge_responses").insert([{
           challenge_id: challengeId,
           user_id: dbData.user_id,
@@ -264,6 +278,7 @@ export function UploadProvider({ children }: { children: React.ReactNode }) {
           second_video_thumbnail_path: secondVideoThumbnailPath,
           is_target_response: isTarget || false,
           waveform: waveform || null,
+          ...(createdAtOverride ? { created_at: createdAtOverride } : {})
         }]);
 
         if (error) throw error;

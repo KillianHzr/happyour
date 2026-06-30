@@ -183,14 +183,15 @@ const PhotoFeedContent = forwardRef(({
         console.warn("[scrollToPhoto] Photo not found in feed items for photoId:", photoId);
       }
     },
-    // TODO: voir à la version finale — déclenchement de debug : scrolle directement tout en
-    // bas du reveal jusqu'à la couronne de la semaine (utilisé pour les démos/tests), à
-    // retirer (ou conditionner) avant la release.
+    // TODO: voir à la version finale — déclenchement de debug : scrolle vers le reveal,
+    // 3 moments AVANT la couronne (moment défi inclus dans le décompte), utilisé pour
+    // les démos/tests, à retirer (ou conditionner) avant la release.
     scrollToCrown: () => {
       let idx = items.findIndex(item => item.type === "crown");
       if (idx === -1) idx = items.findIndex(item => item.type === "end");
       if (idx === -1) idx = items.length - 1;
       if (idx < 0) return;
+      idx = Math.max(0, idx - 4); // 3 moments avant la couronne (défi inclus)
       try {
         flatListRef.current?.scrollToOffset({ offset: FEED_HEIGHT * idx, animated: true });
       } catch (e) {

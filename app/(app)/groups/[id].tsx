@@ -9,6 +9,7 @@ import { RightSlideModal } from "../../../components/atoms/RightSlideModal";
 import { supabase } from "../../../lib/supabase";
 import { r2Storage } from "../../../lib/r2";
 import { useAuth } from "../../../lib/auth-context";
+import { isDebugDemoEmail } from "../../../lib/debug-demo";
 import { useToast } from "../../../lib/toast-context";
 import { translateError } from "../../../lib/error-messages";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -116,19 +117,10 @@ function getWeekBounds(revealDayOfWeek = 0, revealHour = 20) {
   return { monday, revealDate, prevRevealDate };
 }
 
-// Comptes autorisés à utiliser les déclencheurs de debug pour la démo.
-const DEBUG_DEMO_EMAILS = [
-  "theolanglade21@gmail.com",
-  "me@melisseclivaz.com",
-  "hugopinna@free.fr",
-  "killianherzer@gmail.com",
-  "axel.genin17@gmail.com",
-];
-
 export default function MainPagerScreen() {
   const { id, onboarding } = useLocalSearchParams<{ id: string; onboarding?: string }>();
   const { user } = useAuth();
-  const debugDemoAllowed = !!user?.email && DEBUG_DEMO_EMAILS.includes(user.email.toLowerCase());
+  const debugDemoAllowed = isDebugDemoEmail(user?.email);
   const { showToast } = useToast();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
