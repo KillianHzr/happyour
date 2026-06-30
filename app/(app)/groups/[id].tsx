@@ -116,9 +116,19 @@ function getWeekBounds(revealDayOfWeek = 0, revealHour = 20) {
   return { monday, revealDate, prevRevealDate };
 }
 
+// Comptes autorisés à utiliser les déclencheurs de debug pour la démo.
+const DEBUG_DEMO_EMAILS = [
+  "theolanglade21@gmail.com",
+  "me@melisseclivaz.com",
+  "hugopinna@free.fr",
+  "killianherzer@gmail.com",
+  "axel.genin17@gmail.com",
+];
+
 export default function MainPagerScreen() {
   const { id, onboarding } = useLocalSearchParams<{ id: string; onboarding?: string }>();
   const { user } = useAuth();
+  const debugDemoAllowed = !!user?.email && DEBUG_DEMO_EMAILS.includes(user.email.toLowerCase());
   const { showToast } = useToast();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -1635,10 +1645,10 @@ export default function MainPagerScreen() {
         onScrollLock={(v) => { setCameraScrollLocked(v); }}
         onHideMenu={setCameraHideMenu}
         onCaptureSent={(info) => { setProfileRefreshKey(k => k + 1); showCaptureToast(info); }}
-        onDebugUnlock={() => { setDebugUnlocked(true); setDebugRevealCountdown(true); }}
+        onDebugUnlock={debugDemoAllowed ? () => { setDebugUnlocked(true); setDebugRevealCountdown(true); } : undefined}
       />
     </ForceThemeMode>
-  ), [activeGroupId, user?.id, activePage === 1, allGroups, pendingChallenge]);
+  ), [activeGroupId, user?.id, activePage === 1, allGroups, pendingChallenge, debugDemoAllowed]);
 
   const memoizedProfilePage = useMemo(() => (
     <ProfilePage
@@ -1776,7 +1786,7 @@ export default function MainPagerScreen() {
               hasUnseenActivity={hasUnseenActivity}
               // TODO: voir à la version finale — déclenchement de debug : tap sur le timer
               // pour scroller tout en bas du reveal (couronne de la semaine), à retirer avant la release.
-              onTimerPress={() => photoFeedRef.current?.scrollToCrown?.()}
+              onTimerPress={debugDemoAllowed ? () => photoFeedRef.current?.scrollToCrown?.() : undefined}
             />
           )}
           <PhotoFeed
