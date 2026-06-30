@@ -332,20 +332,37 @@ export async function fetchChallengeData(
   const allResponses = responsesRes.data ?? [];
   const allVotes = votesRes.data ?? [];
 
+  // Résoudre le pseudo/avatar via le profil de l'auteur (comme les moments),
+  // pas seulement via la liste des membres : ainsi les réponses d'auteurs non
+  // membres (reveals composés/importés) affichent leur vrai nom au lieu de
+  // "Anonyme". On retombe sur la liste des membres puis "Anonyme".
+  const responderIds = [...new Set(allResponses.map((r: any) => r.user_id).filter(Boolean))];
+  const profileMap = new Map<string, { username: string | null; avatar_url: string | null }>();
+  if (responderIds.length > 0) {
+    const { data: profs } = await supabase
+      .from("profiles")
+      .select("id, username, avatar_url")
+      .in("id", responderIds);
+    for (const p of profs ?? []) {
+      profileMap.set(p.id, { username: p.username ?? null, avatar_url: p.avatar_url ?? null });
+    }
+  }
+
   const enrich = (c: any): ChallengeWithData => {
     const base = mapChallenge(c);
     const responses: ChallengeResponse[] = allResponses
       .filter((r: any) => r.challenge_id === c.id)
       .map((r: any) => {
         const m = members.find((x) => x.user_id === r.user_id);
+        const prof = profileMap.get(r.user_id);
         return {
           ...r,
           url: r.image_path === "text_mode" ? "" : r2Storage.getPublicUrl(r.image_path),
           audio_note_url: r.audio_note_path ? r2Storage.getPublicUrl(r.audio_note_path) : null,
           video_thumbnail_url: r.video_thumbnail_path ? r2Storage.getPublicUrl(r.video_thumbnail_path) : null,
           second_video_thumbnail_url: r.second_video_thumbnail_path ? r2Storage.getPublicUrl(r.second_video_thumbnail_path) : null,
-          username: m?.username ?? "Anonyme",
-          avatar_url: m?.avatar_url ?? null,
+          username: m?.username ?? prof?.username ?? "Anonyme",
+          avatar_url: m?.avatar_url ?? prof?.avatar_url ?? null,
         };
       });
     const votes: ChallengeVote[] = allVotes.filter((v: any) => v.challenge_id === c.id);

@@ -4,43 +4,21 @@ import { router, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../../../lib/supabase";
 import { useAuth } from "../../../lib/auth-context";
-import { radii, typography, type ThemeColors } from "../../../lib/theme";
+import { spacing, radii, textStyles, typography, type ThemeColors } from "../../../lib/theme";
 import { useTheme, useThemedStyles } from "../../../lib/theme-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import LoadingScreen from "../../../components/LoadingScreen";
-import Svg, { Path } from "react-native-svg";
-
-const LogoutIcon = () => (
-  <Svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#FF3B30" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <Path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-    <Path d="M16 17l5-5-5-5" />
-    <Path d="M21 12H9" />
-  </Svg>
-);
-
-const PlusIcon = () => {
-  const { colors } = useTheme();
-  return (
-    <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-      <Path d="M12 5V19M5 12H19" stroke={colors.bg} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  );
-};
-
-const GroupIcon = () => {
-  const { colors } = useTheme();
-  return (
-    <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-      <Path d="M17 21V19C17 17.9391 16.5786 16.9217 15.8284 16.1716C15.0783 15.4214 14.0609 15 13 15H5C3.93913 15 2.92172 15.4214 2.17157 16.1716C1.42143 16.9217 1 17.9391 1 19V21M13 7C13 9.20914 11.2091 11 9 11C6.79086 11 5 9.20914 5 7C5 4.79086 6.79086 3 9 3C11.2091 3 13 4.79086 13 7Z" stroke={colors.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  );
-};
+import Icon from "../../../components/Icon";
+import AddGroupFlow from "../../../components/groups/AddGroupFlow";
 
 export default function GroupsHomeScreen() {
   const { user, logout } = useAuth();
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
   const [loading, setLoading] = useState(true);
+  // Ouvre le même bottom sheet créer/rejoindre que les vues liste / groupe.
+  const [addStep, setAddStep] = useState<"create" | "join" | null>(null);
 
   useFocusEffect(useCallback(() => {
     if (!user) return;
@@ -77,70 +55,135 @@ export default function GroupsHomeScreen() {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 24 }]}>
-      <View style={styles.centered}>
-        <View style={styles.logoMark} />
-        <Text style={styles.title}>Prêt pour votre premier cercle ?</Text>
-        <Text style={styles.subtitle}>
-          Créez un groupe pour vous et vos amis, ou rejoignez un cercle existant avec un code.
-        </Text>
+    <View style={[styles.container, { paddingTop: insets.top + spacing.xl3, paddingBottom: insets.bottom + spacing.xl }]}>
+      <View style={styles.hero}>
+        <View style={styles.brandBadge}>
+          <Icon name="plus" size={28} color={colors.iconBrandOnBrand} />
+        </View>
+
+        <View style={styles.heroText}>
+          <Text style={styles.title}>Prêt pour votre premier cercle ?</Text>
+          <Text style={styles.subtitle}>
+            Créez un groupe pour vous et vos amis, ou rejoignez un cercle existant avec un code.
+          </Text>
+        </View>
 
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.primaryBtn} onPress={() => router.push("/(app)/groups/create")}>
-            <View style={styles.btnIcon}>
-              <PlusIcon />
-            </View>
-            <Text style={styles.primaryBtnText}>Créer un groupe</Text>
+          <TouchableOpacity style={styles.btnPrimary} activeOpacity={0.85} onPress={() => setAddStep("create")}>
+            <Text style={styles.btnPrimaryText}>Créer un groupe</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.push("/(app)/groups/join")}>
-            <View style={[styles.btnIcon, styles.btnIconDark]}>
-              <GroupIcon />
-            </View>
-            <Text style={styles.secondaryBtnText}>Rejoindre</Text>
+          <TouchableOpacity style={styles.btnNeutral} activeOpacity={0.85} onPress={() => setAddStep("join")}>
+            <Text style={styles.btnNeutralText}>Rejoindre un groupe</Text>
           </TouchableOpacity>
         </View>
       </View>
 
       <View style={{ flex: 1 }} />
 
-      <View style={styles.logoutCard}>
-        <TouchableOpacity style={styles.logoutRow} onPress={() => logout().catch(() => {})}>
-          <View style={styles.logoutIconWrap}>
-            <LogoutIcon />
-          </View>
-          <Text style={styles.logoutLabel}>Se déconnecter</Text>
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity style={styles.logoutRow} activeOpacity={0.7} onPress={() => logout().catch(() => {})}>
+        <View style={styles.logoutIconWrap}>
+          <Icon name="log-out" size={18} color={colors.iconDanger} />
+        </View>
+        <Text style={styles.logoutLabel}>Se déconnecter</Text>
+      </TouchableOpacity>
+
+      <AddGroupFlow
+        visible={addStep !== null}
+        userId={user?.id ?? ""}
+        initialStep={addStep ?? "menu"}
+        onClose={() => setAddStep(null)}
+        onGroupsChanged={() => {}}
+        onEnterGroup={(id) => { setAddStep(null); router.replace(`/(app)/groups/${id}`); }}
+      />
     </View>
   );
 }
 
 const makeStyles = (colors: ThemeColors) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 24 },
-  centered: { alignItems: "center" },
-  logoMark: {
-    width: 40, height: 40, borderWidth: 3, borderColor: colors.text,
-    borderRadius: radii.sm, transform: [{ rotate: "45deg" }], marginBottom: 32,
+  container: {
+    flex: 1,
+    backgroundColor: colors.bg,
+    paddingHorizontal: spacing.xl,
   },
-  title: { color: colors.text, fontSize: typography.size.xxl, fontFamily: typography.family.bold, textAlign: "center", marginBottom: 12 },
+  hero: {
+    alignItems: "center",
+    gap: spacing.xl3,
+  },
+  brandBadge: {
+    width: 64,
+    height: 64,
+    borderRadius: radii.xl,
+    backgroundColor: colors.brand,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  heroText: {
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  title: {
+    ...textStyles.subtitleStrong,
+    color: colors.text,
+    textAlign: "center",
+  },
   subtitle: {
-    color: colors.secondary, fontSize: typography.size.sm, fontFamily: typography.family.regular,
-    textAlign: "center", lineHeight: 22, paddingHorizontal: 16, marginBottom: 48,
+    ...textStyles.bodyBase,
+    color: colors.textSecondary,
+    textAlign: "center",
+    paddingHorizontal: spacing.lg,
   },
-  actions: { width: "100%", gap: 16 },
-  primaryBtn: { flexDirection: "row", alignItems: "center", backgroundColor: colors.text, padding: 20, borderRadius: radii.lg, gap: 16 },
-  secondaryBtn: {
-    flexDirection: "row", alignItems: "center",
-    backgroundColor: colors.accentMuted, borderWidth: 1,
-    borderColor: colors.cardBorder, padding: 20, borderRadius: radii.lg, gap: 16,
+  // ── Boutons (mêmes styles que le bottom sheet AddGroupFlow) ──
+  actions: {
+    alignSelf: "stretch",
+    gap: spacing.md,
   },
-  btnIcon: { width: 44, height: 44, borderRadius: radii.md, backgroundColor: colors.opacityDark, justifyContent: "center", alignItems: "center" },
-  btnIconDark: { backgroundColor: colors.accentMuted },
-  primaryBtnText: { fontSize: typography.size.lg, fontFamily: typography.family.bold, color: colors.bg },
-  secondaryBtnText: { fontSize: typography.size.lg, fontFamily: typography.family.bold, color: colors.text },
-  logoutCard: { backgroundColor: colors.card, borderRadius: radii.lg, overflow: "hidden" },
-  logoutRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 13, gap: 12 },
-  logoutIconWrap: { width: 36, height: 36, borderRadius: radii.sm, backgroundColor: "rgba(255,59,48,0.12)", justifyContent: "center", alignItems: "center" },
-  logoutLabel: { fontSize: typography.size.md, color: "#FF3B30", fontFamily: typography.family.semibold },
+  btnPrimary: {
+    alignSelf: "stretch",
+    paddingVertical: spacing.lg,
+    borderRadius: radii.lg,
+    backgroundColor: colors.brand,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  btnPrimaryText: {
+    ...textStyles.singleLineSubheadingStrong,
+    lineHeight: typography.size.xl + 4,
+    color: colors.textBrandOnBrand,
+  },
+  btnNeutral: {
+    alignSelf: "stretch",
+    paddingVertical: spacing.lg,
+    borderRadius: radii.lg,
+    backgroundColor: colors.bgNeutralTertiary,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  btnNeutralText: {
+    ...textStyles.singleLineSubheadingStrong,
+    lineHeight: typography.size.xl + 4,
+    color: colors.textNeutral,
+  },
+  // ── Déconnexion ──
+  logoutRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radii.lg,
+    backgroundColor: colors.card,
+  },
+  logoutIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: radii.sm,
+    backgroundColor: colors.bgDangerTertiary,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  logoutLabel: {
+    ...textStyles.bodyStrong,
+    color: colors.textDanger,
+  },
 });

@@ -17,6 +17,8 @@ import {
   OnboardingStickerText,
   OnboardingButton,
   OnboardingDevButton,
+  ONBOARDING_SCALE,
+  ONBOARDING_SHORT,
 } from "../../components/onboarding/OnboardingKit";
 
 export default function OnboardingPhotoScreen() {
@@ -146,15 +148,17 @@ export default function OnboardingPhotoScreen() {
 const makeStyles = (_colors: ThemeColors) =>
   StyleSheet.create({
     avatar: {
-      width: 160,
-      height: 160,
+      width: Math.round(160 * ONBOARDING_SCALE),
+      height: Math.round(160 * ONBOARDING_SCALE),
       aspectRatio: 1,
       flexDirection: "column",
       justifyContent: "center",
       alignItems: "center",
       borderRadius: radii.xl3, // radius/1000 = 40px
       overflow: "hidden",
-      marginTop: 80, // 80px sous le texte
+      // Écran court : on resserre l'écart titre↔avatar (le centrage vertical de
+      // OnboardingSlideLayout laisse alors plus d'air entre l'avatar et le footer).
+      marginTop: ONBOARDING_SHORT ? 24 : Math.round(80 * ONBOARDING_SCALE),
     },
     buttons: {
       width: "100%",

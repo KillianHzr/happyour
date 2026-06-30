@@ -672,7 +672,7 @@ export default function MainPagerScreen() {
 
           if (photoIds.length > 0) {
             const [reactionsRes, viewsRes, commentsRes] = await Promise.all([
-              supabase.from("reactions").select("id, photo_id, user_id, emoji, created_at").in("photo_id", photoIds),
+              supabase.from("reactions").select("id, photo_id, user_id, emoji, created_at, profiles:user_id(username, avatar_url)").in("photo_id", photoIds),
               supabase.from("comment_views").select("photo_id, last_viewed_at").eq("user_id", user.id).in("photo_id", photoIds),
               supabase.from("comments")
                 .select("id, photo_id, user_id, content, created_at, profiles:user_id(username, avatar_url)")
@@ -707,11 +707,14 @@ export default function MainPagerScreen() {
             for (const r of reactionsRes.data ?? []) {
               if (!reactionsByPhoto[r.photo_id]) reactionsByPhoto[r.photo_id] = [];
               const member = membersData.find(m => m.user_id === r.user_id);
+              // Pseudo/avatar via le profil de l'auteur (comme les moments) afin
+              // que les réactions d'auteurs non membres ne s'affichent pas
+              // "Anonyme" ; repli sur la liste des membres puis "Anonyme".
               reactionsByPhoto[r.photo_id].push({
-                id: r.id, 
+                id: r.id,
                 user_id: r.user_id,
-                username: member?.username ?? "Anonyme",
-                avatar_url: member?.avatar_url ?? null,
+                username: member?.username ?? r.profiles?.username ?? "Anonyme",
+                avatar_url: member?.avatar_url ?? r.profiles?.avatar_url ?? null,
                 sticker_id: r.emoji,
                 created_at: r.created_at,
               } as any);

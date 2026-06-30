@@ -8,6 +8,8 @@ import { useThemedStyles } from "../../lib/theme-context";
 import { radii, type ThemeColors } from "../../lib/theme";
 import {
   ONBOARDING_TOP_OFFSET,
+  ONBOARDING_SCALE,
+  ONBOARDING_SHORT,
   OnboardingStickerText,
   OnboardingButton,
 } from "../../components/onboarding/OnboardingKit";
@@ -108,17 +110,21 @@ export default function OnboardingIntroScreen() {
         </View>
       </View>
 
-      {/* Illustrations (pleine largeur) superposées, une par slide */}
+      {/* Illustrations (pleine largeur) superposées, une par slide.
+          Sur écran très court (iPad compat iPhone), on masque les illustrations
+          des slides 2 et 3 qui chevauchent le texte — cf. ONBOARDING_SHORT. */}
       <View style={styles.illustration}>
-        <View style={styles.illoLayer} pointerEvents="none">
+        <View style={[styles.illoLayer, ONBOARDING_SHORT && styles.illoLayerShort]} pointerEvents="none">
           <GroupAvatarReveal active={index === 0} />
         </View>
-        <View style={styles.illoLayer} pointerEvents="none">
-          <GroupShapeLayer active={index === 1} />
-        </View>
+        {!ONBOARDING_SHORT && (
+          <View style={styles.illoLayer} pointerEvents="none">
+            <GroupShapeLayer active={index === 1} />
+          </View>
+        )}
         <View style={styles.illoLayer} pointerEvents="none">
           <View style={styles.slide3}>
-            <ShapesFormsReveal active={index === 2} />
+            {!ONBOARDING_SHORT && <ShapesFormsReveal active={index === 2} />}
             <RevealStatsLayer active={index === 2} />
           </View>
         </View>
@@ -165,6 +171,14 @@ const makeStyles = (colors: ThemeColors) =>
       ...StyleSheet.absoluteFillObject,
       justifyContent: "center",
       alignItems: "center",
+      // Réduit les illustrations (taille fixe) sur les écrans courts pour qu'elles
+      // ne débordent pas sur le titre — cf. iPad en mode compatibilité iPhone.
+      transform: [{ scale: ONBOARDING_SCALE }],
+    },
+    // Slide 1 sur écran court : on descend un peu l'illustration pour aérer
+    // l'espace entre le titre et les avatars.
+    illoLayerShort: {
+      paddingTop: 96,
     },
     slide3: {
       alignItems: "center",

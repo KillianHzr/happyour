@@ -10,6 +10,7 @@ import {
   StyleProp,
   ViewStyle,
   TextStyle,
+  Dimensions,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
@@ -71,20 +72,46 @@ export function OnboardingScreen({
 }
 
 /**
- * Layout des écrans « slide » de l'onboarding (slider de bienvenue + photo de
- * profil) : le contenu haut commence à exactement 160px du haut de l'écran, et
- * le footer (boutons / pagination) est collé en bas. Pas de SafeArea en haut :
- * 160px > encoche, donc le texte est toujours sous la status bar.
+ * Échelle responsive de l'onboarding. Référence ≈ iPhone moderne (800pt de haut).
+ * Sur un écran plus court — surtout iPad en mode compatibilité iPhone où le canvas
+ * est nettement plus court/carré — on réduit proportionnellement l'offset du titre
+ * et la taille des illustrations pour éviter que le titre et l'illustration ne se
+ * chevauchent. 1 sur les iPhone ≥ 800pt (aucun changement sur les appareils
+ * supportés normaux).
  */
-export const ONBOARDING_TOP_OFFSET = 160;
+const ONBOARDING_SCREEN_HEIGHT = Dimensions.get("window").height;
+export const ONBOARDING_SCALE = Math.min(1, Math.max(0.58, ONBOARDING_SCREEN_HEIGHT / 800));
+
+// Vrai uniquement sur un canvas très court (iPad en mode compatibilité iPhone) —
+// pas sur les iPhone normaux ni les petits iPhone (SE ~667pt). Sur ces écrans on
+// simplifie l'onboarding : illustrations qui chevauchent le texte masquées, et
+// contenu centré verticalement plutôt que calé à un offset figé (seuil ≈ 600pt).
+export const ONBOARDING_SHORT = ONBOARDING_SCALE < 0.75;
+
+/**
+ * Layout des écrans « slide » de l'onboarding (slider de bienvenue + photo de
+ * profil) : le contenu haut commence à 160px du haut de l'écran (réduit sur écran
+ * court via ONBOARDING_SCALE), et le footer (boutons / pagination) est collé en
+ * bas. Pas de SafeArea en haut : l'offset > encoche, donc le texte est toujours
+ * sous la status bar.
+ */
+export const ONBOARDING_TOP_OFFSET = Math.round(160 * ONBOARDING_SCALE);
 
 export function OnboardingSlideLayout({ top, footer }: { top: ReactNode; footer?: ReactNode }) {
   const styles = useThemedStyles(makeStyles);
   const insets = useSafeAreaInsets();
   return (
     <View style={styles.slideContainer}>
-      <View style={styles.slideTop}>{top}</View>
-      <View style={{ flex: 1 }} />
+      {ONBOARDING_SHORT ? (
+        // Écran court (iPad compat) : contenu centré verticalement, sans offset figé
+        // en haut, pour que tout tienne dans l'écran.
+        <View style={styles.slideTopCentered}>{top}</View>
+      ) : (
+        <>
+          <View style={styles.slideTop}>{top}</View>
+          <View style={{ flex: 1 }} />
+        </>
+      )}
       {footer ? (
         <View style={[styles.slideFooter, { paddingBottom: insets.bottom + 20 }]}>{footer}</View>
       ) : null}
@@ -351,6 +378,15 @@ const makeStyles = (colors: ThemeColors) =>
     },
     slideTop: {
       paddingTop: ONBOARDING_TOP_OFFSET, // 160px sous le haut de l'écran
+      paddingHorizontal: 16,
+      alignItems: "center",
+      width: "100%",
+    },
+    // Écran court : on centre le contenu verticalement dans l'espace au-dessus
+    // du footer, sans offset figé en haut.
+    slideTopCentered: {
+      flex: 1,
+      justifyContent: "center",
       paddingHorizontal: 16,
       alignItems: "center",
       width: "100%",

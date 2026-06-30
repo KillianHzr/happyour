@@ -22,9 +22,11 @@ type Props = {
   onGroupsChanged: () => Promise<void> | void;
   /** Le flow est terminé → entrer dans la vue du groupe. */
   onEnterGroup: (groupId: string) => void;
+  /** Étape sur laquelle ouvrir le flow (défaut : "menu"). */
+  initialStep?: Step;
 };
 
-export default function AddGroupFlow({ visible, userId, onClose, onGroupsChanged, onEnterGroup }: Props) {
+export default function AddGroupFlow({ visible, userId, onClose, onGroupsChanged, onEnterGroup, initialStep = "menu" }: Props) {
   const { colors } = useTheme();
   const styles = useThemedStyles(makeStyles);
 
@@ -41,7 +43,7 @@ export default function AddGroupFlow({ visible, userId, onClose, onGroupsChanged
   // Réinitialise à chaque ouverture
   useEffect(() => {
     if (visible) {
-      setStep("menu");
+      setStep(initialStep);
       setName(""); setCode(""); setJoinError(null);
       setGroup(null); setLoading(false); setCopied(null);
     }
