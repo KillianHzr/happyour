@@ -19,9 +19,12 @@
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleDevelopmentRegion": "fr",
         "CFBundleAllowMixedLocalizations": true,
-        "CFBundleLocalizations": ["fr", "en"]
+        "CFBundleLocalizations": [
+          "fr",
+          "en"
+        ]
       },
-      "buildNumber": "53"
+      "buildNumber": "54"
     },
     "android": {
       "package": "com.happyour.app",
