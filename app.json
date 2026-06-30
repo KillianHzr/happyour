@@ -103,7 +103,8 @@
         }
       ],
       "expo-asset",
-      "expo-sensors"
+      "expo-sensors",
+      "./plugins/withIphoneOnly"
     ],
     "runtimeVersion": {
       "policy": "appVersion"
