@@ -98,7 +98,8 @@
       [
         "expo-audio",
         {
-          "microphonePermission": "L'app a besoin du micro pour enregistrer des messages audio."
+          "microphonePermission": "L'app a besoin du micro pour enregistrer des messages audio.",
+          "enableBackgroundPlayback": false
         }
       ],
       "expo-asset",
